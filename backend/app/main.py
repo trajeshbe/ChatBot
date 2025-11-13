@@ -222,13 +222,31 @@ graphql_app = GraphQLRouter(schema)
 app.include_router(graphql_app, prefix="/graphql")
 
 
-# Models API router
+# Models API router (safe fallback version)
 try:
-    from app.api.routes import models
-    app.include_router(models.router)
-    logger.info("Models API router registered")
+    # Try enhanced version first
+    from app.api.routes import models as models_router
+    app.include_router(models_router.router)
+    logger.info("✓ Models API router registered (enhanced)")
+except ImportError as e:
+    logger.warning(f"Enhanced models API not available: {e}")
+    try:
+        # Fallback to safe version
+        from app.api.routes import models_safe as models_router
+        app.include_router(models_router.router)
+        logger.info("✓ Models API router registered (fallback)")
+    except Exception as e2:
+        logger.warning(f"Could not register fallback models router: {e2}")
+        logger.warning("Continuing without model selection API")
 except Exception as e:
     logger.warning(f"Could not register models router: {e}")
+    try:
+        # Fallback to safe version
+        from app.api.routes import models_safe as models_router
+        app.include_router(models_router.router)
+        logger.info("✓ Models API router registered (fallback)")
+    except Exception as e2:
+        logger.warning("Continuing without model selection API")
 
 
 # OpenTelemetry instrumentation (if enabled)
