@@ -89,25 +89,34 @@ services:
   #   networks:
   #     - rag-network
 
-  # llama.cpp CPU fallback (REQUIRES MODEL FILE - commented out by default)
-  # To use: Download a GGUF model file and place it in the llama_models volume
-  # Example: docker run --rm -v llama_models:/models alpine wget -O /models/model.gguf <model-url>
-  # llama-cpp:
-  #   image: ghcr.io/ggerganov/llama.cpp:server
-  #   container_name: rag-llama-cpp
-  #   ports:
-  #     - "8080:8080"
-  #   volumes:
-  #     - llama_models:/models
-  #   command:
-  #     - -m
-  #     - /models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
-  #     - --host
-  #     - 0.0.0.0
-  #     - --port
-  #     - "8080"
-  #   networks:
-  #     - rag-network
+  # llama.cpp CPU fallback (enabled for local testing)
+  # Model: TinyLlama-1.1B-Chat (Q4_K_M quantization ~637MB)
+  llama-cpp:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    container_name: rag-llama-cpp
+    ports:
+      - "8080:8080"
+    volumes:
+      - llama_models:/models
+    command:
+      - -m
+      - /models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - -c
+      - "2048"
+      - --n-gpu-layers
+      - "0"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - rag-network
 
   # Prefect Server
   prefect-server:
@@ -232,7 +241,7 @@ services:
       - minio
       - prefect-server
       - tempo
-      # - llama-cpp  # Uncomment if using llama.cpp
+      - llama-cpp  # Local LLM fallback enabled
     networks:
       - rag-network
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
