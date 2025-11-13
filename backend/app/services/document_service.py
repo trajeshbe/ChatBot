@@ -271,11 +271,12 @@ class DocumentService:
         from sqlalchemy import text as sql_text
 
         try:
-            # Convert embedding to PostgreSQL vector format
+            # Convert embedding to PostgreSQL vector format string
             embedding_str = f"[{','.join(map(str, query_embedding))}]"
 
-            # Perform vector similarity search
-            query = sql_text("""
+            # Perform vector similarity search using raw SQL with proper parameter binding
+            # Note: Using string formatting for embedding since asyncpg doesn't support vector type in params
+            query = sql_text(f"""
                 SELECT
                     dc.id,
                     dc.document_id,
@@ -284,18 +285,17 @@ class DocumentService:
                     d.filename,
                     d.source_type,
                     d.source_url,
-                    1 - (dc.embedding <=> :embedding::vector) as similarity
+                    1 - (dc.embedding <=> '{embedding_str}'::vector) as similarity
                 FROM document_chunks dc
                 JOIN documents d ON dc.document_id = d.id
-                WHERE 1 - (dc.embedding <=> :embedding::vector) > :threshold
-                ORDER BY dc.embedding <=> :embedding::vector
+                WHERE 1 - (dc.embedding <=> '{embedding_str}'::vector) > :threshold
+                ORDER BY dc.embedding <=> '{embedding_str}'::vector
                 LIMIT :limit
             """)
 
             result = await db.execute(
                 query,
                 {
-                    "embedding": embedding_str,
                     "threshold": threshold,
                     "limit": top_k
                 }
