@@ -12,8 +12,8 @@
 fastapi==0.111.0              # Modern async web framework - main API server (updated for prefect 3.0 compatibility)
 uvicorn[standard]==0.30.0     # ASGI server - runs FastAPI application (updated for fastapi 0.111.0)
 python-multipart==0.0.9       # Form/file upload handling - used by file upload endpoints
-pydantic==2.5.3               # Data validation - used throughout for request/response models
-pydantic-settings==2.1.0      # Settings management - used by app/core/config.py
+pydantic==2.8.2               # Data validation - used throughout for request/response models (updated for prefect 3.0: >=2.7)
+pydantic-settings==2.3.4      # Settings management - used by app/core/config.py (updated for pydantic 2.8)
 
 # ----------------------------------------------------------------------------
 # GRAPHQL API (Required)
