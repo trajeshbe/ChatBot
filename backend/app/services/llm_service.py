@@ -110,42 +110,50 @@ class LLMService:
     ) -> Dict:
         """
         Generate response with automatic fallback chain:
-        vLLM -> llama.cpp -> OpenAI
+        OpenAI -> vLLM -> llama.cpp
+
+        Prioritizes OpenAI for speed and reliability, with local LLM fallback
         """
         start_time = time.time()
 
-        # Try vLLM first if enabled
-        if settings.USE_VLLM:
+        # Try OpenAI first (fastest and most reliable)
+        if self.openai_client:
+            try:
+                if not messages:
+                    messages = [{"role": "user", "content": prompt}]
+                result = await self._call_openai(messages, max_tokens, temperature)
+                result["latency_ms"] = (time.time() - start_time) * 1000
+                logger.info(f"Using OpenAI (latency: {result['latency_ms']:.0f}ms)")
+                return result
+            except Exception as e:
+                logger.warning(f"OpenAI failed, trying local LLM fallback: {e}")
+
+        # Fallback to vLLM if enabled
+        if use_fallback and settings.USE_VLLM:
             try:
                 result = await self._call_vllm(prompt, max_tokens, temperature)
                 result["latency_ms"] = (time.time() - start_time) * 1000
+                logger.info(f"Using vLLM fallback (latency: {result['latency_ms']:.0f}ms)")
                 return result
             except Exception as e:
-                logger.warning(f"vLLM failed, trying fallback: {e}")
+                logger.warning(f"vLLM failed, trying llama.cpp: {e}")
 
-        # Try llama.cpp CPU fallback
+        # Final fallback to llama.cpp CPU
         if use_fallback:
             try:
                 result = await self._call_llama_cpp(prompt, max_tokens, temperature)
                 result["latency_ms"] = (time.time() - start_time) * 1000
+                logger.info(f"Using llama.cpp fallback (latency: {result['latency_ms']:.0f}ms)")
                 return result
             except Exception as e:
-                logger.warning(f"llama.cpp failed, trying OpenAI: {e}")
-
-        # Final fallback to OpenAI
-        if self.openai_client and use_fallback:
-            if not messages:
-                messages = [{"role": "user", "content": prompt}]
-            result = await self._call_openai(messages, max_tokens, temperature)
-            result["latency_ms"] = (time.time() - start_time) * 1000
-            return result
+                logger.warning(f"llama.cpp failed: {e}")
 
         # No LLM backend available
         error_msg = (
             "No LLM backend available. Please configure one of the following:\n"
-            "1. Set OPENAI_API_KEY environment variable for OpenAI API\n"
+            "1. Set OPENAI_API_KEY environment variable for OpenAI API (recommended)\n"
             "2. Enable and start vLLM service (requires GPU)\n"
-            "3. Enable and start llama.cpp service (requires model file)\n"
+            "3. Enable and start llama.cpp service (requires CPU + model file)\n"
             "See docker-compose.yml and .env.example for configuration details."
         )
         logger.error(error_msg)
