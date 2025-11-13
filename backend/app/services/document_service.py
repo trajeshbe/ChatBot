@@ -268,9 +268,19 @@ class DocumentService:
         db: AsyncSession = None
     ) -> List[Dict]:
         """Search for similar document chunks using vector similarity"""
-        from sqlalchemy import text as sql_text
+        from sqlalchemy import text as sql_text, select, func
+        from app.models.database import DocumentChunk
 
         try:
+            # First check if there are any document chunks at all
+            count_query = select(func.count()).select_from(DocumentChunk)
+            count_result = await db.execute(count_query)
+            chunk_count = count_result.scalar()
+
+            if chunk_count == 0:
+                logger.info("No documents found in database")
+                return []
+
             # Convert embedding to PostgreSQL vector format string
             embedding_str = f"[{','.join(map(str, query_embedding))}]"
 
@@ -314,11 +324,15 @@ class DocumentService:
                     'similarity': float(row.similarity)
                 })
 
+            logger.info(f"Found {len(chunks)} similar chunks out of {chunk_count} total")
             return chunks
 
         except Exception as e:
             logger.error(f"Error searching similar chunks: {e}")
-            raise
+            # Rollback transaction on error to prevent "transaction aborted" state
+            await db.rollback()
+            # Return empty list instead of raising to allow graceful degradation
+            return []
 
 
 # Singleton instance

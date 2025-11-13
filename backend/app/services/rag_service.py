@@ -61,11 +61,19 @@ class RAGService:
                     conversation_history=conversation_history
                 )
             else:
-                # No relevant context found, generate without context
-                logger.warning("No relevant context found, generating without RAG")
+                # No relevant context found - inform user about uploading documents
+                logger.warning("No relevant context found, generating response without RAG")
+                system_message = ("You are a helpful enterprise RAG assistant. "
+                                "Currently, there are no documents in your knowledge base. "
+                                "Politely inform the user that they should upload documents "
+                                "or scrape URLs first to enable document-based answers. "
+                                "Still answer their question if it's a general one.")
                 response = await llm_service.generate(
-                    prompt=f"Question: {query_text}\n\nAnswer:",
-                    messages=[{"role": "user", "content": query_text}]
+                    prompt=f"System: {system_message}\n\nUser: {query_text}\n\nAssistant:",
+                    messages=[
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": query_text}
+                    ]
                 )
 
             # Step 4: Extract and format sources
