@@ -31,15 +31,39 @@ async def lifespan(app: FastAPI):
     """Handle startup and shutdown events"""
     # Startup
     logger.info("Starting up application...")
+
+    # Initialize database with retries
     try:
+        logger.info("Initializing database...")
         await init_db()
-        await embedding_service.initialize()
-        await llm_service.initialize()
-        await document_service.initialize()
-        logger.info("All services initialized successfully")
+        logger.info("Database initialized successfully")
     except Exception as e:
-        logger.error(f"Error during startup: {e}")
-        raise
+        logger.error(f"Database initialization failed: {e}")
+        logger.warning("Application starting without database - some features may not work")
+
+    # Initialize services (non-blocking)
+    try:
+        logger.info("Initializing embedding service...")
+        await embedding_service.initialize()
+        logger.info("Embedding service initialized")
+    except Exception as e:
+        logger.warning(f"Embedding service initialization failed: {e}")
+
+    try:
+        logger.info("Initializing LLM service...")
+        await llm_service.initialize()
+        logger.info("LLM service initialized")
+    except Exception as e:
+        logger.warning(f"LLM service initialization failed: {e}")
+
+    try:
+        logger.info("Initializing document service...")
+        await document_service.initialize()
+        logger.info("Document service initialized")
+    except Exception as e:
+        logger.warning(f"Document service initialization failed: {e}")
+
+    logger.info("Application startup complete - API is ready")
 
     yield
 
