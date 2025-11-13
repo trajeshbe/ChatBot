@@ -11,7 +11,17 @@ from app.core.config import settings
 from app.core.database import init_db, close_db, get_db
 from app.api.graphql.schema import schema
 from app.services.embedding_service import embedding_service
-from app.services.llm_service import llm_service
+
+# Try to import enhanced LLM service, fallback to basic if it fails
+try:
+    from app.services.llm_service_enhanced import llm_service
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.info("Using Enhanced LLM Service with multi-model support")
+except ImportError as e:
+    from app.services.llm_service import llm_service
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.warning(f"Enhanced LLM service not available: {e}. Using basic service.")
+
 from app.services.document_service import document_service
 from app.services.scraper_service import scraper_service
 from app.services.rag_service import rag_service

@@ -407,6 +407,55 @@ class EnhancedLLMService:
         self._default_model_id = model_id
         logger.info(f"Default model changed to: {model.name}")
 
+    async def generate_with_context(
+        self,
+        query: str,
+        context_chunks: List[Dict],
+        conversation_history: Optional[List[Dict]] = None,
+        max_tokens: int = 1024,
+        temperature: float = 0.7,
+        model_id: Optional[str] = None
+    ) -> Dict:
+        """Generate response with RAG context"""
+        # Build context from chunks
+        context_text = "\n\n".join([
+            f"Source {i+1} ({chunk.get('source', 'unknown')}):\n{chunk['content']}"
+            for i, chunk in enumerate(context_chunks)
+        ])
+
+        # Build prompt
+        system_prompt = """You are a helpful AI assistant with access to relevant documents and information.
+Use the provided context to answer questions accurately. Always cite your sources using [Source N] notation.
+If the context doesn't contain enough information to answer the question, say so clearly."""
+
+        user_prompt = f"""Context:
+{context_text}
+
+Question: {query}
+
+Please provide a detailed answer based on the context above, and cite your sources."""
+
+        # Prepare messages
+        messages = [
+            {"role": "system", "content": system_prompt}
+        ]
+
+        if conversation_history:
+            messages.extend(conversation_history[-6:])  # Last 3 turns
+
+        messages.append({"role": "user", "content": user_prompt})
+
+        # Convert to single prompt for compatibility
+        prompt = self._messages_to_prompt(messages)
+
+        return await self.generate(
+            prompt=prompt,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            model_id=model_id
+        )
+
 
 # Global singleton
 llm_service = EnhancedLLMService()

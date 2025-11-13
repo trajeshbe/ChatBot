@@ -2,7 +2,13 @@ from typing import Dict, List, Optional
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.embedding_service import embedding_service
-from app.services.llm_service import llm_service
+
+# Try to import enhanced LLM service, fallback to basic if it fails
+try:
+    from app.services.llm_service_enhanced import llm_service
+except ImportError:
+    from app.services.llm_service import llm_service
+
 from app.services.document_service import document_service
 from app.core.config import settings
 import time
