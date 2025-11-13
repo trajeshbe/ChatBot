@@ -31,7 +31,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
+# Upgrade pip first to avoid warnings
+RUN pip install --upgrade pip
+
 COPY requirements.txt .
+# Install dependencies (pip 24+ handles hashes automatically)
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright browsers (without system deps since we installed them above)
