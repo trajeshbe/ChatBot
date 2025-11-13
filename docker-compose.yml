@@ -242,6 +242,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: dev
     container_name: rag-frontend
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
