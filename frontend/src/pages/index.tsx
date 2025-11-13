@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import Head from 'next/head'
-import ChatInterface from '@/components/ChatInterface'
+import ChatInterface from '@/components/ChatInterfaceEnhanced'
 import Sidebar from '@/components/Sidebar'
 import { FileText, Globe } from 'lucide-react'
 

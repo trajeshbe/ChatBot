@@ -222,6 +222,15 @@ graphql_app = GraphQLRouter(schema)
 app.include_router(graphql_app, prefix="/graphql")
 
 
+# Models API router
+try:
+    from app.api.routes import models
+    app.include_router(models.router)
+    logger.info("Models API router registered")
+except Exception as e:
+    logger.warning(f"Could not register models router: {e}")
+
+
 # OpenTelemetry instrumentation (if enabled)
 if settings.ENABLE_TRACING:
     try:

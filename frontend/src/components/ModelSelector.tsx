@@ -269,7 +269,7 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
                           <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300">
                             Recommended
                           </span>
-                        </span>
+                        )}
                         {selectedModel === model.id && (
                           <Check className="w-4 h-4 text-blue-600" />
                         )}
