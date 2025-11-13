@@ -51,6 +51,7 @@ hiredis==2.3.2                # Redis protocol parser - improves Redis performan
 # Used by: app/services/llm_service.py, app/services/rag_service.py
 # ----------------------------------------------------------------------------
 openai==1.40.0                # OpenAI API client - LLM fallback for responses (updated for langchain compatibility)
+anthropic==0.39.0             # Anthropic Claude API client - Claude models support
 sentence-transformers==2.3.1  # Embedding generation - creates vector embeddings for documents
 
 # ----------------------------------------------------------------------------

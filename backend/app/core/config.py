@@ -58,9 +58,10 @@ class Settings(BaseSettings):
     # llama.cpp fallback
     LLAMA_CPP_ENDPOINT: str = "http://llama-cpp:8080"
 
-    # OpenAI fallback
+    # LLM API Keys
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4-turbo-preview"
+    ANTHROPIC_API_KEY: Optional[str] = None  # For Claude models
 
     # Embeddings
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
