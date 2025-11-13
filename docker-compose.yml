@@ -11,7 +11,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"      # Changed host port to 5433 to avoid conflicts
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -27,8 +27,8 @@ services:
     image: redis/redis-stack:7.2.0-v10
     container_name: rag-redis
     ports:
-      - "6379:6379"
-      - "8001:8001"  # RedisInsight
+      - "6380:6379"      # Changed host port to 6380 to avoid conflicts
+      - "8002:8001"      # Changed RedisInsight to 8002
     volumes:
       - redis_data:/data
     healthcheck:
