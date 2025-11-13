@@ -1,4 +1,5 @@
-version: '3.8'
+# Docker Compose for Enterprise RAG Chatbot
+# For local development without GPU
 
 services:
   # PostgreSQL with pgvector
@@ -59,51 +60,54 @@ services:
     networks:
       - rag-network
 
-  # vLLM Service (mock for local dev - requires GPU in production)
-  vllm-service:
-    image: vllm/vllm-openai:latest
-    container_name: rag-vllm
-    environment:
-      HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN}
-    ports:
-      - "8100:8000"
-    volumes:
-      - vllm_cache:/root/.cache/huggingface
-    command:
-      - --model
-      - ${VLLM_MODEL:-TinyLlama/TinyLlama-1.1B-Chat-v1.0}
-      - --dtype
-      - auto
-      - --max-model-len
-      - "2048"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    networks:
-      - rag-network
-    # Comment out for CPU-only environments
+  # vLLM Service (REQUIRES GPU - commented out by default)
+  # Uncomment if you have NVIDIA GPU with CUDA support
+  # See docker-compose.gpu.yml for GPU configuration
+  # vllm-service:
+  #   image: vllm/vllm-openai:latest
+  #   container_name: rag-vllm
+  #   environment:
+  #     HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN:-}
+  #   ports:
+  #     - "8100:8000"
+  #   volumes:
+  #     - vllm_cache:/root/.cache/huggingface
+  #   command:
+  #     - --model
+  #     - ${VLLM_MODEL:-TinyLlama/TinyLlama-1.1B-Chat-v1.0}
+  #     - --dtype
+  #     - auto
+  #     - --max-model-len
+  #     - "2048"
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: all
+  #             capabilities: [gpu]
+  #   networks:
+  #     - rag-network
 
-  # llama.cpp CPU fallback
-  llama-cpp:
-    image: ghcr.io/ggerganov/llama.cpp:server
-    container_name: rag-llama-cpp
-    ports:
-      - "8080:8080"
-    volumes:
-      - llama_models:/models
-    command:
-      - -m
-      - /models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8080"
-    networks:
-      - rag-network
+  # llama.cpp CPU fallback (REQUIRES MODEL FILE - commented out by default)
+  # To use: Download a GGUF model file and place it in the llama_models volume
+  # Example: docker run --rm -v llama_models:/models alpine wget -O /models/model.gguf <model-url>
+  # llama-cpp:
+  #   image: ghcr.io/ggerganov/llama.cpp:server
+  #   container_name: rag-llama-cpp
+  #   ports:
+  #     - "8080:8080"
+  #   volumes:
+  #     - llama_models:/models
+  #   command:
+  #     - -m
+  #     - /models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+  #     - --host
+  #     - 0.0.0.0
+  #     - --port
+  #     - "8080"
+  #   networks:
+  #     - rag-network
 
   # Prefect Server
   prefect-server:
@@ -213,10 +217,11 @@ services:
       MINIO_SECRET_KEY: minioadmin
       VLLM_ENDPOINT: http://vllm-service:8000
       LLAMA_CPP_ENDPOINT: http://llama-cpp:8080
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       PREFECT_API_URL: http://prefect-server:4200/api
       OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4317
       ENABLE_TRACING: "true"
+      USE_VLLM: "false"
     ports:
       - "8000:8000"
     volumes:
@@ -225,9 +230,9 @@ services:
       - postgres
       - redis
       - minio
-      - llama-cpp
       - prefect-server
       - tempo
+      # - llama-cpp  # Uncomment if using llama.cpp
     networks:
       - rag-network
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

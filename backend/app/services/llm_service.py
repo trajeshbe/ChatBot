@@ -140,7 +140,16 @@ class LLMService:
             result["latency_ms"] = (time.time() - start_time) * 1000
             return result
 
-        raise Exception("All LLM backends failed")
+        # No LLM backend available
+        error_msg = (
+            "No LLM backend available. Please configure one of the following:\n"
+            "1. Set OPENAI_API_KEY environment variable for OpenAI API\n"
+            "2. Enable and start vLLM service (requires GPU)\n"
+            "3. Enable and start llama.cpp service (requires model file)\n"
+            "See docker-compose.yml and .env.example for configuration details."
+        )
+        logger.error(error_msg)
+        raise Exception(error_msg)
 
     async def generate_with_context(
         self,
