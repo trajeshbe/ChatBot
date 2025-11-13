@@ -9,8 +9,8 @@
 # CORE WEB FRAMEWORK (Required)
 # Used by: app/main.py, all API endpoints
 # ----------------------------------------------------------------------------
-fastapi==0.109.0              # Modern async web framework - main API server
-uvicorn[standard]==0.27.0     # ASGI server - runs FastAPI application
+fastapi==0.111.0              # Modern async web framework - main API server (updated for prefect 3.0 compatibility)
+uvicorn[standard]==0.30.0     # ASGI server - runs FastAPI application (updated for fastapi 0.111.0)
 python-multipart==0.0.9       # Form/file upload handling - used by file upload endpoints
 pydantic==2.5.3               # Data validation - used throughout for request/response models
 pydantic-settings==2.1.0      # Settings management - used by app/core/config.py
@@ -19,7 +19,7 @@ pydantic-settings==2.1.0      # Settings management - used by app/core/config.py
 # GRAPHQL API (Required)
 # Used by: app/api/graphql/schema.py
 # ----------------------------------------------------------------------------
-strawberry-graphql[fastapi]==0.219.2  # GraphQL implementation - provides GraphQL API
+strawberry-graphql[fastapi]==0.235.0  # GraphQL implementation - provides GraphQL API (updated for fastapi 0.111.0)
 graphql-core==3.2.3                   # GraphQL core library - required by strawberry
 
 # ----------------------------------------------------------------------------
@@ -85,7 +85,7 @@ lxml==5.1.0                   # XML/HTML parser - faster than default parser
 # Used by: app/services/scraper_service.py
 # ----------------------------------------------------------------------------
 playwright==1.41.0            # Browser automation - scrapes JavaScript-heavy sites
-httpx==0.26.0                 # Async HTTP client - makes HTTP requests
+httpx==0.27.0                 # Async HTTP client - makes HTTP requests (updated for compatibility)
 trafilatura==1.6.3            # Content extraction - extracts main content from HTML
 
 # ----------------------------------------------------------------------------
@@ -99,11 +99,11 @@ prefect==3.0.0                # Workflow orchestration - manages document proces
 # OBSERVABILITY & MONITORING (Required)
 # Used by: app/main.py, automatic instrumentation
 # ----------------------------------------------------------------------------
-opentelemetry-api==1.22.0                    # OpenTelemetry API - tracing interface
-opentelemetry-sdk==1.22.0                    # OpenTelemetry SDK - tracing implementation
-opentelemetry-instrumentation-fastapi==0.43b0 # FastAPI auto-instrumentation - traces API calls
-opentelemetry-exporter-otlp==1.22.0          # OTLP exporter - sends traces to Tempo/Grafana
-prometheus-client==0.19.0                    # Prometheus metrics - exposes /metrics endpoint
+opentelemetry-api==1.25.0                    # OpenTelemetry API - tracing interface
+opentelemetry-sdk==1.25.0                    # OpenTelemetry SDK - tracing implementation
+opentelemetry-instrumentation-fastapi==0.46b0 # FastAPI auto-instrumentation - traces API calls (updated for fastapi 0.111.0)
+opentelemetry-exporter-otlp==1.25.0          # OTLP exporter - sends traces to Tempo/Grafana
+prometheus-client==0.20.0                    # Prometheus metrics - exposes /metrics endpoint
 
 # ----------------------------------------------------------------------------
 # UTILITIES (Required)
