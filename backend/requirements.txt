@@ -22,7 +22,7 @@ minio==7.2.3
 # Redis and Caching
 redis==5.0.1
 hiredis==2.3.2
-redis-om==0.2.1
+# redis-om removed - not used and conflicts with pydantic 2.x
 
 # LLM and AI
 openai==1.10.0
@@ -31,12 +31,13 @@ langchain-community==0.0.19
 langchain-openai==0.0.5
 langgraph==0.0.26
 sentence-transformers==2.3.1
-transformers==4.37.2
-torch==2.1.2
-vllm==0.2.7
+# Heavy ML packages (optional - needed for local LLM)
+# transformers==4.37.2
+# torch==2.1.2
+# vllm==0.2.7  # Requires GPU
 
 # Document Processing
-docling==1.0.0
+# docling==1.0.0  # Not available in PyPI - optional for advanced document processing
 pypdf2==3.0.1
 python-docx==1.1.0
 python-pptx==0.6.23
@@ -49,9 +50,9 @@ playwright==1.41.0
 httpx==0.26.0
 trafilatura==1.6.3
 
-# Workflow and Agents
-prefect==3.0.0
-prefect-ray==0.3.0
+# Workflow and Agents (optional)
+# prefect==3.0.0
+# prefect-ray==0.3.0
 
 # Observability
 opentelemetry-api==1.22.0
