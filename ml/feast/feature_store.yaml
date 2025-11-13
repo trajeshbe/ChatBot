@@ -1,0 +1,11 @@
+project: rag_chatbot
+registry:
+  registry_type: sql
+  path: postgresql://postgres:postgres@postgres:5432/feast
+provider: local
+online_store:
+  type: redis
+  connection_string: redis:6379
+offline_store:
+  type: file
+entity_key_serialization_version: 2

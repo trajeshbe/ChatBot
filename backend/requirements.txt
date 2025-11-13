@@ -1,0 +1,69 @@
+# Core FastAPI and server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# GraphQL
+strawberry-graphql[fastapi]==0.219.2
+graphql-core==3.2.3
+
+# Database and Vector Store
+psycopg2-binary==2.9.9
+asyncpg==0.29.0
+sqlalchemy==2.0.25
+pgvector==0.2.4
+alembic==1.13.1
+
+# Object Storage
+minio==7.2.3
+
+# Redis and Caching
+redis==5.0.1
+hiredis==2.3.2
+redis-om==0.2.1
+
+# LLM and AI
+openai==1.10.0
+langchain==0.1.6
+langchain-community==0.0.19
+langchain-openai==0.0.5
+langgraph==0.0.26
+sentence-transformers==2.3.1
+transformers==4.37.2
+torch==2.1.2
+vllm==0.2.7
+
+# Document Processing
+docling==1.0.0
+pypdf2==3.0.1
+python-docx==1.1.0
+python-pptx==0.6.23
+openpyxl==3.1.2
+beautifulsoup4==4.12.3
+lxml==5.1.0
+
+# Web Scraping
+playwright==1.41.0
+httpx==0.26.0
+trafilatura==1.6.3
+
+# Workflow and Agents
+prefect==3.0.0
+prefect-ray==0.3.0
+
+# Observability
+opentelemetry-api==1.22.0
+opentelemetry-sdk==1.22.0
+opentelemetry-instrumentation-fastapi==0.43b0
+opentelemetry-exporter-otlp==1.22.0
+prometheus-client==0.19.0
+
+# Utilities
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-dotenv==1.0.0
+tenacity==8.2.3
+aiofiles==23.2.1
+pyyaml==6.0.1

@@ -1,0 +1,110 @@
+# Istio Ambient Mesh Configuration
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: ambient-mesh
+  namespace: istio-system
+spec:
+  profile: ambient
+  meshConfig:
+    accessLogFile: /dev/stdout
+    enableTracing: true
+    defaultConfig:
+      tracing:
+        sampling: 100.0
+        openCensusAgent:
+          address: tempo.rag-chatbot:4317
+    extensionProviders:
+    - name: otel
+      opentelemetry:
+        service: tempo.rag-chatbot
+        port: 4317
+  components:
+    ingressGateways:
+    - name: istio-ingressgateway
+      enabled: true
+      k8s:
+        service:
+          ports:
+          - port: 80
+            targetPort: 8080
+            name: http2
+          - port: 443
+            targetPort: 8443
+            name: https
+---
+# Gateway for ingress traffic
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: rag-chatbot-gateway
+  namespace: rag-chatbot
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+---
+# Virtual Service for routing
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: rag-chatbot
+  namespace: rag-chatbot
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - rag-chatbot-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /api
+    - uri:
+        prefix: /graphql
+    route:
+    - destination:
+        host: backend
+        port:
+          number: 8000
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: frontend
+        port:
+          number: 3000
+---
+# Destination Rule for traffic policies
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: backend
+  namespace: rag-chatbot
+spec:
+  host: backend
+  trafficPolicy:
+    loadBalancer:
+      simple: LEAST_REQUEST
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 50
+        http2MaxRequests: 100
+---
+# PeerAuthentication for mTLS
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: rag-chatbot
+spec:
+  mtls:
+    mode: STRICT

@@ -1,0 +1,121 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: rag-chatbot
+data:
+  POSTGRES_SERVER: postgres
+  POSTGRES_DB: ragchatbot
+  REDIS_HOST: redis
+  MINIO_ENDPOINT: minio:9000
+  VLLM_ENDPOINT: http://vllm-service:8000
+  LLAMA_CPP_ENDPOINT: http://llama-cpp:8080
+  PREFECT_API_URL: http://prefect-server:4200/api
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4317
+  ENABLE_TRACING: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: rag-chatbot
+  labels:
+    app: backend
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: backend
+        image: rag-backend:latest
+        ports:
+        - containerPort: 8000
+          name: http
+        envFrom:
+        - configMapRef:
+            name: backend-config
+        env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openai-secret
+              key: api-key
+              optional: true
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: rag-chatbot
+  labels:
+    app: backend
+spec:
+  selector:
+    app: backend
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-hpa
+  namespace: rag-chatbot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

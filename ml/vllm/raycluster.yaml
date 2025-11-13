@@ -1,0 +1,132 @@
+# Ray Cluster for vLLM
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: vllm-cluster
+  namespace: rag-chatbot
+spec:
+  rayVersion: '2.9.0'
+  headGroupSpec:
+    serviceType: ClusterIP
+    rayStartParams:
+      dashboard-host: '0.0.0.0'
+      block: 'true'
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray-ml:2.9.0-py311-gpu
+          ports:
+          - containerPort: 6379
+            name: gcs
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          resources:
+            requests:
+              cpu: "4"
+              memory: "16Gi"
+            limits:
+              cpu: "8"
+              memory: "32Gi"
+              nvidia.com/gpu: "1"
+          volumeMounts:
+          - name: shared-mem
+            mountPath: /dev/shm
+        volumes:
+        - name: shared-mem
+          emptyDir:
+            medium: Memory
+            sizeLimit: 8Gi
+  workerGroupSpecs:
+  - replicas: 2
+    minReplicas: 1
+    maxReplicas: 4
+    groupName: vllm-workers
+    rayStartParams:
+      block: 'true'
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray-ml:2.9.0-py311-gpu
+          resources:
+            requests:
+              cpu: "8"
+              memory: "32Gi"
+            limits:
+              cpu: "16"
+              memory: "64Gi"
+              nvidia.com/gpu: "2"
+          volumeMounts:
+          - name: shared-mem
+            mountPath: /dev/shm
+        volumes:
+        - name: shared-mem
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Gi
+---
+# vLLM Service
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: vllm-service
+  namespace: rag-chatbot
+spec:
+  serviceUnhealthySecondThreshold: 900
+  deploymentUnhealthySecondThreshold: 300
+  serveConfigV2: |
+    applications:
+      - name: vllm
+        import_path: vllm_app:deployment
+        runtime_env:
+          pip:
+            - vllm==0.2.7
+            - torch==2.1.2
+        deployments:
+          - name: VLLMDeployment
+            num_replicas: 2
+            ray_actor_options:
+              num_cpus: 8
+              num_gpus: 2
+  rayClusterConfig:
+    rayVersion: '2.9.0'
+    headGroupSpec:
+      serviceType: ClusterIP
+      rayStartParams:
+        dashboard-host: '0.0.0.0'
+      template:
+        spec:
+          containers:
+          - name: ray-head
+            image: rayproject/ray-ml:2.9.0-py311-gpu
+            resources:
+              requests:
+                cpu: "4"
+                memory: "16Gi"
+              limits:
+                cpu: "8"
+                memory: "32Gi"
+                nvidia.com/gpu: "1"
+    workerGroupSpecs:
+    - replicas: 2
+      minReplicas: 1
+      maxReplicas: 4
+      groupName: vllm-workers
+      rayStartParams:
+        block: 'true'
+      template:
+        spec:
+          containers:
+          - name: ray-worker
+            image: rayproject/ray-ml:2.9.0-py311-gpu
+            resources:
+              requests:
+                cpu: "8"
+                memory: "32Gi"
+              limits:
+                cpu: "16"
+                memory: "64Gi"
+                nvidia.com/gpu: "2"

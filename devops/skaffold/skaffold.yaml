@@ -1,0 +1,83 @@
+apiVersion: skaffold/v4beta6
+kind: Config
+metadata:
+  name: rag-chatbot
+build:
+  artifacts:
+  - image: rag-backend
+    context: ../../backend
+    docker:
+      dockerfile: Dockerfile
+    sync:
+      manual:
+      - src: 'app/**/*.py'
+        dest: /app/app
+  - image: rag-frontend
+    context: ../../frontend
+    docker:
+      dockerfile: Dockerfile
+    sync:
+      manual:
+      - src: 'src/**/*'
+        dest: /app/src
+  local:
+    push: false
+    useBuildkit: true
+deploy:
+  kubectl:
+    manifests:
+    - ../../infrastructure/kubernetes/base/*.yaml
+  helm:
+    releases:
+    - name: rag-chatbot
+      chartPath: ../../infrastructure/helm/rag-chatbot
+      valuesFiles:
+      - ../../infrastructure/helm/rag-chatbot/values.yaml
+      namespace: rag-chatbot
+      createNamespace: true
+portForward:
+- resourceType: service
+  resourceName: backend
+  namespace: rag-chatbot
+  port: 8000
+  localPort: 8000
+- resourceType: service
+  resourceName: frontend
+  namespace: rag-chatbot
+  port: 3000
+  localPort: 3001
+- resourceType: service
+  resourceName: grafana
+  namespace: rag-chatbot
+  port: 3000
+  localPort: 3000
+profiles:
+- name: dev
+  activation:
+  - command: dev
+  build:
+    artifacts:
+    - image: rag-backend
+      docker:
+        dockerfile: Dockerfile
+      sync:
+        auto: true
+    - image: rag-frontend
+      docker:
+        dockerfile: Dockerfile
+      sync:
+        auto: true
+  deploy:
+    kubectl:
+      manifests:
+      - ../../infrastructure/kubernetes/overlays/dev/*.yaml
+- name: prod
+  activation:
+  - command: run
+  build:
+    tagPolicy:
+      gitCommit: {}
+  deploy:
+    kubectl:
+      manifests:
+      - ../../infrastructure/kubernetes/overlays/prod/*.yaml

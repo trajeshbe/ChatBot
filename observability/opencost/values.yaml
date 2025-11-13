@@ -1,0 +1,27 @@
+# OpenCost Helm Values
+opencost:
+  exporter:
+    defaultClusterId: rag-chatbot-cluster
+    cloudProviderApiKey: ""
+
+  prometheus:
+    internal:
+      enabled: true
+      serviceName: prometheus-server
+      namespaceName: monitoring
+      port: 9090
+
+  ui:
+    enabled: true
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9003"
