@@ -54,14 +54,14 @@ openai==1.10.0                # OpenAI API client - LLM fallback for responses
 sentence-transformers==2.3.1  # Embedding generation - creates vector embeddings for documents
 
 # ----------------------------------------------------------------------------
-# AI & LLM - OPTIONAL PACKAGES (Commented out for lighter install)
-# Uncomment these for advanced AI features or local LLM support
-# ----------------------------------------------------------------------------
+# AI & LLM - AGENTIC WORKFLOWS (Required for complex query orchestration)
 # Used by: app/agents/rag_agent.py (LangGraph workflows)
-# langchain==0.1.20           # LLM framework - agent orchestration
-# langchain-community==0.0.38 # Community integrations for LangChain
-# langchain-openai==0.0.8     # OpenAI integration for LangChain
-# langgraph==0.0.40           # Agent workflow graphs - DAG orchestration
+# Note: Using versions compatible with pydantic 2.x
+# ----------------------------------------------------------------------------
+langchain==0.2.16             # LLM framework - agent orchestration (pydantic 2.x compatible)
+langchain-community==0.2.16   # Community integrations for LangChain
+langchain-openai==0.1.22      # OpenAI integration for LangChain
+langgraph==0.2.16             # Agent workflow graphs - DAG orchestration
 #
 # Used by: local LLM inference (if not using OpenAI)
 # transformers==4.37.2        # Hugging Face transformers - model loading
@@ -89,11 +89,11 @@ httpx==0.26.0                 # Async HTTP client - makes HTTP requests
 trafilatura==1.6.3            # Content extraction - extracts main content from HTML
 
 # ----------------------------------------------------------------------------
-# WORKFLOW ORCHESTRATION (Optional - commented out)
+# WORKFLOW ORCHESTRATION (Required for document ingestion pipelines)
 # Used by: app/agents/rag_agent.py
 # ----------------------------------------------------------------------------
-# prefect==3.0.0              # Workflow orchestration - manages document processing pipelines
-# prefect-ray==0.3.0          # Ray integration for distributed processing
+prefect==3.0.0                # Workflow orchestration - manages document processing pipelines
+# prefect-ray==0.3.0          # Ray integration for distributed processing (optional)
 
 # ----------------------------------------------------------------------------
 # OBSERVABILITY & MONITORING (Required)

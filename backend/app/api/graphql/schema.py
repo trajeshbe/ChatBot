@@ -6,6 +6,7 @@ from app.services.rag_service import rag_service
 from app.services.document_service import document_service
 from app.services.scraper_service import scraper_service
 from app.core.database import AsyncSessionLocal
+from app.agents.rag_agent import rag_agent, document_ingestion_flow, web_scraping_flow
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +106,7 @@ class MultiScrapeInput:
 class Query:
     @strawberry.field
     async def query(self, input: QueryInput) -> QueryResponse:
-        """Query the RAG system"""
+        """Query the RAG system (simple, fast query)"""
         try:
             async with AsyncSessionLocal() as db:
                 result = await rag_service.query(
@@ -139,6 +140,39 @@ class Query:
 
         except Exception as e:
             logger.error(f"Error processing query: {e}")
+            raise
+
+    @strawberry.field
+    async def agentic_query(self, input: QueryInput) -> QueryResponse:
+        """Query using LangGraph agent workflow for complex queries"""
+        try:
+            # Use the LangGraph agent for orchestrated query processing
+            result = await rag_agent.run(input.query)
+
+            sources = [
+                Source(
+                    id=s['id'],
+                    filename=s['filename'],
+                    source_type=s['source_type'],
+                    source_url=s.get('source_url'),
+                    relevance=s['relevance'],
+                    excerpt=s['excerpt']
+                )
+                for s in result.get('sources', [])
+            ]
+
+            return QueryResponse(
+                answer=result.get('answer', ''),
+                sources=sources,
+                model='langgraph-agent',
+                tokens_used=0,  # TODO: Track tokens in agent
+                latency_ms=0,   # TODO: Track latency in agent
+                num_sources=result.get('retrieved_docs', 0),
+                cached=False
+            )
+
+        except Exception as e:
+            logger.error(f"Error processing agentic query: {e}")
             raise
 
     @strawberry.field
@@ -209,22 +243,10 @@ class Mutation:
 
     @strawberry.mutation
     async def scrape_multiple_urls(self, input: MultiScrapeInput) -> List[ScrapeJobResult]:
-        """Scrape multiple URLs"""
+        """Scrape multiple URLs using Prefect orchestration"""
         try:
-            # Scrape each URL directly
-            results = []
-            async with AsyncSessionLocal() as db:
-                for url in input.urls:
-                    try:
-                        result = await scraper_service.scrape_url(url, input.scrape_prompt, db)
-                        results.append(result)
-                    except Exception as e:
-                        logger.error(f"Error scraping URL {url}: {e}")
-                        results.append({
-                            'success': False,
-                            'url': url,
-                            'error': str(e)
-                        })
+            # Use Prefect flow for orchestrated web scraping
+            results = await web_scraping_flow(input.urls, input.scrape_prompt)
 
             return [
                 ScrapeJobResult(
