@@ -133,22 +133,23 @@ class RAGService:
             embedding_str = f"[{','.join(map(str, query_embedding))}]"
 
             # Search for similar cached queries
-            query = sql_text("""
+            # Note: Embedding is embedded directly in SQL since asyncpg doesn't support vector params
+            query = sql_text(f"""
                 SELECT
                     id,
                     response,
                     sources,
-                    1 - (query_embedding <=> :embedding::vector) as similarity,
+                    1 - (query_embedding <=> '{embedding_str}'::vector) as similarity,
                     EXTRACT(EPOCH FROM (NOW() - created_at)) as age_seconds,
                     ttl_seconds
                 FROM query_cache
-                WHERE 1 - (query_embedding <=> :embedding::vector) > 0.95
+                WHERE 1 - (query_embedding <=> '{embedding_str}'::vector) > 0.95
                     AND EXTRACT(EPOCH FROM (NOW() - created_at)) < ttl_seconds
                 ORDER BY similarity DESC
                 LIMIT 1
             """)
 
-            result = await db.execute(query, {"embedding": embedding_str})
+            result = await db.execute(query)
             row = result.first()
 
             if row:
@@ -168,6 +169,8 @@ class RAGService:
 
         except Exception as e:
             logger.warning(f"Error checking semantic cache: {e}")
+            # Rollback on error to prevent transaction-aborted state
+            await db.rollback()
             return None
 
     async def _cache_result(
@@ -180,21 +183,22 @@ class RAGService:
         """Cache query result for future use"""
         try:
             from sqlalchemy import text as sql_text
-
-            query = sql_text("""
-                INSERT INTO query_cache (query_text, query_embedding, response, sources, ttl_seconds)
-                VALUES (:query_text, :embedding::vector, :response, :sources, :ttl)
-            """)
+            import json
 
             embedding_str = f"[{','.join(map(str, query_embedding))}]"
+
+            # Note: Embedding is embedded directly in SQL since asyncpg doesn't support vector params
+            query = sql_text(f"""
+                INSERT INTO query_cache (query_text, query_embedding, response, sources, ttl_seconds)
+                VALUES (:query_text, '{embedding_str}'::vector, :response, :sources, :ttl)
+            """)
 
             await db.execute(
                 query,
                 {
                     "query_text": query_text,
-                    "embedding": embedding_str,
-                    "response": result,
-                    "sources": result.get('sources', []),
+                    "response": json.dumps(result),
+                    "sources": json.dumps(result.get('sources', [])),
                     "ttl": 3600  # 1 hour
                 }
             )
@@ -204,6 +208,7 @@ class RAGService:
 
         except Exception as e:
             logger.warning(f"Error caching result: {e}")
+            await db.rollback()
 
 
 # Singleton instance
