@@ -83,6 +83,7 @@ temp/
 *.bin
 *.safetensors
 models/
+!backend/app/models/
 checkpoints/
 
 # Data
