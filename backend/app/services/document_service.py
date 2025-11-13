@@ -204,7 +204,7 @@ class DocumentService:
                     chunk_index=i,
                     content=chunk['content'],
                     embedding=embedding,
-                    metadata={
+                    meta_info={
                         'source': document.filename,
                         'source_type': document.source_type,
                         'source_url': document.source_url,
@@ -280,7 +280,7 @@ class DocumentService:
                     dc.id,
                     dc.document_id,
                     dc.content,
-                    dc.metadata,
+                    dc.meta_info,
                     d.filename,
                     d.source_type,
                     d.source_url,
@@ -307,7 +307,7 @@ class DocumentService:
                     'id': str(row.id),
                     'document_id': str(row.document_id),
                     'content': row.content,
-                    'metadata': row.metadata,
+                    'meta_info': row.meta_info,
                     'filename': row.filename,
                     'source_type': row.source_type,
                     'source_url': row.source_url,

@@ -18,7 +18,7 @@ class Document(Base):
     file_size = Column(Integer, nullable=False)
     source_type = Column(String(50), nullable=False)  # 'upload' or 'scrape'
     source_url = Column(String(1024), nullable=True)  # For scraped content
-    metadata = Column(JSON, nullable=True)
+    meta_info = Column(JSON, nullable=True)
     upload_date = Column(DateTime(timezone=True), server_default=func.now())
     processed = Column(Boolean, default=False)
     processing_error = Column(Text, nullable=True)
@@ -32,7 +32,7 @@ class DocumentChunk(Base):
     chunk_index = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
     embedding = Column(Vector(384))  # Dimension matches EMBEDDING_DIMENSION in config
-    metadata = Column(JSON, nullable=True)
+    meta_info = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -43,7 +43,7 @@ class Conversation(Base):
     session_id = Column(String(255), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    metadata = Column(JSON, nullable=True)
+    meta_info = Column(JSON, nullable=True)
 
 
 class Message(Base):
@@ -71,7 +71,7 @@ class WebScrapeJob(Base):
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)
-    metadata = Column(JSON, nullable=True)
+    meta_info = Column(JSON, nullable=True)
 
 
 class QueryCache(Base):
