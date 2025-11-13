@@ -158,72 +158,60 @@ class ModelRegistry:
         ))
 
         # ============================================================================
-        # LOCAL GPU MODELS (vLLM)
+        # LOCAL GPU MODELS (vLLM with quantization support)
+        # Max 7B models, optimized for speed and efficiency
         # ============================================================================
 
         self.register(ModelInfo(
-            id="llama-3.1-70b",
-            name="Llama 3.1 70B (Local)",
-            provider=ModelProvider.VLLM,
-            model_type=ModelType.LOCAL_GPU,
-            model_path="meta-llama/Meta-Llama-3.1-70B-Instruct",
-            context_length=128000,
-            cost_per_1k_tokens=0.0,
-            requires_gpu=True,
-            min_gpu_memory_gb=80,
-            description="Meta's flagship open model. Excellent quality, requires high-end GPU.",
-            recommended=False
-        ))
-
-        self.register(ModelInfo(
-            id="llama-3.1-8b",
-            name="Llama 3.1 8B (Local)",
+            id="llama-3.1-8b-gpu",
+            name="Llama 3.1 8B (GPU)",
             provider=ModelProvider.VLLM,
             model_type=ModelType.LOCAL_GPU,
             model_path="meta-llama/Meta-Llama-3.1-8B-Instruct",
             context_length=128000,
             cost_per_1k_tokens=0.0,
             requires_gpu=True,
-            min_gpu_memory_gb=16,
-            description="Balanced local model. Good quality with moderate GPU requirements.",
+            min_gpu_memory_gb=12,  # With quantization
+            description="Best quality in 7B range. Fast inference with AWQ/GPTQ quantization.",
             recommended=True
         ))
 
         self.register(ModelInfo(
-            id="llama-3.2-3b",
-            name="Llama 3.2 3B (Local)",
+            id="llama-3.2-3b-gpu",
+            name="Llama 3.2 3B (GPU)",
             provider=ModelProvider.VLLM,
             model_type=ModelType.LOCAL_GPU,
             model_path="meta-llama/Llama-3.2-3B-Instruct",
             context_length=128000,
             cost_per_1k_tokens=0.0,
             requires_gpu=True,
-            min_gpu_memory_gb=8,
-            description="Lightweight local model. Works on modest GPUs.",
+            min_gpu_memory_gb=6,  # Lightweight
+            description="Lightweight and fast. Excellent speed/quality balance.",
             recommended=True
         ))
 
         self.register(ModelInfo(
-            id="qwen-2.5-7b",
-            name="Qwen 2.5 7B (Local)",
+            id="qwen-2.5-7b-gpu",
+            name="Qwen 2.5 7B (GPU)",
             provider=ModelProvider.VLLM,
             model_type=ModelType.LOCAL_GPU,
             model_path="Qwen/Qwen2.5-7B-Instruct",
             context_length=32768,
             cost_per_1k_tokens=0.0,
             requires_gpu=True,
-            min_gpu_memory_gb=16,
-            description="Alibaba's Qwen model. Strong multilingual capabilities.",
+            min_gpu_memory_gb=12,
+            description="Multilingual powerhouse. Excellent for non-English queries.",
             recommended=False
         ))
 
         # ============================================================================
-        # LOCAL CPU MODELS (llama.cpp)
+        # LOCAL CPU MODELS (llama.cpp - GGUF quantized Q4_K_M)
+        # Optimized for CPU inference with 4-bit quantization
         # ============================================================================
 
         self.register(ModelInfo(
             id="llama-3.2-3b-cpu",
-            name="Llama 3.2 3B (CPU)",
+            name="Llama 3.2 3B Q4 (CPU)",
             provider=ModelProvider.LLAMA_CPP,
             model_type=ModelType.LOCAL_CPU,
             model_path="/models/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
@@ -231,13 +219,13 @@ class ModelRegistry:
             cost_per_1k_tokens=0.0,
             requires_gpu=False,
             min_gpu_memory_gb=0,
-            description="CPU-optimized Llama 3.2. Decent quality, slower inference.",
+            description="Best CPU model. Q4_K_M quantized for speed. ~2GB RAM, 5-10 tok/s.",
             recommended=True
         ))
 
         self.register(ModelInfo(
             id="qwen-1.5b-cpu",
-            name="Qwen 1.5B (CPU)",
+            name="Qwen 1.5B Q4 (CPU)",
             provider=ModelProvider.LLAMA_CPP,
             model_type=ModelType.LOCAL_CPU,
             model_path="/models/qwen2.5-1.5b-instruct-q4_k_m.gguf",
@@ -245,22 +233,8 @@ class ModelRegistry:
             cost_per_1k_tokens=0.0,
             requires_gpu=False,
             min_gpu_memory_gb=0,
-            description="Lightweight Qwen model for CPU. Fast on lower-end hardware.",
+            description="Ultra-fast CPU model. Q4_K_M quantized. ~1GB RAM, 10-15 tok/s.",
             recommended=True
-        ))
-
-        self.register(ModelInfo(
-            id="tinyllama-cpu",
-            name="TinyLlama 1.1B (CPU)",
-            provider=ModelProvider.LLAMA_CPP,
-            model_type=ModelType.LOCAL_CPU,
-            model_path="/models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-            context_length=2048,
-            cost_per_1k_tokens=0.0,
-            requires_gpu=False,
-            min_gpu_memory_gb=0,
-            description="Tiny model for testing. Very fast but basic quality.",
-            recommended=False
         ))
 
     def register(self, model: ModelInfo):

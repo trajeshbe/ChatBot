@@ -89,8 +89,9 @@ services:
   #   networks:
   #     - rag-network
 
-  # llama.cpp CPU fallback (enabled for local testing)
-  # Model: TinyLlama-1.1B-Chat (Q4_K_M quantization ~637MB)
+  # llama.cpp CPU fallback (optimized with quantized models)
+  # Default: Llama 3.2 3B Q4_K_M (~2GB, 5-10 tok/s)
+  # Alternative: Qwen 1.5B Q4_K_M (~1GB, 10-15 tok/s)
   llama-cpp:
     image: ghcr.io/ggerganov/llama.cpp:server
     container_name: rag-llama-cpp
@@ -100,15 +101,17 @@ services:
       - llama_models:/models
     command:
       - -m
-      - /models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+      - /models/Llama-3.2-3B-Instruct-Q4_K_M.gguf  # Quantized for speed
       - --host
       - 0.0.0.0
       - --port
       - "8080"
       - -c
-      - "2048"
+      - "4096"  # Context length
       - --n-gpu-layers
-      - "0"
+      - "0"    # CPU only (set to 32 if GPU available)
+      - -ngl
+      - "0"    # Alternative GPU layers flag
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
       interval: 30s

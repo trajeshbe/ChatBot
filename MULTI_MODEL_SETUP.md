@@ -10,7 +10,8 @@ This guide shows you how to set up the **enhanced multi-model system** with:
 ✅ **Automatic GPU/CPU detection**
 ✅ **Multiple LLM providers**: OpenAI, Claude, Local GPU (vLLM), Local CPU (llama.cpp)
 ✅ **UI model selector dropdown** with grouping
-✅ **12 pre-configured models** ready to use
+✅ **11 pre-configured models** (6 proprietary + 5 local, max 7B)
+✅ **GGUF Q4 quantization** for CPU models (4x smaller, 2x faster)
 ✅ **Intelligent fallback** based on hardware
 
 ---
@@ -26,12 +27,13 @@ This guide shows you how to set up the **enhanced multi-model system** with:
    - Recommends optimal backend
 
 2. **`backend/app/models/model_registry.py`**
-   - Registry of 12 models:
+   - Registry of 11 models (6 proprietary + 5 local):
      - **Proprietary**: GPT-4 Turbo, GPT-4, GPT-3.5 Turbo, Claude 3.5 Sonnet, Claude 3 Opus, Claude 3 Haiku
-     - **Local GPU**: Llama 3.1 70B, Llama 3.1 8B, Llama 3.2 3B, Qwen 2.5 7B
-     - **Local CPU**: Llama 3.2 3B, Qwen 1.5B, TinyLlama 1.1B
+     - **Local GPU** (max 7B): Llama 3.1 8B, Llama 3.2 3B, Qwen 2.5 7B
+     - **Local CPU** (GGUF Q4 quantized): Llama 3.2 3B Q4, Qwen 1.5B Q4
    - Tracks cost, context length, GPU requirements
    - Auto-detects model availability
+   - Optimized with quantization for speed
 
 3. **`backend/app/services/llm_service_enhanced.py`**
    - Unified API across all providers
@@ -262,19 +264,19 @@ Try sending a message with different models selected:
 
 | Model | Type | Requires | Available When |
 |-------|------|----------|----------------|
-| GPT-4 Turbo | Proprietary | OpenAI API Key | Always (if key set) |
-| GPT-4 | Proprietary | OpenAI API Key | Always (if key set) |
-| GPT-3.5 Turbo | Proprietary | OpenAI API Key | Always (if key set) |
-| Claude 3.5 Sonnet | Proprietary | Anthropic API Key | Always (if key set) |
-| Claude 3 Opus | Proprietary | Anthropic API Key | Always (if key set) |
-| Claude 3 Haiku | Proprietary | Anthropic API Key | Always (if key set) |
-| Llama 3.1 70B | Local GPU | 80+ GB GPU | GPU with 80GB+ VRAM |
-| Llama 3.1 8B | Local GPU | 16+ GB GPU | GPU with 16GB+ VRAM |
-| Llama 3.2 3B | Local GPU | 8+ GB GPU | GPU with 8GB+ VRAM |
-| Qwen 2.5 7B | Local GPU | 16+ GB GPU | GPU with 16GB+ VRAM |
-| Llama 3.2 3B (CPU) | Local CPU | None | Always |
-| Qwen 1.5B (CPU) | Local CPU | None | Always |
-| TinyLlama 1.1B | Local CPU | None | Always |
+| GPT-4 Turbo | ☁️ Proprietary | OpenAI API Key | Always (if key set) |
+| GPT-4 | ☁️ Proprietary | OpenAI API Key | Always (if key set) |
+| GPT-3.5 Turbo | ☁️ Proprietary | OpenAI API Key | Always (if key set) |
+| Claude 3.5 Sonnet | ☁️ Proprietary | Anthropic API Key | Always (if key set) |
+| Claude 3 Opus | ☁️ Proprietary | Anthropic API Key | Always (if key set) |
+| Claude 3 Haiku | ☁️ Proprietary | Anthropic API Key | Always (if key set) |
+| Llama 3.1 8B | ⚡ Local GPU | 12+ GB GPU | GPU with 12GB+ VRAM |
+| Llama 3.2 3B | ⚡ Local GPU | 6+ GB GPU | GPU with 6GB+ VRAM |
+| Qwen 2.5 7B | ⚡ Local GPU | 12+ GB GPU | GPU with 12GB+ VRAM |
+| Llama 3.2 3B Q4 | 💻 Local CPU | ~2GB RAM | Always |
+| Qwen 1.5B Q4 | 💻 Local CPU | ~1GB RAM | Always |
+
+**Note**: Local models limited to max 7B for efficiency. CPU models use GGUF Q4_K_M quantization for 4x compression with minimal quality loss.
 
 ---
 
