@@ -6,7 +6,6 @@ from app.services.rag_service import rag_service
 from app.services.document_service import document_service
 from app.services.scraper_service import scraper_service
 from app.core.database import AsyncSessionLocal
-from app.agents.rag_agent import rag_agent, document_ingestion_flow, web_scraping_flow
 
 logger = logging.getLogger(__name__)
 
@@ -212,8 +211,20 @@ class Mutation:
     async def scrape_multiple_urls(self, input: MultiScrapeInput) -> List[ScrapeJobResult]:
         """Scrape multiple URLs"""
         try:
-            # Use Prefect flow for orchestration
-            results = await web_scraping_flow(input.urls, input.scrape_prompt)
+            # Scrape each URL directly
+            results = []
+            async with AsyncSessionLocal() as db:
+                for url in input.urls:
+                    try:
+                        result = await scraper_service.scrape_url(url, input.scrape_prompt, db)
+                        results.append(result)
+                    except Exception as e:
+                        logger.error(f"Error scraping URL {url}: {e}")
+                        results.append({
+                            'success': False,
+                            'url': url,
+                            'error': str(e)
+                        })
 
             return [
                 ScrapeJobResult(
