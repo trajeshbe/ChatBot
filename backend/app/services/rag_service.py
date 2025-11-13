@@ -18,6 +18,7 @@ class RAGService:
         query_text: str,
         conversation_history: Optional[List[Dict]] = None,
         use_cache: bool = True,
+        model_id: Optional[str] = None,
         db: AsyncSession = None
     ) -> Dict:
         """
@@ -58,7 +59,8 @@ class RAGService:
                 response = await llm_service.generate_with_context(
                     query=query_text,
                     context_chunks=similar_chunks,
-                    conversation_history=conversation_history
+                    conversation_history=conversation_history,
+                    model_id=model_id
                 )
             else:
                 # No relevant context found - inform user about uploading documents
@@ -73,7 +75,8 @@ class RAGService:
                     messages=[
                         {"role": "system", "content": system_message},
                         {"role": "user", "content": query_text}
-                    ]
+                    ],
+                    model_id=model_id
                 )
 
             # Step 4: Extract and format sources
@@ -83,6 +86,7 @@ class RAGService:
                 'answer': response['content'],
                 'sources': sources,
                 'model': response['model'],
+                'model_name': response.get('model_name', response['model']),
                 'tokens_used': response['tokens'],
                 'latency_ms': (time.time() - start_time) * 1000,
                 'num_sources': len(sources),

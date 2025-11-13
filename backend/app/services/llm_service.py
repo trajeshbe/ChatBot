@@ -50,6 +50,7 @@ class LLMService:
             return {
                 "content": response.json()["choices"][0]["text"],
                 "model": "vllm",
+                "model_name": "Local GPU (vLLM)",
                 "tokens": response.json().get("usage", {}).get("total_tokens", 0)
             }
         except Exception as e:
@@ -73,6 +74,7 @@ class LLMService:
             return {
                 "content": response.json()["content"],
                 "model": "llama-cpp",
+                "model_name": "Local CPU (llama.cpp)",
                 "tokens": response.json().get("tokens_evaluated", 0)
             }
         except Exception as e:
@@ -94,6 +96,7 @@ class LLMService:
             return {
                 "content": response.choices[0].message.content,
                 "model": "openai",
+                "model_name": f"OpenAI ({settings.OPENAI_MODEL})",
                 "tokens": response.usage.total_tokens
             }
         except Exception as e:
@@ -106,15 +109,22 @@ class LLMService:
         messages: Optional[List[Dict]] = None,
         max_tokens: int = 512,
         temperature: float = 0.7,
-        use_fallback: bool = True
+        use_fallback: bool = True,
+        model_id: Optional[str] = None
     ) -> Dict:
         """
         Generate response with automatic fallback chain:
         OpenAI -> vLLM -> llama.cpp
 
         Prioritizes OpenAI for speed and reliability, with local LLM fallback
+
+        Args:
+            model_id: Optional model identifier (for enhanced service compatibility)
         """
         start_time = time.time()
+
+        # Note: Basic service uses automatic fallback chain
+        # model_id parameter accepted for compatibility with enhanced service
 
         # Try OpenAI first (fastest and most reliable)
         if self.openai_client:
@@ -165,7 +175,8 @@ class LLMService:
         context_chunks: List[Dict],
         conversation_history: Optional[List[Dict]] = None,
         max_tokens: int = 1024,
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        model_id: Optional[str] = None
     ) -> Dict:
         """Generate response with RAG context"""
         # Build context from chunks
@@ -204,7 +215,8 @@ Please provide a detailed answer based on the context above, and cite your sourc
             prompt=prompt,
             messages=messages,
             max_tokens=max_tokens,
-            temperature=temperature
+            temperature=temperature,
+            model_id=model_id
         )
 
 

@@ -149,6 +149,7 @@ async def query_endpoint(
     query: str = Form(...),
     session_id: Optional[str] = Form(None),
     use_cache: bool = Form(True),
+    model_id: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db)
 ):
     """Query the RAG system"""
@@ -157,6 +158,7 @@ async def query_endpoint(
             query_text=query,
             conversation_history=None,
             use_cache=use_cache,
+            model_id=model_id,
             db=db
         )
 
