@@ -1,70 +1,146 @@
-# Core FastAPI and server
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-python-multipart==0.0.9
-pydantic==2.5.3
-pydantic-settings==2.1.0
+# ============================================================================
+# ENTERPRISE RAG CHATBOT - PYTHON DEPENDENCIES
+# ============================================================================
+# This file lists all Python packages required for the backend application.
+# Packages are organized by functionality with detailed comments.
+# ============================================================================
 
-# GraphQL
-strawberry-graphql[fastapi]==0.219.2
-graphql-core==3.2.3
+# ----------------------------------------------------------------------------
+# CORE WEB FRAMEWORK (Required)
+# Used by: app/main.py, all API endpoints
+# ----------------------------------------------------------------------------
+fastapi==0.109.0              # Modern async web framework - main API server
+uvicorn[standard]==0.27.0     # ASGI server - runs FastAPI application
+python-multipart==0.0.9       # Form/file upload handling - used by file upload endpoints
+pydantic==2.5.3               # Data validation - used throughout for request/response models
+pydantic-settings==2.1.0      # Settings management - used by app/core/config.py
 
-# Database and Vector Store
-psycopg2-binary==2.9.9
-asyncpg==0.29.0
-sqlalchemy==2.0.25
-pgvector==0.2.4
-alembic==1.13.1
+# ----------------------------------------------------------------------------
+# GRAPHQL API (Required)
+# Used by: app/api/graphql/schema.py
+# ----------------------------------------------------------------------------
+strawberry-graphql[fastapi]==0.219.2  # GraphQL implementation - provides GraphQL API
+graphql-core==3.2.3                   # GraphQL core library - required by strawberry
 
-# Object Storage
-minio==7.2.3
+# ----------------------------------------------------------------------------
+# DATABASE & VECTOR STORAGE (Required)
+# Used by: app/core/database.py, app/models/database.py, app/services/*
+# ----------------------------------------------------------------------------
+psycopg2-binary==2.9.9        # PostgreSQL adapter - database driver (sync)
+asyncpg==0.29.0               # Async PostgreSQL driver - used for async operations
+sqlalchemy==2.0.25            # ORM framework - database abstraction layer
+pgvector==0.2.4               # Vector operations for PostgreSQL - enables semantic search
+alembic==1.13.1               # Database migrations - schema version control
 
-# Redis and Caching
-redis==5.0.1
-hiredis==2.3.2
-# redis-om removed - not used and conflicts with pydantic 2.x
+# ----------------------------------------------------------------------------
+# OBJECT STORAGE (Required)
+# Used by: app/services/document_service.py
+# ----------------------------------------------------------------------------
+minio==7.2.3                  # S3-compatible object storage client - stores uploaded files
 
-# LLM and AI
-openai==1.10.0
-langchain==0.1.6
-langchain-community==0.0.19
-langchain-openai==0.0.5
-langgraph==0.0.26
-sentence-transformers==2.3.1
-# Heavy ML packages (optional - needed for local LLM)
-# transformers==4.37.2
-# torch==2.1.2
-# vllm==0.2.7  # Requires GPU
+# ----------------------------------------------------------------------------
+# CACHING (Required)
+# Used by: app/services/embedding_service.py, app/services/rag_service.py
+# ----------------------------------------------------------------------------
+redis==5.0.1                  # Redis client - semantic caching and session storage
+hiredis==2.3.2                # Redis protocol parser - improves Redis performance
+# Note: redis-om removed due to pydantic 2.x conflicts (not used in code)
 
-# Document Processing
-# docling==1.0.0  # Not available in PyPI - optional for advanced document processing
-pypdf2==3.0.1
-python-docx==1.1.0
-python-pptx==0.6.23
-openpyxl==3.1.2
-beautifulsoup4==4.12.3
-lxml==5.1.0
+# ----------------------------------------------------------------------------
+# AI & LLM INTEGRATION (Required for core functionality)
+# Used by: app/services/llm_service.py, app/services/rag_service.py
+# ----------------------------------------------------------------------------
+openai==1.10.0                # OpenAI API client - LLM fallback for responses
+sentence-transformers==2.3.1  # Embedding generation - creates vector embeddings for documents
 
-# Web Scraping
-playwright==1.41.0
-httpx==0.26.0
-trafilatura==1.6.3
+# ----------------------------------------------------------------------------
+# AI & LLM - OPTIONAL PACKAGES (Commented out for lighter install)
+# Uncomment these for advanced AI features or local LLM support
+# ----------------------------------------------------------------------------
+# Used by: app/agents/rag_agent.py (LangGraph workflows)
+# langchain==0.1.20           # LLM framework - agent orchestration
+# langchain-community==0.0.38 # Community integrations for LangChain
+# langchain-openai==0.0.8     # OpenAI integration for LangChain
+# langgraph==0.0.40           # Agent workflow graphs - DAG orchestration
+#
+# Used by: local LLM inference (if not using OpenAI)
+# transformers==4.37.2        # Hugging Face transformers - model loading
+# torch==2.1.2                # PyTorch - ML framework (large download ~2GB)
+# vllm==0.2.7                 # GPU-accelerated LLM inference (requires CUDA)
 
-# Workflow and Agents (optional)
-# prefect==3.0.0
-# prefect-ray==0.3.0
+# ----------------------------------------------------------------------------
+# DOCUMENT PROCESSING (Required)
+# Used by: app/services/document_service.py
+# ----------------------------------------------------------------------------
+# docling==1.0.0              # Advanced document parsing (not in PyPI - install separately)
+pypdf2==3.0.1                 # PDF text extraction - processes PDF uploads
+python-docx==1.1.0            # Word document parsing - processes DOCX uploads
+python-pptx==0.6.23           # PowerPoint parsing - processes PPTX uploads
+openpyxl==3.1.2               # Excel file parsing - processes XLSX uploads
+beautifulsoup4==4.12.3        # HTML parsing - cleans web scraped content
+lxml==5.1.0                   # XML/HTML parser - faster than default parser
 
-# Observability
-opentelemetry-api==1.22.0
-opentelemetry-sdk==1.22.0
-opentelemetry-instrumentation-fastapi==0.43b0
-opentelemetry-exporter-otlp==1.22.0
-prometheus-client==0.19.0
+# ----------------------------------------------------------------------------
+# WEB SCRAPING (Required)
+# Used by: app/services/scraper_service.py
+# ----------------------------------------------------------------------------
+playwright==1.41.0            # Browser automation - scrapes JavaScript-heavy sites
+httpx==0.26.0                 # Async HTTP client - makes HTTP requests
+trafilatura==1.6.3            # Content extraction - extracts main content from HTML
 
-# Utilities
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-dotenv==1.0.0
-tenacity==8.2.3
-aiofiles==23.2.1
-pyyaml==6.0.1
+# ----------------------------------------------------------------------------
+# WORKFLOW ORCHESTRATION (Optional - commented out)
+# Used by: app/agents/rag_agent.py
+# ----------------------------------------------------------------------------
+# prefect==3.0.0              # Workflow orchestration - manages document processing pipelines
+# prefect-ray==0.3.0          # Ray integration for distributed processing
+
+# ----------------------------------------------------------------------------
+# OBSERVABILITY & MONITORING (Required)
+# Used by: app/main.py, automatic instrumentation
+# ----------------------------------------------------------------------------
+opentelemetry-api==1.22.0                    # OpenTelemetry API - tracing interface
+opentelemetry-sdk==1.22.0                    # OpenTelemetry SDK - tracing implementation
+opentelemetry-instrumentation-fastapi==0.43b0 # FastAPI auto-instrumentation - traces API calls
+opentelemetry-exporter-otlp==1.22.0          # OTLP exporter - sends traces to Tempo/Grafana
+prometheus-client==0.19.0                    # Prometheus metrics - exposes /metrics endpoint
+
+# ----------------------------------------------------------------------------
+# UTILITIES (Required)
+# Used by: various services throughout the application
+# ----------------------------------------------------------------------------
+python-jose[cryptography]==3.3.0  # JWT tokens - authentication (if needed)
+passlib[bcrypt]==1.7.4            # Password hashing - secure password storage (if needed)
+python-dotenv==1.0.0              # Environment variables - loads .env file
+tenacity==8.2.3                   # Retry logic - handles transient failures in API calls
+aiofiles==23.2.1                  # Async file operations - improves I/O performance
+pyyaml==6.0.1                     # YAML parsing - reads configuration files
+
+# ============================================================================
+# INSTALLATION NOTES
+# ============================================================================
+#
+# QUICK START (Minimal Install):
+#   pip install -r requirements.txt
+#   This installs core functionality without heavy ML packages
+#
+# FULL INSTALL (With Local LLM):
+#   1. Uncomment torch, transformers, vllm lines above
+#   2. pip install -r requirements.txt
+#   Note: This adds ~3GB of downloads
+#
+# OPTIONAL FEATURES:
+#   - LangChain/LangGraph: Uncomment langchain packages for agent workflows
+#   - Prefect: Uncomment prefect packages for workflow orchestration
+#   - Docling: Install separately if available: pip install docling
+#
+# PLAYWRIGHT SETUP:
+#   After pip install, run: playwright install chromium
+#   This downloads browser binaries for web scraping
+#
+# SYSTEM DEPENDENCIES:
+#   - PostgreSQL development headers (for psycopg2)
+#   - Build tools (gcc, g++, make)
+#   - See Dockerfile for complete list
+#
+# ============================================================================
