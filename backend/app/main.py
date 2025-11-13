@@ -16,11 +16,14 @@ from app.services.embedding_service import embedding_service
 try:
     from app.services.llm_service_enhanced import llm_service
     logger_temp = logging.getLogger(__name__)
-    logger_temp.info("Using Enhanced LLM Service with multi-model support")
+    logger_temp.info("✓ Using Enhanced LLM Service with multi-model support")
 except ImportError as e:
     from app.services.llm_service import llm_service
     logger_temp = logging.getLogger(__name__)
-    logger_temp.warning(f"Enhanced LLM service not available: {e}. Using basic service.")
+    logger_temp.warning(f"⚠ Enhanced LLM service not available: {e}")
+    logger_temp.warning("⚠ Using basic LLM service - model selection will not work")
+    import traceback
+    logger_temp.debug(f"Import traceback: {traceback.format_exc()}")
 
 from app.services.document_service import document_service
 from app.services.scraper_service import scraper_service
@@ -60,9 +63,18 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Embedding service initialization failed: {e}")
 
     try:
-        logger.info("Initializing LLM service...")
+        logger.info(f"Initializing LLM service... (Type: {type(llm_service).__name__})")
         await llm_service.initialize()
-        logger.info("LLM service initialized")
+        logger.info(f"✓ LLM service initialized successfully (Type: {type(llm_service).__name__})")
+
+        # Log model availability if enhanced service
+        if hasattr(llm_service, 'get_available_models'):
+            try:
+                models_info = llm_service.get_available_models()
+                logger.info(f"Available models: {len(models_info.get('models', []))} total")
+                logger.info(f"Default model: {models_info.get('default', 'not set')}")
+            except Exception as e:
+                logger.warning(f"Could not get model info: {e}")
     except Exception as e:
         logger.warning(f"LLM service initialization failed: {e}")
 
