@@ -81,6 +81,10 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     setAttachedFiles(prev => [...prev, ...files])
+    // Reset input to allow re-uploading same file
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
   const removeAttachedFile = (index: number) => {
