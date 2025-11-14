@@ -86,10 +86,10 @@ class Settings(BaseSettings):
     ENABLE_TRACING: bool = True
 
     # RAG settings
-    CHUNK_SIZE: int = 500
-    CHUNK_OVERLAP: int = 50
+    CHUNK_SIZE: int = 800  # Increased from 500 for better context (optimal for embeddings)
+    CHUNK_OVERLAP: int = 150  # Increased from 50 for better continuity (20% overlap)
     TOP_K_RESULTS: int = 5
-    SIMILARITY_THRESHOLD: float = 0.5  # Lowered from 0.7 to be more lenient and improve retrieval
+    SIMILARITY_THRESHOLD: float = 0.3  # Lowered from 0.5 for better recall with hybrid search
 
     class Config:
         env_file = ".env"

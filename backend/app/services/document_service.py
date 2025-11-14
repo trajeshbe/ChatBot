@@ -12,6 +12,7 @@ from app.models.database import Document, DocumentChunk
 from app.services.embedding_service import embedding_service
 import io
 import os
+import re
 
 # Document processing imports
 try:
@@ -23,7 +24,11 @@ except ImportError:
 
 from PyPDF2 import PdfReader
 from docx import Document as DocxDocument
+from pptx import Presentation
 import json
+
+# LangChain for better text splitting
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 logger = logging.getLogger(__name__)
 
@@ -131,9 +136,21 @@ class DocumentService:
                 doc = DocxDocument(io.BytesIO(file_data))
                 text = "\n\n".join([para.text for para in doc.paragraphs])
                 return text
+            elif filename.endswith('.pptx'):
+                # Extract text from PowerPoint presentations
+                prs = Presentation(io.BytesIO(file_data))
+                text_runs = []
+                for slide in prs.slides:
+                    for shape in slide.shapes:
+                        if hasattr(shape, "text"):
+                            text_runs.append(shape.text)
+                text = "\n\n".join(text_runs)
+                return text
             elif filename.endswith('.json'):
                 data = json.loads(file_data)
                 return json.dumps(data, indent=2)
+            elif filename.endswith('.md'):
+                return file_data.decode('utf-8', errors='ignore')
             else:
                 return file_data.decode('utf-8', errors='ignore')
         except Exception as e:
@@ -243,43 +260,93 @@ class DocumentService:
             raise
 
     def _chunk_text(self, text: str) -> List[Dict]:
-        """Split text into overlapping chunks"""
+        """
+        Split text into overlapping chunks with semantic boundaries.
+        Uses LangChain's RecursiveCharacterTextSplitter for better semantic chunking.
+        """
+        # Clean the text first
+        text = self._clean_text(text)
+
+        # Use RecursiveCharacterTextSplitter for better semantic chunking
+        # This splits on paragraphs, then sentences, then words
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=settings.CHUNK_SIZE,
+            chunk_overlap=settings.CHUNK_OVERLAP,
+            length_function=len,
+            separators=[
+                "\n\n\n",  # Multiple newlines (section breaks)
+                "\n\n",    # Paragraph breaks
+                "\n",      # Line breaks
+                ". ",      # Sentence endings
+                "! ",      # Exclamations
+                "? ",      # Questions
+                "; ",      # Semicolons
+                ", ",      # Commas
+                " ",       # Spaces
+                ""         # Characters
+            ],
+            is_separator_regex=False,
+        )
+
+        # Split the text
+        chunk_texts = text_splitter.split_text(text)
+
+        # Create chunks with metadata
         chunks = []
-        chunk_size = settings.CHUNK_SIZE
-        overlap = settings.CHUNK_OVERLAP
-
-        start = 0
-        while start < len(text):
-            end = start + chunk_size
-            chunk_text = text[start:end]
-
-            # Try to break at sentence boundary
-            if end < len(text):
-                last_period = chunk_text.rfind('.')
-                last_newline = chunk_text.rfind('\n')
-                break_point = max(last_period, last_newline)
-                if break_point > chunk_size * 0.5:  # Only if we're past halfway
-                    end = start + break_point + 1
-                    chunk_text = text[start:end]
+        char_position = 0
+        for i, chunk_text in enumerate(chunk_texts):
+            # Find the chunk in the original text for accurate positioning
+            start_pos = text.find(chunk_text, char_position)
+            if start_pos == -1:
+                start_pos = char_position
+            end_pos = start_pos + len(chunk_text)
 
             chunks.append({
                 'content': chunk_text.strip(),
-                'start': start,
-                'end': end
+                'start': start_pos,
+                'end': end_pos,
+                'chunk_index': i
             })
 
-            start = end - overlap
+            char_position = end_pos
 
+        logger.info(f"Created {len(chunks)} semantic chunks (avg size: {sum(len(c['content']) for c in chunks) / len(chunks):.0f} chars)")
         return chunks
+
+    def _clean_text(self, text: str) -> str:
+        """
+        Clean extracted text for better chunking and embedding.
+        """
+        # Remove excessive whitespace while preserving structure
+        text = re.sub(r'\n{4,}', '\n\n\n', text)  # Max 3 consecutive newlines
+        text = re.sub(r' {3,}', '  ', text)  # Max 2 consecutive spaces
+        text = re.sub(r'\t+', ' ', text)  # Replace tabs with spaces
+
+        # Remove page numbers and headers/footers patterns (common in PDFs)
+        text = re.sub(r'\n\d+\n', '\n', text)  # Standalone page numbers
+        text = re.sub(r'Page \d+ of \d+', '', text, flags=re.IGNORECASE)
+
+        # Remove excessive dashes (often used as separators)
+        text = re.sub(r'-{4,}', '', text)
+        text = re.sub(r'_{4,}', '', text)
+
+        return text.strip()
 
     async def search_similar_chunks(
         self,
         query_embedding: List[float],
         top_k: int = 5,
-        threshold: float = 0.7,
-        db: AsyncSession = None
+        threshold: float = 0.5,
+        db: AsyncSession = None,
+        query_text: str = None,
+        use_hybrid: bool = True
     ) -> List[Dict]:
-        """Search for similar document chunks using vector similarity"""
+        """
+        Search for similar document chunks using hybrid search:
+        1. Vector similarity search (semantic)
+        2. Keyword matching (lexical) - optional
+        3. Combined reranking for better results
+        """
         from sqlalchemy import text as sql_text, select, func
         from app.models.database import DocumentChunk
 
@@ -296,31 +363,81 @@ class DocumentService:
             # Convert embedding to PostgreSQL vector format string
             embedding_str = f"[{','.join(map(str, query_embedding))}]"
 
-            # Perform vector similarity search using raw SQL with proper parameter binding
-            # Note: Using string formatting for embedding since asyncpg doesn't support vector type in params
-            query = sql_text(f"""
-                SELECT
-                    dc.id,
-                    dc.document_id,
-                    dc.content,
-                    dc.meta_info,
-                    d.filename,
-                    d.source_type,
-                    d.source_url,
-                    1 - (dc.embedding <=> '{embedding_str}'::vector) as similarity
-                FROM document_chunks dc
-                JOIN documents d ON dc.document_id = d.id
-                WHERE dc.embedding IS NOT NULL
-                    AND 1 - (dc.embedding <=> '{embedding_str}'::vector) > :threshold
-                ORDER BY dc.embedding <=> '{embedding_str}'::vector
-                LIMIT :limit
-            """)
+            # Hybrid search: combine semantic and keyword search
+            if use_hybrid and query_text:
+                # Extract keywords from query for keyword matching
+                keywords = self._extract_keywords(query_text)
+                keyword_condition = " OR ".join([f"dc.content ILIKE '%{kw}%'" for kw in keywords]) if keywords else "TRUE"
+
+                # Hybrid query with both semantic and keyword matching
+                query = sql_text(f"""
+                    WITH semantic_search AS (
+                        SELECT
+                            dc.id,
+                            dc.document_id,
+                            dc.content,
+                            dc.meta_info,
+                            d.filename,
+                            d.source_type,
+                            d.source_url,
+                            1 - (dc.embedding <=> '{embedding_str}'::vector) as semantic_score
+                        FROM document_chunks dc
+                        JOIN documents d ON dc.document_id = d.id
+                        WHERE dc.embedding IS NOT NULL
+                    ),
+                    keyword_search AS (
+                        SELECT
+                            id,
+                            CASE
+                                WHEN ({keyword_condition}) THEN 1.0
+                                ELSE 0.0
+                            END as keyword_score
+                        FROM document_chunks
+                    )
+                    SELECT
+                        ss.id,
+                        ss.document_id,
+                        ss.content,
+                        ss.meta_info,
+                        ss.filename,
+                        ss.source_type,
+                        ss.source_url,
+                        ss.semantic_score,
+                        COALESCE(ks.keyword_score, 0) as keyword_score,
+                        (ss.semantic_score * 0.7 + COALESCE(ks.keyword_score, 0) * 0.3) as combined_score
+                    FROM semantic_search ss
+                    LEFT JOIN keyword_search ks ON ss.id = ks.id
+                    WHERE (ss.semantic_score * 0.7 + COALESCE(ks.keyword_score, 0) * 0.3) > :threshold
+                    ORDER BY combined_score DESC
+                    LIMIT :limit
+                """)
+            else:
+                # Standard semantic search only
+                query = sql_text(f"""
+                    SELECT
+                        dc.id,
+                        dc.document_id,
+                        dc.content,
+                        dc.meta_info,
+                        d.filename,
+                        d.source_type,
+                        d.source_url,
+                        1 - (dc.embedding <=> '{embedding_str}'::vector) as semantic_score,
+                        0.0 as keyword_score,
+                        1 - (dc.embedding <=> '{embedding_str}'::vector) as combined_score
+                    FROM document_chunks dc
+                    JOIN documents d ON dc.document_id = d.id
+                    WHERE dc.embedding IS NOT NULL
+                        AND 1 - (dc.embedding <=> '{embedding_str}'::vector) > :threshold
+                    ORDER BY dc.embedding <=> '{embedding_str}'::vector
+                    LIMIT :limit
+                """)
 
             result = await db.execute(
                 query,
                 {
                     "threshold": threshold,
-                    "limit": top_k
+                    "limit": top_k * 2  # Get more results for better diversity
                 }
             )
 
@@ -334,10 +451,15 @@ class DocumentService:
                     'filename': row.filename,
                     'source_type': row.source_type,
                     'source_url': row.source_url,
-                    'similarity': float(row.similarity)
+                    'similarity': float(row.combined_score),
+                    'semantic_score': float(row.semantic_score),
+                    'keyword_score': float(row.keyword_score)
                 })
 
-            logger.info(f"Found {len(chunks)} similar chunks out of {chunk_count} total")
+            # Diversify results - avoid too many chunks from same document
+            chunks = self._diversify_chunks(chunks, top_k)
+
+            logger.info(f"Found {len(chunks)} similar chunks out of {chunk_count} total (hybrid={use_hybrid})")
             return chunks
 
         except Exception as e:
@@ -346,6 +468,56 @@ class DocumentService:
             await db.rollback()
             # Return empty list instead of raising to allow graceful degradation
             return []
+
+    def _extract_keywords(self, text: str, max_keywords: int = 5) -> List[str]:
+        """Extract important keywords from query text"""
+        # Remove common stop words
+        stop_words = {
+            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+            'of', 'with', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+            'what', 'which', 'who', 'when', 'where', 'why', 'how', 'can', 'could',
+            'should', 'would', 'will', 'shall', 'may', 'might', 'must', 'do', 'does', 'did'
+        }
+
+        # Extract words (alphanumeric, min 3 chars)
+        words = re.findall(r'\b[a-zA-Z0-9]{3,}\b', text.lower())
+
+        # Filter stop words and get unique keywords
+        keywords = [w for w in words if w not in stop_words]
+
+        # Return top keywords (by length as simple heuristic)
+        keywords = sorted(set(keywords), key=len, reverse=True)[:max_keywords]
+
+        return keywords
+
+    def _diversify_chunks(self, chunks: List[Dict], top_k: int) -> List[Dict]:
+        """
+        Diversify results to avoid too many chunks from the same document.
+        Ensures we get variety in sources.
+        """
+        if len(chunks) <= top_k:
+            return chunks
+
+        # Group by document
+        from collections import defaultdict
+        doc_chunks = defaultdict(list)
+        for chunk in chunks:
+            doc_chunks[chunk['document_id']].append(chunk)
+
+        # Select diverse chunks
+        diversified = []
+        max_per_doc = max(2, top_k // len(doc_chunks))  # At least 2 per doc if we have few docs
+
+        # First pass: add top chunk from each document
+        for doc_id, doc_chunk_list in doc_chunks.items():
+            if len(diversified) < top_k:
+                diversified.append(doc_chunk_list[0])
+
+        # Second pass: fill remaining slots with best chunks
+        remaining = [c for c in chunks if c not in diversified]
+        diversified.extend(remaining[:top_k - len(diversified)])
+
+        return diversified[:top_k]
 
 
 # Singleton instance

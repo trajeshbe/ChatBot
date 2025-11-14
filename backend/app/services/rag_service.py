@@ -50,18 +50,21 @@ class RAGService:
             logger.info(f"Processing query: {query_text[:100]}...")
             query_embedding = await embedding_service.get_embedding(query_text)
 
-            # Step 2: Search for similar chunks
+            # Step 2: Search for similar chunks using hybrid search
             similar_chunks = await document_service.search_similar_chunks(
                 query_embedding=query_embedding,
+                query_text=query_text,  # For keyword matching
                 top_k=settings.TOP_K_RESULTS,
                 threshold=settings.SIMILARITY_THRESHOLD,
+                use_hybrid=True,  # Enable hybrid search
                 db=db
             )
 
-            logger.info(f"Found {len(similar_chunks)} relevant chunks")
+            logger.info(f"Found {len(similar_chunks)} relevant chunks (hybrid search)")
 
             # Step 3: Generate response with context
             if similar_chunks:
+                # We have relevant documents - use RAG
                 response = await llm_service.generate_with_context(
                     query=query_text,
                     context_chunks=similar_chunks,
@@ -69,13 +72,35 @@ class RAGService:
                     model_id=model_id
                 )
             else:
-                # No relevant context found - inform user about uploading documents
-                logger.warning("No relevant context found, generating response without RAG")
-                system_message = ("You are a helpful enterprise RAG assistant. "
-                                "Currently, there are no documents in your knowledge base. "
-                                "Politely inform the user that they should upload documents "
-                                "or scrape URLs first to enable document-based answers. "
-                                "Still answer their question if it's a general one.")
+                # No relevant context found - use pure LLM with helpful message
+                logger.warning("No relevant context found, falling back to pure LLM")
+
+                # Check if there are ANY documents in the database
+                from sqlalchemy import text as sql_text, func
+                count_query = sql_text("SELECT COUNT(*) FROM documents WHERE processed = true")
+                count_result = await db.execute(count_query)
+                doc_count = count_result.scalar()
+
+                if doc_count == 0:
+                    # No documents at all - guide user to upload
+                    system_message = (
+                        "You are a helpful enterprise RAG assistant. "
+                        "Currently, there are no documents in your knowledge base. "
+                        "Politely inform the user that they should upload documents "
+                        "or scrape URLs first to enable document-based answers. "
+                        "However, if they ask a general question that doesn't require "
+                        "document context, answer it helpfully."
+                    )
+                else:
+                    # Documents exist but none are relevant to the query
+                    system_message = (
+                        "You are a helpful enterprise RAG assistant. "
+                        "The user has uploaded documents, but none appear directly relevant "
+                        "to this specific query. Provide the best answer you can based on "
+                        "your general knowledge, and suggest that the user might want to "
+                        "upload more relevant documents if they need specific information."
+                    )
+
                 response = await llm_service.generate(
                     prompt=f"System: {system_message}\n\nUser: {query_text}\n\nAssistant:",
                     messages=[

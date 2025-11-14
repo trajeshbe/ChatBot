@@ -81,24 +81,28 @@ class EnhancedRAGService:
                 short_term_chunks = await self._search_session_documents(
                     session_id=session_id,
                     query_embedding=query_embedding,
+                    query_text=query_text,  # For keyword matching
                     top_k=settings.TOP_K_RESULTS,
                     threshold=settings.SIMILARITY_THRESHOLD - 0.1,  # Slightly lower threshold for session docs
+                    use_hybrid=True,  # Enable hybrid search
                     db=db
                 )
                 if short_term_chunks:
-                    logger.info(f"✅ Found {len(short_term_chunks)} chunks in short-term memory (session documents)")
+                    logger.info(f"✅ Found {len(short_term_chunks)} chunks in short-term memory (session documents) - hybrid search")
                     logger.info(f"📄 Session documents used: {list(set([c['filename'] for c in short_term_chunks]))}")
                 else:
                     logger.info(f"⚠️ No session-specific documents found for session {session_id}")
 
-            # Step 3: Search long-term memory (all documents)
+            # Step 3: Search long-term memory (all documents) using hybrid search
             long_term_chunks = await document_service.search_similar_chunks(
                 query_embedding=query_embedding,
+                query_text=query_text,  # For keyword matching
                 top_k=settings.TOP_K_RESULTS,
                 threshold=settings.SIMILARITY_THRESHOLD,
+                use_hybrid=True,  # Enable hybrid search
                 db=db
             )
-            logger.info(f"Found {len(long_term_chunks)} chunks in long-term memory")
+            logger.info(f"Found {len(long_term_chunks)} chunks in long-term memory - hybrid search")
 
             # Step 4: Combine and deduplicate results (short-term has priority)
             combined_chunks = self._combine_memory_results(
@@ -129,13 +133,34 @@ class EnhancedRAGService:
                     model_id=model_id
                 )
             else:
-                # No context found - inform user
-                logger.warning("No relevant context found, generating response without RAG")
-                system_message = ("You are a helpful enterprise RAG assistant. "
-                                "Currently, there are no documents in your knowledge base. "
-                                "Politely inform the user that they should upload documents "
-                                "or scrape URLs first to enable document-based answers. "
-                                "Still answer their question if it's a general one.")
+                # No context found - use pure LLM with helpful message
+                logger.warning("No relevant context found, falling back to pure LLM")
+
+                # Check if there are ANY documents in the database
+                count_query = sql_text("SELECT COUNT(*) FROM documents WHERE processed = true")
+                count_result = await db.execute(count_query)
+                doc_count = count_result.scalar()
+
+                if doc_count == 0:
+                    # No documents at all - guide user to upload
+                    system_message = (
+                        "You are a helpful enterprise RAG assistant. "
+                        "Currently, there are no documents in your knowledge base. "
+                        "Politely inform the user that they should upload documents "
+                        "or scrape URLs first to enable document-based answers. "
+                        "However, if they ask a general question that doesn't require "
+                        "document context, answer it helpfully."
+                    )
+                else:
+                    # Documents exist but none are relevant to the query
+                    system_message = (
+                        "You are a helpful enterprise RAG assistant. "
+                        "The user has uploaded documents, but none appear directly relevant "
+                        "to this specific query. Provide the best answer you can based on "
+                        "your general knowledge, and suggest that the user might want to "
+                        "upload more relevant documents if they need specific information."
+                    )
+
                 response = await llm_service.generate(
                     prompt=f"System: {system_message}\n\nUser: {query_text}\n\nAssistant:",
                     messages=[
@@ -249,11 +274,16 @@ class EnhancedRAGService:
         self,
         session_id: str,
         query_embedding: List[float],
+        query_text: str = None,
         top_k: int = 5,
         threshold: float = 0.6,
+        use_hybrid: bool = True,
         db: AsyncSession = None
     ) -> List[Dict]:
-        """Search only documents associated with this session (short-term memory)"""
+        """
+        Search only documents associated with this session (short-term memory)
+        with optional hybrid search (semantic + keyword matching)
+        """
         try:
             from app.models.database_enhanced import SessionDocument, ChatSession
 
@@ -279,26 +309,81 @@ class EnhancedRAGService:
             # Search chunks from session documents only
             embedding_str = f"[{','.join(map(str, query_embedding))}]"
 
-            query = sql_text(f"""
-                SELECT
-                    dc.id,
-                    dc.document_id,
-                    dc.content,
-                    dc.meta_info,
-                    d.filename,
-                    d.source_type,
-                    d.source_url,
-                    sd.priority,
-                    1 - (dc.embedding <=> '{embedding_str}'::vector) as similarity
-                FROM document_chunks dc
-                JOIN documents d ON dc.document_id = d.id
-                JOIN session_documents sd ON d.id = sd.document_id
-                WHERE sd.session_id = :session_id
-                    AND dc.embedding IS NOT NULL
-                    AND 1 - (dc.embedding <=> '{embedding_str}'::vector) > :threshold
-                ORDER BY sd.priority DESC, dc.embedding <=> '{embedding_str}'::vector
-                LIMIT :limit
-            """)
+            # Hybrid search: combine semantic and keyword search
+            if use_hybrid and query_text:
+                # Extract keywords from query for keyword matching
+                keywords = document_service._extract_keywords(query_text)
+                keyword_condition = " OR ".join([f"dc.content ILIKE '%{kw}%'" for kw in keywords]) if keywords else "TRUE"
+
+                query = sql_text(f"""
+                    WITH semantic_search AS (
+                        SELECT
+                            dc.id,
+                            dc.document_id,
+                            dc.content,
+                            dc.meta_info,
+                            d.filename,
+                            d.source_type,
+                            d.source_url,
+                            sd.priority,
+                            1 - (dc.embedding <=> '{embedding_str}'::vector) as semantic_score
+                        FROM document_chunks dc
+                        JOIN documents d ON dc.document_id = d.id
+                        JOIN session_documents sd ON d.id = sd.document_id
+                        WHERE sd.session_id = :session_id
+                            AND dc.embedding IS NOT NULL
+                    ),
+                    keyword_search AS (
+                        SELECT
+                            id,
+                            CASE
+                                WHEN ({keyword_condition}) THEN 1.0
+                                ELSE 0.0
+                            END as keyword_score
+                        FROM document_chunks
+                    )
+                    SELECT
+                        ss.id,
+                        ss.document_id,
+                        ss.content,
+                        ss.meta_info,
+                        ss.filename,
+                        ss.source_type,
+                        ss.source_url,
+                        ss.priority,
+                        ss.semantic_score,
+                        COALESCE(ks.keyword_score, 0) as keyword_score,
+                        (ss.semantic_score * 0.7 + COALESCE(ks.keyword_score, 0) * 0.3) as combined_score
+                    FROM semantic_search ss
+                    LEFT JOIN keyword_search ks ON ss.id = ks.id
+                    WHERE (ss.semantic_score * 0.7 + COALESCE(ks.keyword_score, 0) * 0.3) > :threshold
+                    ORDER BY ss.priority DESC, combined_score DESC
+                    LIMIT :limit
+                """)
+            else:
+                # Standard semantic search only
+                query = sql_text(f"""
+                    SELECT
+                        dc.id,
+                        dc.document_id,
+                        dc.content,
+                        dc.meta_info,
+                        d.filename,
+                        d.source_type,
+                        d.source_url,
+                        sd.priority,
+                        1 - (dc.embedding <=> '{embedding_str}'::vector) as semantic_score,
+                        0.0 as keyword_score,
+                        1 - (dc.embedding <=> '{embedding_str}'::vector) as combined_score
+                    FROM document_chunks dc
+                    JOIN documents d ON dc.document_id = d.id
+                    JOIN session_documents sd ON d.id = sd.document_id
+                    WHERE sd.session_id = :session_id
+                        AND dc.embedding IS NOT NULL
+                        AND 1 - (dc.embedding <=> '{embedding_str}'::vector) > :threshold
+                    ORDER BY sd.priority DESC, dc.embedding <=> '{embedding_str}'::vector
+                    LIMIT :limit
+                """)
 
             result = await db.execute(
                 query,
@@ -319,7 +404,9 @@ class EnhancedRAGService:
                     'filename': row.filename,
                     'source_type': row.source_type,
                     'source_url': row.source_url,
-                    'similarity': float(row.similarity),
+                    'similarity': float(row.combined_score),
+                    'semantic_score': float(row.semantic_score),
+                    'keyword_score': float(row.keyword_score),
                     'memory_type': 'short-term',  # Mark as short-term memory
                     'priority': row.priority
                 })
