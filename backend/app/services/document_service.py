@@ -310,7 +310,8 @@ class DocumentService:
                     1 - (dc.embedding <=> '{embedding_str}'::vector) as similarity
                 FROM document_chunks dc
                 JOIN documents d ON dc.document_id = d.id
-                WHERE 1 - (dc.embedding <=> '{embedding_str}'::vector) > :threshold
+                WHERE dc.embedding IS NOT NULL
+                    AND 1 - (dc.embedding <=> '{embedding_str}'::vector) > :threshold
                 ORDER BY dc.embedding <=> '{embedding_str}'::vector
                 LIMIT :limit
             """)

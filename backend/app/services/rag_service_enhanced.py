@@ -294,6 +294,7 @@ class EnhancedRAGService:
                 JOIN documents d ON dc.document_id = d.id
                 JOIN session_documents sd ON d.id = sd.document_id
                 WHERE sd.session_id = :session_id
+                    AND dc.embedding IS NOT NULL
                     AND 1 - (dc.embedding <=> '{embedding_str}'::vector) > :threshold
                 ORDER BY sd.priority DESC, dc.embedding <=> '{embedding_str}'::vector
                 LIMIT :limit
