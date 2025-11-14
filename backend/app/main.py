@@ -203,6 +203,7 @@ async def upload_file(
 
         # Check for duplicate file in this session
         if session_id and ENHANCED_RAG_AVAILABLE:
+            from app.models.database import Document
             from app.models.database_enhanced import SessionDocument, ChatSession
             from sqlalchemy import and_
 
