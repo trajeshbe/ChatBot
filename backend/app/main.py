@@ -133,10 +133,10 @@ async def lifespan(app: FastAPI):
     try:
         logger.info("Checking for default admin user...")
         from app.models.database_enhanced import User, UserRole
-        from app.core.database import async_session_maker
+        from app.core.database import AsyncSessionLocal
         import hashlib
 
-        async with async_session_maker() as session:
+        async with AsyncSessionLocal() as session:
             query = select(User).where(User.username == 'admin')
             result = await session.execute(query)
             existing_admin = result.scalar_one_or_none()

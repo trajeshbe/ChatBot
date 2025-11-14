@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FileText, Trash2, RefreshCw, AlertCircle } from 'lucide-react'
+import { FileText, Trash2, RefreshCw, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import axios from 'axios'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -24,6 +24,7 @@ export default function UploadedFilesList({ sessionId, onRefresh }: Props) {
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isCollapsed, setIsCollapsed] = useState(true) // Start collapsed
 
   const loadDocuments = async () => {
     if (!sessionId) {
@@ -91,14 +92,29 @@ export default function UploadedFilesList({ sessionId, onRefresh }: Props) {
     return null
   }
 
+  // Don't show the list if no documents and collapsed
+  if (documents.length === 0 && isCollapsed) {
+    return null
+  }
+
   return (
     <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-            <FileText className="w-4 h-4" />
-            Uploaded Documents ({documents.length})
-          </h3>
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="flex items-center gap-2 hover:text-blue-600 transition-colors flex-1 text-left"
+          >
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              Uploaded Documents ({documents.length})
+            </h3>
+            {isCollapsed ? (
+              <ChevronDown className="w-4 h-4 text-slate-500" />
+            ) : (
+              <ChevronUp className="w-4 h-4 text-slate-500" />
+            )}
+          </button>
           <button
             onClick={loadDocuments}
             disabled={loading}
@@ -109,26 +125,28 @@ export default function UploadedFilesList({ sessionId, onRefresh }: Props) {
           </button>
         </div>
 
-        {error && (
-          <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-red-600 mt-0.5" />
-            <div className="text-sm text-red-800 dark:text-red-200">
-              {error}
-            </div>
-          </div>
-        )}
+        {!isCollapsed && (
+          <>
+            {error && (
+              <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 mt-0.5" />
+                <div className="text-sm text-red-800 dark:text-red-200">
+                  {error}
+                </div>
+              </div>
+            )}
 
-        {documents.length === 0 && !loading && !error && (
-          <div className="text-center py-6 text-sm text-slate-500">
-            <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>No documents uploaded yet</p>
-            <p className="text-xs mt-1">Use the paperclip button to attach files</p>
-          </div>
-        )}
+            {documents.length === 0 && !loading && !error && (
+              <div className="text-center py-6 text-sm text-slate-500">
+                <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p>No documents uploaded yet</p>
+                <p className="text-xs mt-1">Use the paperclip button to attach files</p>
+              </div>
+            )}
 
-        {documents.length > 0 && (
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {documents.map((doc) => (
+            {documents.length > 0 && (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {documents.map((doc) => (
               <div
                 key={doc.id}
                 className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
@@ -188,7 +206,9 @@ export default function UploadedFilesList({ sessionId, onRefresh }: Props) {
                 </button>
               </div>
             ))}
-          </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

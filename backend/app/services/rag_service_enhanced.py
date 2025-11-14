@@ -329,14 +329,14 @@ class EnhancedRAGService:
                 logger.warning(f"No embeddings found for session {session_id} documents")
                 return []
 
-            # Cascading fallback strategy
+            # Cascading fallback strategy - reduced aggressiveness to prevent irrelevant results
             thresholds_to_try = [threshold]
             if use_cascading_fallback:
-                thresholds_to_try.extend([
-                    threshold - 0.1,
-                    threshold - 0.15,
-                    settings.MIN_SIMILARITY_THRESHOLD,
-                ])
+                # Only fallback by small amounts, don't go too low
+                if threshold > settings.MIN_SIMILARITY_THRESHOLD + 0.1:
+                    thresholds_to_try.append(threshold - 0.1)
+                if threshold > settings.MIN_SIMILARITY_THRESHOLD:
+                    thresholds_to_try.append(settings.MIN_SIMILARITY_THRESHOLD)
 
             chunks = []
             for current_threshold in thresholds_to_try:
@@ -730,13 +730,20 @@ class EnhancedRAGService:
             await db.rollback()
 
     def _format_sources(self, chunks: List[Dict], short_term_chunks: List[Dict]) -> List[Dict]:
-        """Format source references with memory type indicators"""
+        """Format source references with memory type indicators, filtering by relevance"""
         sources = []
         seen_docs = set()
         short_term_doc_ids = {chunk['document_id'] for chunk in short_term_chunks}
 
         for chunk in chunks:
             doc_id = chunk['document_id']
+            similarity = chunk.get('similarity', 0)
+
+            # Only include sources that meet the relevance threshold
+            if similarity < settings.NO_RELEVANT_DOCS_THRESHOLD:
+                logger.debug(f"Filtered out source {chunk['filename']} with similarity {similarity:.2f} (below threshold {settings.NO_RELEVANT_DOCS_THRESHOLD})")
+                continue
+
             if doc_id not in seen_docs:
                 memory_type = chunk.get('memory_type', 'long-term')
                 sources.append({

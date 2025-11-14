@@ -325,8 +325,8 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
             <div
               className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                 message.role === 'user'
-                  ? 'bg-blue-600 text-white rounded-br-md'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-md'
+                  ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-br-md shadow-sm'
+                  : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-md border border-slate-200 dark:border-slate-700'
               }`}
             >
               <div className="markdown-content">
