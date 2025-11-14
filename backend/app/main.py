@@ -1008,6 +1008,139 @@ async def get_session(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/v1/debug/session/{session_id}")
+async def debug_session_query(
+    session_id: str,
+    test_query: str = "test query",
+    db: AsyncSession = Depends(get_db)
+):
+    """Debug endpoint to diagnose session document retrieval issues"""
+    try:
+        from app.models.database_enhanced import SessionDocument, ChatSession
+        from app.models.database import Document, DocumentChunk
+        from sqlalchemy import text as sql_text
+
+        debug_info = {"session_id": session_id}
+
+        # 1. Check if session exists
+        session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+        session_result = await db.execute(session_query)
+        session = session_result.scalar_one_or_none()
+
+        if not session:
+            debug_info["session_exists"] = False
+            debug_info["error"] = "Session not found"
+            return debug_info
+
+        debug_info["session_exists"] = True
+        debug_info["session_uuid"] = str(session.id)
+
+        # 2. Check session documents count
+        count_query = select(func.count()).select_from(SessionDocument).where(
+            SessionDocument.session_id == session.id
+        )
+        count_result = await db.execute(count_query)
+        session_doc_count = count_result.scalar()
+        debug_info["session_documents_count"] = session_doc_count
+
+        if session_doc_count == 0:
+            debug_info["error"] = "No documents associated with session"
+            return debug_info
+
+        # 3. Get session documents details
+        doc_query = select(SessionDocument, Document).join(
+            Document, SessionDocument.document_id == Document.id
+        ).where(SessionDocument.session_id == session.id)
+        doc_result = await db.execute(doc_query)
+        doc_rows = doc_result.all()
+
+        documents = []
+        for sd, doc in doc_rows:
+            # Count chunks for this document
+            chunk_count_query = select(func.count()).select_from(DocumentChunk).where(
+                DocumentChunk.document_id == doc.id
+            )
+            chunk_count_result = await db.execute(chunk_count_query)
+            chunk_count = chunk_count_result.scalar()
+
+            # Count chunks with embeddings
+            embed_count_query = select(func.count()).select_from(DocumentChunk).where(
+                and_(
+                    DocumentChunk.document_id == doc.id,
+                    DocumentChunk.embedding.isnot(None)
+                )
+            )
+            embed_count_result = await db.execute(embed_count_query)
+            embed_count = embed_count_result.scalar()
+
+            documents.append({
+                "document_id": str(doc.id),
+                "filename": doc.filename,
+                "priority": sd.priority,
+                "processed": doc.processed,
+                "chunk_count": chunk_count,
+                "chunks_with_embeddings": embed_count
+            })
+
+        debug_info["documents"] = documents
+
+        # 4. Generate test embedding and run vector search query
+        query_embedding = await embedding_service.get_embedding(test_query)
+        embedding_str = f"[{','.join(map(str, query_embedding))}]"
+
+        threshold = 0.5  # Lower threshold for debugging
+
+        search_query = sql_text(f"""
+            SELECT
+                dc.id,
+                dc.document_id,
+                dc.content,
+                d.filename,
+                sd.priority,
+                1 - (dc.embedding <=> '{embedding_str}'::vector) as similarity
+            FROM document_chunks dc
+            JOIN documents d ON dc.document_id = d.id
+            JOIN session_documents sd ON d.id = sd.document_id
+            WHERE sd.session_id = :session_id
+                AND dc.embedding IS NOT NULL
+                AND 1 - (dc.embedding <=> '{embedding_str}'::vector) > :threshold
+            ORDER BY sd.priority DESC, similarity DESC
+            LIMIT 10
+        """)
+
+        search_result = await db.execute(
+            search_query,
+            {"session_id": session.id, "threshold": threshold}
+        )
+        search_rows = search_result.fetchall()
+
+        debug_info["test_query"] = test_query
+        debug_info["threshold"] = threshold
+        debug_info["chunks_found"] = len(search_rows)
+
+        if search_rows:
+            debug_info["sample_results"] = [
+                {
+                    "filename": row.filename,
+                    "priority": row.priority,
+                    "similarity": float(row.similarity),
+                    "content_preview": row.content[:100] + "..."
+                }
+                for row in search_rows[:3]
+            ]
+        else:
+            debug_info["warning"] = "No chunks found despite having documents with embeddings"
+
+        return debug_info
+
+    except Exception as e:
+        logger.error(f"Error in debug endpoint: {e}", exc_info=True)
+        return {
+            "error": str(e),
+            "traceback": str(e.__traceback__)
+        }
+
+
 # OpenTelemetry instrumentation (if enabled)
 if settings.ENABLE_TRACING:
     try:
