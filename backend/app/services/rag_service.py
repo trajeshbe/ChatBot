@@ -60,14 +60,25 @@ class RAGService:
                 db=db
             )
 
-            logger.info(f"Found {len(similar_chunks)} relevant chunks (hybrid search)")
+            logger.info(f"Found {len(similar_chunks)} chunks (hybrid search)")
+
+            # Filter chunks based on quality threshold
+            # If best match is below NO_RELEVANT_DOCS_THRESHOLD, treat as no results
+            filtered_chunks = []
+            if similar_chunks:
+                best_score = max(chunk.get('similarity', 0) for chunk in similar_chunks)
+                if best_score >= settings.NO_RELEVANT_DOCS_THRESHOLD:
+                    filtered_chunks = similar_chunks
+                    logger.info(f"✅ {len(filtered_chunks)} high-quality chunks (best score: {best_score:.3f})")
+                else:
+                    logger.warning(f"⚠️ Best match score {best_score:.3f} below threshold {settings.NO_RELEVANT_DOCS_THRESHOLD}, treating as no relevant docs")
 
             # Step 3: Generate response with context
-            if similar_chunks:
+            if filtered_chunks:
                 # We have relevant documents - use RAG
                 response = await llm_service.generate_with_context(
                     query=query_text,
-                    context_chunks=similar_chunks,
+                    context_chunks=filtered_chunks,
                     conversation_history=conversation_history,
                     model_id=model_id
                 )
@@ -96,9 +107,11 @@ class RAGService:
                     system_message = (
                         "You are a helpful enterprise RAG assistant. "
                         "The user has uploaded documents, but none appear directly relevant "
-                        "to this specific query. Provide the best answer you can based on "
-                        "your general knowledge, and suggest that the user might want to "
-                        "upload more relevant documents if they need specific information."
+                        "to this specific query (all similarity scores were below 35%). "
+                        "If this is a general question about you as an AI assistant, answer it naturally. "
+                        "If this is a question about a specific topic, politely inform the user that "
+                        "their uploaded documents don't contain information about this topic, and "
+                        "suggest they upload relevant documents for better answers."
                     )
 
                 response = await llm_service.generate(
@@ -111,7 +124,8 @@ class RAGService:
                 )
 
             # Step 4: Extract and format sources
-            sources = self._format_sources(similar_chunks)
+            # Only show sources if we used them (filtered_chunks)
+            sources = self._format_sources(filtered_chunks)
 
             result = {
                 'answer': response['content'],

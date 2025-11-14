@@ -385,14 +385,17 @@ class DocumentService:
             logger.info(f"📊 Database status: {chunk_count} total chunks, {embedding_count} with embeddings")
 
             # Cascading fallback strategy: try multiple thresholds
+            # More conservative approach to avoid irrelevant results
             thresholds_to_try = [threshold]
             if use_cascading_fallback:
-                # Add progressively lower thresholds
+                # Add progressively lower thresholds (but not too low)
+                # Only try 2 fallback levels instead of 3
                 thresholds_to_try.extend([
-                    threshold - 0.1,
-                    threshold - 0.15,
-                    settings.MIN_SIMILARITY_THRESHOLD,  # Final fallback (0.05)
+                    max(threshold - 0.1, settings.MIN_SIMILARITY_THRESHOLD),
+                    settings.MIN_SIMILARITY_THRESHOLD,  # Final fallback (0.3)
                 ])
+                # Remove duplicates and sort descending
+                thresholds_to_try = sorted(list(set(thresholds_to_try)), reverse=True)
 
             chunks = []
             threshold_used = threshold
