@@ -4,6 +4,12 @@ echo "=============================================="
 echo "  Database Setup & Migration Tool"
 echo "=============================================="
 echo ""
+echo "NOTE: All tables are created in ONE database: 'rag_chatbot'"
+echo "      - Base tables (documents, chunks, etc.)"
+echo "      - RBAC tables (users, roles, permissions)"
+echo "      - Audit tables (logs, metrics)"
+echo "      - Session tables (chat_sessions, messages)"
+echo ""
 
 # Color codes
 GREEN='\033[0;32m'
@@ -150,11 +156,20 @@ fi
 echo ""
 echo -e "${BLUE}Step 5: Applying RBAC and Audit migrations...${NC}"
 
-MIGRATIONS_DIR="/home/user/ChatBot/backend/migrations"
+# Get the script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MIGRATIONS_DIR="$SCRIPT_DIR/backend/migrations"
+
+echo -e "${YELLOW}Looking for migrations in: $MIGRATIONS_DIR${NC}"
 
 if [ ! -f "$MIGRATIONS_DIR/001_add_rbac_and_audit.sql" ]; then
     echo -e "${RED}✗ Migration file not found: $MIGRATIONS_DIR/001_add_rbac_and_audit.sql${NC}"
-    exit 1
+    echo -e "${YELLOW}Checking alternate location...${NC}"
+    MIGRATIONS_DIR="/home/user/ChatBot/backend/migrations"
+    if [ ! -f "$MIGRATIONS_DIR/001_add_rbac_and_audit.sql" ]; then
+        echo -e "${RED}✗ Migration file not found in alternate location either${NC}"
+        exit 1
+    fi
 fi
 
 echo -e "${YELLOW}Applying migration 001: RBAC and Audit Logging${NC}"
@@ -204,17 +219,33 @@ echo ""
 echo "=============================================="
 echo -e "${GREEN}Database setup complete!${NC}"
 echo ""
-echo "Summary:"
-echo "  ✓ Database 'rag_chatbot' ready"
+
+# Show total table count
+TABLE_COUNT=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "
+    SELECT COUNT(*) FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
+" 2>/dev/null | tr -d '[:space:]')
+
+echo -e "${YELLOW}Summary - ONE Database: 'rag_chatbot'${NC}"
+echo "  ✓ Total tables created: $TABLE_COUNT"
 echo "  ✓ Extensions enabled (uuid-ossp, vector)"
-echo "  ✓ Base tables created"
-echo "  ✓ RBAC and audit tables created"
-echo "  ✓ Default users created"
+echo ""
+echo "  Base tables (RAG functionality):"
+echo "    - documents, document_chunks, query_cache"
+echo "    - conversations, messages, web_scrape_jobs"
+echo ""
+echo "  Enhanced tables (RBAC & Audit):"
+echo "    - users, api_keys, chat_sessions"
+echo "    - session_documents, conversation_messages"
+echo "    - audit_logs, usage_metrics"
+echo "    - document_permissions, session_contexts"
+echo ""
+echo "  ✓ Default users created (admin, anonymous)"
 echo ""
 echo "Next steps:"
 echo "  1. Restart backend: docker compose restart backend"
 echo "  2. Check backend logs: docker compose logs -f backend | grep 'Enhanced'"
-echo "  3. Test document upload: curl -X POST http://localhost:8000/api/v1/upload -F 'file=@test.pdf'"
+echo "  3. Test upload: ./QUICKSTART.md for examples"
 echo ""
 echo "Default credentials (CHANGE IN PRODUCTION!):"
 echo "  Username: admin"
