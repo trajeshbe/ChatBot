@@ -93,28 +93,39 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
   }
 
   // Upload files to backend with session ID
-  const uploadAttachedFiles = async (): Promise<boolean> => {
-    if (attachedFiles.length === 0) return true
+  const uploadAttachedFiles = async (): Promise<{ success: boolean; duplicates: string[] }> => {
+    if (attachedFiles.length === 0) return { success: true, duplicates: [] }
 
     setUploadingFiles(true)
+    const duplicates: string[] = []
+    let hasErrors = false
+
     try {
       for (const file of attachedFiles) {
         const formData = new FormData()
         formData.append('file', file)
         formData.append('session_id', sessionId) // 🎯 Pass session ID!
 
-        await axios.post(`${API_URL}/api/v1/upload`, formData, {
+        const response = await axios.post(`${API_URL}/api/v1/upload`, formData, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
         })
-        console.log(`✅ Uploaded ${file.name} to session ${sessionId}`)
+
+        // Check if file was duplicate
+        if (response.data.duplicate || !response.data.success) {
+          duplicates.push(file.name)
+          console.log(`⚠️ Duplicate file skipped: ${file.name}`)
+        } else {
+          console.log(`✅ Uploaded ${file.name} to session ${sessionId}`)
+        }
       }
-      setAttachedFiles([]) // Clear after successful upload
-      return true
+      setAttachedFiles([]) // Clear after processing all files
+      return { success: !hasErrors, duplicates }
     } catch (error) {
       console.error('Error uploading files:', error)
-      return false
+      hasErrors = true
+      return { success: false, duplicates }
     } finally {
       setUploadingFiles(false)
     }
@@ -125,8 +136,9 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
 
     // Upload attached files first
     if (attachedFiles.length > 0) {
-      const uploadSuccess = await uploadAttachedFiles()
-      if (!uploadSuccess) {
+      const uploadResult = await uploadAttachedFiles()
+
+      if (!uploadResult.success) {
         const errorMessage: Message = {
           role: 'assistant',
           content: 'Sorry, there was an error uploading your files. Please try again.',
@@ -135,17 +147,24 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
         setMessages(prev => [...prev, errorMessage])
         return
       }
-    }
 
-    // If only files were attached without a message, don't send query
-    if (!input.trim()) {
-      const successMessage: Message = {
-        role: 'assistant',
-        content: `Files uploaded successfully to this session! You can now ask questions about them.`,
-        timestamp: new Date()
+      // If only files were attached without a message, show success message
+      if (!input.trim()) {
+        let successContent = 'Files uploaded successfully to this session! You can now ask questions about them.'
+
+        // Add note about duplicates if any
+        if (uploadResult.duplicates.length > 0) {
+          successContent += `\n\n**Note:** The following files were already uploaded to this session and were skipped:\n${uploadResult.duplicates.map(f => `- ${f}`).join('\n')}`
+        }
+
+        const successMessage: Message = {
+          role: 'assistant',
+          content: successContent,
+          timestamp: new Date()
+        }
+        setMessages(prev => [...prev, successMessage])
+        return
       }
-      setMessages(prev => [...prev, successMessage])
-      return
     }
 
     const userMessage: Message = {

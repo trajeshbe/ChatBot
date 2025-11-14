@@ -466,34 +466,52 @@ class EnhancedLLMService:
     ) -> Dict:
         """Generate response with RAG context"""
         # Build context from chunks
-        context_text = "\n\n".join([
-            f"Source {i+1} ({chunk.get('source', 'unknown')}):\n{chunk['content']}"
-            for i, chunk in enumerate(context_chunks)
-        ])
+        context_parts = []
+        for i, chunk in enumerate(context_chunks):
+            # Get source info from chunk metadata
+            source_info = chunk.get('filename', chunk.get('source', 'unknown'))
+            memory_type = chunk.get('memory_type', '')
+            memory_indicator = f" [Session Document]" if memory_type == 'short-term' else ""
 
-        # Build prompt
+            context_parts.append(
+                f"[Source {i+1}: {source_info}{memory_indicator}]\n{chunk['content']}"
+            )
+
+        context_text = "\n\n".join(context_parts)
+
+        # Build prompt with clear instructions
         system_prompt = """You are a helpful AI assistant with access to relevant documents and information.
-Use the provided context to answer questions accurately. Always cite your sources using [Source N] notation.
-If the context doesn't contain enough information to answer the question, say so clearly."""
 
-        user_prompt = f"""Context:
+IMPORTANT INSTRUCTIONS:
+- Use the provided context documents to answer questions accurately and comprehensively
+- Always cite your sources using [Source N] notation when referencing information
+- Documents marked as [Session Document] are specifically uploaded for this conversation
+- If the context contains the answer, provide it in detail
+- If the context doesn't contain enough information, say so clearly
+- Be conversational and helpful in your responses"""
+
+        user_prompt = f"""Here are the relevant documents to help answer the question:
+
 {context_text}
 
 Question: {query}
 
-Please provide a detailed answer based on the context above, and cite your sources."""
+Based on the documents provided above, please give a detailed and accurate answer. Cite your sources using [Source N] format."""
 
-        # Prepare messages
+        # Prepare messages with conversation history
         messages = [
             {"role": "system", "content": system_prompt}
         ]
 
+        # Include conversation history for context continuity
         if conversation_history:
-            messages.extend(conversation_history[-6:])  # Last 3 turns
+            # Include last 6 messages (3 exchanges) for context window management
+            messages.extend(conversation_history[-6:])
 
+        # Add the current query with context
         messages.append({"role": "user", "content": user_prompt})
 
-        # Convert to single prompt for compatibility
+        # Convert to single prompt for compatibility with non-chat models
         prompt = self._messages_to_prompt(messages)
 
         return await self.generate(

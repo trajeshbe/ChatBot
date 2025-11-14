@@ -116,6 +116,8 @@ class EnhancedRAGService:
 
             # Step 6: Generate response with context
             if combined_chunks or conversation_context:
+                logger.info(f"🎯 Generating response with {len(combined_chunks)} chunks and {len(conversation_context)} conversation messages")
+                logger.debug(f"Context chunks summary: {[{'filename': c.get('filename'), 'memory_type': c.get('memory_type'), 'similarity': c.get('similarity')} for c in combined_chunks]}")
                 response = await llm_service.generate_with_context(
                     query=query_text,
                     context_chunks=combined_chunks,

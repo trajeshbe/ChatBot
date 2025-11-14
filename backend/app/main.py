@@ -201,6 +201,40 @@ async def upload_file(
         # Read file data
         file_data = await file.read()
 
+        # Check for duplicate file in this session
+        if session_id and ENHANCED_RAG_AVAILABLE:
+            from app.models.database_enhanced import SessionDocument, ChatSession
+            from sqlalchemy import and_
+
+            # Get session
+            session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+            session_result = await db.execute(session_query)
+            session = session_result.scalar_one_or_none()
+
+            if session:
+                # Check if a document with same filename and similar size already exists in this session
+                duplicate_query = select(Document).join(
+                    SessionDocument, Document.id == SessionDocument.document_id
+                ).where(
+                    and_(
+                        SessionDocument.session_id == session.id,
+                        Document.filename == file.filename,
+                        Document.file_size == len(file_data)
+                    )
+                )
+                duplicate_result = await db.execute(duplicate_query)
+                existing_document = duplicate_result.scalar_one_or_none()
+
+                if existing_document:
+                    logger.warning(f"Duplicate file detected: {file.filename} (already in session {session_id})")
+                    return {
+                        "success": False,
+                        "message": f"File '{file.filename}' has already been uploaded to this session",
+                        "duplicate": True,
+                        "existing_document_id": str(existing_document.id),
+                        "filename": file.filename
+                    }
+
         # Upload and create document
         document = await document_service.upload_file(
             file_data=file_data,
