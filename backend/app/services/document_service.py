@@ -194,7 +194,19 @@ class DocumentService:
 
             # Generate embeddings
             chunk_texts = [chunk['content'] for chunk in chunks]
+            logger.info(f"Generating embeddings for {len(chunk_texts)} chunks...")
             embeddings = await embedding_service.get_embeddings_batch(chunk_texts)
+            logger.info(f"Generated {len(embeddings)} embeddings")
+
+            # Verify embeddings
+            if not embeddings or len(embeddings) != len(chunk_texts):
+                raise ValueError(f"Expected {len(chunk_texts)} embeddings, got {len(embeddings)}")
+
+            # Verify embedding dimensions
+            if embeddings and len(embeddings[0]) != 384:
+                raise ValueError(f"Expected 384-dimensional embeddings, got {len(embeddings[0])}")
+
+            logger.info(f"✅ All embeddings valid (384 dimensions)")
 
             # Create chunk records
             document_chunks = []

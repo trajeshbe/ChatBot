@@ -217,7 +217,7 @@ class EnhancedRAGService:
                 logger.warning(f"Session {session_id} not found, creating...")
                 session = ChatSession(session_id=session_id)
                 db.add(session)
-                await db.commit()
+                await db.flush()  # Flush to get ID without committing
                 await db.refresh(session)
 
             # Check if association already exists
@@ -237,12 +237,12 @@ class EnhancedRAGService:
                     priority=priority
                 )
                 db.add(session_doc)
-                await db.commit()
+                await db.flush()  # Flush to database without committing transaction
                 logger.info(f"Associated document {document_id} with session {session_id}")
 
         except Exception as e:
             logger.error(f"Error associating document with session: {e}")
-            await db.rollback()
+            # Don't rollback here - let the calling code handle it
             raise
 
     async def _search_session_documents(

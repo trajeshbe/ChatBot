@@ -257,8 +257,21 @@ async def upload_file(
         logger.info(f"Document created: {document.id} - {document.filename}")
 
         # Process document asynchronously (chunk and embed)
-        chunks = await document_service.process_document(document.id, db)
-        logger.info(f"Document processed: {len(chunks)} chunks created")
+        try:
+            chunks = await document_service.process_document(document.id, db)
+            logger.info(f"Document processed: {len(chunks)} chunks created")
+
+            # Log embedding status
+            if chunks:
+                chunks_with_embeddings = sum(1 for c in chunks if c.embedding is not None)
+                logger.info(f"Embeddings generated: {chunks_with_embeddings}/{len(chunks)} chunks have embeddings")
+                if chunks_with_embeddings == 0:
+                    logger.error(f"❌ No embeddings generated for document {document.id}!")
+            else:
+                logger.warning(f"⚠️ No chunks created for document {document.id}")
+        except Exception as e:
+            logger.error(f"Error during document processing: {e}", exc_info=True)
+            raise
 
         # Associate document with session for short-term memory
         if session_id and ENHANCED_RAG_AVAILABLE:
