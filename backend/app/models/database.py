@@ -86,3 +86,26 @@ class QueryCache(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     last_accessed = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     ttl_seconds = Column(Integer, default=3600)
+
+
+# Import enhanced models (RBAC, audit logs, sessions)
+# These are imported here to ensure they use the same Base
+try:
+    from app.models.database_enhanced import (
+        User, APIKey, ChatSession, SessionDocument, ConversationMessage,
+        AuditLog, UsageMetrics, DocumentPermission, SessionContext,
+        UserRole, ActionType
+    )
+    __all__ = [
+        'Document', 'DocumentChunk', 'Conversation', 'Message',
+        'WebScrapeJob', 'QueryCache',
+        'User', 'APIKey', 'ChatSession', 'SessionDocument', 'ConversationMessage',
+        'AuditLog', 'UsageMetrics', 'DocumentPermission', 'SessionContext',
+        'UserRole', 'ActionType', 'Base'
+    ]
+except ImportError:
+    # Enhanced models not available yet
+    __all__ = [
+        'Document', 'DocumentChunk', 'Conversation', 'Message',
+        'WebScrapeJob', 'QueryCache', 'Base'
+    ]
