@@ -47,7 +47,12 @@ class EnhancedRAGService:
         conversation_history: Optional[List[Dict]] = None,
         use_cache: bool = True,
         model_id: Optional[str] = None,
-        db: AsyncSession = None
+        db: AsyncSession = None,
+        # RAG configuration parameters (override defaults from settings)
+        top_k: Optional[int] = None,
+        similarity_threshold: Optional[float] = None,
+        min_similarity_threshold: Optional[float] = None,
+        no_relevant_docs_threshold: Optional[float] = None
     ) -> Dict:
         """
         Process query with memory hierarchy:
@@ -60,6 +65,14 @@ class EnhancedRAGService:
         start_time = time.time()
 
         try:
+            # Use provided RAG config parameters or fall back to settings
+            _top_k = top_k if top_k is not None else settings.TOP_K_RESULTS
+            _similarity_threshold = similarity_threshold if similarity_threshold is not None else settings.SIMILARITY_THRESHOLD
+            _min_similarity_threshold = min_similarity_threshold if min_similarity_threshold is not None else settings.MIN_SIMILARITY_THRESHOLD
+            _no_relevant_docs_threshold = no_relevant_docs_threshold if no_relevant_docs_threshold is not None else settings.NO_RELEVANT_DOCS_THRESHOLD
+
+            logger.info(f"🔧 RAG Config: top_k={_top_k}, sim_threshold={_similarity_threshold:.2f}, min_sim={_min_similarity_threshold:.2f}, no_relevant={_no_relevant_docs_threshold:.2f}")
+
             # Ensure session exists
             if session_id:
                 await self._ensure_session_exists(session_id, user_id, db)
@@ -147,8 +160,8 @@ class EnhancedRAGService:
                     session_id=session_id,
                     query_embedding=query_embedding,
                     query_text=query_text,  # For keyword matching
-                    top_k=settings.TOP_K_RESULTS,
-                    threshold=settings.SIMILARITY_THRESHOLD - 0.05,  # Slightly lower threshold for session docs
+                    top_k=_top_k,
+                    threshold=_similarity_threshold - 0.05,  # Slightly lower threshold for session docs
                     use_hybrid=True,  # Enable hybrid search
                     use_cascading_fallback=True,  # Enable cascading fallback
                     db=db
@@ -163,8 +176,8 @@ class EnhancedRAGService:
             long_term_chunks = await document_service.search_similar_chunks(
                 query_embedding=query_embedding,
                 query_text=query_text,  # For keyword matching
-                top_k=settings.TOP_K_RESULTS,
-                threshold=settings.SIMILARITY_THRESHOLD,
+                top_k=_top_k,
+                threshold=_similarity_threshold,
                 use_hybrid=True,  # Enable hybrid search
                 use_cascading_fallback=True,  # Enable cascading fallback
                 db=db
@@ -175,7 +188,7 @@ class EnhancedRAGService:
             combined_chunks = self._combine_memory_results(
                 short_term_chunks,
                 long_term_chunks,
-                max_chunks=settings.TOP_K_RESULTS
+                max_chunks=_top_k
             )
             logger.info(f"Combined to {len(combined_chunks)} total chunks")
 
@@ -238,7 +251,7 @@ class EnhancedRAGService:
                 )
 
             # Step 7: Format sources with memory indicators
-            sources = self._format_sources(combined_chunks, short_term_chunks)
+            sources = self._format_sources(combined_chunks, short_term_chunks, _no_relevant_docs_threshold)
 
             num_short_term = len([s for s in sources if s.get('memory_type') == 'short-term'])
             num_long_term = len([s for s in sources if s.get('memory_type') == 'long-term'])
@@ -814,8 +827,11 @@ class EnhancedRAGService:
             logger.error(f"Error saving conversation message: {e}")
             await db.rollback()
 
-    def _format_sources(self, chunks: List[Dict], short_term_chunks: List[Dict]) -> List[Dict]:
+    def _format_sources(self, chunks: List[Dict], short_term_chunks: List[Dict], relevance_threshold: float = None) -> List[Dict]:
         """Format source references with memory type indicators, filtering by relevance"""
+        # Use provided threshold or fall back to settings
+        threshold = relevance_threshold if relevance_threshold is not None else settings.NO_RELEVANT_DOCS_THRESHOLD
+
         sources = []
         seen_docs = set()
         short_term_doc_ids = {chunk['document_id'] for chunk in short_term_chunks}
@@ -825,8 +841,8 @@ class EnhancedRAGService:
             similarity = chunk.get('similarity', 0)
 
             # Only include sources that meet the relevance threshold
-            if similarity < settings.NO_RELEVANT_DOCS_THRESHOLD:
-                logger.debug(f"Filtered out source {chunk['filename']} with similarity {similarity:.2f} (below threshold {settings.NO_RELEVANT_DOCS_THRESHOLD})")
+            if similarity < threshold:
+                logger.debug(f"Filtered out source {chunk['filename']} with similarity {similarity:.2f} (below threshold {threshold})")
                 continue
 
             if doc_id not in seen_docs:

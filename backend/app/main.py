@@ -387,6 +387,11 @@ async def query_endpoint(
     use_cache: bool = Form(True),
     model_id: Optional[str] = Form(None),
     conversation_history: Optional[str] = Form(None),  # NEW: Accept conversation history as JSON string
+    # RAG configuration parameters
+    top_k: Optional[int] = Form(None),
+    similarity_threshold: Optional[float] = Form(None),
+    min_similarity_threshold: Optional[float] = Form(None),
+    no_relevant_docs_threshold: Optional[float] = Form(None),
     db: AsyncSession = Depends(get_db)
 ):
     """Query the RAG system with memory hierarchy and conversation context"""
@@ -416,7 +421,12 @@ async def query_endpoint(
                 conversation_history=parsed_history,  # FIXED: Pass parsed history
                 use_cache=use_cache,
                 model_id=model_id,
-                db=db
+                db=db,
+                # Pass RAG configuration parameters
+                top_k=top_k,
+                similarity_threshold=similarity_threshold,
+                min_similarity_threshold=min_similarity_threshold,
+                no_relevant_docs_threshold=no_relevant_docs_threshold
             )
         else:
             # Fall back to basic RAG service

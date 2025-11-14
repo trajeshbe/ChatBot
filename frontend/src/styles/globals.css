@@ -61,3 +61,27 @@ body {
 .markdown-content a {
   @apply text-blue-600 hover:underline;
 }
+
+/* User message text - force white color */
+.user-message-text,
+.user-message-text * {
+  color: white !important;
+}
+
+.user-message-text p,
+.user-message-text h1,
+.user-message-text h2,
+.user-message-text h3,
+.user-message-text h4,
+.user-message-text h5,
+.user-message-text h6,
+.user-message-text span,
+.user-message-text strong,
+.user-message-text em,
+.user-message-text code {
+  color: white !important;
+}
+
+.user-message-text a {
+  @apply text-blue-100 hover:text-white !important;
+}

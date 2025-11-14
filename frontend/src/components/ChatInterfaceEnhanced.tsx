@@ -5,6 +5,8 @@ import FileUpload from './FileUpload'
 import WebScraper from './WebScraper'
 import ModelSelector from './ModelSelector'
 import UploadedFilesList from './UploadedFilesList'
+import RAGSettings, { getCurrentRAGConfig, type RAGConfig } from './RAGSettings'
+import PerformanceMetrics from './PerformanceMetrics'
 import axios from 'axios'
 
 interface Message {
@@ -15,6 +17,11 @@ interface Message {
   model?: string
   model_name?: string
   contextInfo?: string
+  // Performance metrics
+  latency_ms?: number
+  tokens_used?: number
+  num_sources?: number
+  cached?: boolean
 }
 
 interface Source {
@@ -60,6 +67,8 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
   const [sessionId, setSessionId] = useState<string>('')
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [uploadingFiles, setUploadingFiles] = useState(false)
+  const [ragConfig, setRagConfig] = useState<RAGConfig>(getCurrentRAGConfig())
+  const [filesJustUploaded, setFilesJustUploaded] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -123,6 +132,7 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
         }
       }
       setAttachedFiles([]) // Clear after processing all files
+      setFilesJustUploaded(true) // Signal that files were just uploaded
       return { success: !hasErrors, duplicates }
     } catch (error) {
       console.error('Error uploading files:', error)
@@ -190,6 +200,12 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
         formData.append('model_id', selectedModel)
       }
 
+      // 🆕 Add RAG configuration parameters
+      formData.append('top_k', ragConfig.top_k.toString())
+      formData.append('similarity_threshold', ragConfig.similarity_threshold.toString())
+      formData.append('min_similarity_threshold', ragConfig.min_similarity_threshold.toString())
+      formData.append('no_relevant_docs_threshold', ragConfig.no_relevant_docs_threshold.toString())
+
       // 🆕 Pass conversation history for context continuity
       // Include last 10 messages (5 exchanges) for context window
       const recentMessages = messages.slice(-10).map(msg => ({
@@ -213,7 +229,12 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
         model: response.data.model,
         model_name: response.data.model_name,
         contextInfo: response.data.context_info,
-        timestamp: new Date()
+        timestamp: new Date(),
+        // 🆕 Capture performance metrics
+        latency_ms: response.data.latency_ms,
+        tokens_used: response.data.tokens_used,
+        num_sources: response.data.sources?.length || 0,
+        cached: response.data.cached || false
       }
 
       // Log context usage
@@ -309,6 +330,9 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
         </div>
       </div>
 
+      {/* 🆕 RAG Settings Panel */}
+      <RAGSettings onSettingsChange={setRagConfig} />
+
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="max-w-3xl mx-auto space-y-6">
@@ -329,7 +353,7 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
                   : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-md border border-slate-200 dark:border-slate-700'
               }`}
             >
-              <div className="markdown-content">
+              <div className={`markdown-content ${message.role === 'user' ? 'user-message-text' : ''}`}>
                 <ReactMarkdown>{message.content}</ReactMarkdown>
               </div>
 
@@ -347,6 +371,20 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
                     </span>
                   )}
                 </div>
+              )}
+
+              {/* 🆕 Performance Metrics */}
+              {message.role === 'assistant' && (
+                <PerformanceMetrics
+                  metrics={{
+                    latency_ms: message.latency_ms,
+                    tokens_used: message.tokens_used,
+                    num_sources: message.num_sources,
+                    cached: message.cached,
+                    model_used: message.model,
+                    model_name: message.model_name
+                  }}
+                />
               )}
 
               {/* Sources */}
@@ -428,7 +466,13 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
       </div>
 
       {/* Uploaded Files List */}
-      <UploadedFilesList sessionId={sessionId} />
+      <UploadedFilesList
+        sessionId={sessionId}
+        forceExpand={filesJustUploaded}
+        onExpandChange={(expanded) => {
+          if (!expanded) setFilesJustUploaded(false)
+        }}
+      />
 
       {/* Input Area */}
       <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-4">

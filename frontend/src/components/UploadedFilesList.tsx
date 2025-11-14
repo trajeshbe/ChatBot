@@ -18,9 +18,11 @@ interface Document {
 interface Props {
   sessionId: string
   onRefresh?: () => void
+  forceExpand?: boolean
+  onExpandChange?: (expanded: boolean) => void
 }
 
-export default function UploadedFilesList({ sessionId, onRefresh }: Props) {
+export default function UploadedFilesList({ sessionId, onRefresh, forceExpand = false, onExpandChange }: Props) {
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -88,6 +90,22 @@ export default function UploadedFilesList({ sessionId, onRefresh }: Props) {
     loadDocuments()
   }, [sessionId])
 
+  // Expand when forceExpand is true or when documents are loaded
+  useEffect(() => {
+    if (forceExpand || (documents.length > 0 && isCollapsed)) {
+      setIsCollapsed(false)
+    }
+  }, [forceExpand, documents.length])
+
+  // Notify parent when collapse state changes
+  const toggleCollapse = () => {
+    const newState = !isCollapsed
+    setIsCollapsed(newState)
+    if (onExpandChange) {
+      onExpandChange(!newState)
+    }
+  }
+
   if (!sessionId) {
     return null
   }
@@ -102,7 +120,7 @@ export default function UploadedFilesList({ sessionId, onRefresh }: Props) {
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
           <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
+            onClick={toggleCollapse}
             className="flex items-center gap-2 hover:text-blue-600 transition-colors flex-1 text-left"
           >
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
