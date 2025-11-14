@@ -13,6 +13,8 @@ from app.core.config import settings
 from app.core.database import init_db, close_db, get_db
 from app.api.graphql.schema import schema
 from app.services.embedding_service import embedding_service
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 
 # Try to import enhanced LLM service, fallback to basic if it fails
 try:
@@ -47,8 +49,6 @@ try:
 except ImportError:
     logger_temp.warning("⚠ Audit service not available")
     audit_service = None
-
-from sqlalchemy.ext.asyncio import AsyncSession
 
 # Configure logging
 logging.basicConfig(
