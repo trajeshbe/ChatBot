@@ -4,7 +4,7 @@ Audit Logging Service
 Tracks all user actions for compliance and security auditing.
 """
 
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
