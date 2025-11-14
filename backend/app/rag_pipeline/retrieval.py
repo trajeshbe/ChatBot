@@ -269,6 +269,7 @@ class HybridRetriever:
 
         except Exception as e:
             logger.error(f"Error in hybrid retrieval: {e}", exc_info=True)
+            await db.rollback()
             raise
 
 

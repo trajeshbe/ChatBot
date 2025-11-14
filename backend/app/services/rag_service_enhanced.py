@@ -504,6 +504,7 @@ class EnhancedRAGService:
 
         except Exception as e:
             logger.error(f"Error in _execute_session_search: {e}", exc_info=True)
+            await db.rollback()
             return []
 
     async def _keyword_only_session_search(
@@ -570,6 +571,7 @@ class EnhancedRAGService:
 
         except Exception as e:
             logger.error(f"Error in keyword-only session search: {e}", exc_info=True)
+            await db.rollback()
             return []
 
     def _combine_memory_results(
@@ -651,6 +653,7 @@ class EnhancedRAGService:
 
         except Exception as e:
             logger.error(f"Error retrieving conversation context: {e}")
+            await db.rollback()
             return []
 
     async def _ensure_session_exists(

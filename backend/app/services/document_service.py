@@ -569,6 +569,7 @@ class DocumentService:
 
         except Exception as e:
             logger.error(f"Error in _execute_search: {e}", exc_info=True)
+            await db.rollback()
             return []
 
     async def _keyword_only_search(
@@ -630,6 +631,7 @@ class DocumentService:
 
         except Exception as e:
             logger.error(f"Error in keyword-only search: {e}", exc_info=True)
+            await db.rollback()
             return []
 
     def _extract_keywords(self, text: str, max_keywords: int = 8) -> List[str]:
