@@ -149,12 +149,12 @@ class HybridRetriever:
                         dc.document_id,
                         dc.content,
                         dc.chunk_index,
-                        dc.meta_info as chunk_metadata,
+                        dc.meta_info::jsonb as chunk_metadata,
                         1 - (dc.embedding <=> '{embedding_str}'::vector) as semantic_score,
                         d.filename,
                         d.source_type,
                         d.source_url,
-                        d.meta_info as doc_metadata
+                        d.meta_info::jsonb as doc_metadata
                     FROM document_chunks dc
                     INNER JOIN documents d ON dc.document_id = d.id
                     WHERE d.processed = true
@@ -169,7 +169,7 @@ class HybridRetriever:
                         dc.document_id,
                         dc.content,
                         dc.chunk_index,
-                        dc.meta_info as chunk_metadata,
+                        dc.meta_info::jsonb as chunk_metadata,
                         ts_rank(
                             to_tsvector('english', dc.content),
                             plainto_tsquery('english', :query_text)
@@ -177,7 +177,7 @@ class HybridRetriever:
                         d.filename,
                         d.source_type,
                         d.source_url,
-                        d.meta_info as doc_metadata
+                        d.meta_info::jsonb as doc_metadata
                     FROM document_chunks dc
                     INNER JOIN documents d ON dc.document_id = d.id
                     WHERE d.processed = true
