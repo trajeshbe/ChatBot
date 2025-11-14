@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Loader2, FileText, ExternalLink, Paperclip, X } from 'lucide-react'
+import { Send, Loader2, FileText, ExternalLink, Paperclip, X, Trash2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import FileUpload from './FileUpload'
 import WebScraper from './WebScraper'
 import ModelSelector from './ModelSelector'
+import UploadedFilesList from './UploadedFilesList'
 import axios from 'axios'
 
 interface Message {
@@ -214,6 +215,35 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
     }
   }
 
+  const handleClearSession = async () => {
+    if (!confirm('Clear this session? This will:\n• Remove all messages\n• Remove document associations\n• Start a fresh conversation\n\nDocuments will remain in the system for future sessions.')) {
+      return
+    }
+
+    try {
+      // Clear session on backend
+      await axios.post(`${API_URL}/api/v1/sessions/${sessionId}/clear`)
+      console.log(`🧹 Cleared session: ${sessionId}`)
+
+      // Generate new session ID
+      const newSessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      sessionStorage.setItem('chat_session_id', newSessionId)
+      setSessionId(newSessionId)
+      console.log('🆕 New session started:', newSessionId)
+
+      // Reset frontend state
+      setMessages([{
+        role: 'assistant',
+        content: 'Session cleared! Starting fresh. You can upload new files or ask me anything.',
+        timestamp: new Date()
+      }])
+      setAttachedFiles([])
+    } catch (error) {
+      console.error('Error clearing session:', error)
+      alert('Failed to clear session. Please try again.')
+    }
+  }
+
   if (activeTab === 'upload') {
     return <FileUpload />
   }
@@ -236,8 +266,18 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
               onModelChange={setSelectedModel}
             />
           </div>
-          <div className="text-xs text-slate-500 dark:text-slate-400">
-            {messages.length - 1} messages
+          <div className="flex items-center gap-4">
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              {messages.length - 1} messages
+            </div>
+            <button
+              onClick={handleClearSession}
+              className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center gap-1 px-3 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              title="Clear session and start fresh"
+            >
+              <Trash2 className="w-4 h-4" />
+              Clear Session
+            </button>
           </div>
         </div>
       </div>
@@ -332,6 +372,9 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Uploaded Files List */}
+      <UploadedFilesList sessionId={sessionId} />
 
       {/* Input Area */}
       <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">

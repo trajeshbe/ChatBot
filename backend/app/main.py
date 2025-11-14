@@ -618,6 +618,247 @@ async def get_usage_metrics(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/v1/sessions/{session_id}/documents")
+async def get_session_documents(
+    session_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all documents associated with a session"""
+    try:
+        from app.models.database_enhanced import SessionDocument, ChatSession
+        from app.models.database import Document, DocumentChunk
+
+        # Get session
+        session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+        session_result = await db.execute(session_query)
+        session = session_result.scalar_one_or_none()
+
+        if not session:
+            # Session doesn't exist yet - return empty list
+            return {"documents": []}
+
+        # Get session documents with join
+        query = (
+            select(Document, SessionDocument, func.count(DocumentChunk.id).label('chunk_count'))
+            .join(SessionDocument, Document.id == SessionDocument.document_id)
+            .outerjoin(DocumentChunk, Document.id == DocumentChunk.document_id)
+            .where(SessionDocument.session_id == session.id)
+            .group_by(Document.id, SessionDocument.id)
+            .order_by(SessionDocument.added_at.desc())
+        )
+
+        result = await db.execute(query)
+        rows = result.all()
+
+        documents = []
+        for doc, session_doc, chunk_count in rows:
+            documents.append({
+                "id": str(doc.id),
+                "filename": doc.filename,
+                "file_size": doc.file_size,
+                "processing_status": doc.processing_status or 'completed',
+                "has_embeddings": chunk_count > 0,
+                "chunk_count": chunk_count,
+                "created_at": doc.created_at.isoformat() if doc.created_at else None,
+                "priority": session_doc.priority
+            })
+
+        logger.info(f"Retrieved {len(documents)} documents for session {session_id}")
+        return {"documents": documents}
+
+    except Exception as e:
+        logger.error(f"Error getting session documents: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/v1/documents/{document_id}")
+async def delete_document(
+    document_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a document and all its chunks"""
+    try:
+        from app.models.database import Document
+
+        # Get document
+        query = select(Document).where(Document.id == uuid.UUID(document_id))
+        result = await db.execute(query)
+        document = result.scalar_one_or_none()
+
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        # Delete from database (cascades to chunks and session associations)
+        await db.delete(document)
+        await db.commit()
+
+        logger.info(f"Deleted document {document_id}: {document.filename}")
+        return {"success": True, "message": "Document deleted"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting document: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/sessions/{session_id}/clear")
+async def clear_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Clear session: remove document associations and conversation messages"""
+    try:
+        from app.models.database_enhanced import SessionDocument, ChatSession, ConversationMessage
+        from sqlalchemy import delete as sql_delete
+
+        # Get session
+        session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+        session_result = await db.execute(session_query)
+        session = session_result.scalar_one_or_none()
+
+        if session:
+            # Delete session document associations (short-term memory)
+            await db.execute(
+                sql_delete(SessionDocument).where(SessionDocument.session_id == session.id)
+            )
+
+            # Delete conversation messages
+            await db.execute(
+                sql_delete(ConversationMessage).where(ConversationMessage.session_id == session.id)
+            )
+
+            # Mark session as cleared
+            session.status = 'cleared'
+            session.ended_at = func.now()
+
+            await db.commit()
+            logger.info(f"Cleared session {session_id}")
+
+        return {"success": True, "message": "Session cleared"}
+
+    except Exception as e:
+        logger.error(f"Error clearing session: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/admin/documents")
+async def get_admin_documents(
+    search: Optional[str] = None,
+    embedded_only: bool = False,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all documents with user, session, and embedding info (admin endpoint)"""
+    try:
+        from app.models.database import Document, DocumentChunk
+        from app.models.database_enhanced import SessionDocument, ChatSession, User
+
+        # Base query with counts
+        query = (
+            select(
+                Document,
+                func.count(DocumentChunk.id).label('chunk_count'),
+                User.email.label('user_email'),
+                User.username.label('username'),
+                ChatSession.session_id
+            )
+            .outerjoin(DocumentChunk, Document.id == DocumentChunk.document_id)
+            .outerjoin(SessionDocument, Document.id == SessionDocument.document_id)
+            .outerjoin(ChatSession, SessionDocument.session_id == ChatSession.id)
+            .outerjoin(User, ChatSession.user_id == User.id)
+            .group_by(Document.id, User.email, User.username, ChatSession.session_id)
+        )
+
+        # Apply filters
+        if search:
+            query = query.where(Document.filename.ilike(f'%{search}%'))
+
+        if embedded_only:
+            query = query.having(func.count(DocumentChunk.id) > 0)
+
+        query = query.order_by(Document.created_at.desc()).limit(limit)
+
+        result = await db.execute(query)
+        rows = result.all()
+
+        documents = []
+        for doc, chunk_count, user_email, username, session_id in rows:
+            documents.append({
+                "id": str(doc.id),
+                "filename": doc.filename,
+                "file_size": doc.file_size,
+                "processing_status": doc.processing_status or 'completed',
+                "chunk_count": chunk_count,
+                "user_email": user_email or "anonymous",
+                "username": username or "anonymous",
+                "session_id": session_id,
+                "created_at": doc.created_at.isoformat() if doc.created_at else None
+            })
+
+        logger.info(f"Retrieved {len(documents)} documents for admin")
+        return {"documents": documents}
+
+    except Exception as e:
+        logger.error(f"Error getting admin documents: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/admin/users")
+async def create_user(
+    username: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    role: str = Form('user'),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new user (admin endpoint)"""
+    try:
+        from app.models.database_enhanced import User
+        import hashlib
+
+        # Check if user already exists
+        existing_query = select(User).where(
+            (User.username == username) | (User.email == email)
+        )
+        existing_result = await db.execute(existing_query)
+        if existing_result.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Username or email already exists")
+
+        # Hash password (use proper bcrypt in production!)
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+
+        # Create new user
+        new_user = User(
+            username=username,
+            email=email,
+            password_hash=password_hash,
+            role=role,
+            is_active=True
+        )
+
+        db.add(new_user)
+        await db.commit()
+        await db.refresh(new_user)
+
+        logger.info(f"Created new user: {username} ({email}) with role {role}")
+        return {
+            "success": True,
+            "user_id": str(new_user.id),
+            "username": username,
+            "email": email,
+            "role": role
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating user: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/v1/sessions/{session_id}")
 async def get_session(
     session_id: str,
