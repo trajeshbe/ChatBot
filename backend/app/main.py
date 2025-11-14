@@ -267,7 +267,8 @@ async def upload_file(
                 priority=1,  # Higher priority for recently uploaded docs
                 db=db
             )
-            logger.info(f"Associated document {document.id} with session {session_id}")
+            logger.info(f"✅ Document '{document.filename}' (ID: {document.id}) associated with session {session_id}")
+            logger.info(f"📌 This document will be prioritized in queries for session {session_id}")
 
         # Commit the transaction explicitly
         await db.commit()

@@ -85,7 +85,11 @@ class EnhancedRAGService:
                     threshold=settings.SIMILARITY_THRESHOLD - 0.1,  # Slightly lower threshold for session docs
                     db=db
                 )
-                logger.info(f"Found {len(short_term_chunks)} chunks in short-term memory")
+                if short_term_chunks:
+                    logger.info(f"✅ Found {len(short_term_chunks)} chunks in short-term memory (session documents)")
+                    logger.info(f"📄 Session documents used: {list(set([c['filename'] for c in short_term_chunks]))}")
+                else:
+                    logger.info(f"⚠️ No session-specific documents found for session {session_id}")
 
             # Step 3: Search long-term memory (all documents)
             long_term_chunks = await document_service.search_similar_chunks(
@@ -144,6 +148,9 @@ class EnhancedRAGService:
             # Step 7: Format sources with memory indicators
             sources = self._format_sources(combined_chunks, short_term_chunks)
 
+            num_short_term = len([s for s in sources if s.get('memory_type') == 'short-term'])
+            num_long_term = len([s for s in sources if s.get('memory_type') == 'long-term'])
+
             result = {
                 'answer': response['content'],
                 'sources': sources,
@@ -152,10 +159,11 @@ class EnhancedRAGService:
                 'tokens_used': response['tokens'],
                 'latency_ms': (time.time() - start_time) * 1000,
                 'num_sources': len(sources),
-                'num_short_term_sources': len([s for s in sources if s.get('memory_type') == 'short-term']),
-                'num_long_term_sources': len([s for s in sources if s.get('memory_type') == 'long-term']),
+                'num_short_term_sources': num_short_term,
+                'num_long_term_sources': num_long_term,
                 'session_id': session_id,
-                'cached': False
+                'cached': False,
+                'context_info': f"Used {num_short_term} session document(s) and {num_long_term} global document(s)" if sources else "No documents found"
             }
 
             # Step 8: Save conversation message

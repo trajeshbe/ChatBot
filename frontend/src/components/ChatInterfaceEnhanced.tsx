@@ -14,6 +14,7 @@ interface Message {
   timestamp: Date
   model?: string
   model_name?: string
+  contextInfo?: string
 }
 
 interface Source {
@@ -23,6 +24,7 @@ interface Source {
   source_url?: string
   relevance: number
   excerpt: string
+  memory_type?: 'short-term' | 'long-term'
 }
 
 interface Props {
@@ -210,7 +212,13 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
         sources: response.data.sources,
         model: response.data.model,
         model_name: response.data.model_name,
+        contextInfo: response.data.context_info,
         timestamp: new Date()
+      }
+
+      // Log context usage
+      if (response.data.context_info) {
+        console.log(`📚 Context: ${response.data.context_info}`)
       }
 
       setMessages(prev => [...prev, assistantMessage])
@@ -319,12 +327,19 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
                 <ReactMarkdown>{message.content}</ReactMarkdown>
               </div>
 
-              {/* Model used indicator (for assistant messages) */}
-              {message.role === 'assistant' && message.model_name && (
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
-                    {message.model_name}
-                  </span>
+              {/* Model used and context info (for assistant messages) */}
+              {message.role === 'assistant' && (message.model_name || message.contextInfo) && (
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  {message.model_name && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
+                      {message.model_name}
+                    </span>
+                  )}
+                  {message.contextInfo && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
+                      📚 {message.contextInfo}
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -350,6 +365,11 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
                             <span className="font-medium text-slate-900 dark:text-white">
                               {source.filename}
                             </span>
+                            {source.memory_type === 'short-term' && (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300">
+                                Session
+                              </span>
+                            )}
                           </div>
                           <span className="text-xs text-slate-500">
                             {(source.relevance * 100).toFixed(0)}% match
