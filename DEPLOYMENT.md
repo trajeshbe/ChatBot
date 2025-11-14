@@ -108,14 +108,23 @@ Press `Ctrl+C` to stop watching logs.
 ### Step 6: Verify Deployment
 
 ```bash
-# Check all services are running
-docker compose ps
+# Run comprehensive validation
+./validate-services.sh
 
-# Test backend health
-curl http://localhost:8000/health
+# Or manually check key services:
+docker compose ps                           # All services status
+curl http://localhost:8000/health          # Backend health
+curl http://localhost:8000/api/v1/models/  # Available models
+```
 
-# Test models API
-curl http://localhost:8000/api/v1/models/
+**Expected validation output**:
+```
+✅ Frontend UI          - OK
+✅ Backend API Docs     - OK
+✅ Backend Health       - OK
+✅ Redis                - OK
+✅ PostgreSQL           - OK
+✅ Ollama Models        - OK (2 models installed)
 ```
 
 ### Step 7: Open Application
@@ -126,6 +135,210 @@ You should see:
 - Chat interface with model dropdown
 - Upload and Scrape tabs
 - Model selector in the header
+
+---
+
+## 🔗 Service URLs & Validation
+
+### Primary Interfaces
+
+| Service | URL | Default Credentials | Validation |
+|---------|-----|---------------------|------------|
+| **Frontend UI** | http://localhost:3001 | - | Should load chat interface with model dropdown |
+| **Backend API Docs** | http://localhost:8000/api/docs | - | Swagger UI with all endpoints |
+| **GraphQL Playground** | http://localhost:8000/graphql | - | Interactive GraphQL explorer |
+| **Health Check** | http://localhost:8000/health | - | Returns `{"status": "healthy"}` |
+
+### Monitoring & Administration
+
+| Service | URL | Default Credentials | Purpose |
+|---------|-----|---------------------|---------|
+| **Grafana Dashboards** | http://localhost:3000 | admin / admin | Metrics visualization |
+| **MinIO Console** | http://localhost:9001 | minioadmin / minioadmin | Object storage for documents |
+| **Redis Insight** | http://localhost:8002 | - | Redis cache monitoring |
+| **Prefect UI** | http://localhost:4200 | - | Workflow orchestration |
+| **Flink Dashboard** | http://localhost:8081 | - | Stream processing |
+| **Envoy Admin** | http://localhost:9901 | - | Service mesh admin |
+
+### Validation Steps
+
+#### 1. Frontend (React UI)
+```bash
+# Test frontend is accessible
+curl -I http://localhost:3001
+
+# Expected: HTTP 200 OK
+```
+**Manual Check**: Open http://localhost:3001 and verify:
+- ✅ Chat interface loads
+- ✅ Model dropdown shows 11 models
+- ✅ Upload and Scrape tabs are visible
+
+#### 2. Backend API
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Expected output:
+{"status":"healthy","timestamp":"2024-...","version":"1.0.0"}
+
+# Test models endpoint
+curl http://localhost:8000/api/v1/models/ | jq
+
+# Expected: List of 11 available models
+```
+
+#### 3. GraphQL API
+```bash
+# Test GraphQL endpoint
+curl -X POST http://localhost:8000/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ __schema { types { name } } }"}'
+
+# Expected: GraphQL schema response
+```
+**Manual Check**: Open http://localhost:8000/graphql for interactive playground
+
+#### 4. MinIO (Object Storage)
+```bash
+# Check MinIO is running
+curl -I http://localhost:9001
+
+# Expected: HTTP 200 or 302
+```
+**Manual Check**:
+1. Open http://localhost:9001
+2. Login: `minioadmin` / `minioadmin`
+3. Should see buckets: `documents`, `uploads`
+
+#### 5. Grafana (Monitoring)
+**Manual Check**:
+1. Open http://localhost:3000
+2. Login: `admin` / `admin`
+3. Navigate to Dashboards
+4. Should see pre-configured dashboards for:
+   - Backend API metrics
+   - Database performance
+   - LLM usage tracking
+
+#### 6. Prefect (Workflows)
+```bash
+# Check Prefect UI
+curl -I http://localhost:4200
+
+# Expected: HTTP 200 OK
+```
+**Manual Check**: Open http://localhost:4200 to view:
+- Document processing workflows
+- Scraping job status
+- Scheduled tasks
+
+#### 7. Redis (Cache)
+```bash
+# Test Redis connection
+docker exec -it rag-redis redis-cli ping
+
+# Expected output: PONG
+
+# Check cached queries
+docker exec -it rag-redis redis-cli KEYS "*"
+```
+**Manual Check**: Open http://localhost:8002 for Redis Insight dashboard
+
+#### 8. PostgreSQL (Database)
+```bash
+# Test database connection
+docker exec -it rag-postgres psql -U postgres -c "SELECT version();"
+
+# Expected: PostgreSQL version info
+
+# Check tables exist
+docker exec -it rag-postgres psql -U postgres -d rag_chatbot -c "\dt"
+
+# Expected: List of tables (documents, chunks, conversations, etc.)
+```
+
+#### 9. Ollama (Local LLM)
+```bash
+# List installed models
+docker exec rag-ollama ollama list
+
+# Expected output:
+# NAME                             SIZE
+# llama3.2:3b-instruct-q4_K_M     2.0GB
+# qwen2.5:1.5b-instruct-q4_K_M    1.0GB
+
+# Test inference
+docker exec rag-ollama ollama run llama3.2:3b-instruct-q4_K_M "Hello, what model are you?"
+
+# Expected: Response from Llama 3.2
+```
+
+#### 10. All Services Status
+```bash
+# Check all services are running
+docker compose ps
+
+# Expected: All services should show "Up" status
+```
+
+**Quick Validation Script**:
+```bash
+#!/bin/bash
+echo "=== Service Health Check ==="
+
+# Frontend
+echo -n "Frontend (3001): "
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3001 && echo " ✅" || echo " ❌"
+
+# Backend Health
+echo -n "Backend Health (8000): "
+curl -s http://localhost:8000/health > /dev/null && echo " ✅" || echo " ❌"
+
+# API Docs
+echo -n "API Docs (8000/api/docs): "
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/docs && echo " ✅" || echo " ❌"
+
+# GraphQL
+echo -n "GraphQL (8000/graphql): "
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/graphql && echo " ✅" || echo " ❌"
+
+# Grafana
+echo -n "Grafana (3000): "
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 && echo " ✅" || echo " ❌"
+
+# MinIO
+echo -n "MinIO (9001): "
+curl -s -o /dev/null -w "%{http_code}" http://localhost:9001 && echo " ✅" || echo " ❌"
+
+# Prefect
+echo -n "Prefect (4200): "
+curl -s -o /dev/null -w "%{http_code}" http://localhost:4200 && echo " ✅" || echo " ❌"
+
+# Redis Insight
+echo -n "Redis Insight (8002): "
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8002 && echo " ✅" || echo " ❌"
+
+# Flink
+echo -n "Flink (8081): "
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8081 && echo " ✅" || echo " ❌"
+
+# Envoy
+echo -n "Envoy (9901): "
+curl -s -o /dev/null -w "%{http_code}" http://localhost:9901 && echo " ✅" || echo " ❌"
+
+echo "=== Models Check ==="
+curl -s http://localhost:8000/api/v1/models/ | jq -r '.[] | "  • \(.name)"'
+
+echo "=== Ollama Models ==="
+docker exec rag-ollama ollama list
+```
+
+Save this as `validate-services.sh` and run:
+```bash
+chmod +x validate-services.sh
+./validate-services.sh
+```
 
 ---
 
@@ -298,18 +511,21 @@ docker compose logs backend | grep -i error
 docker compose logs backend | grep -i "model"
 ```
 
-### API Documentation
+### Quick Service Access
 
-- **Swagger UI**: http://localhost:8000/api/docs
-- **ReDoc**: http://localhost:8000/api/redoc
-- **GraphQL Playground**: http://localhost:8000/graphql
+For complete service URLs, credentials, and validation steps, see **[🔗 Service URLs & Validation](#-service-urls--validation)** section above.
 
-### Monitoring Dashboards
+**Quick Links**:
+- Frontend UI: http://localhost:3001
+- API Docs: http://localhost:8000/api/docs
+- GraphQL: http://localhost:8000/graphql
+- Grafana: http://localhost:3000 (admin/admin)
+- MinIO: http://localhost:9001 (minioadmin/minioadmin)
 
-- **Prefect UI**: http://localhost:4200 (workflow orchestration)
-- **MinIO Console**: http://localhost:9001 (object storage)
-  - Username: `minioadmin`
-  - Password: `minioadmin`
+**Validate All Services**:
+```bash
+./validate-services.sh
+```
 
 ---
 
