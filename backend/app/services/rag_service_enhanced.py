@@ -83,8 +83,9 @@ class EnhancedRAGService:
                     query_embedding=query_embedding,
                     query_text=query_text,  # For keyword matching
                     top_k=settings.TOP_K_RESULTS,
-                    threshold=settings.SIMILARITY_THRESHOLD - 0.1,  # Slightly lower threshold for session docs
+                    threshold=settings.SIMILARITY_THRESHOLD - 0.05,  # Slightly lower threshold for session docs
                     use_hybrid=True,  # Enable hybrid search
+                    use_cascading_fallback=True,  # Enable cascading fallback
                     db=db
                 )
                 if short_term_chunks:
@@ -93,16 +94,17 @@ class EnhancedRAGService:
                 else:
                     logger.info(f"⚠️ No session-specific documents found for session {session_id}")
 
-            # Step 3: Search long-term memory (all documents) using hybrid search
+            # Step 3: Search long-term memory (all documents) using hybrid search with cascading fallback
             long_term_chunks = await document_service.search_similar_chunks(
                 query_embedding=query_embedding,
                 query_text=query_text,  # For keyword matching
                 top_k=settings.TOP_K_RESULTS,
                 threshold=settings.SIMILARITY_THRESHOLD,
                 use_hybrid=True,  # Enable hybrid search
+                use_cascading_fallback=True,  # Enable cascading fallback
                 db=db
             )
-            logger.info(f"Found {len(long_term_chunks)} chunks in long-term memory - hybrid search")
+            logger.info(f"Found {len(long_term_chunks)} chunks in long-term memory - hybrid search with fallback")
 
             # Step 4: Combine and deduplicate results (short-term has priority)
             combined_chunks = self._combine_memory_results(
@@ -278,14 +280,16 @@ class EnhancedRAGService:
         top_k: int = 5,
         threshold: float = 0.6,
         use_hybrid: bool = True,
+        use_cascading_fallback: bool = True,
         db: AsyncSession = None
     ) -> List[Dict]:
         """
         Search only documents associated with this session (short-term memory)
-        with optional hybrid search (semantic + keyword matching)
+        with optional hybrid search and cascading fallback
         """
         try:
             from app.models.database_enhanced import SessionDocument, ChatSession
+            from app.models.database import DocumentChunk
 
             # Get session
             session_query = select(ChatSession).where(ChatSession.session_id == session_id)
@@ -306,14 +310,99 @@ class EnhancedRAGService:
                 logger.info(f"No documents associated with session {session_id}")
                 return []
 
-            # Search chunks from session documents only
+            # Check chunks with embeddings for session documents
+            embedding_count_query = sql_text(f"""
+                SELECT COUNT(*)
+                FROM document_chunks dc
+                JOIN session_documents sd ON dc.document_id = sd.document_id
+                WHERE sd.session_id = :session_id AND dc.embedding IS NOT NULL
+            """)
+            embedding_count_result = await db.execute(
+                embedding_count_query,
+                {"session_id": session.id}
+            )
+            embedding_count = embedding_count_result.scalar()
+
+            logger.info(f"📊 Session {session_id}: {session_doc_count} documents, {embedding_count} chunks with embeddings")
+
+            if embedding_count == 0:
+                logger.warning(f"No embeddings found for session {session_id} documents")
+                return []
+
+            # Cascading fallback strategy
+            thresholds_to_try = [threshold]
+            if use_cascading_fallback:
+                thresholds_to_try.extend([
+                    threshold - 0.1,
+                    threshold - 0.15,
+                    settings.MIN_SIMILARITY_THRESHOLD,
+                ])
+
+            chunks = []
+            for current_threshold in thresholds_to_try:
+                if current_threshold < 0:
+                    continue
+
+                logger.info(f"🔍 Session search with threshold={current_threshold:.2f}")
+
+                chunks = await self._execute_session_search(
+                    session_id=session.id,
+                    query_embedding=query_embedding,
+                    query_text=query_text,
+                    threshold=current_threshold,
+                    top_k=top_k,
+                    use_hybrid=use_hybrid,
+                    db=db
+                )
+
+                if chunks:
+                    logger.info(f"✅ Found {len(chunks)} session chunks with threshold={current_threshold:.2f}")
+                    break
+                else:
+                    logger.warning(f"⚠️ No session results with threshold={current_threshold:.2f}")
+
+            # Final fallback: keyword search on session documents
+            if not chunks and query_text and use_hybrid:
+                logger.info("🔍 Session fallback: trying keyword-only search...")
+                chunks = await self._keyword_only_session_search(
+                    session_id=session.id,
+                    query_text=query_text,
+                    top_k=top_k,
+                    db=db
+                )
+                if chunks:
+                    logger.info(f"✅ Found {len(chunks)} session chunks with keyword search")
+
+            return chunks
+
+        except Exception as e:
+            logger.error(f"Error searching session documents: {e}", exc_info=True)
+            await db.rollback()
+            return []
+
+    async def _execute_session_search(
+        self,
+        session_id: uuid.UUID,
+        query_embedding: List[float],
+        query_text: Optional[str],
+        threshold: float,
+        top_k: int,
+        use_hybrid: bool,
+        db: AsyncSession
+    ) -> List[Dict]:
+        """Execute session document search with given parameters"""
+        try:
             embedding_str = f"[{','.join(map(str, query_embedding))}]"
 
             # Hybrid search: combine semantic and keyword search
             if use_hybrid and query_text:
-                # Extract keywords from query for keyword matching
                 keywords = document_service._extract_keywords(query_text)
-                keyword_condition = " OR ".join([f"dc.content ILIKE '%{kw}%'" for kw in keywords]) if keywords else "TRUE"
+                if not keywords:
+                    return await self._execute_session_search(
+                        session_id, query_embedding, None, threshold, top_k, False, db
+                    )
+
+                keyword_condition = " OR ".join([f"dc.content ILIKE '%{kw}%'" for kw in keywords])
 
                 query = sql_text(f"""
                     WITH semantic_search AS (
@@ -353,10 +442,10 @@ class EnhancedRAGService:
                         ss.priority,
                         ss.semantic_score,
                         COALESCE(ks.keyword_score, 0) as keyword_score,
-                        (ss.semantic_score * 0.7 + COALESCE(ks.keyword_score, 0) * 0.3) as combined_score
+                        (ss.semantic_score * 0.6 + COALESCE(ks.keyword_score, 0) * 0.4) as combined_score
                     FROM semantic_search ss
                     LEFT JOIN keyword_search ks ON ss.id = ks.id
-                    WHERE (ss.semantic_score * 0.7 + COALESCE(ks.keyword_score, 0) * 0.3) > :threshold
+                    WHERE (ss.semantic_score * 0.6 + COALESCE(ks.keyword_score, 0) * 0.4) > :threshold
                     ORDER BY ss.priority DESC, combined_score DESC
                     LIMIT :limit
                 """)
@@ -388,7 +477,7 @@ class EnhancedRAGService:
             result = await db.execute(
                 query,
                 {
-                    "session_id": session.id,
+                    "session_id": session_id,
                     "threshold": threshold,
                     "limit": top_k
                 }
@@ -407,15 +496,80 @@ class EnhancedRAGService:
                     'similarity': float(row.combined_score),
                     'semantic_score': float(row.semantic_score),
                     'keyword_score': float(row.keyword_score),
-                    'memory_type': 'short-term',  # Mark as short-term memory
+                    'memory_type': 'short-term',
                     'priority': row.priority
                 })
 
             return chunks
 
         except Exception as e:
-            logger.error(f"Error searching session documents: {e}")
-            await db.rollback()
+            logger.error(f"Error in _execute_session_search: {e}", exc_info=True)
+            return []
+
+    async def _keyword_only_session_search(
+        self,
+        session_id: uuid.UUID,
+        query_text: str,
+        top_k: int,
+        db: AsyncSession
+    ) -> List[Dict]:
+        """Pure keyword search for session documents"""
+        try:
+            keywords = document_service._extract_keywords(query_text)
+            if not keywords:
+                return []
+
+            keyword_conditions = [f"dc.content ILIKE :kw{i}" for i in range(len(keywords))]
+            keyword_clause = " OR ".join(keyword_conditions)
+
+            query = sql_text(f"""
+                SELECT
+                    dc.id,
+                    dc.document_id,
+                    dc.content,
+                    dc.meta_info,
+                    d.filename,
+                    d.source_type,
+                    d.source_url,
+                    sd.priority
+                FROM document_chunks dc
+                JOIN documents d ON dc.document_id = d.id
+                JOIN session_documents sd ON d.id = sd.document_id
+                WHERE sd.session_id = :session_id
+                    AND ({keyword_clause})
+                ORDER BY sd.priority DESC
+                LIMIT :limit
+            """)
+
+            params = {f"kw{i}": f"%{kw}%" for i, kw in enumerate(keywords)}
+            params["session_id"] = session_id
+            params["limit"] = top_k
+
+            result = await db.execute(query, params)
+
+            chunks = []
+            for row in result:
+                chunks.append({
+                    'id': str(row.id),
+                    'document_id': str(row.document_id),
+                    'content': row.content,
+                    'meta_info': row.meta_info,
+                    'filename': row.filename,
+                    'source_type': row.source_type,
+                    'source_url': row.source_url,
+                    'keyword_score': 1.0,
+                    'semantic_score': 0.1,
+                    'combined_score': 0.5,
+                    'similarity': 0.5,
+                    'memory_type': 'short-term',
+                    'priority': row.priority,
+                    'search_type': 'keyword_only'
+                })
+
+            return chunks
+
+        except Exception as e:
+            logger.error(f"Error in keyword-only session search: {e}", exc_info=True)
             return []
 
     def _combine_memory_results(

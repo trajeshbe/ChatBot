@@ -339,13 +339,24 @@ class DocumentService:
         threshold: float = 0.5,
         db: AsyncSession = None,
         query_text: str = None,
-        use_hybrid: bool = True
+        use_hybrid: bool = True,
+        use_cascading_fallback: bool = True
     ) -> List[Dict]:
         """
-        Search for similar document chunks using hybrid search:
+        Search for similar document chunks using robust hybrid search with cascading fallback:
         1. Vector similarity search (semantic)
         2. Keyword matching (lexical) - optional
         3. Combined reranking for better results
+        4. Cascading fallback with progressively lower thresholds if no results
+
+        Args:
+            query_embedding: Vector embedding of the query
+            top_k: Number of results to return
+            threshold: Initial similarity threshold
+            db: Database session
+            query_text: Original query text for keyword matching
+            use_hybrid: Enable hybrid search (semantic + keyword)
+            use_cascading_fallback: Enable cascading fallback with lower thresholds
         """
         from sqlalchemy import text as sql_text, select, func
         from app.models.database import DocumentChunk
@@ -357,9 +368,98 @@ class DocumentService:
             chunk_count = count_result.scalar()
 
             if chunk_count == 0:
-                logger.info("No documents found in database")
+                logger.warning("❌ No document chunks found in database")
                 return []
 
+            # Check chunks with embeddings
+            embedding_count_query = select(func.count()).select_from(DocumentChunk).where(
+                DocumentChunk.embedding.isnot(None)
+            )
+            embedding_count_result = await db.execute(embedding_count_query)
+            embedding_count = embedding_count_result.scalar()
+
+            if embedding_count == 0:
+                logger.error(f"❌ No embeddings found! {chunk_count} chunks exist but none have embeddings")
+                return []
+
+            logger.info(f"📊 Database status: {chunk_count} total chunks, {embedding_count} with embeddings")
+
+            # Cascading fallback strategy: try multiple thresholds
+            thresholds_to_try = [threshold]
+            if use_cascading_fallback:
+                # Add progressively lower thresholds
+                thresholds_to_try.extend([
+                    threshold - 0.1,
+                    threshold - 0.15,
+                    settings.MIN_SIMILARITY_THRESHOLD,  # Final fallback (0.05)
+                ])
+
+            chunks = []
+            threshold_used = threshold
+
+            for current_threshold in thresholds_to_try:
+                if current_threshold < 0:
+                    continue
+
+                logger.info(f"🔍 Searching with threshold={current_threshold:.2f}, hybrid={use_hybrid}")
+
+                chunks = await self._execute_search(
+                    query_embedding=query_embedding,
+                    query_text=query_text,
+                    threshold=current_threshold,
+                    top_k=top_k,
+                    use_hybrid=use_hybrid,
+                    db=db
+                )
+
+                if chunks:
+                    threshold_used = current_threshold
+                    logger.info(f"✅ Found {len(chunks)} chunks with threshold={current_threshold:.2f}")
+                    break
+                else:
+                    logger.warning(f"⚠️ No results with threshold={current_threshold:.2f}, trying lower threshold...")
+
+            # Final fallback: pure keyword search (if query_text provided and still no results)
+            if not chunks and query_text and use_hybrid:
+                logger.info("🔍 Final fallback: trying pure keyword search...")
+                chunks = await self._keyword_only_search(query_text, top_k, db)
+                if chunks:
+                    logger.info(f"✅ Found {len(chunks)} chunks with keyword-only search")
+                    # Add low semantic scores for keyword-only results
+                    for chunk in chunks:
+                        chunk['semantic_score'] = 0.1
+                        chunk['combined_score'] = chunk.get('keyword_score', 0.5)
+                        chunk['similarity'] = chunk['combined_score']
+
+            if chunks:
+                # Diversify results - avoid too many chunks from same document
+                chunks = self._diversify_chunks(chunks, top_k)
+                logger.info(f"📄 Final result: {len(chunks)} chunks from {len(set(c['filename'] for c in chunks))} documents")
+            else:
+                logger.warning(f"❌ No relevant chunks found after all fallback strategies (total chunks in DB: {chunk_count}, with embeddings: {embedding_count})")
+
+            return chunks
+
+        except Exception as e:
+            logger.error(f"❌ Error searching similar chunks: {e}", exc_info=True)
+            # Rollback transaction on error to prevent "transaction aborted" state
+            await db.rollback()
+            # Return empty list instead of raising to allow graceful degradation
+            return []
+
+    async def _execute_search(
+        self,
+        query_embedding: List[float],
+        query_text: Optional[str],
+        threshold: float,
+        top_k: int,
+        use_hybrid: bool,
+        db: AsyncSession
+    ) -> List[Dict]:
+        """Execute a single search with given parameters"""
+        from sqlalchemy import text as sql_text
+
+        try:
             # Convert embedding to PostgreSQL vector format string
             embedding_str = f"[{','.join(map(str, query_embedding))}]"
 
@@ -367,9 +467,18 @@ class DocumentService:
             if use_hybrid and query_text:
                 # Extract keywords from query for keyword matching
                 keywords = self._extract_keywords(query_text)
-                keyword_condition = " OR ".join([f"dc.content ILIKE '%{kw}%'" for kw in keywords]) if keywords else "TRUE"
+                if not keywords:
+                    # If no keywords extracted, fall back to semantic only
+                    return await self._execute_search(
+                        query_embedding, None, threshold, top_k, False, db
+                    )
+
+                keyword_condition = " OR ".join([f"dc.content ILIKE '%{kw}%'" for kw in keywords])
+
+                logger.debug(f"Keywords extracted: {keywords}")
 
                 # Hybrid query with both semantic and keyword matching
+                # Adjust weights: 60% semantic, 40% keyword for better keyword matching
                 query = sql_text(f"""
                     WITH semantic_search AS (
                         SELECT
@@ -404,10 +513,10 @@ class DocumentService:
                         ss.source_url,
                         ss.semantic_score,
                         COALESCE(ks.keyword_score, 0) as keyword_score,
-                        (ss.semantic_score * 0.7 + COALESCE(ks.keyword_score, 0) * 0.3) as combined_score
+                        (ss.semantic_score * 0.6 + COALESCE(ks.keyword_score, 0) * 0.4) as combined_score
                     FROM semantic_search ss
                     LEFT JOIN keyword_search ks ON ss.id = ks.id
-                    WHERE (ss.semantic_score * 0.7 + COALESCE(ks.keyword_score, 0) * 0.3) > :threshold
+                    WHERE (ss.semantic_score * 0.6 + COALESCE(ks.keyword_score, 0) * 0.4) > :threshold
                     ORDER BY combined_score DESC
                     LIMIT :limit
                 """)
@@ -456,39 +565,148 @@ class DocumentService:
                     'keyword_score': float(row.keyword_score)
                 })
 
-            # Diversify results - avoid too many chunks from same document
-            chunks = self._diversify_chunks(chunks, top_k)
-
-            logger.info(f"Found {len(chunks)} similar chunks out of {chunk_count} total (hybrid={use_hybrid})")
             return chunks
 
         except Exception as e:
-            logger.error(f"Error searching similar chunks: {e}")
-            # Rollback transaction on error to prevent "transaction aborted" state
-            await db.rollback()
-            # Return empty list instead of raising to allow graceful degradation
+            logger.error(f"Error in _execute_search: {e}", exc_info=True)
             return []
 
-    def _extract_keywords(self, text: str, max_keywords: int = 5) -> List[str]:
-        """Extract important keywords from query text"""
-        # Remove common stop words
+    async def _keyword_only_search(
+        self,
+        query_text: str,
+        top_k: int,
+        db: AsyncSession
+    ) -> List[Dict]:
+        """
+        Pure keyword search as final fallback when semantic search fails
+        """
+        from sqlalchemy import text as sql_text
+
+        try:
+            keywords = self._extract_keywords(query_text)
+            if not keywords:
+                return []
+
+            # Build ILIKE conditions for each keyword
+            keyword_conditions = [f"dc.content ILIKE :kw{i}" for i in range(len(keywords))]
+            keyword_clause = " OR ".join(keyword_conditions)
+
+            query = sql_text(f"""
+                SELECT
+                    dc.id,
+                    dc.document_id,
+                    dc.content,
+                    dc.meta_info,
+                    d.filename,
+                    d.source_type,
+                    d.source_url
+                FROM document_chunks dc
+                JOIN documents d ON dc.document_id = d.id
+                WHERE {keyword_clause}
+                LIMIT :limit
+            """)
+
+            # Build parameters dict
+            params = {f"kw{i}": f"%{kw}%" for i, kw in enumerate(keywords)}
+            params["limit"] = top_k * 2
+
+            result = await db.execute(query, params)
+
+            chunks = []
+            for row in result:
+                chunks.append({
+                    'id': str(row.id),
+                    'document_id': str(row.document_id),
+                    'content': row.content,
+                    'meta_info': row.meta_info,
+                    'filename': row.filename,
+                    'source_type': row.source_type,
+                    'source_url': row.source_url,
+                    'keyword_score': 1.0,
+                    'search_type': 'keyword_only'
+                })
+
+            return chunks
+
+        except Exception as e:
+            logger.error(f"Error in keyword-only search: {e}", exc_info=True)
+            return []
+
+    def _extract_keywords(self, text: str, max_keywords: int = 8) -> List[str]:
+        """
+        Extract important keywords from query text with improved extraction.
+        Returns more keywords with better handling of names, acronyms, and important terms.
+        """
+        # Remove common stop words (expanded list)
         stop_words = {
             'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
             'of', 'with', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
             'what', 'which', 'who', 'when', 'where', 'why', 'how', 'can', 'could',
-            'should', 'would', 'will', 'shall', 'may', 'might', 'must', 'do', 'does', 'did'
+            'should', 'would', 'will', 'shall', 'may', 'might', 'must', 'do', 'does', 'did',
+            'have', 'has', 'had', 'this', 'that', 'these', 'those', 'there', 'their',
+            'them', 'they', 'about', 'after', 'before', 'between', 'into', 'through',
+            'during', 'from', 'up', 'down', 'out', 'off', 'over', 'under', 'again',
+            'further', 'then', 'once'
         }
 
-        # Extract words (alphanumeric, min 3 chars)
-        words = re.findall(r'\b[a-zA-Z0-9]{3,}\b', text.lower())
+        # Extract words and phrases
+        # 1. Extract capitalized words (likely names, acronyms) - min 2 chars
+        capitalized = re.findall(r'\b[A-Z][a-zA-Z0-9]{1,}\b', text)
 
-        # Filter stop words and get unique keywords
-        keywords = [w for w in words if w not in stop_words]
+        # 2. Extract all words (alphanumeric, min 2 chars for better coverage)
+        words = re.findall(r'\b[a-zA-Z0-9]{2,}\b', text.lower())
 
-        # Return top keywords (by length as simple heuristic)
-        keywords = sorted(set(keywords), key=len, reverse=True)[:max_keywords]
+        # 3. Extract quoted phrases (if any)
+        quoted = re.findall(r'"([^"]+)"', text)
+        quoted_words = []
+        for phrase in quoted:
+            quoted_words.extend(phrase.lower().split())
 
-        return keywords
+        # Combine all keywords
+        all_keywords = []
+
+        # Priority 1: Capitalized words (names, acronyms) - keep as-is
+        for word in capitalized:
+            if word.lower() not in stop_words:
+                all_keywords.append(word)
+
+        # Priority 2: Quoted words
+        for word in quoted_words:
+            if word not in stop_words and len(word) >= 2:
+                all_keywords.append(word)
+
+        # Priority 3: Regular words filtered by stop words
+        for word in words:
+            if word not in stop_words and word not in [k.lower() for k in all_keywords]:
+                all_keywords.append(word)
+
+        # Remove duplicates while preserving order (case-insensitive)
+        seen = set()
+        unique_keywords = []
+        for kw in all_keywords:
+            kw_lower = kw.lower()
+            if kw_lower not in seen:
+                seen.add(kw_lower)
+                unique_keywords.append(kw)
+
+        # Prioritize by:
+        # 1. Capitalized words (likely names)
+        # 2. Longer words (more specific)
+        # 3. Words that appear in original case (not lowercased)
+        def keyword_priority(kw):
+            is_capitalized = kw[0].isupper() if kw else False
+            return (
+                1 if is_capitalized else 2,  # Capitalized first
+                -len(kw),  # Longer words first
+                kw.lower()  # Alphabetical for tie-breaking
+            )
+
+        unique_keywords.sort(key=keyword_priority)
+
+        # Return top keywords
+        result = unique_keywords[:max_keywords]
+        logger.debug(f"Extracted keywords from '{text}': {result}")
+        return result
 
     def _diversify_chunks(self, chunks: List[Dict], top_k: int) -> List[Dict]:
         """

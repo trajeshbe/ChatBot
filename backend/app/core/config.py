@@ -89,7 +89,8 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 800  # Increased from 500 for better context (optimal for embeddings)
     CHUNK_OVERLAP: int = 150  # Increased from 50 for better continuity (20% overlap)
     TOP_K_RESULTS: int = 5
-    SIMILARITY_THRESHOLD: float = 0.3  # Lowered from 0.5 for better recall with hybrid search
+    SIMILARITY_THRESHOLD: float = 0.2  # Lowered for better recall with cascading fallback strategy
+    MIN_SIMILARITY_THRESHOLD: float = 0.05  # Minimum threshold for fallback searches
 
     class Config:
         env_file = ".env"
