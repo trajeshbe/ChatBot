@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Loader2, FileText, ExternalLink } from 'lucide-react'
+import { Send, Loader2, FileText, ExternalLink, Paperclip, X } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import FileUpload from './FileUpload'
 import WebScraper from './WebScraper'
@@ -30,18 +30,35 @@ interface Props {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+// Generate or retrieve session ID
+const getSessionId = (): string => {
+  if (typeof window === 'undefined') return ''
+
+  let sessionId = sessionStorage.getItem('chat_session_id')
+  if (!sessionId) {
+    sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    sessionStorage.setItem('chat_session_id', sessionId)
+    console.log('🆔 Created new session:', sessionId)
+  }
+  return sessionId
+}
+
 export default function ChatInterfaceEnhanced({ activeTab }: Props) {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: 'Hello! I\'m your enterprise RAG assistant with multi-model support. I can use OpenAI, Claude, or local models. Select your preferred model above and ask me anything!',
+      content: 'Hello! I\'m your enterprise RAG assistant with multi-model support. I can use OpenAI, Claude, or local models. Select your preferred model above and ask me anything! You can also upload files directly in this chat.',
       timestamp: new Date()
     }
   ])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [selectedModel, setSelectedModel] = useState<string | null>(null)
+  const [sessionId, setSessionId] = useState<string>('')
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([])
+  const [uploadingFiles, setUploadingFiles] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -51,8 +68,80 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
     scrollToBottom()
   }, [messages])
 
+  // Initialize session ID on mount
+  useEffect(() => {
+    setSessionId(getSessionId())
+  }, [])
+
+  // Handle file attachment
+  const handleFileAttach = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    setAttachedFiles(prev => [...prev, ...files])
+  }
+
+  const removeAttachedFile = (index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  // Upload files to backend with session ID
+  const uploadAttachedFiles = async (): Promise<boolean> => {
+    if (attachedFiles.length === 0) return true
+
+    setUploadingFiles(true)
+    try {
+      for (const file of attachedFiles) {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('session_id', sessionId) // 🎯 Pass session ID!
+
+        await axios.post(`${API_URL}/api/v1/upload`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        })
+        console.log(`✅ Uploaded ${file.name} to session ${sessionId}`)
+      }
+      setAttachedFiles([]) // Clear after successful upload
+      return true
+    } catch (error) {
+      console.error('Error uploading files:', error)
+      return false
+    } finally {
+      setUploadingFiles(false)
+    }
+  }
+
   const handleSendMessage = async () => {
-    if (!input.trim() || isLoading) return
+    if ((!input.trim() && attachedFiles.length === 0) || isLoading) return
+
+    // Upload attached files first
+    if (attachedFiles.length > 0) {
+      const uploadSuccess = await uploadAttachedFiles()
+      if (!uploadSuccess) {
+        const errorMessage: Message = {
+          role: 'assistant',
+          content: 'Sorry, there was an error uploading your files. Please try again.',
+          timestamp: new Date()
+        }
+        setMessages(prev => [...prev, errorMessage])
+        return
+      }
+    }
+
+    // If only files were attached without a message, don't send query
+    if (!input.trim()) {
+      const successMessage: Message = {
+        role: 'assistant',
+        content: `Files uploaded successfully to this session! You can now ask questions about them.`,
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, successMessage])
+      return
+    }
 
     const userMessage: Message = {
       role: 'user',
@@ -67,12 +156,15 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
     try {
       const formData = new FormData()
       formData.append('query', input)
+      formData.append('session_id', sessionId) // 🎯 Pass session ID!
       formData.append('use_cache', 'true')
 
       // Add selected model if specified
       if (selectedModel) {
         formData.append('model_id', selectedModel)
       }
+
+      console.log(`📤 Querying with session ${sessionId}`)
 
       const response = await axios.post(`${API_URL}/api/v1/query`, formData, {
         headers: {
@@ -232,22 +324,63 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
       {/* Input Area */}
       <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
         <div className="max-w-4xl mx-auto">
+          {/* Attached Files Display */}
+          {attachedFiles.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {attachedFiles.map((file, index) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100 px-3 py-1.5 rounded-lg text-sm"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span className="max-w-[200px] truncate">{file.name}</span>
+                  <button
+                    onClick={() => removeAttachedFile(index)}
+                    className="hover:bg-blue-200 dark:hover:bg-blue-800 rounded p-0.5"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="flex gap-2">
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileSelect}
+              multiple
+              accept=".pdf,.txt,.doc,.docx,.json,.md"
+              className="hidden"
+            />
+
+            {/* File attachment button */}
+            <button
+              onClick={handleFileAttach}
+              disabled={isLoading || uploadingFiles}
+              className="px-3 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
+              title="Attach files"
+            >
+              <Paperclip className="w-5 h-5" />
+            </button>
+
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask a question about your documents..."
+              placeholder="Ask a question or attach files..."
               className="flex-1 resize-none rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               rows={3}
-              disabled={isLoading}
+              disabled={isLoading || uploadingFiles}
             />
             <button
               onClick={handleSendMessage}
-              disabled={!input.trim() || isLoading}
+              disabled={(attachedFiles.length === 0 && !input.trim()) || isLoading || uploadingFiles}
               className="px-6 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
             >
-              {isLoading ? (
+              {isLoading || uploadingFiles ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <>

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { Upload, FileText, CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import axios from 'axios'
@@ -13,10 +13,30 @@ interface UploadedFile {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+// Get or create session ID
+const getSessionId = (): string => {
+  if (typeof window === 'undefined') return ''
+
+  let sessionId = sessionStorage.getItem('chat_session_id')
+  if (!sessionId) {
+    sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    sessionStorage.setItem('chat_session_id', sessionId)
+    console.log('🆔 Created new session:', sessionId)
+  }
+  return sessionId
+}
+
 export default function FileUpload() {
   const [files, setFiles] = useState<UploadedFile[]>([])
+  const [sessionId, setSessionId] = useState<string>('')
+
+  useEffect(() => {
+    setSessionId(getSessionId())
+  }, [])
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    const currentSessionId = getSessionId()
+
     for (const file of acceptedFiles) {
       const uploadedFile: UploadedFile = {
         name: file.name,
@@ -29,6 +49,7 @@ export default function FileUpload() {
       try {
         const formData = new FormData()
         formData.append('file', file)
+        formData.append('session_id', currentSessionId) // 🎯 Pass session ID!
 
         const response = await axios.post(`${API_URL}/api/v1/upload`, formData, {
           headers: {
@@ -38,6 +59,8 @@ export default function FileUpload() {
             // Update progress if needed
           }
         })
+
+        console.log(`✅ Uploaded ${file.name} to session ${currentSessionId}`)
 
         setFiles(prev =>
           prev.map(f =>
