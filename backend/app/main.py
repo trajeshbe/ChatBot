@@ -275,14 +275,25 @@ async def query_endpoint(
     session_id: Optional[str] = Form(None),
     use_cache: bool = Form(True),
     model_id: Optional[str] = Form(None),
+    conversation_history: Optional[str] = Form(None),  # NEW: Accept conversation history as JSON string
     db: AsyncSession = Depends(get_db)
 ):
-    """Query the RAG system with memory hierarchy"""
+    """Query the RAG system with memory hierarchy and conversation context"""
     import time
+    import json
 
     start_time = time.time()
     ip_address, user_agent = get_client_info(request)
     user_id = await get_anonymous_user_id(db)
+
+    # Parse conversation history if provided
+    parsed_history = None
+    if conversation_history:
+        try:
+            parsed_history = json.loads(conversation_history)
+            logger.info(f"📜 Received conversation history with {len(parsed_history)} messages")
+        except json.JSONDecodeError:
+            logger.warning("Failed to parse conversation history JSON")
 
     try:
         # Use enhanced RAG service with memory hierarchy if available
@@ -291,7 +302,7 @@ async def query_endpoint(
                 query_text=query,
                 session_id=session_id,
                 user_id=user_id,
-                conversation_history=None,
+                conversation_history=parsed_history,  # FIXED: Pass parsed history
                 use_cache=use_cache,
                 model_id=model_id,
                 db=db
@@ -300,7 +311,7 @@ async def query_endpoint(
             # Fall back to basic RAG service
             result = await rag_service.query(
                 query_text=query,
-                conversation_history=None,
+                conversation_history=parsed_history,  # FIXED: Pass parsed history
                 use_cache=use_cache,
                 model_id=model_id,
                 db=db

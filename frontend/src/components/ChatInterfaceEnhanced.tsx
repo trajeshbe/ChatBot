@@ -164,7 +164,15 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
         formData.append('model_id', selectedModel)
       }
 
-      console.log(`📤 Querying with session ${sessionId}`)
+      // 🆕 Pass conversation history for context continuity
+      // Include last 10 messages (5 exchanges) for context window
+      const recentMessages = messages.slice(-10).map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }))
+      formData.append('conversation_history', JSON.stringify(recentMessages))
+
+      console.log(`📤 Querying with session ${sessionId} and ${recentMessages.length} context messages`)
 
       const response = await axios.post(`${API_URL}/api/v1/query`, formData, {
         headers: {
