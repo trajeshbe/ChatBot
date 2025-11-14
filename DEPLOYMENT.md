@@ -1,377 +1,723 @@
-# Deployment Guide - Enterprise RAG Chatbot
+# Enterprise RAG Chatbot - Complete Deployment Guide
 
-## Quick Start (5 Minutes)
+## 🎯 Overview
 
-### Prerequisites
-- Docker Desktop installed and running
-- 16GB+ RAM available
-- 20GB+ disk space
+Multi-model RAG chatbot with intelligent model selection:
+- **Proprietary APIs**: OpenAI (GPT-4, GPT-3.5), Anthropic Claude
+- **Local LLMs**: Ollama (Llama 3.2, Qwen 2.5) - CPU/GPU support
+- **Features**: Document upload, web scraping, semantic caching, model selection UI
+- **WSL2/Docker Compatible**: Tested on Windows WSL2 environment
 
-### Steps
+---
 
-1. **Clone the repository** (already done)
-   ```bash
-   cd /home/user/ChatBot
-   ```
+## 📋 Prerequisites
 
-2. **Configure environment**
-   ```bash
-   cp .env.example .env
-   # Edit .env and add your API keys (optional for local testing)
-   ```
+### Required
+- **Docker** & **Docker Compose** (v2.0+)
+- **Git**
+- **4GB+ RAM** (8GB+ recommended for local models)
+- **10GB+ disk space**
 
-3. **Start the stack**
-   ```bash
-   # Option 1: Use the quick start script
-   ./scripts/quick-start.sh
+### Optional (for proprietary models)
+- **OpenAI API Key** → https://platform.openai.com/api-keys
+- **Anthropic API Key** → https://console.anthropic.com/
 
-   # Option 2: Use Make
-   make up
+### Optional (for GPU acceleration)
+- **NVIDIA GPU** with CUDA support
+- **NVIDIA Docker runtime**
 
-   # Option 3: Use Docker Compose directly
-   docker-compose up -d
-   ```
+---
 
-4. **Access the application**
-   - Frontend: http://localhost:3001
-   - Backend API: http://localhost:8000/api/docs
-   - Grafana: http://localhost:3000 (admin/admin)
+## 🚀 Quick Start (10 Minutes)
 
-## What's Included
-
-This repository contains a complete, production-ready RAG chatbot system with:
-
-### ✅ Core Features
-- [x] Conversational AI with chat interface
-- [x] Document upload and processing (PDF, DOCX, TXT, JSON, MD)
-- [x] Web scraping with URL input
-- [x] Vector search with source references
-- [x] Semantic caching for performance
-- [x] Multi-LLM support (vLLM, llama.cpp, OpenAI)
-
-### ✅ Backend Implementation
-- [x] FastAPI REST API
-- [x] GraphQL API with Strawberry
-- [x] PostgreSQL + pgvector for vector storage
-- [x] Redis for semantic caching
-- [x] MinIO for object storage
-- [x] Document processing with Docling
-- [x] Embedding generation with Sentence Transformers
-- [x] LLM service with fallback chain
-- [x] RAG service with source tracking
-- [x] Web scraping service
-- [x] Prefect workflows
-- [x] LangGraph agent orchestration
-
-### ✅ Frontend Implementation
-- [x] Next.js 14 with TypeScript
-- [x] Modern chat interface
-- [x] File upload with drag-and-drop
-- [x] Web scraping UI
-- [x] Source reference display
-- [x] Real-time status updates
-- [x] Responsive design with Tailwind CSS
-
-### ✅ Infrastructure
-- [x] Docker Compose for local development
-- [x] Kubernetes manifests for production
-- [x] Istio ambient mesh configuration
-- [x] Envoy/Contour ingress
-- [x] OPA Gatekeeper policies
-- [x] Argo CD GitOps setup
-- [x] Tekton CI/CD pipelines
-- [x] Skaffold for dev workflow
-- [x] DevContainer configuration
-
-### ✅ Observability
-- [x] OpenTelemetry tracing
-- [x] Grafana Tempo for traces
-- [x] Grafana Loki for logs
-- [x] Grafana for visualization
-- [x] OpenCost for cost tracking
-
-### ✅ ML/AI Infrastructure
-- [x] vLLM on Kube-Ray configuration
-- [x] llama.cpp CPU fallback
-- [x] Feast feature store setup
-- [x] Apache Flink integration
-
-### ✅ Documentation
-- [x] Comprehensive README
-- [x] Contributing guidelines
-- [x] Deployment guide
-- [x] Quick start script
-- [x] Makefile with common commands
-
-### ✅ Testing
-- [x] Backend test structure
-- [x] Frontend test setup
-- [x] Integration test framework
-- [x] pytest configuration
-
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         Frontend                            │
-│                     (Next.js + Tailwind)                    │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-┌──────────────────────┼──────────────────────────────────────┐
-│                  Envoy Ingress                              │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-┌──────────────────────┼──────────────────────────────────────┐
-│                Istio Service Mesh                           │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────────────┐
-│                FastAPI Backend                              │
-│         (REST API + GraphQL + Agents)                       │
-└─────┬────────┬────────┬────────┬─────────┬─────────────────┘
-      │        │        │        │         │
-┌─────▼──┐ ┌──▼───┐ ┌──▼────┐ ┌─▼─────┐ ┌─▼────────┐
-│PostgreSQL│ │Redis │ │MinIO  │ │vLLM   │ │Prefect  │
-│+pgvector│ │ VSS  │ │Object │ │/llama │ │Workflows│
-└─────────┘ └──────┘ └───────┘ └───────┘ └─────────┘
-      │        │        │        │         │
-┌─────▼────────▼────────▼────────▼─────────▼─────────┐
-│              OpenTelemetry                          │
-│         (Tempo + Loki + Mimir)                      │
-└─────────────────────────────────────────────────────┘
-```
-
-## Production Deployment
-
-### Option 1: Kubernetes with Argo CD
+### Step 1: Clone & Configure
 
 ```bash
-# 1. Install prerequisites
-kubectl create namespace rag-chatbot
-kubectl create namespace argocd
+# Navigate to project directory
+cd /home/user/ChatBot
 
-# 2. Install Istio
-istioctl install --set profile=ambient -y
-
-# 3. Install Argo CD
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-
-# 4. Deploy application
-kubectl apply -f infrastructure/argocd/application.yaml
-
-# 5. Monitor deployment
-kubectl get pods -n rag-chatbot -w
+# Create environment file
+cp .env.example .env
 ```
 
-### Option 2: Kubernetes with kubectl
-
-```bash
-# Deploy base manifests
-kubectl apply -k infrastructure/kubernetes/base/
-
-# Or deploy with production settings
-kubectl apply -k infrastructure/kubernetes/overlays/prod/
-```
-
-### Option 3: Skaffold
-
-```bash
-# Development mode
-cd devops/skaffold
-skaffold dev
-
-# Production deployment
-skaffold run
-```
-
-## Configuration
-
-### Environment Variables
+### Step 2: Add API Keys (Optional)
 
 Edit `.env` file:
 
-```env
-# OpenAI (optional - for fallback)
-OPENAI_API_KEY=sk-...
+```bash
+# Proprietary models (optional - local models work without these!)
+OPENAI_API_KEY=sk-...                    # For GPT models
+ANTHROPIC_API_KEY=sk-ant-...             # For Claude models
 
-# HuggingFace (optional - for custom models)
-HUGGING_FACE_HUB_TOKEN=hf_...
-
-# vLLM Model
-VLLM_MODEL=TinyLlama/TinyLlama-1.1B-Chat-v1.0
-
-# Enable features
+# Database (use defaults or customize)
+POSTGRES_PASSWORD=postgres
 DEBUG=true
 ENABLE_TRACING=true
 ```
 
-### GPU Support
+**💡 Note**: You can skip API keys and use **free local models** via Ollama!
 
-For vLLM with GPU:
-1. Install NVIDIA Docker runtime
-2. Uncomment GPU sections in docker-compose.yml
-3. Update VLLM_MODEL to a larger model
+### Step 3: Start Core Services
 
-### Custom Models
+```bash
+# Start infrastructure services first
+docker compose up -d postgres redis minio prefect-server tempo
 
-Edit `docker-compose.yml`:
-```yaml
-vllm-service:
-  command:
-    - --model
-    - meta-llama/Llama-2-13b-chat-hf  # Your model
+# Wait 30 seconds for initialization
+sleep 30
 ```
 
-## Monitoring & Debugging
+### Step 4: Setup Ollama (Local Models)
 
-### View Logs
 ```bash
-# All services
-docker-compose logs -f
-
-# Specific service
-docker-compose logs -f backend
+# Run automated setup script
+./setup-ollama.sh
 ```
 
-### Check Health
+**Expected output:**
+```
+✅ Ollama Setup Complete!
+Downloaded models:
+  • Llama 3.2 3B - General purpose, good quality
+  • Qwen 2.5 1.5B - Fast, multilingual
+```
+
+This downloads ~3GB of models. **Takes 5-10 minutes** depending on internet speed.
+
+### Step 5: Start Application
+
 ```bash
-# Backend health
+# Start backend and frontend
+docker compose up -d backend frontend
+
+# Watch backend logs to verify startup
+docker compose logs -f backend
+```
+
+**Look for success indicators:**
+```
+✓ Using Enhanced LLM Service with multi-model support
+Initializing LLM service... (Type: EnhancedLLMService)
+Available models: 11 total
+Default model: llama-3.2-3b-cpu
+Application startup complete - API is ready
+```
+
+Press `Ctrl+C` to stop watching logs.
+
+### Step 6: Verify Deployment
+
+```bash
+# Check all services are running
+docker compose ps
+
+# Test backend health
 curl http://localhost:8000/health
 
-# Check all services
-make health
+# Test models API
+curl http://localhost:8000/api/v1/models/
 ```
 
-### Access Dashboards
-- Grafana: http://localhost:3000
-- Prefect: http://localhost:4200
-- MinIO: http://localhost:9001
-- Redis Insight: http://localhost:8001
+### Step 7: Open Application
 
-## Troubleshooting
+🌐 **Frontend**: http://localhost:3001
 
-### Services won't start
+You should see:
+- Chat interface with model dropdown
+- Upload and Scrape tabs
+- Model selector in the header
+
+---
+
+## ✅ Verify Model Selection Works
+
+### Test Local Models (Free!)
+
+1. Open http://localhost:3001
+2. Click **model dropdown** in header
+3. Select **"Llama 3.2 3B Q4 (CPU)"**
+4. Ask: **"What model are you?"**
+5. Response should show badge: **"Llama 3.2 3B Q4 (CPU)"** ✅
+
+Try the same with **"Qwen 2.5 1.5B Q4 (CPU)"** - even faster!
+
+### Test Proprietary Models (if API keys configured)
+
+1. Select **"GPT-3.5 Turbo"** from dropdown
+2. Ask: **"What model are you?"**
+3. Response badge should show: **"GPT-3.5 Turbo"** ✅
+
+---
+
+## 🤖 Available Models
+
+### Proprietary (Requires API Keys)
+
+| Model | Provider | Speed | Quality | Cost | Best For |
+|-------|----------|-------|---------|------|----------|
+| **GPT-4 Turbo** | OpenAI | Medium | Excellent | $$$ | Complex reasoning |
+| **GPT-4** | OpenAI | Slow | Excellent | $$$$ | High-quality tasks |
+| **GPT-3.5 Turbo** | OpenAI | Fast | Good | $ | General use, high volume |
+| **Claude 3.5 Sonnet** | Anthropic | Fast | Excellent | $$ | Coding, analysis |
+| **Claude 3 Opus** | Anthropic | Slow | Best | $$$$ | Most demanding tasks |
+| **Claude 3 Haiku** | Anthropic | Very Fast | Good | $ | Simple queries |
+
+### Local (Free, No API Keys Needed!)
+
+| Model | Provider | Speed | Quality | RAM | Best For |
+|-------|----------|-------|---------|-----|----------|
+| **Llama 3.2 3B Q4** ⭐ | Ollama | Medium | Good | ~2GB | General purpose CPU |
+| **Qwen 2.5 1.5B Q4** ⭐ | Ollama | Fast | Good | ~1GB | Fast responses, multilingual |
+
+### GPU Models (if GPU available)
+
+| Model | Provider | Speed | Quality | VRAM | Best For |
+|-------|----------|-------|---------|------|----------|
+| **Llama 3.1 8B** | vLLM | Very Fast | Excellent | ~12GB | GPU-accelerated |
+| **Llama 3.2 3B** | vLLM | Very Fast | Good | ~6GB | Lightweight GPU |
+| **Qwen 2.5 7B** | vLLM | Very Fast | Excellent | ~12GB | Multilingual GPU |
+
+---
+
+## 📚 Upload Documents
+
+### Via UI
+
+1. Click **"Upload"** tab
+2. Drag & drop files (PDF, DOCX, TXT, MD, JSON)
+3. Wait for processing (progress indicator shown)
+4. Go back to **"Chat"** tab
+5. Ask questions about your documents!
+
+### Via API
+
 ```bash
-# Check Docker resources
-docker system df
-
-# Clean and restart
-make clean
-make up
+curl -X POST http://localhost:8000/api/v1/upload \
+  -F "file=@document.pdf"
 ```
 
-### Out of memory
-- Increase Docker Desktop memory limit to 16GB+
-- Comment out vLLM in docker-compose.yml
-- Use llama.cpp only
+### Supported Formats
 
-### Database connection errors
+- **PDF** - Extracted with layout preservation
+- **DOCX** - Microsoft Word documents
+- **TXT** - Plain text files
+- **MD** - Markdown files
+- **JSON** - JSON data
+
+---
+
+## 🌐 Web Scraping
+
+### Via UI
+
+1. Click **"Scrape"** tab
+2. Enter URL (e.g., https://example.com)
+3. Optional: Add scraping instructions
+4. Click **"Scrape URL"**
+5. Content is extracted and indexed
+6. Ask questions in **"Chat"** tab!
+
+### Via API
+
 ```bash
-# Reset database
-docker-compose down -v postgres
-docker-compose up -d postgres
+curl -X POST http://localhost:8000/api/v1/scrape \
+  -d "url=https://example.com" \
+  -d "scrape_prompt=Extract main content"
 ```
 
-### Port conflicts
-Edit docker-compose.yml to use different ports:
-```yaml
-ports:
-  - "3002:3000"  # Change host port
+---
+
+## 🔧 Configuration
+
+### Environment Variables
+
+All configuration in `.env`:
+
+```bash
+# === LLM API Keys (Optional) ===
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+
+# === Database ===
+POSTGRES_SERVER=postgres
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=ragchatbot
+
+# === Storage ===
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+
+# === Features ===
+DEBUG=true
+ENABLE_TRACING=true
+USE_SEMANTIC_CACHE=true
+
+# === RAG Settings ===
+CHUNK_SIZE=500
+CHUNK_OVERLAP=50
+TOP_K_RESULTS=5
+SIMILARITY_THRESHOLD=0.7
 ```
 
-## Performance Tuning
+### Add More Ollama Models
 
-### For Local Development
-- Use TinyLlama model (fast, small)
-- Enable semantic caching
-- Reduce chunk size if needed
+```bash
+# List available models
+docker exec rag-ollama ollama list
 
-### For Production
-- Use larger, better models
-- Scale backend replicas
-- Enable GPU for vLLM
-- Use production-grade PostgreSQL
-- Enable connection pooling
+# Pull additional models
+docker exec rag-ollama ollama pull mistral:7b
+docker exec rag-ollama ollama pull codellama:7b
+docker exec rag-ollama ollama pull phi3:3.8b
+docker exec rag-ollama ollama pull gemma:7b
 
-## Security Checklist
+# View all available models
+docker exec rag-ollama ollama list --available
+```
 
-- [ ] Change default passwords in .env
-- [ ] Enable HTTPS with proper certificates
-- [ ] Configure OPA policies
-- [ ] Enable Istio mTLS
-- [ ] Set up proper RBAC
-- [ ] Use secrets manager (not .env files)
-- [ ] Enable audit logging
+To add them to the UI dropdown, update `backend/app/models/model_registry.py`.
+
+---
+
+## 📊 Monitoring & Logs
+
+### View Logs
+
+```bash
+# All services
+docker compose logs -f
+
+# Specific service
+docker compose logs -f backend
+docker compose logs -f ollama
+docker compose logs -f frontend
+
+# Search for errors
+docker compose logs backend | grep -i error
+docker compose logs backend | grep -i "model"
+```
+
+### API Documentation
+
+- **Swagger UI**: http://localhost:8000/api/docs
+- **ReDoc**: http://localhost:8000/api/redoc
+- **GraphQL Playground**: http://localhost:8000/graphql
+
+### Monitoring Dashboards
+
+- **Prefect UI**: http://localhost:4200 (workflow orchestration)
+- **MinIO Console**: http://localhost:9001 (object storage)
+  - Username: `minioadmin`
+  - Password: `minioadmin`
+
+---
+
+## 🔄 Common Operations
+
+### Restart Services
+
+```bash
+# Restart everything
+docker compose restart
+
+# Restart specific service
+docker compose restart backend
+docker compose restart ollama
+
+# Rebuild and restart
+docker compose up -d --build backend
+```
+
+### Stop Services
+
+```bash
+# Stop all (keeps data)
+docker compose down
+
+# Stop and remove ALL data (⚠️ DELETES EVERYTHING!)
+docker compose down -v
+```
+
+### Update Application
+
+```bash
+git pull
+docker compose build backend frontend
+docker compose up -d
+```
+
+### Reset Database Only
+
+```bash
+docker compose stop backend
+docker compose down postgres
+docker volume rm chatbot_postgres_data
+docker compose up -d postgres
+
+# Wait 10 seconds
+sleep 10
+
+docker compose up -d backend
+```
+
+---
+
+## 🛠️ Troubleshooting
+
+### Backend Won't Start
+
+```bash
+# Check logs for errors
+docker compose logs backend | tail -50
+
+# Common fixes:
+docker compose restart postgres redis
+sleep 10
+docker compose restart backend
+```
+
+### Models Not Showing in Dropdown
+
+```bash
+# Verify enhanced service is loaded
+docker compose logs backend | grep "Enhanced"
+
+# Should see: "✓ Using Enhanced LLM Service"
+
+# If you see "Using basic LLM service" instead:
+docker compose build backend
+docker compose restart backend
+```
+
+### Ollama Models Not Responding
+
+```bash
+# Check Ollama container is running
+docker compose ps ollama
+
+# Verify models are downloaded
+docker exec rag-ollama ollama list
+
+# Expected output:
+# NAME                              SIZE
+# llama3.2:3b                       2.0GB
+# qwen2.5:1.5b                      1.0GB
+
+# Re-download if needed
+./setup-ollama.sh
+```
+
+### Connection Errors
+
+```bash
+# Check all services are running
+docker compose ps
+
+# Restart dependent services
+docker compose restart postgres redis minio
+sleep 10
+docker compose restart backend
+```
+
+### Out of Memory
+
+```bash
+# Check Docker resource usage
+docker stats
+
+# Solutions:
+# 1. Increase Docker Desktop memory limit (8GB+)
+# 2. Stop unused services:
+docker compose stop prefect-server tempo
+
+# 3. Use smaller models only (Qwen 1.5B instead of Llama 3.2 3B)
+```
+
+### Permission Errors (WSL2)
+
+```bash
+# Fix file permissions
+sudo chown -R $USER:$USER /home/user/ChatBot
+chmod -R 755 /home/user/ChatBot
+
+# Fix script permissions
+chmod +x setup-ollama.sh
+chmod +x scripts/*.sh
+```
+
+---
+
+## 🏗️ Architecture
+
+```
+┌──────────────────────────────────────────────────────┐
+│              Frontend (Next.js + TypeScript)         │
+│             http://localhost:3001                    │
+│                                                      │
+│  • Chat Interface                                    │
+│  • Model Selection Dropdown                          │
+│  • Upload & Scrape Tabs                              │
+│  • Real-time Model Badge Display                     │
+└───────────────────┬──────────────────────────────────┘
+                    │ HTTP/REST
+┌───────────────────▼──────────────────────────────────┐
+│          Backend API (FastAPI + Python)              │
+│           http://localhost:8000                      │
+│                                                      │
+│  ┌────────────────────────────────────────────┐     │
+│  │    Enhanced LLM Service                    │     │
+│  │    • Model Registry (11 models)            │     │
+│  │    • Intelligent Routing                   │     │
+│  │    • Cost Tracking                         │     │
+│  │    • Model Selection                       │     │
+│  └──┬──────────┬──────────┬──────────┬────────┘     │
+│     │          │          │          │              │
+└─────┼──────────┼──────────┼──────────┼──────────────┘
+      │          │          │          │
+      ▼          ▼          ▼          ▼
+  ┌────────┐┌─────────┐┌────────┐┌──────────┐
+  │ OpenAI ││ Claude  ││ vLLM   ││  Ollama  │
+  │  API   ││   API   ││  GPU   ││ CPU/GPU  │
+  └────────┘└─────────┘└────────┘└────┬─────┘
+                                       ├─ Llama 3.2 3B
+                                       └─ Qwen 2.5 1.5B
+
+      ┌──────────────────────────────────────┐
+      │      Supporting Services             │
+      ├──────────────────────────────────────┤
+      │  • PostgreSQL + pgvector (vectors)   │
+      │  • Redis (semantic caching)          │
+      │  • MinIO (document storage)          │
+      │  • Prefect (workflow orchestration)  │
+      │  • Tempo (distributed tracing)       │
+      └──────────────────────────────────────┘
+```
+
+---
+
+## 🚀 Performance Optimization
+
+### For Faster Responses
+
+1. **Use Qwen 1.5B** - 2x faster than Llama 3.2 3B
+2. **Enable semantic caching** (already enabled by default)
+3. **Reduce chunk size** in `.env`: `CHUNK_SIZE=300`
+4. **Use GPT-3.5 Turbo** - Fastest proprietary model
+
+### For Better Quality
+
+1. **Use GPT-4 Turbo** - Best overall quality
+2. **Use Claude 3.5 Sonnet** - Best for coding/analysis
+3. **Use Llama 3.2 3B** - Best free local model
+4. **Upload relevant documents** - Better RAG context
+
+### For Lower Cost
+
+1. **Use local Ollama models** - Completely free!
+2. **Use GPT-3.5 Turbo** - Cheapest proprietary model
+3. **Enable caching** - Reuses responses for similar queries (already enabled)
+4. **Batch similar questions** - Cache hit rate improves
+
+---
+
+## 🎓 Advanced: GPU Support
+
+If you have an NVIDIA GPU, you can use GPU-accelerated models:
+
+### 1. Install NVIDIA Docker Runtime
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install -y nvidia-docker2
+sudo systemctl restart docker
+```
+
+### 2. Uncomment vLLM Service
+
+Edit `docker-compose.yml` and uncomment the vLLM service section (~lines 70-90).
+
+### 3. Start vLLM
+
+```bash
+docker compose up -d vllm-service
+
+# Check logs
+docker compose logs -f vllm-service
+```
+
+### 4. Test GPU Model
+
+Select **"Llama 3.1 8B (GPU)"** from dropdown and test!
+
+---
+
+## 📖 API Reference
+
+### Query Endpoint
+
+```bash
+curl -X POST http://localhost:8000/api/v1/query \
+  -F "query=What is RAG?" \
+  -F "model_id=llama-3.2-3b-cpu" \
+  -F "use_cache=true"
+```
+
+### List Models
+
+```bash
+curl http://localhost:8000/api/v1/models/
+```
+
+Response:
+```json
+{
+  "models": [...],
+  "grouped": {
+    "proprietary": [...],
+    "local_gpu": [...],
+    "local_cpu": [...]
+  },
+  "default": "llama-3.2-3b-cpu",
+  "gpu_info": {...}
+}
+```
+
+### Health Check
+
+```bash
+curl http://localhost:8000/health
+```
+
+---
+
+## 🏭 Production Deployment
+
+For production environments:
+
+### 1. Security
+
+- [ ] Change all default passwords in `.env`
+- [ ] Use Docker secrets instead of `.env` files
+- [ ] Enable HTTPS with proper SSL certificates
+- [ ] Add authentication middleware
 - [ ] Configure firewall rules
-- [ ] Scan images for vulnerabilities
+- [ ] Enable rate limiting
 
-## Scaling
+### 2. Scalability
 
-### Horizontal Scaling
 ```bash
-# Scale backend
-docker-compose up -d --scale backend=3
+# Scale backend horizontally
+docker compose up -d --scale backend=3
 
-# Or in Kubernetes
+# Or use Kubernetes
 kubectl scale deployment backend --replicas=5 -n rag-chatbot
 ```
 
-### Vertical Scaling
-Edit resource limits in:
-- `docker-compose.yml` for Docker
-- `infrastructure/kubernetes/base/backend-deployment.yaml` for Kubernetes
+### 3. Monitoring
 
-## Cost Optimization
+- Set up Prometheus + Grafana
+- Configure alerts for errors
+- Monitor resource usage
+- Track model costs
 
-1. **Use semantic caching** - Already enabled
-2. **Use local LLMs** - vLLM/llama.cpp instead of OpenAI
-3. **Optimize chunk size** - Reduce to save on embeddings
-4. **Monitor with OpenCost** - Track per-request costs
-5. **Auto-scale down** - During low usage periods
+### 4. Backups
 
-## Backup & Recovery
-
-### Backup Database
 ```bash
-make backup-db
+# Backup PostgreSQL
+docker exec rag-postgres pg_dump -U postgres ragchatbot > backup.sql
+
+# Backup MinIO (documents)
+docker exec rag-minio mc mirror /data/documents /backup/
 ```
 
-### Restore Database
+---
+
+## 📋 Quick Command Reference
+
 ```bash
-make restore-db FILE=backup.sql
+# === Setup ===
+./setup-ollama.sh                    # Setup local models
+docker compose up -d                 # Start all services
+docker compose logs -f backend       # Watch logs
+
+# === Operations ===
+docker compose ps                    # Check status
+docker compose restart backend       # Restart service
+docker compose down                  # Stop all (keep data)
+docker compose down -v               # Stop all (DELETE data)
+docker compose build backend         # Rebuild backend
+
+# === Testing ===
+curl http://localhost:8000/health            # Health check
+curl http://localhost:8000/api/v1/models/    # List models
+
+# === Ollama ===
+docker exec rag-ollama ollama list            # List models
+docker exec rag-ollama ollama pull mistral   # Download model
+docker exec rag-ollama ollama ps              # Running models
+
+# === Logs ===
+docker compose logs -f backend               # Backend logs
+docker compose logs -f ollama                # Ollama logs
+docker compose logs backend | grep error     # Search errors
 ```
 
-### Backup Documents
-MinIO data is in Docker volume `minio_data` or can be synced to S3.
+---
 
-## Next Steps
+## 🎯 Next Steps
 
-1. **Test the system**
-   - Upload some documents
-   - Try web scraping
-   - Ask questions and verify sources
+Now that your deployment is complete:
 
-2. **Customize**
-   - Add your own models
-   - Adjust chunk sizes
+1. **✅ Test Model Selection**
+   - Try all available models
+   - Compare response quality
+   - Check model badges appear
+
+2. **📚 Upload Your Documents**
+   - Upload PDFs, DOCX, TXT files
+   - Ask questions about them
+   - Verify source citations work
+
+3. **🌐 Try Web Scraping**
+   - Scrape a documentation site
+   - Ask questions about scraped content
+   - Verify it works with different websites
+
+4. **⚙️ Customize**
+   - Add more Ollama models
+   - Adjust RAG settings
    - Customize UI theme
 
-3. **Deploy to production**
+5. **🚀 Deploy to Production** (optional)
    - Set up Kubernetes cluster
    - Configure monitoring
    - Enable security features
 
-4. **Integrate**
-   - Connect to your data sources
-   - Add authentication
-   - Integrate with your systems
+---
 
-## Support
+## 📞 Support
 
-- GitHub Issues: For bugs and features
-- Documentation: Check README.md
-- Community: Discussions tab
+- **Documentation**: See `/docs` folder
+- **API Docs**: http://localhost:8000/api/docs
+- **Logs**: `docker compose logs -f backend`
+- **Issues**: Check backend logs first for error messages
 
-## License
+---
 
-MIT License - See LICENSE file
+## 🎉 Summary
+
+**Congratulations!** You now have a fully functional enterprise RAG chatbot with:
+
+✅ **11 LLM models** (6 proprietary + 5 local)
+✅ **Intelligent model selection** with UI dropdown
+✅ **Document upload & processing**
+✅ **Web scraping** capability
+✅ **Semantic caching** for performance
+✅ **Model validation** with response badges
+✅ **Working local models** via Ollama (no API keys needed!)
+✅ **WSL2/Docker compatible** (tested and verified)
+
+**Your chatbot is ready to use!** 🚀
+
+Enjoy exploring different models and comparing their capabilities!
