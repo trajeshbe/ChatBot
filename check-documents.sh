@@ -24,29 +24,33 @@ LIMIT 10;" 2>/dev/null || echo "Error querying documents table"
 
 # Count total documents
 doc_count=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c \
-"SELECT COUNT(*) FROM documents;" 2>/dev/null | tr -d ' ')
+"SELECT COUNT(*) FROM documents;" 2>/dev/null | tr -d ' ' || echo "0")
+doc_count=${doc_count:-0}
 echo -e "\n${GREEN}Total documents: $doc_count${NC}"
 
 # Count processed documents
 processed_count=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c \
-"SELECT COUNT(*) FROM documents WHERE processed = true;" 2>/dev/null | tr -d ' ')
+"SELECT COUNT(*) FROM documents WHERE processed = true;" 2>/dev/null | tr -d ' ' || echo "0")
+processed_count=${processed_count:-0}
 echo -e "${GREEN}Processed documents: $processed_count${NC}"
 
 # Count failed documents
 failed_count=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c \
-"SELECT COUNT(*) FROM documents WHERE processing_error IS NOT NULL;" 2>/dev/null | tr -d ' ')
+"SELECT COUNT(*) FROM documents WHERE processing_error IS NOT NULL;" 2>/dev/null | tr -d ' ' || echo "0")
+failed_count=${failed_count:-0}
 if [ "$failed_count" -gt 0 ]; then
     echo -e "${RED}Failed documents: $failed_count${NC}"
     echo -e "\n${RED}Processing errors:${NC}"
     docker exec rag-postgres psql -U postgres -d rag_chatbot -c \
-    "SELECT filename, processing_error FROM documents WHERE processing_error IS NOT NULL;"
+    "SELECT filename, processing_error FROM documents WHERE processing_error IS NOT NULL;" 2>/dev/null
 fi
 
 echo -e "\n${BLUE}=== Checking Document Chunks (Embeddings) ===${NC}"
 
 # Count chunks
 chunk_count=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c \
-"SELECT COUNT(*) FROM document_chunks;" 2>/dev/null | tr -d ' ')
+"SELECT COUNT(*) FROM document_chunks;" 2>/dev/null | tr -d ' ' || echo "0")
+chunk_count=${chunk_count:-0}
 echo -e "${GREEN}Total chunks: $chunk_count${NC}"
 
 if [ "$chunk_count" -gt 0 ]; then
@@ -71,7 +75,8 @@ echo -e "\n${BLUE}=== Checking Query Cache ===${NC}"
 
 # Count cached queries
 cache_count=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c \
-"SELECT COUNT(*) FROM query_cache;" 2>/dev/null | tr -d ' ')
+"SELECT COUNT(*) FROM query_cache;" 2>/dev/null | tr -d ' ' || echo "0")
+cache_count=${cache_count:-0}
 echo -e "${GREEN}Cached queries: $cache_count${NC}"
 
 if [ "$cache_count" -gt 0 ]; then
