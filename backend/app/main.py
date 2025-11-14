@@ -652,14 +652,24 @@ async def get_session_documents(
 
         documents = []
         for doc, session_doc, chunk_count in rows:
+            # Derive processing status from Document model fields
+            if doc.processing_error:
+                processing_status = 'failed'
+            elif doc.processed:
+                processing_status = 'completed'
+            elif chunk_count > 0:
+                processing_status = 'completed'
+            else:
+                processing_status = 'processing'
+
             documents.append({
                 "id": str(doc.id),
                 "filename": doc.filename,
                 "file_size": doc.file_size,
-                "processing_status": doc.processing_status or 'completed',
+                "processing_status": processing_status,
                 "has_embeddings": chunk_count > 0,
                 "chunk_count": chunk_count,
-                "created_at": doc.created_at.isoformat() if doc.created_at else None,
+                "created_at": doc.upload_date.isoformat() if doc.upload_date else None,
                 "priority": session_doc.priority
             })
 
@@ -778,23 +788,33 @@ async def get_admin_documents(
         if embedded_only:
             query = query.having(func.count(DocumentChunk.id) > 0)
 
-        query = query.order_by(Document.created_at.desc()).limit(limit)
+        query = query.order_by(Document.upload_date.desc()).limit(limit)
 
         result = await db.execute(query)
         rows = result.all()
 
         documents = []
         for doc, chunk_count, user_email, username, session_id in rows:
+            # Derive processing status from Document model fields
+            if doc.processing_error:
+                processing_status = 'failed'
+            elif doc.processed:
+                processing_status = 'completed'
+            elif chunk_count > 0:
+                processing_status = 'completed'
+            else:
+                processing_status = 'processing'
+
             documents.append({
                 "id": str(doc.id),
                 "filename": doc.filename,
                 "file_size": doc.file_size,
-                "processing_status": doc.processing_status or 'completed',
+                "processing_status": processing_status,
                 "chunk_count": chunk_count,
                 "user_email": user_email or "anonymous",
                 "username": username or "anonymous",
                 "session_id": session_id,
-                "created_at": doc.created_at.isoformat() if doc.created_at else None
+                "created_at": doc.upload_date.isoformat() if doc.upload_date else None
             })
 
         logger.info(f"Retrieved {len(documents)} documents for admin")
