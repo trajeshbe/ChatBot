@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text as sql_text, and_, func
 from app.services.embedding_service import embedding_service
 from app.services.document_service import document_service
+from app.services.query_classifier import query_classifier
+from app.services.quality_metrics import quality_metrics_service
 from app.core.config import settings
 import time
 import uuid
@@ -61,6 +63,69 @@ class EnhancedRAGService:
             # Ensure session exists
             if session_id:
                 await self._ensure_session_exists(session_id, user_id, db)
+
+            # STEP 0: Classify query to determine if it needs documents
+            classification = query_classifier.classify(query_text)
+            logger.info(f"📊 Query classification: {classification['query_type']} (confidence: {classification['confidence']:.2f}) - {classification['reason']}")
+
+            # If this is an AI-personal question, skip RAG entirely
+            if classification['query_type'] == 'ai_personal':
+                logger.info("⚡ Skipping RAG for AI-personal question - using direct LLM response")
+
+                # Use a system message appropriate for AI-personal questions
+                system_message = (
+                    "You are a helpful AI assistant. Answer questions about yourself naturally and accurately. "
+                    "You are an enterprise RAG (Retrieval-Augmented Generation) chatbot that can answer questions "
+                    "using uploaded documents. You support multiple AI models including OpenAI, Claude, and local models. "
+                    "Be friendly and informative when answering questions about your capabilities."
+                )
+
+                response = await llm_service.generate(
+                    prompt=query_text,
+                    messages=[
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": query_text}
+                    ],
+                    model_id=model_id
+                )
+
+                result = {
+                    'answer': response['content'],
+                    'sources': [],
+                    'model': response['model'],
+                    'model_name': response.get('model_name', response['model']),
+                    'tokens_used': response['tokens'],
+                    'latency_ms': (time.time() - start_time) * 1000,
+                    'num_sources': 0,
+                    'num_short_term_sources': 0,
+                    'num_long_term_sources': 0,
+                    'session_id': session_id,
+                    'cached': False,
+                    'context_info': 'Direct answer (AI-personal question)',
+                    'query_classification': classification['query_type']
+                }
+
+                # Still save to conversation history
+                if session_id:
+                    await self._save_conversation_message(
+                        session_id=session_id,
+                        role='user',
+                        content=query_text,
+                        db=db
+                    )
+                    await self._save_conversation_message(
+                        session_id=session_id,
+                        role='assistant',
+                        content=response['content'],
+                        model_id=response['model'],
+                        model_name=response.get('model_name'),
+                        tokens=response.get('tokens', 0),
+                        latency_ms=(time.time() - start_time) * 1000,
+                        sources=[],
+                        db=db
+                    )
+
+                return result
 
             # Check semantic cache first
             if use_cache:
@@ -190,8 +255,28 @@ class EnhancedRAGService:
                 'num_long_term_sources': num_long_term,
                 'session_id': session_id,
                 'cached': False,
-                'context_info': f"Used {num_short_term} session document(s) and {num_long_term} global document(s)" if sources else "No documents found"
+                'context_info': f"Used {num_short_term} session document(s) and {num_long_term} global document(s)" if sources else "No documents found",
+                'query_classification': classification['query_type']
             }
+
+            # Step 7.5: Calculate quality metrics for the response
+            if combined_chunks:  # Only evaluate if we used RAG
+                try:
+                    quality_metrics = await quality_metrics_service.evaluate_response(
+                        query=query_text,
+                        answer=response['content'],
+                        context_chunks=combined_chunks
+                    )
+                    result['quality_metrics'] = quality_metrics
+                    logger.info(f"📊 Quality: {quality_metrics.get('quality_level', 'unknown')} (score: {quality_metrics.get('rag_score', 0):.2f})")
+
+                    # Log warning if quality is poor
+                    if quality_metrics.get('rag_score', 1) < 0.4:
+                        logger.warning(f"⚠️ LOW QUALITY RESPONSE detected! Score: {quality_metrics.get('rag_score', 0):.2f}")
+                        logger.warning(quality_metrics_service.generate_quality_report(quality_metrics))
+                except Exception as e:
+                    logger.error(f"Error calculating quality metrics: {e}")
+                    result['quality_metrics'] = None
 
             # Step 8: Save conversation message
             if session_id:

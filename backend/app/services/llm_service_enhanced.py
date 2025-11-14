@@ -358,17 +358,24 @@ class EnhancedLLMService:
         start_time = time.time()
 
         # Get model info
+        requested_model_id = model_id  # Store original request for logging
         if model_id is None:
             model_id = self._default_model_id
+            logger.info(f"🎯 No model specified, using default: {model_id}")
+        else:
+            logger.info(f"🎯 Model requested: {model_id}")
 
         model_info = self.model_registry.get_model(model_id)
         if not model_info:
+            logger.error(f"❌ Model not found in registry: {model_id}")
             raise ValueError(f"Model not found: {model_id}")
 
         if not model_info.available:
+            logger.error(f"❌ Model not available: {model_info.name} (provider: {model_info.provider.value})")
+            logger.error(f"   Reasons: API key missing or hardware insufficient")
             raise ValueError(f"Model not available: {model_info.name}")
 
-        logger.info(f"Generating with model: {model_info.name} ({model_info.provider.value})")
+        logger.info(f"✅ Routing to: {model_info.name} via {model_info.provider.value} provider")
 
         # Convert prompt to messages if needed
         if not messages:
@@ -402,12 +409,20 @@ class EnhancedLLMService:
 
             # Add latency
             result["latency_ms"] = (time.time() - start_time) * 1000
-            logger.info(f"✓ Generated {result['tokens']} tokens in {result['latency_ms']:.0f}ms (${result.get('cost', 0):.4f})")
+
+            # Log successful generation with detailed model info
+            logger.info(f"✅ SUCCESS: Generated {result['tokens']} tokens in {result['latency_ms']:.0f}ms using {result['model_name']} (${result.get('cost', 0):.4f})")
+
+            # Validation: Ensure the model used matches what was requested
+            if requested_model_id and result['model'] != model_id:
+                logger.warning(f"⚠️ Model mismatch: requested={requested_model_id}, used={result['model']}")
+            else:
+                logger.debug(f"✅ Model routing validated: requested={requested_model_id or 'default'}, used={result['model']}")
 
             return result
 
         except Exception as e:
-            logger.error(f"Generation failed with {model_info.name}: {e}")
+            logger.error(f"❌ Generation FAILED with {model_info.name} ({model_info.provider.value}): {e}")
             raise
 
     def _messages_to_prompt(self, messages: List[Dict]) -> str:
