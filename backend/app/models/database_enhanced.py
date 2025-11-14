@@ -200,3 +200,144 @@ class SessionContext(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     meta_info = Column(JSON, nullable=True)
+
+
+# Evaluation System Models
+class EvaluationConfig(Base):
+    """User-specific evaluation configuration (toggleable metrics)"""
+    __tablename__ = "evaluation_configs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=True)
+
+    # Toggle switches for evaluation methods
+    enable_ragas = Column(Boolean, default=False)
+    enable_llm_as_judge = Column(Boolean, default=False)
+    enable_deepeval = Column(Boolean, default=False)
+    enable_semantic_similarity = Column(Boolean, default=False)
+    enable_bertscore = Column(Boolean, default=False)
+    enable_citation_accuracy = Column(Boolean, default=True)
+    enable_toxicity = Column(Boolean, default=True)
+    enable_bias_detection = Column(Boolean, default=True)
+    enable_hallucination = Column(Boolean, default=True)
+    enable_answer_relevancy = Column(Boolean, default=True)
+    enable_context_precision = Column(Boolean, default=False)
+    enable_context_recall = Column(Boolean, default=False)
+    enable_faithfulness = Column(Boolean, default=True)
+
+    # Configuration parameters
+    llm_judge_model = Column(String(100), default="gpt-4-turbo-preview")
+    use_cache = Column(Boolean, default=True)
+    async_evaluation = Column(Boolean, default=True)
+    batch_size = Column(Integer, default=10)
+    min_score_threshold = Column(Float, default=0.7)
+    cache_ttl_seconds = Column(Integer, default=3600)
+
+    # Auto-evaluation settings
+    auto_evaluate = Column(Boolean, default=False)  # Automatically evaluate all responses
+    evaluation_sampling_rate = Column(Float, default=1.0)  # % of queries to evaluate (0.0-1.0)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    meta_info = Column(JSON, nullable=True)
+
+
+class EvaluationResult(Base):
+    """Stores evaluation results for RAG responses"""
+    __tablename__ = "evaluation_results"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=True)
+    message_id = Column(UUID(as_uuid=True), ForeignKey("conversation_messages.id", ondelete="CASCADE"), nullable=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    # Query and response data
+    query = Column(Text, nullable=False)
+    response = Column(Text, nullable=False)
+    num_contexts = Column(Integer, nullable=True)
+
+    # Individual evaluation scores (JSON format for flexibility)
+    scores = Column(JSON, nullable=False)  # All evaluation method scores
+    overall_score = Column(Float, nullable=True, index=True)  # Weighted average score
+
+    # Performance metrics
+    evaluation_time_ms = Column(Float, nullable=True)
+    enabled_methods = Column(JSON, nullable=True)  # List of methods that were enabled
+
+    # Metadata
+    metadata = Column(JSON, nullable=True)
+    errors = Column(JSON, nullable=True)  # Any evaluation errors
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class EvaluationCache(Base):
+    """Cache for evaluation results to improve performance"""
+    __tablename__ = "evaluation_cache"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cache_key = Column(String(255), unique=True, nullable=False, index=True)
+    result = Column(JSON, nullable=False)
+    ttl_seconds = Column(Integer, default=3600)
+    hit_count = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_accessed = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class HumanFeedback(Base):
+    """Human feedback on RAG responses for evaluation improvement"""
+    __tablename__ = "human_feedback"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=True)
+    message_id = Column(UUID(as_uuid=True), ForeignKey("conversation_messages.id", ondelete="CASCADE"), nullable=True)
+    evaluation_id = Column(UUID(as_uuid=True), ForeignKey("evaluation_results.id", ondelete="CASCADE"), nullable=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    # Feedback data
+    rating = Column(Integer, nullable=True)  # 1-5 star rating
+    thumbs_up = Column(Boolean, nullable=True)  # Simple thumbs up/down
+    feedback_text = Column(Text, nullable=True)  # Detailed feedback
+
+    # Specific criteria ratings
+    accuracy_rating = Column(Integer, nullable=True)
+    helpfulness_rating = Column(Integer, nullable=True)
+    clarity_rating = Column(Integer, nullable=True)
+
+    # Issues flagged
+    has_hallucination = Column(Boolean, default=False)
+    has_bias = Column(Boolean, default=False)
+    has_toxicity = Column(Boolean, default=False)
+    is_irrelevant = Column(Boolean, default=False)
+
+    # Metadata
+    feedback_type = Column(String(50), nullable=True)  # 'inline', 'survey', 'detailed'
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(512), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    meta_info = Column(JSON, nullable=True)
+
+
+class EvaluationMetricsBenchmark(Base):
+    """Benchmark dataset for evaluation metrics validation"""
+    __tablename__ = "evaluation_benchmarks"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Benchmark data
+    query = Column(Text, nullable=False)
+    ground_truth_answer = Column(Text, nullable=False)
+    context_chunks = Column(JSON, nullable=False)  # List of context chunks
+
+    # Expected scores (for validation)
+    expected_scores = Column(JSON, nullable=True)
+
+    # Benchmark metadata
+    dataset_name = Column(String(100), nullable=True, index=True)  # e.g., "MS-MARCO", "HotpotQA"
+    difficulty = Column(String(50), nullable=True)  # 'easy', 'medium', 'hard'
+    category = Column(String(100), nullable=True)  # Domain category
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    meta_info = Column(JSON, nullable=True)

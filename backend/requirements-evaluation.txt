@@ -1,0 +1,19 @@
+# Optional dependencies for advanced RAG evaluation
+# Install with: pip install -r requirements-evaluation.txt
+
+# RAGAS - Comprehensive RAG evaluation framework
+ragas==0.1.7
+
+# DeepEval - Modern evaluation framework
+deepeval==0.21.0
+
+# BERTScore - Semantic similarity evaluation
+bert-score==0.3.13
+
+# Additional evaluation utilities
+rouge-score==0.1.2  # ROUGE metrics for text similarity
+nltk==3.8.1  # Natural language processing toolkit
+
+# For better toxicity and bias detection (optional)
+detoxify==0.5.2  # Toxicity detection
+fairlearn==0.9.0  # Bias and fairness metrics

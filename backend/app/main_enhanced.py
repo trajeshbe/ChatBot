@@ -140,6 +140,14 @@ app.add_middleware(
 graphql_app = GraphQLRouter(schema)
 app.include_router(graphql_app, prefix="/graphql")
 
+# Add Evaluation router
+try:
+    from app.api.routes.evaluation import router as evaluation_router
+    app.include_router(evaluation_router)
+    logger.info("✓ Evaluation API routes loaded")
+except ImportError as e:
+    logger.warning(f"⚠ Evaluation routes not available: {e}")
+
 
 # === REST API Endpoints ===
 
