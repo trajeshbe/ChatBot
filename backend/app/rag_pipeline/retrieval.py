@@ -134,8 +134,10 @@ class HybridRetriever:
             if session_id:
                 session_filter = """
                     AND dc.document_id IN (
-                        SELECT document_id FROM session_documents
-                        WHERE session_id = :session_id
+                        SELECT sd.document_id
+                        FROM session_documents sd
+                        JOIN chat_sessions cs ON sd.session_id = cs.id
+                        WHERE cs.session_id = :session_id
                     )
                 """
 
