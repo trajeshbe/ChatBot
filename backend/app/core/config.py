@@ -89,7 +89,7 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 500
     CHUNK_OVERLAP: int = 50
     TOP_K_RESULTS: int = 5
-    SIMILARITY_THRESHOLD: float = 0.7
+    SIMILARITY_THRESHOLD: float = 0.5  # Lowered from 0.7 to be more lenient and improve retrieval
 
     class Config:
         env_file = ".env"

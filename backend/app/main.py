@@ -1141,6 +1141,329 @@ async def debug_session_query(
         }
 
 
+@app.post("/api/v1/admin/regenerate-embeddings")
+async def regenerate_embeddings_endpoint(
+    document_id: Optional[str] = None,
+    batch_size: int = 100,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Admin endpoint to regenerate embeddings for documents missing them
+
+    Args:
+        document_id: Optional specific document ID to process
+        batch_size: Number of chunks to process per batch
+    """
+    try:
+        from app.models.database import Document, DocumentChunk
+        from app.services.embedding_service import embedding_service
+        import uuid as uuid_module
+
+        logger.info("Starting embedding regeneration via API")
+
+        # Parse document ID if provided
+        doc_uuid = None
+        if document_id:
+            try:
+                doc_uuid = uuid_module.UUID(document_id)
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid document ID: {document_id}")
+
+        # Count chunks without embeddings
+        count_query = sql_text("""
+            SELECT COUNT(*) FROM document_chunks WHERE embedding IS NULL
+        """)
+        if doc_uuid:
+            count_query = sql_text(f"""
+                SELECT COUNT(*) FROM document_chunks
+                WHERE embedding IS NULL AND document_id = '{doc_uuid}'
+            """)
+
+        count_result = await db.execute(count_query)
+        missing_count = count_result.scalar()
+
+        if missing_count == 0:
+            return {
+                "status": "already_complete",
+                "message": "All chunks already have embeddings",
+                "chunks_processed": 0
+            }
+
+        # Get documents with missing embeddings
+        if doc_uuid:
+            docs_query = select(Document).where(Document.id == doc_uuid)
+        else:
+            docs_query = select(Document).where(
+                Document.id.in_(
+                    select(DocumentChunk.document_id)
+                    .where(DocumentChunk.embedding == None)
+                    .distinct()
+                )
+            )
+
+        docs_result = await db.execute(docs_query)
+        documents = docs_result.scalars().all()
+
+        logger.info(f"Found {len(documents)} documents to process ({missing_count} chunks)")
+
+        # Process each document
+        total_processed = 0
+        errors = []
+
+        for doc in documents:
+            try:
+                # Get chunks without embeddings for this document
+                chunks_query = select(DocumentChunk).where(
+                    DocumentChunk.document_id == doc.id,
+                    DocumentChunk.embedding == None
+                )
+                chunks_result = await db.execute(chunks_query)
+                chunks = chunks_result.scalars().all()
+
+                if not chunks:
+                    continue
+
+                logger.info(f"Processing {doc.filename}: {len(chunks)} chunks")
+
+                # Process in batches
+                for i in range(0, len(chunks), batch_size):
+                    batch = chunks[i:i + batch_size]
+                    chunk_texts = [chunk.content for chunk in batch]
+
+                    # Generate embeddings
+                    embeddings = await embedding_service.get_embeddings_batch(chunk_texts)
+
+                    if not embeddings or len(embeddings) != len(batch):
+                        error_msg = f"Embedding generation failed for {doc.filename}"
+                        logger.error(error_msg)
+                        errors.append(error_msg)
+                        continue
+
+                    # Update chunks
+                    for chunk, embedding in zip(batch, embeddings):
+                        chunk.embedding = embedding
+
+                    await db.flush()
+                    total_processed += len(batch)
+
+                logger.info(f"✅ Completed {doc.filename}")
+
+            except Exception as e:
+                error_msg = f"Error processing {doc.filename}: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                errors.append(error_msg)
+                await db.rollback()
+                # Create new session for next document
+                continue
+
+        # Final commit
+        await db.commit()
+
+        return {
+            "status": "completed" if not errors else "partial",
+            "documents_processed": len(documents),
+            "chunks_processed": total_processed,
+            "chunks_remaining": missing_count - total_processed,
+            "errors": errors if errors else None
+        }
+
+    except Exception as e:
+        logger.error(f"Error in embedding regeneration: {e}", exc_info=True)
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/debug/embeddings")
+async def debug_embeddings(db: AsyncSession = Depends(get_db)):
+    """
+    Comprehensive diagnostic endpoint to check embedding status
+    Returns detailed information about documents, chunks, and embeddings
+    """
+    try:
+        from app.models.database import Document, DocumentChunk
+        from sqlalchemy import text as sql_text, func, select
+
+        diagnostic_info = {}
+
+        # 1. Count total documents
+        doc_count_query = select(func.count()).select_from(Document)
+        doc_count_result = await db.execute(doc_count_query)
+        total_documents = doc_count_result.scalar()
+        diagnostic_info['total_documents'] = total_documents
+
+        # 2. Count total chunks
+        chunk_count_query = select(func.count()).select_from(DocumentChunk)
+        chunk_count_result = await db.execute(chunk_count_query)
+        total_chunks = chunk_count_result.scalar()
+        diagnostic_info['total_chunks'] = total_chunks
+
+        # 3. Count chunks with embeddings
+        embedding_query = sql_text("""
+            SELECT
+                COUNT(*) as total_chunks,
+                COUNT(embedding) as chunks_with_embeddings,
+                COUNT(*) FILTER (WHERE embedding IS NULL) as chunks_without_embeddings
+            FROM document_chunks
+        """)
+        embedding_result = await db.execute(embedding_query)
+        embedding_row = embedding_result.fetchone()
+
+        diagnostic_info['chunks_with_embeddings'] = embedding_row[1]
+        diagnostic_info['chunks_without_embeddings'] = embedding_row[2]
+        diagnostic_info['embedding_coverage_percentage'] = (
+            (embedding_row[1] / embedding_row[0] * 100) if embedding_row[0] > 0 else 0
+        )
+
+        # 4. Check embedding dimensions
+        if embedding_row[1] > 0:
+            dim_query = sql_text("""
+                SELECT array_length(embedding::float[], 1) as dimensions
+                FROM document_chunks
+                WHERE embedding IS NOT NULL
+                LIMIT 1
+            """)
+            dim_result = await db.execute(dim_query)
+            dim_row = dim_result.fetchone()
+            diagnostic_info['embedding_dimensions'] = dim_row[0] if dim_row else None
+        else:
+            diagnostic_info['embedding_dimensions'] = None
+
+        # 5. Check for processing errors
+        error_query = select(Document).where(Document.processing_error != None)
+        error_result = await db.execute(error_query)
+        error_docs = error_result.scalars().all()
+        diagnostic_info['documents_with_errors'] = len(error_docs)
+        diagnostic_info['error_details'] = [
+            {
+                'filename': doc.filename,
+                'error': doc.processing_error[:200]  # Truncate long errors
+            }
+            for doc in error_docs[:5]  # Limit to 5 examples
+        ]
+
+        # 6. Check pgvector extension
+        extension_query = sql_text("""
+            SELECT extname, extversion
+            FROM pg_extension
+            WHERE extname = 'vector'
+        """)
+        extension_result = await db.execute(extension_query)
+        extension_row = extension_result.fetchone()
+        diagnostic_info['pgvector_installed'] = extension_row is not None
+        if extension_row:
+            diagnostic_info['pgvector_version'] = extension_row[1]
+
+        # 7. Check vector indexes
+        index_query = sql_text("""
+            SELECT indexname, indexdef
+            FROM pg_indexes
+            WHERE tablename = 'document_chunks'
+            AND indexdef LIKE '%embedding%'
+        """)
+        index_result = await db.execute(index_query)
+        indexes = index_result.fetchall()
+        diagnostic_info['vector_indexes'] = [
+            {'name': row[0], 'definition': row[1][:100]}
+            for row in indexes
+        ]
+
+        # 8. Sample document chunk details
+        if total_chunks > 0:
+            sample_query = sql_text("""
+                SELECT
+                    dc.id,
+                    d.filename,
+                    dc.chunk_index,
+                    LENGTH(dc.content) as content_length,
+                    dc.embedding IS NOT NULL as has_embedding,
+                    CASE WHEN dc.embedding IS NOT NULL
+                         THEN array_length(dc.embedding::float[], 1)
+                         ELSE NULL
+                    END as embedding_dimensions
+                FROM document_chunks dc
+                JOIN documents d ON dc.document_id = d.id
+                ORDER BY d.upload_date DESC, dc.chunk_index
+                LIMIT 5
+            """)
+            sample_result = await db.execute(sample_query)
+            samples = sample_result.fetchall()
+            diagnostic_info['sample_chunks'] = [
+                {
+                    'filename': row[1],
+                    'chunk_index': row[2],
+                    'content_length': row[3],
+                    'has_embedding': row[4],
+                    'embedding_dimensions': row[5]
+                }
+                for row in samples
+            ]
+        else:
+            diagnostic_info['sample_chunks'] = []
+
+        # 9. Test vector search (if embeddings exist)
+        if embedding_row[1] > 0:
+            # Generate a test embedding (all zeros for testing)
+            test_embedding = [0.0] * 384
+            embedding_str = f"[{','.join(map(str, test_embedding))}]"
+
+            # Try a very low threshold to see if ANY results come back
+            test_query = sql_text(f"""
+                SELECT COUNT(*) as count
+                FROM document_chunks
+                WHERE embedding IS NOT NULL
+                AND 1 - (embedding <=> '{embedding_str}'::vector) > 0.0
+            """)
+            test_result = await db.execute(test_query)
+            test_row = test_result.fetchone()
+            diagnostic_info['test_vector_search_results'] = test_row[0]
+        else:
+            diagnostic_info['test_vector_search_results'] = 0
+
+        # 10. Current configuration
+        diagnostic_info['config'] = {
+            'similarity_threshold': settings.SIMILARITY_THRESHOLD,
+            'top_k_results': settings.TOP_K_RESULTS,
+            'chunk_size': settings.CHUNK_SIZE,
+            'chunk_overlap': settings.CHUNK_OVERLAP
+        }
+
+        # 11. Diagnosis and recommendations
+        issues = []
+        recommendations = []
+
+        if total_documents == 0:
+            issues.append("No documents uploaded")
+            recommendations.append("Upload documents using the /api/v1/upload endpoint")
+        elif total_chunks == 0:
+            issues.append("Documents exist but not processed into chunks")
+            recommendations.append("Check document processing pipeline and logs")
+        elif embedding_row[2] > 0:  # Some chunks without embeddings
+            issues.append(f"{embedding_row[2]} chunks missing embeddings")
+            recommendations.append("Run embedding regeneration script or re-upload documents")
+
+        if embedding_row[1] == 0 and total_chunks > 0:
+            issues.append("No embeddings found - RAG queries will fail")
+            recommendations.append("Check embedding service and regenerate embeddings")
+
+        if not extension_row:
+            issues.append("pgvector extension not installed")
+            recommendations.append("Install pgvector: CREATE EXTENSION vector;")
+
+        if not indexes:
+            issues.append("No vector indexes found - searches will be slow")
+            recommendations.append("Create vector index on document_chunks.embedding")
+
+        diagnostic_info['issues'] = issues
+        diagnostic_info['recommendations'] = recommendations
+        diagnostic_info['status'] = 'healthy' if not issues else 'degraded'
+
+        return diagnostic_info
+
+    except Exception as e:
+        logger.error(f"Error in embeddings diagnostic: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # OpenTelemetry instrumentation (if enabled)
 if settings.ENABLE_TRACING:
     try:
