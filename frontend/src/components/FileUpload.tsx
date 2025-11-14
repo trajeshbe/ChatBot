@@ -1,12 +1,12 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload, FileText, CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import { Upload, FileText, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react'
 import axios from 'axios'
 
 interface UploadedFile {
   name: string
   size: number
-  status: 'uploading' | 'processing' | 'success' | 'error'
+  status: 'uploading' | 'processing' | 'success' | 'error' | 'duplicate'
   documentId?: string
   error?: string
 }
@@ -38,6 +38,23 @@ export default function FileUpload() {
     const currentSessionId = getSessionId()
 
     for (const file of acceptedFiles) {
+      // Check if file is already in the list (client-side duplicate check)
+      const isDuplicate = files.some(
+        f => f.name === file.name && f.size === file.size && f.status !== 'error'
+      )
+
+      if (isDuplicate) {
+        console.warn(`⚠️ File ${file.name} is already in the upload list`)
+        // Still add it to show the duplicate status
+        setFiles(prev => [...prev, {
+          name: file.name,
+          size: file.size,
+          status: 'duplicate',
+          error: 'This file is already in your current session'
+        }])
+        continue // Skip to next file
+      }
+
       const uploadedFile: UploadedFile = {
         name: file.name,
         size: file.size,
@@ -60,6 +77,42 @@ export default function FileUpload() {
           }
         })
 
+        // Check if the backend indicates success
+        if (response.data.success === false) {
+          // Handle duplicate file case
+          if (response.data.duplicate) {
+            console.warn(`⚠️ Duplicate file: ${file.name} already exists in session`)
+            setFiles(prev =>
+              prev.map(f =>
+                f.name === file.name
+                  ? {
+                      ...f,
+                      status: 'duplicate',
+                      documentId: response.data.existing_document_id,
+                      error: response.data.message || 'File already exists in this session'
+                    }
+                  : f
+              )
+            )
+            return // Skip to next file
+          }
+
+          // Handle other backend errors
+          console.error(`❌ Upload failed for ${file.name}: ${response.data.message}`)
+          setFiles(prev =>
+            prev.map(f =>
+              f.name === file.name
+                ? {
+                    ...f,
+                    status: 'error',
+                    error: response.data.message || 'Upload failed'
+                  }
+                : f
+            )
+          )
+          return
+        }
+
         console.log(`✅ Uploaded ${file.name} to session ${currentSessionId}`)
 
         setFiles(prev =>
@@ -73,22 +126,29 @@ export default function FileUpload() {
               : f
           )
         )
-      } catch (error) {
+      } catch (error: any) {
         console.error('Upload error:', error)
+
+        // Extract error message from backend response
+        const errorMessage = error.response?.data?.detail
+          || error.response?.data?.message
+          || error.message
+          || 'Upload failed. Please try again.'
+
         setFiles(prev =>
           prev.map(f =>
             f.name === file.name
               ? {
                   ...f,
                   status: 'error',
-                  error: 'Upload failed'
+                  error: errorMessage
                 }
               : f
           )
         )
       }
     }
-  }, [])
+  }, [files])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -189,6 +249,12 @@ export default function FileUpload() {
                         <>
                           <CheckCircle className="w-5 h-5 text-green-600" />
                           <span className="text-sm text-green-600">Processed</span>
+                        </>
+                      )}
+                      {file.status === 'duplicate' && (
+                        <>
+                          <AlertCircle className="w-5 h-5 text-amber-600" />
+                          <span className="text-sm text-amber-600">{file.error || 'Already uploaded'}</span>
                         </>
                       )}
                       {file.status === 'error' && (
