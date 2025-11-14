@@ -13,21 +13,21 @@ export default function Sidebar({ activeTab, setActiveTab }: Props) {
   ]
 
   return (
-    <div className="w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col">
-      <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+    <div className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-400 rounded-lg flex items-center justify-center">
-            <FileText className="w-6 h-6 text-white" />
+          <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-sm">
+            <MessageSquare className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h2 className="font-bold text-slate-900 dark:text-white">RAG Bot</h2>
-            <p className="text-xs text-slate-500">Enterprise Edition</p>
+            <h2 className="font-semibold text-slate-900 dark:text-white text-sm">RAG Bot</h2>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400">Enterprise AI</p>
           </div>
         </div>
       </div>
 
-      <nav className="flex-1 p-4">
-        <div className="space-y-2">
+      <nav className="flex-1 p-3">
+        <div className="space-y-1">
           {tabs.map((tab) => {
             const Icon = tab.icon
             const isActive = activeTab === tab.id
@@ -36,13 +36,13 @@ export default function Sidebar({ activeTab, setActiveTab }: Props) {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm ${
                   isActive
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                 }`}
               >
-                <Icon className="w-5 h-5" />
+                <Icon className="w-4 h-4" />
                 <span className="font-medium">{tab.label}</span>
               </button>
             )
@@ -50,18 +50,14 @@ export default function Sidebar({ activeTab, setActiveTab }: Props) {
         </div>
       </nav>
 
-      <div className="p-4 border-t border-slate-200 dark:border-slate-700">
-        <div className="text-xs text-slate-500 space-y-1">
-          <p>Tech Stack:</p>
-          <ul className="list-disc list-inside text-[10px] space-y-0.5">
-            <li>vLLM + llama.cpp</li>
-            <li>pgvector + MinIO</li>
-            <li>Redis VSS Cache</li>
-            <li>Prefect + LangGraph</li>
-            <li>Istio + Envoy</li>
-            <li>OTEL + Grafana</li>
-          </ul>
-        </div>
+      <div className="p-3 border-t border-slate-200 dark:border-slate-800">
+        <a
+          href="/admin"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+        >
+          <FileText className="w-4 h-4" />
+          <span className="font-medium">Admin</span>
+        </a>
       </div>
     </div>
   )

@@ -63,6 +63,17 @@ export default function AdminPage() {
   const [sessionDetails, setSessionDetails] = useState<any>(null)
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
 
+  // User creation form
+  const [showUserForm, setShowUserForm] = useState(false)
+  const [newUser, setNewUser] = useState({
+    username: '',
+    email: '',
+    full_name: '',
+    password: '',
+    role: 'user'
+  })
+  const [creatingUser, setCreatingUser] = useState(false)
+
   // Filters
   const [actionFilter, setActionFilter] = useState<string>('')
   const [userFilter, setUserFilter] = useState<string>('')
@@ -112,6 +123,41 @@ export default function AdminPage() {
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleString()
+  }
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setCreatingUser(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/admin/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newUser)
+      })
+
+      if (res.ok) {
+        const createdUser = await res.json()
+        setUsers([createdUser, ...users])
+        setShowUserForm(false)
+        setNewUser({
+          username: '',
+          email: '',
+          full_name: '',
+          password: '',
+          role: 'user'
+        })
+        alert('User created successfully!')
+      } else {
+        const error = await res.json()
+        alert(`Error creating user: ${error.detail || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Error creating user:', error)
+      alert('Error creating user. Please try again.')
+    }
+    setCreatingUser(false)
   }
 
   const filteredAuditLogs = auditLogs.filter(log => {
@@ -220,15 +266,119 @@ export default function AdminPage() {
             <>
               {/* Users Tab */}
               {activeTab === 'users' && (
-                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
-                  <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                    <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                      User Management
-                    </h2>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-                      Total users: {users.length}
-                    </p>
-                  </div>
+                <div className="space-y-4">
+                  {/* User Creation Form */}
+                  {showUserForm && (
+                    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+                        Create New User
+                      </h3>
+                      <form onSubmit={handleCreateUser} className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                              Username *
+                            </label>
+                            <input
+                              type="text"
+                              value={newUser.username}
+                              onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                              required
+                              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                              Email *
+                            </label>
+                            <input
+                              type="email"
+                              value={newUser.email}
+                              onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                              required
+                              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                              Full Name
+                            </label>
+                            <input
+                              type="text"
+                              value={newUser.full_name}
+                              onChange={(e) => setNewUser({ ...newUser, full_name: e.target.value })}
+                              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                              Password *
+                            </label>
+                            <input
+                              type="password"
+                              value={newUser.password}
+                              onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                              required
+                              minLength={8}
+                              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                              Role *
+                            </label>
+                            <select
+                              value={newUser.role}
+                              onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                              required
+                              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="user">User</option>
+                              <option value="admin">Admin</option>
+                              <option value="viewer">Viewer</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setShowUserForm(false)}
+                            className="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={creatingUser}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                          >
+                            {creatingUser ? 'Creating...' : 'Create User'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+                    <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                            User Management
+                          </h2>
+                          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                            Total users: {users.length}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setShowUserForm(!showUserForm)}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                        >
+                          <Users className="w-4 h-4" />
+                          {showUserForm ? 'Cancel' : 'Add User'}
+                        </button>
+                      </div>
+                    </div>
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead className="bg-slate-50 dark:bg-slate-900">
@@ -290,6 +440,7 @@ export default function AdminPage() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
                   </div>
                 </div>
               )}

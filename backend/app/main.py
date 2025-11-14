@@ -129,6 +129,42 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Document service initialization failed: {e}")
 
+    # Create default admin user if it doesn't exist
+    try:
+        logger.info("Checking for default admin user...")
+        from app.models.database_enhanced import User, UserRole
+        from app.core.database import async_session_maker
+        import hashlib
+
+        async with async_session_maker() as session:
+            query = select(User).where(User.username == 'admin')
+            result = await session.execute(query)
+            existing_admin = result.scalar_one_or_none()
+
+            if not existing_admin:
+                # Create default admin user
+                default_password = 'admin123'
+                hashed_password = hashlib.sha256(default_password.encode()).hexdigest()
+
+                admin_user = User(
+                    username='admin',
+                    email='admin@example.com',
+                    full_name='System Administrator',
+                    hashed_password=hashed_password,
+                    role=UserRole.ADMIN,
+                    is_active=True,
+                    is_verified=True
+                )
+
+                session.add(admin_user)
+                await session.commit()
+                logger.info("✓ Default admin user created (username: admin, password: admin123)")
+                logger.warning("⚠️  IMPORTANT: Change the default admin password!")
+            else:
+                logger.info("✓ Admin user already exists")
+    except Exception as e:
+        logger.warning(f"Could not create default admin user: {e}")
+
     logger.info("Application startup complete - API is ready")
 
     yield
@@ -550,6 +586,75 @@ async def get_all_users(db: AsyncSession = Depends(get_db)):
         ]
     except Exception as e:
         logger.error(f"Error getting users: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/admin/users")
+async def create_user(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """Create a new user (admin endpoint)"""
+    try:
+        from app.models.database_enhanced import User, UserRole
+        from sqlalchemy import select
+        import hashlib
+
+        # Get JSON body
+        body = await request.json()
+        username = body.get('username')
+        email = body.get('email')
+        password = body.get('password')
+        full_name = body.get('full_name')
+        role = body.get('role', 'user')
+
+        # Validate required fields
+        if not username or not email or not password:
+            raise HTTPException(status_code=400, detail="Username, email, and password are required")
+
+        # Check if user already exists
+        query = select(User).where((User.username == username) | (User.email == email))
+        result = await db.execute(query)
+        existing_user = result.scalar_one_or_none()
+
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Username or email already exists")
+
+        # Hash password (simple hash for demo - use bcrypt in production)
+        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+
+        # Create user
+        new_user = User(
+            username=username,
+            email=email,
+            full_name=full_name,
+            hashed_password=hashed_password,
+            role=UserRole[role.upper()] if hasattr(UserRole, role.upper()) else UserRole.USER,
+            is_active=True,
+            is_verified=True
+        )
+
+        db.add(new_user)
+        await db.commit()
+        await db.refresh(new_user)
+
+        logger.info(f"✓ Created user: {username} ({role})")
+
+        return {
+            "id": str(new_user.id),
+            "username": new_user.username,
+            "email": new_user.email,
+            "full_name": new_user.full_name,
+            "role": new_user.role.value if new_user.role else None,
+            "is_active": new_user.is_active,
+            "created_at": new_user.created_at.isoformat() if new_user.created_at else None,
+            "last_login": new_user.last_login.isoformat() if new_user.last_login else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating user: {e}")
+        await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 

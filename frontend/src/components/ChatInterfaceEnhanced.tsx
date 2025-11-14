@@ -280,12 +280,12 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-white dark:bg-slate-900">
       {/* Model Selector Header */}
-      <div className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-3">
-        <div className="flex items-center justify-between">
+      <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
+        <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
               Model:
             </span>
             <ModelSelector
@@ -299,28 +299,34 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
             </div>
             <button
               onClick={handleClearSession}
-              className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 flex items-center gap-1 px-3 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              className="text-xs text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-1 px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               title="Clear session and start fresh"
             >
-              <Trash2 className="w-4 h-4" />
-              Clear Session
+              <Trash2 className="w-3.5 h-3.5" />
+              Clear
             </button>
           </div>
         </div>
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto px-4 py-6">
+        <div className="max-w-3xl mx-auto space-y-6">
         {messages.map((message, index) => (
           <div
             key={index}
-            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
+            {message.role === 'assistant' && (
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-semibold text-sm">
+                AI
+              </div>
+            )}
             <div
-              className={`max-w-3xl rounded-lg p-4 ${
+              className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                 message.role === 'user'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-md'
+                  ? 'bg-blue-600 text-white rounded-br-md'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-md'
               }`}
             >
               <div className="markdown-content">
@@ -331,12 +337,12 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
               {message.role === 'assistant' && (message.model_name || message.contextInfo) && (
                 <div className="mt-2 flex items-center gap-2 flex-wrap">
                   {message.model_name && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
+                    <span className="text-xs px-1.5 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
                       {message.model_name}
                     </span>
                   )}
                   {message.contextInfo && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
+                    <span className="text-xs px-1.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
                       📚 {message.contextInfo}
                     </span>
                   )}
@@ -345,34 +351,34 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
 
               {/* Sources */}
               {message.sources && message.sources.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                  <p className="text-sm font-semibold mb-2 text-slate-700 dark:text-slate-300">
+                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-xs font-semibold mb-2 text-slate-600 dark:text-slate-400">
                     Sources:
                   </p>
                   <div className="space-y-2">
                     {message.sources.map((source, idx) => (
                       <div
                         key={idx}
-                        className="text-sm bg-slate-50 dark:bg-slate-900 p-3 rounded border border-slate-200 dark:border-slate-700"
+                        className="text-xs bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700"
                       >
                         <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
                             {source.source_type === 'scrape' ? (
-                              <ExternalLink className="w-4 h-4 text-blue-500" />
+                              <ExternalLink className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
                             ) : (
-                              <FileText className="w-4 h-4 text-green-500" />
+                              <FileText className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
                             )}
-                            <span className="font-medium text-slate-900 dark:text-white">
+                            <span className="font-medium text-slate-900 dark:text-white text-xs">
                               {source.filename}
                             </span>
                             {source.memory_type === 'short-term' && (
-                              <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300">
+                              <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
                                 Session
                               </span>
                             )}
                           </div>
-                          <span className="text-xs text-slate-500">
-                            {(source.relevance * 100).toFixed(0)}% match
+                          <span className="text-[10px] text-slate-500">
+                            {(source.relevance * 100).toFixed(0)}%
                           </span>
                         </div>
                         {source.source_url && (
@@ -380,12 +386,12 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
                             href={source.source_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs text-blue-600 hover:underline mt-1 block"
+                            className="text-[10px] text-blue-600 hover:underline mt-1 block truncate"
                           >
                             {source.source_url}
                           </a>
                         )}
-                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 italic">
+                        <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-1.5 italic line-clamp-2">
                           "{source.excerpt}"
                         </p>
                       </div>
@@ -394,17 +400,26 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
                 </div>
               )}
 
-              <p className="text-xs text-slate-500 mt-2" suppressHydrationWarning>
+              <p className="text-[10px] text-slate-500 dark:text-slate-500 mt-2" suppressHydrationWarning>
                 {message.timestamp.toLocaleTimeString()}
               </p>
             </div>
+            {message.role === 'user' && (
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-semibold text-sm">
+                U
+              </div>
+            )}
           </div>
         ))}
+        </div>
 
         {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-white dark:bg-slate-800 rounded-lg p-4 shadow-md">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+          <div className="max-w-3xl mx-auto flex gap-3 justify-start">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-semibold text-sm">
+              AI
+            </div>
+            <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-bl-md px-4 py-3">
+              <Loader2 className="w-5 h-5 animate-spin text-emerald-600 dark:text-emerald-400" />
             </div>
           </div>
         )}
@@ -416,30 +431,30 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
       <UploadedFilesList sessionId={sessionId} />
 
       {/* Input Area */}
-      <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
-        <div className="max-w-4xl mx-auto">
+      <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-4">
+        <div className="max-w-3xl mx-auto">
           {/* Attached Files Display */}
           {attachedFiles.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-2">
               {attachedFiles.map((file, index) => (
                 <div
                   key={index}
-                  className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100 px-3 py-1.5 rounded-lg text-sm"
+                  className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100 px-2.5 py-1.5 rounded-lg text-xs border border-blue-200 dark:border-blue-800"
                 >
-                  <FileText className="w-4 h-4" />
+                  <FileText className="w-3.5 h-3.5" />
                   <span className="max-w-[200px] truncate">{file.name}</span>
                   <button
                     onClick={() => removeAttachedFile(index)}
-                    className="hover:bg-blue-200 dark:hover:bg-blue-800 rounded p-0.5"
+                    className="hover:bg-blue-100 dark:hover:bg-blue-800 rounded p-0.5"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
               ))}
             </div>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-end">
             {/* Hidden file input */}
             <input
               ref={fileInputRef}
@@ -454,33 +469,33 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
             <button
               onClick={handleFileAttach}
               disabled={isLoading || uploadingFiles}
-              className="px-3 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
+              className="p-3 text-slate-600 dark:text-slate-400 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
               title="Attach files"
             >
               <Paperclip className="w-5 h-5" />
             </button>
 
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Ask a question or attach files..."
-              className="flex-1 resize-none rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              rows={3}
-              disabled={isLoading || uploadingFiles}
-            />
+            <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 focus-within:border-blue-500 dark:focus-within:border-blue-500 transition-colors">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Message RAG Bot..."
+                className="w-full resize-none bg-transparent px-4 py-3 text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none"
+                rows={1}
+                disabled={isLoading || uploadingFiles}
+              />
+            </div>
+
             <button
               onClick={handleSendMessage}
               disabled={(attachedFiles.length === 0 && !input.trim()) || isLoading || uploadingFiles}
-              className="px-6 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed transition-colors flex items-center"
             >
               {isLoading || uploadingFiles ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
-                <>
-                  <Send className="w-5 h-5" />
-                  Send
-                </>
+                <Send className="w-5 h-5" />
               )}
             </button>
           </div>
