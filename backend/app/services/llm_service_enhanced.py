@@ -103,7 +103,11 @@ class EnhancedLLMService:
                         settings.USE_VLLM)
             self.model_registry.update_availability(model.id, available)
 
-        # CPU models always available
+        # Ollama models always available (CPU-based)
+        for model in self.model_registry.get_models_by_provider(ModelProvider.OLLAMA):
+            self.model_registry.update_availability(model.id, True)
+
+        # llama.cpp models (deprecated - use Ollama instead)
         for model in self.model_registry.get_models_by_provider(ModelProvider.LLAMA_CPP):
             self.model_registry.update_availability(model.id, True)
 
@@ -253,6 +257,45 @@ class EnhancedLLMService:
             raise
 
     @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
+    async def _call_ollama(
+        self,
+        model_info: ModelInfo,
+        prompt: str,
+        max_tokens: int = 512,
+        temperature: float = 0.7
+    ) -> Dict:
+        """Call Ollama service (local CPU/GPU)"""
+        try:
+            response = await self.llama_cpp_client.post(
+                f"{settings.OLLAMA_ENDPOINT}/api/generate",
+                json={
+                    "model": model_info.model_path,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "num_predict": max_tokens,
+                        "temperature": temperature,
+                        "top_p": 0.9,
+                        "stop": ["</s>", "Human:", "User:"],
+                    }
+                }
+            )
+            response.raise_for_status()
+            result = response.json()
+
+            return {
+                "content": result["response"],
+                "model": model_info.id,
+                "model_name": model_info.name,
+                "provider": "ollama",
+                "tokens": result.get("eval_count", 0) + result.get("prompt_eval_count", 0),
+                "cost": 0.0  # Local, no cost
+            }
+        except Exception as e:
+            logger.warning(f"Ollama call failed: {e}")
+            raise
+
+    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
     async def _call_llama_cpp(
         self,
         model_info: ModelInfo,
@@ -260,7 +303,7 @@ class EnhancedLLMService:
         max_tokens: int = 512,
         temperature: float = 0.7
     ) -> Dict:
-        """Call llama.cpp service (local CPU)"""
+        """Call llama.cpp service (local CPU) - DEPRECATED, use Ollama instead"""
         try:
             response = await self.llama_cpp_client.post(
                 f"{settings.LLAMA_CPP_ENDPOINT}/completion",
@@ -344,8 +387,13 @@ class EnhancedLLMService:
                 prompt_text = self._messages_to_prompt(messages)
                 result = await self._call_vllm(model_info, prompt_text, max_tokens, temperature)
 
+            elif model_info.provider == ModelProvider.OLLAMA:
+                # Ollama works with raw prompts
+                prompt_text = self._messages_to_prompt(messages)
+                result = await self._call_ollama(model_info, prompt_text, max_tokens, temperature)
+
             elif model_info.provider == ModelProvider.LLAMA_CPP:
-                # llama.cpp works with raw prompts
+                # llama.cpp works with raw prompts (deprecated - use Ollama)
                 prompt_text = self._messages_to_prompt(messages)
                 result = await self._call_llama_cpp(model_info, prompt_text, max_tokens, temperature)
 

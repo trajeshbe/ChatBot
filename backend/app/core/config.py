@@ -55,7 +55,10 @@ class Settings(BaseSettings):
     VLLM_ENDPOINT: str = "http://vllm-service:8000"
     VLLM_MODEL: str = "meta-llama/Llama-2-7b-chat-hf"
 
-    # llama.cpp fallback
+    # Ollama (local LLM - replaces llama.cpp)
+    OLLAMA_ENDPOINT: str = "http://ollama:11434"
+
+    # llama.cpp fallback (DEPRECATED - use Ollama instead)
     LLAMA_CPP_ENDPOINT: str = "http://llama-cpp:8080"
 
     # LLM API Keys

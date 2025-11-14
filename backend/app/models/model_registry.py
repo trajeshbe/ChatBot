@@ -25,7 +25,8 @@ class ModelProvider(str, Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     VLLM = "vllm"
-    LLAMA_CPP = "llama.cpp"
+    OLLAMA = "ollama"
+    LLAMA_CPP = "llama.cpp"  # Deprecated
 
 
 @dataclass
@@ -205,16 +206,16 @@ class ModelRegistry:
         ))
 
         # ============================================================================
-        # LOCAL CPU MODELS (llama.cpp - GGUF quantized Q4_K_M)
+        # LOCAL CPU MODELS (Ollama - better WSL2 compatibility)
         # Optimized for CPU inference with 4-bit quantization
         # ============================================================================
 
         self.register(ModelInfo(
             id="llama-3.2-3b-cpu",
             name="Llama 3.2 3B Q4 (CPU)",
-            provider=ModelProvider.LLAMA_CPP,
+            provider=ModelProvider.OLLAMA,
             model_type=ModelType.LOCAL_CPU,
-            model_path="/models/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+            model_path="llama3.2:3b-instruct-q4_K_M",
             context_length=128000,
             cost_per_1k_tokens=0.0,
             requires_gpu=False,
@@ -226,9 +227,9 @@ class ModelRegistry:
         self.register(ModelInfo(
             id="qwen-1.5b-cpu",
             name="Qwen 1.5B Q4 (CPU)",
-            provider=ModelProvider.LLAMA_CPP,
+            provider=ModelProvider.OLLAMA,
             model_type=ModelType.LOCAL_CPU,
-            model_path="/models/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+            model_path="qwen2.5:1.5b-instruct-q4_K_M",
             context_length=32768,
             cost_per_1k_tokens=0.0,
             requires_gpu=False,

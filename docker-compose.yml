@@ -89,37 +89,48 @@ services:
   #   networks:
   #     - rag-network
 
-  # llama.cpp CPU fallback (optimized with quantized models)
-  # Default: Llama 3.2 3B Q4_K_M (~2GB, 5-10 tok/s)
-  # Alternative: Qwen 1.5B Q4_K_M (~1GB, 10-15 tok/s)
-  llama-cpp:
-    image: ghcr.io/ggerganov/llama.cpp:server
-    container_name: rag-llama-cpp
+  # Ollama - Local LLM inference (replaces llama.cpp)
+  # Much better WSL2 compatibility and easier model management
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag-ollama
     ports:
-      - "8080:8080"
+      - "11434:11434"
     volumes:
-      - llama_models:/models
-    command:
-      - -m
-      - /models/Llama-3.2-3B-Instruct-Q4_K_M.gguf  # Quantized for speed
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8080"
-      - -c
-      - "4096"  # Context length
-      - --n-gpu-layers
-      - "0"    # CPU only (set to 32 if GPU available)
-      - -ngl
-      - "0"    # Alternative GPU layers flag
+      - ollama_models:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
     networks:
       - rag-network
+
+  # llama.cpp CPU fallback (DISABLED - replaced by Ollama)
+  # Ollama has better WSL2 compatibility
+  # llama-cpp:
+  #   image: ghcr.io/ggerganov/llama.cpp:server
+  #   container_name: rag-llama-cpp
+  #   ports:
+  #     - "8080:8080"
+  #   volumes:
+  #     - llama_models:/models
+  #   command:
+  #     - -m
+  #     - /models/Llama-3.2-3B-Instruct-Q4_K_M.gguf
+  #     - --host
+  #     - 0.0.0.0
+  #     - --port
+  #     - "8080"
+  #     - -c
+  #     - "4096"
+  #     - --n-gpu-layers
+  #     - "0"
+  #   networks:
+  #     - rag-network
 
   # Prefect Server
   prefect-server:
@@ -228,7 +239,8 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       VLLM_ENDPOINT: http://vllm-service:8000
-      LLAMA_CPP_ENDPOINT: http://llama-cpp:8080
+      OLLAMA_ENDPOINT: http://ollama:11434
+      LLAMA_CPP_ENDPOINT: http://llama-cpp:8080  # Deprecated
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       PREFECT_API_URL: http://prefect-server:4200/api
       OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4317
@@ -297,6 +309,7 @@ volumes:
   minio_data:
   vllm_cache:
   llama_models:
+  ollama_models:
   tempo_data:
   loki_data:
   grafana_data:
