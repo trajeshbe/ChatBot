@@ -1,11 +1,13 @@
-from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from strawberry.fastapi import GraphQLRouter
 from contextlib import asynccontextmanager
 import logging
-from typing import Optional
+from typing import Optional, List
 import uvicorn
+import uuid
+import time
 
 from app.core.config import settings
 from app.core.database import init_db, close_db, get_db
@@ -27,7 +29,25 @@ except ImportError as e:
 
 from app.services.document_service import document_service
 from app.services.scraper_service import scraper_service
-from app.services.rag_service import rag_service
+
+# Try to import enhanced RAG service with memory hierarchy
+try:
+    from app.services.rag_service_enhanced import enhanced_rag_service as rag_service
+    logger_temp.info("✓ Using Enhanced RAG Service with memory hierarchy")
+    ENHANCED_RAG_AVAILABLE = True
+except ImportError:
+    from app.services.rag_service import rag_service
+    logger_temp.warning("⚠ Enhanced RAG service not available, using basic RAG")
+    ENHANCED_RAG_AVAILABLE = False
+
+# Import audit service
+try:
+    from app.services.audit_service import audit_service
+    logger_temp.info("✓ Audit service loaded")
+except ImportError:
+    logger_temp.warning("⚠ Audit service not available")
+    audit_service = None
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Configure logging
@@ -36,6 +56,30 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+# Helper functions
+def get_client_info(request):
+    """Extract client IP and user agent from request"""
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    return ip_address, user_agent
+
+
+async def get_anonymous_user_id(db: AsyncSession):
+    """Get the anonymous user ID for unauthenticated requests"""
+    try:
+        from app.models.database_enhanced import User
+        from sqlalchemy import select
+
+        query = select(User).where(User.username == 'anonymous')
+        result = await db.execute(query)
+        user = result.scalar_one_or_none()
+
+        return user.id if user else None
+    except Exception as e:
+        logger.warning(f"Could not get anonymous user: {e}")
+        return None
 
 
 # Lifespan context manager for startup/shutdown
@@ -127,17 +171,32 @@ async def health_check():
     return {
         "status": "healthy",
         "app": settings.APP_NAME,
-        "version": settings.APP_VERSION
+        "version": settings.APP_VERSION,
+        "features": {
+            "enhanced_rag": ENHANCED_RAG_AVAILABLE,
+            "memory_hierarchy": ENHANCED_RAG_AVAILABLE,
+            "audit_logging": audit_service is not None,
+            "session_management": ENHANCED_RAG_AVAILABLE
+        }
     }
 
 
 # REST API endpoints
 @app.post("/api/v1/upload")
 async def upload_file(
+    request: Request,
     file: UploadFile = File(...),
+    session_id: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """Upload a file for processing"""
+    """Upload a file for processing and associate with session"""
+    import time
+    import uuid
+
+    start_time = time.time()
+    ip_address, user_agent = get_client_info(request)
+    user_id = await get_anonymous_user_id(db)
+
     try:
         # Read file data
         file_data = await file.read()
@@ -154,40 +213,133 @@ async def upload_file(
         # Process document asynchronously (chunk and embed)
         await document_service.process_document(document.id, db)
 
+        # Associate document with session for short-term memory
+        if session_id and ENHANCED_RAG_AVAILABLE:
+            await rag_service.associate_document_with_session(
+                session_id=session_id,
+                document_id=document.id,
+                priority=1,  # Higher priority for recently uploaded docs
+                db=db
+            )
+            logger.info(f"Associated document {document.id} with session {session_id}")
+
+        latency_ms = (time.time() - start_time) * 1000
+
+        # Audit logging
+        if audit_service:
+            await audit_service.log_upload(
+                db=db,
+                document_id=document.id,
+                filename=file.filename,
+                file_size=len(file_data),
+                user_id=user_id,
+                session_id=session_id,
+                ip_address=ip_address,
+                success=True
+            )
+
         return {
             "success": True,
             "document_id": str(document.id),
             "filename": document.filename,
-            "message": "File uploaded and processed successfully"
+            "session_id": session_id,
+            "in_session_memory": session_id is not None and ENHANCED_RAG_AVAILABLE,
+            "message": "File uploaded and processed successfully",
+            "latency_ms": latency_ms
         }
 
     except Exception as e:
-        logger.error(f"Error uploading file: {e}")
+        logger.error(f"Error uploading file: {e}", exc_info=True)
+
+        # Audit log the failure
+        if audit_service:
+            await audit_service.log_upload(
+                db=db,
+                document_id=None,
+                filename=file.filename,
+                file_size=0,
+                user_id=user_id,
+                session_id=session_id,
+                ip_address=ip_address,
+                success=False,
+                error_message=str(e)
+            )
+
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/v1/query")
 async def query_endpoint(
+    request: Request,
     query: str = Form(...),
     session_id: Optional[str] = Form(None),
     use_cache: bool = Form(True),
     model_id: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """Query the RAG system"""
+    """Query the RAG system with memory hierarchy"""
+    import time
+
+    start_time = time.time()
+    ip_address, user_agent = get_client_info(request)
+    user_id = await get_anonymous_user_id(db)
+
     try:
-        result = await rag_service.query(
-            query_text=query,
-            conversation_history=None,
-            use_cache=use_cache,
-            model_id=model_id,
-            db=db
-        )
+        # Use enhanced RAG service with memory hierarchy if available
+        if ENHANCED_RAG_AVAILABLE:
+            result = await rag_service.query(
+                query_text=query,
+                session_id=session_id,
+                user_id=user_id,
+                conversation_history=None,
+                use_cache=use_cache,
+                model_id=model_id,
+                db=db
+            )
+        else:
+            # Fall back to basic RAG service
+            result = await rag_service.query(
+                query_text=query,
+                conversation_history=None,
+                use_cache=use_cache,
+                model_id=model_id,
+                db=db
+            )
+
+        latency_ms = (time.time() - start_time) * 1000
+
+        # Audit logging
+        if audit_service:
+            await audit_service.log_query(
+                db=db,
+                query_text=query,
+                user_id=user_id,
+                session_id=session_id,
+                model_id=result.get('model', 'unknown'),
+                response=result,
+                latency_ms=latency_ms,
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
 
         return result
 
     except Exception as e:
-        logger.error(f"Error processing query: {e}")
+        logger.error(f"Error processing query: {e}", exc_info=True)
+
+        # Audit log the failure
+        if audit_service:
+            await audit_service.log_action(
+                db=db,
+                action='query',
+                user_id=user_id,
+                session_id=session_id,
+                description=f"Query failed: {query[:50]}...",
+                error_message=str(e),
+                status_code=500,
+                ip_address=ip_address
+            )
+
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -271,6 +423,242 @@ except Exception as e:
         logger.info("✓ Models API router registered (fallback)")
     except Exception as e2:
         logger.warning("Continuing without model selection API")
+
+
+# === Admin API Endpoints ===
+
+@app.get("/api/v1/admin/users")
+async def get_all_users(db: AsyncSession = Depends(get_db)):
+    """Get all users (admin endpoint)"""
+    try:
+        from app.models.database_enhanced import User
+        from sqlalchemy import select, func
+
+        query = select(User).order_by(User.created_at.desc())
+        result = await db.execute(query)
+        users = result.scalars().all()
+
+        return [
+            {
+                "id": str(user.id),
+                "username": user.username,
+                "email": user.email,
+                "full_name": user.full_name,
+                "role": user.role.value if user.role else None,
+                "is_active": user.is_active,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+                "last_login": user.last_login.isoformat() if user.last_login else None
+            }
+            for user in users
+        ]
+    except Exception as e:
+        logger.error(f"Error getting users: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/admin/sessions")
+async def get_all_sessions(
+    limit: int = 50,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all chat sessions (admin endpoint)"""
+    try:
+        from app.models.database_enhanced import ChatSession, ConversationMessage
+        from sqlalchemy import select, func
+
+        # Get sessions with message counts
+        query = select(
+            ChatSession,
+            func.count(ConversationMessage.id).label('message_count')
+        ).outerjoin(
+            ConversationMessage, ChatSession.id == ConversationMessage.session_id
+        ).group_by(ChatSession.id).order_by(ChatSession.last_activity.desc()).limit(limit).offset(offset)
+
+        result = await db.execute(query)
+        sessions = result.all()
+
+        return [
+            {
+                "id": str(session.ChatSession.id),
+                "session_id": session.ChatSession.session_id,
+                "user_id": str(session.ChatSession.user_id) if session.ChatSession.user_id else None,
+                "title": session.ChatSession.title,
+                "created_at": session.ChatSession.created_at.isoformat(),
+                "last_activity": session.ChatSession.last_activity.isoformat(),
+                "is_active": session.ChatSession.is_active,
+                "message_count": session.message_count
+            }
+            for session in sessions
+        ]
+    except Exception as e:
+        logger.error(f"Error getting sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/admin/audit-logs")
+async def get_audit_logs(
+    user_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    action: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get audit logs with filters (admin endpoint)"""
+    try:
+        from app.models.database_enhanced import AuditLog, User, ChatSession
+        from sqlalchemy import select, and_
+
+        # Build query with filters
+        conditions = []
+
+        if user_id:
+            conditions.append(AuditLog.user_id == uuid.UUID(user_id))
+
+        if session_id:
+            # Convert session_id string to UUID
+            session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+            session_result = await db.execute(session_query)
+            session = session_result.scalar_one_or_none()
+            if session:
+                conditions.append(AuditLog.session_id == session.id)
+
+        if action:
+            conditions.append(AuditLog.action == action)
+
+        query = select(AuditLog)
+        if conditions:
+            query = query.where(and_(*conditions))
+
+        query = query.order_by(AuditLog.created_at.desc()).limit(limit).offset(offset)
+
+        result = await db.execute(query)
+        logs = result.scalars().all()
+
+        return [
+            {
+                "id": str(log.id),
+                "user_id": str(log.user_id) if log.user_id else None,
+                "session_id": str(log.session_id) if log.session_id else None,
+                "action": log.action.value if log.action else None,
+                "resource_type": log.resource_type,
+                "resource_id": str(log.resource_id) if log.resource_id else None,
+                "description": log.description,
+                "ip_address": log.ip_address,
+                "status_code": log.status_code,
+                "error_message": log.error_message,
+                "latency_ms": log.latency_ms,
+                "created_at": log.created_at.isoformat()
+            }
+            for log in logs
+        ]
+    except Exception as e:
+        logger.error(f"Error getting audit logs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/admin/usage-metrics")
+async def get_usage_metrics(
+    user_id: Optional[str] = None,
+    days: int = 7,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get usage metrics (admin endpoint)"""
+    try:
+        from app.models.database_enhanced import UsageMetrics, User
+        from sqlalchemy import select, func
+        from datetime import datetime, timedelta
+
+        # Calculate date range
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
+
+        query = select(UsageMetrics).where(
+            UsageMetrics.date >= start_date
+        )
+
+        if user_id:
+            query = query.where(UsageMetrics.user_id == uuid.UUID(user_id))
+
+        query = query.order_by(UsageMetrics.date.desc())
+
+        result = await db.execute(query)
+        metrics = result.scalars().all()
+
+        return [
+            {
+                "id": str(metric.id),
+                "user_id": str(metric.user_id) if metric.user_id else None,
+                "date": metric.date.isoformat(),
+                "model_id": metric.model_id,
+                "total_queries": metric.total_queries,
+                "total_tokens": metric.total_tokens,
+                "total_cost_usd": metric.total_cost_usd,
+                "avg_latency_ms": metric.avg_latency_ms,
+                "documents_uploaded": metric.documents_uploaded,
+                "cache_hits": metric.cache_hits,
+                "cache_misses": metric.cache_misses
+            }
+            for metric in metrics
+        ]
+    except Exception as e:
+        logger.error(f"Error getting usage metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/sessions/{session_id}")
+async def get_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get session information and conversation history"""
+    try:
+        from app.models.database_enhanced import ChatSession, ConversationMessage
+        from sqlalchemy import select
+
+        # Get session
+        session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+        session_result = await db.execute(session_query)
+        session = session_result.scalar_one_or_none()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Get messages
+        messages_query = select(ConversationMessage).where(
+            ConversationMessage.session_id == session.id
+        ).order_by(ConversationMessage.created_at)
+
+        messages_result = await db.execute(messages_query)
+        messages = messages_result.scalars().all()
+
+        return {
+            "session_id": session.session_id,
+            "user_id": str(session.user_id) if session.user_id else None,
+            "title": session.title,
+            "created_at": session.created_at.isoformat(),
+            "last_activity": session.last_activity.isoformat(),
+            "message_count": len(messages),
+            "messages": [
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "model_name": msg.model_name,
+                    "total_tokens": msg.total_tokens,
+                    "latency_ms": msg.latency_ms,
+                    "created_at": msg.created_at.isoformat(),
+                    "sources": msg.sources
+                }
+                for msg in messages
+            ]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # OpenTelemetry instrumentation (if enabled)
