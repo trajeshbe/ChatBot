@@ -39,7 +39,8 @@ async def get_db() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
+            # Don't auto-commit - let endpoints handle commits explicitly
+            # This prevents double-commit issues and gives better control
         except Exception:
             await session.rollback()
             raise

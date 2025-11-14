@@ -210,8 +210,11 @@ async def upload_file(
             db=db
         )
 
+        logger.info(f"Document created: {document.id} - {document.filename}")
+
         # Process document asynchronously (chunk and embed)
-        await document_service.process_document(document.id, db)
+        chunks = await document_service.process_document(document.id, db)
+        logger.info(f"Document processed: {len(chunks)} chunks created")
 
         # Associate document with session for short-term memory
         if session_id and ENHANCED_RAG_AVAILABLE:
@@ -223,9 +226,13 @@ async def upload_file(
             )
             logger.info(f"Associated document {document.id} with session {session_id}")
 
+        # Commit the transaction explicitly
+        await db.commit()
+        logger.info(f"Transaction committed for document {document.id}")
+
         latency_ms = (time.time() - start_time) * 1000
 
-        # Audit logging
+        # Audit logging (after successful commit)
         if audit_service:
             await audit_service.log_upload(
                 db=db,
@@ -237,6 +244,7 @@ async def upload_file(
                 ip_address=ip_address,
                 success=True
             )
+            await db.commit()  # Commit audit log
 
         return {
             "success": True,
@@ -245,25 +253,34 @@ async def upload_file(
             "session_id": session_id,
             "in_session_memory": session_id is not None and ENHANCED_RAG_AVAILABLE,
             "message": "File uploaded and processed successfully",
-            "latency_ms": latency_ms
+            "latency_ms": latency_ms,
+            "chunks_created": len(chunks)
         }
 
     except Exception as e:
         logger.error(f"Error uploading file: {e}", exc_info=True)
 
-        # Audit log the failure
+        # Rollback transaction
+        await db.rollback()
+        logger.info("Transaction rolled back due to error")
+
+        # Audit log the failure (in a new transaction)
         if audit_service:
-            await audit_service.log_upload(
-                db=db,
-                document_id=None,
-                filename=file.filename,
-                file_size=0,
-                user_id=user_id,
-                session_id=session_id,
-                ip_address=ip_address,
-                success=False,
-                error_message=str(e)
-            )
+            try:
+                await audit_service.log_upload(
+                    db=db,
+                    document_id=None,
+                    filename=file.filename,
+                    file_size=0,
+                    user_id=user_id,
+                    session_id=session_id,
+                    ip_address=ip_address,
+                    success=False,
+                    error_message=str(e)
+                )
+                await db.commit()  # Commit audit log in separate transaction
+            except Exception as audit_error:
+                logger.error(f"Failed to log audit entry: {audit_error}")
 
         raise HTTPException(status_code=500, detail=str(e))
 

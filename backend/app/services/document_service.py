@@ -109,7 +109,7 @@ class DocumentService:
 
             if db:
                 db.add(document)
-                await db.commit()
+                await db.flush()  # Flush to get ID without committing
                 await db.refresh(document)
 
             return document
@@ -217,17 +217,17 @@ class DocumentService:
 
             # Mark document as processed
             document.processed = True
-            await db.commit()
+            await db.flush()  # Flush changes without committing
 
-            logger.info(f"Successfully processed document {document_id}")
+            logger.info(f"Successfully processed document {document_id} with {len(document_chunks)} chunks")
             return document_chunks
 
         except Exception as e:
-            logger.error(f"Error processing document: {e}")
+            logger.error(f"Error processing document: {e}", exc_info=True)
             # Mark document as failed
             if document:
                 document.processing_error = str(e)
-                await db.commit()
+                await db.flush()  # Flush error state without committing
             raise
 
     def _chunk_text(self, text: str) -> List[Dict]:
