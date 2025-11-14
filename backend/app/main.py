@@ -484,6 +484,17 @@ graphql_app = GraphQLRouter(schema)
 app.include_router(graphql_app, prefix="/graphql")
 
 
+# Robust RAG Pipeline API router
+try:
+    from app.api.routes import rag_pipeline_routes
+    app.include_router(rag_pipeline_routes.router)
+    logger.info("✓ Robust RAG Pipeline API router registered")
+except ImportError as e:
+    logger.warning(f"Robust RAG Pipeline API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register RAG Pipeline router: {e}")
+
+
 # Models API router (safe fallback version)
 try:
     # Try enhanced version first
