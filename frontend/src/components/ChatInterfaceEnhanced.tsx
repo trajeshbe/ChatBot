@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Loader2, FileText, ExternalLink, Paperclip, X, Trash2 } from 'lucide-react'
+import { Send, Loader2, FileText, ExternalLink, Paperclip, X, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import FileUpload from './FileUpload'
 import WebScraper from './WebScraper'
@@ -8,7 +8,6 @@ import UploadedFilesList from './UploadedFilesList'
 import { getCurrentRAGConfig, type RAGConfig } from './RAGSettings'
 import PerformanceMetrics from './PerformanceMetrics'
 import EvaluationMetrics from './EvaluationMetrics'
-import RAGSettingsDisplay from './RAGSettingsDisplay'
 import axios from 'axios'
 
 interface Message {
@@ -134,12 +133,21 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [uploadingFiles, setUploadingFiles] = useState(false)
   const [filesJustUploaded, setFilesJustUploaded] = useState(false)
+  const [expandedMetrics, setExpandedMetrics] = useState<Record<number, boolean>>({})
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Helper function to get current RAG config - always fresh
   const getCurrentConfig = (): RAGConfig => {
     return ragConfigProp || getCurrentRAGConfig()
+  }
+
+  // Toggle metrics expansion for a specific message
+  const toggleMetricsExpansion = (index: number) => {
+    setExpandedMetrics(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }))
   }
 
   const scrollToBottom = () => {
@@ -481,78 +489,100 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                 </div>
               )}
 
-              {/* 🆕 Performance Metrics */}
-              {message.role === 'assistant' && (
-                <PerformanceMetrics
-                  metrics={{
-                    latency_ms: message.latency_ms,
-                    tokens_used: message.tokens_used,
-                    num_sources: message.num_sources,
-                    cached: message.cached,
-                    model_used: message.model,
-                    model_name: message.model_name
-                  }}
-                />
-              )}
-
-              {/* 🆕 Evaluation Metrics */}
-              {message.role === 'assistant' && message.quality_metrics && (
-                <EvaluationMetrics metrics={message.quality_metrics} />
-              )}
-
-              {/* 🆕 RAG Settings Used */}
-              {message.role === 'assistant' && message.rag_settings && (
-                <RAGSettingsDisplay settings={message.rag_settings} />
-              )}
-
-              {/* Sources */}
-              {message.sources && message.sources.length > 0 && (
+              {/* Collapsible Metrics & Sources Section */}
+              {message.role === 'assistant' && (message.latency_ms || message.sources?.length || message.quality_metrics) && (
                 <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                  <p className="text-xs font-semibold mb-2 text-slate-600 dark:text-slate-400">
-                    Sources:
-                  </p>
-                  <div className="space-y-2">
-                    {message.sources.map((source, idx) => (
-                      <div
-                        key={idx}
-                        className="text-xs bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-1.5">
-                            {source.source_type === 'scrape' ? (
-                              <ExternalLink className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
-                            ) : (
-                              <FileText className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                            )}
-                            <span className="font-medium text-slate-900 dark:text-white text-xs">
-                              {source.filename}
-                            </span>
-                            {source.memory_type === 'short-term' && (
-                              <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
-                                Session
-                              </span>
-                            )}
+                  <button
+                    onClick={() => toggleMetricsExpansion(index)}
+                    className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition-colors w-full"
+                  >
+                    {expandedMetrics[index] ? (
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    )}
+                    <span>
+                      {expandedMetrics[index] ? 'Hide' : 'Show'} Metrics & Sources
+                      {!expandedMetrics[index] && message.sources && message.sources.length > 0 && (
+                        <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700">
+                          {message.sources.length}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+
+                  {expandedMetrics[index] && (
+                    <div className="mt-3 space-y-3">
+                      {/* Performance Metrics with RAG Settings */}
+                      <PerformanceMetrics
+                        metrics={{
+                          latency_ms: message.latency_ms,
+                          tokens_used: message.tokens_used,
+                          num_sources: message.num_sources,
+                          cached: message.cached,
+                          model_used: message.model,
+                          model_name: message.model_name
+                        }}
+                        ragSettings={message.rag_settings}
+                      />
+
+                      {/* Evaluation Metrics */}
+                      {message.quality_metrics && (
+                        <EvaluationMetrics metrics={message.quality_metrics} />
+                      )}
+
+                      {/* Sources */}
+                      {message.sources && message.sources.length > 0 && (
+                        <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                          <p className="text-xs font-semibold mb-2 text-slate-600 dark:text-slate-400">
+                            Sources:
+                          </p>
+                          <div className="space-y-2">
+                            {message.sources.map((source, idx) => (
+                              <div
+                                key={idx}
+                                className="text-xs bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700"
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    {source.source_type === 'scrape' ? (
+                                      <ExternalLink className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                                    ) : (
+                                      <FileText className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                                    )}
+                                    <span className="font-medium text-slate-900 dark:text-white text-xs">
+                                      {source.filename}
+                                    </span>
+                                    {source.memory_type === 'short-term' && (
+                                      <span className="text-[10px] px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
+                                        Session
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[10px] text-slate-500">
+                                    {(source.relevance * 100).toFixed(0)}%
+                                  </span>
+                                </div>
+                                {source.source_url && (
+                                  <a
+                                    href={source.source_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] text-blue-600 hover:underline mt-1 block truncate"
+                                  >
+                                    {source.source_url}
+                                  </a>
+                                )}
+                                <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-1.5 italic line-clamp-2">
+                                  "{source.excerpt}"
+                                </p>
+                              </div>
+                            ))}
                           </div>
-                          <span className="text-[10px] text-slate-500">
-                            {(source.relevance * 100).toFixed(0)}%
-                          </span>
                         </div>
-                        {source.source_url && (
-                          <a
-                            href={source.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[10px] text-blue-600 hover:underline mt-1 block truncate"
-                          >
-                            {source.source_url}
-                          </a>
-                        )}
-                        <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-1.5 italic line-clamp-2">
-                          "{source.excerpt}"
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

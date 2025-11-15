@@ -66,7 +66,7 @@ export default function RAGSettings({ onSettingsChange, compact = false }: RAGSe
       label: 'Top K Results',
       description: 'Number of document chunks to retrieve',
       min: 1,
-      max: 20,
+      max: 50,
       step: 1,
       value: config.top_k,
       format: (v: number) => v.toString()
