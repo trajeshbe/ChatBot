@@ -1413,6 +1413,9 @@ async def db_console_documents(
         from sqlalchemy import text as sql_text
 
         # Build complex query with all the details we need
+        # If no search term provided, use '%%' to match everything
+        search_pattern = f"%{search}%" if search else "%%"
+
         query = sql_text("""
             SELECT
                 d.id,
@@ -1432,17 +1435,15 @@ async def db_console_documents(
             LEFT JOIN document_chunks dc ON d.id = dc.document_id
             LEFT JOIN session_documents sd ON d.id = sd.document_id
             LEFT JOIN chat_sessions cs ON sd.session_id = cs.id
-            WHERE (:search::VARCHAR IS NULL OR d.filename ILIKE :search_pattern)
+            WHERE d.filename ILIKE :search_pattern
             GROUP BY d.id, d.filename, d.file_type, d.file_size, d.source_type, d.source_url, d.upload_date, d.processed, d.processing_error
             ORDER BY d.upload_date DESC
             LIMIT :limit OFFSET :offset
         """)
 
-        search_pattern = f"%{search}%" if search else None
         result = await db.execute(
             query,
             {
-                "search": search,
                 "search_pattern": search_pattern,
                 "limit": limit,
                 "offset": offset
@@ -1477,11 +1478,11 @@ async def db_console_documents(
         count_query = sql_text("""
             SELECT COUNT(DISTINCT d.id)
             FROM documents d
-            WHERE (:search::VARCHAR IS NULL OR d.filename ILIKE :search_pattern)
+            WHERE d.filename ILIKE :search_pattern
         """)
         count_result = await db.execute(
             count_query,
-            {"search": search, "search_pattern": search_pattern}
+            {"search_pattern": search_pattern}
         )
         total = count_result.scalar()
 
