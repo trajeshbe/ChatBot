@@ -81,7 +81,23 @@ else
 fi
 
 echo ""
-echo -e "${BLUE}Step 5: Verifying tables...${NC}"
+echo -e "${BLUE}Step 5: Fixing embedding dimensions...${NC}"
+echo "Migration file: 002_fix_embedding_dimensions.sql"
+
+DIMENSION_FIX_MIGRATION="$MIGRATIONS_DIR/002_fix_embedding_dimensions.sql"
+
+if [ -f "$DIMENSION_FIX_MIGRATION" ]; then
+    echo -e "${YELLOW}Fixing embedding dimensions (1536 → 384)...${NC}"
+    docker exec -i rag-postgres psql -U postgres -d rag_chatbot < "$DIMENSION_FIX_MIGRATION" 2>&1 | \
+        grep -v "does not exist, skipping" || true
+    echo -e "${GREEN}✓ Embedding dimensions fixed${NC}"
+    echo -e "${YELLOW}⚠  Note: Existing embeddings have been dropped and will be regenerated${NC}"
+else
+    echo -e "${YELLOW}⚠  Dimension fix migration file not found (may not be needed)${NC}"
+fi
+
+echo ""
+echo -e "${BLUE}Step 6: Verifying tables...${NC}"
 
 # Get table count
 TABLE_COUNT=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';" | tr -d '[:space:]')
@@ -91,11 +107,11 @@ echo "Database tables created:"
 docker exec rag-postgres psql -U postgres -d rag_chatbot -c "\dt" 2>&1
 
 echo ""
-echo -e "${BLUE}Step 6: Verifying extensions...${NC}"
+echo -e "${BLUE}Step 7: Verifying extensions...${NC}"
 docker exec rag-postgres psql -U postgres -d rag_chatbot -c "SELECT extname FROM pg_extension WHERE extname IN ('uuid-ossp', 'vector');" 2>&1
 
 echo ""
-echo -e "${BLUE}Step 7: Checking default users...${NC}"
+echo -e "${BLUE}Step 8: Checking default users...${NC}"
 USER_COUNT=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "SELECT COUNT(*) FROM users;" 2>/dev/null | tr -d '[:space:]')
 
 if [ -z "$USER_COUNT" ] || [ "$USER_COUNT" = "0" ]; then
