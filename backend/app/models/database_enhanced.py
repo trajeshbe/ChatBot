@@ -266,7 +266,7 @@ class EvaluationResult(Base):
     enabled_methods = Column(JSON, nullable=True)  # List of methods that were enabled
 
     # Metadata
-    metadata = Column(JSON, nullable=True)
+    meta_info = Column(JSON, nullable=True)
     errors = Column(JSON, nullable=True)  # Any evaluation errors
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

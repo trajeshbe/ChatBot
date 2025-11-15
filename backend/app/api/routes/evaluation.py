@@ -340,7 +340,7 @@ async def get_evaluation_results(
                 scores=r.scores or {},
                 evaluation_time_ms=r.evaluation_time_ms or 0,
                 enabled_methods=r.enabled_methods or [],
-                metadata=r.metadata or {},
+                metadata=r.meta_info or {},
                 errors=r.errors or [],
                 created_at=r.created_at
             )
