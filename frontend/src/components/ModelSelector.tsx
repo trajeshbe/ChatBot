@@ -13,6 +13,7 @@ interface Model {
   description: string
   available: boolean
   recommended: boolean
+  min_gpu_memory_gb?: number
 }
 
 interface ModelSelectorProps {

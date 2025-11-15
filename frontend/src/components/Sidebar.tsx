@@ -1,15 +1,18 @@
-import { MessageSquare, Upload, Globe, FileText } from 'lucide-react'
+import { MessageSquare, Upload, Globe, FileText, BarChart3, Settings } from 'lucide-react'
+import RAGSettings, { type RAGConfig } from './RAGSettings'
 
 interface Props {
-  activeTab: 'chat' | 'upload' | 'scrape'
-  setActiveTab: (tab: 'chat' | 'upload' | 'scrape') => void
+  activeTab: 'chat' | 'upload' | 'scrape' | 'evaluation'
+  setActiveTab: (tab: 'chat' | 'upload' | 'scrape' | 'evaluation') => void
+  onRAGSettingsChange?: (settings: RAGConfig) => void
 }
 
-export default function Sidebar({ activeTab, setActiveTab }: Props) {
+export default function Sidebar({ activeTab, setActiveTab, onRAGSettingsChange }: Props) {
   const tabs = [
     { id: 'chat' as const, icon: MessageSquare, label: 'Chat' },
     { id: 'upload' as const, icon: Upload, label: 'Upload Files' },
     { id: 'scrape' as const, icon: Globe, label: 'Web Scraping' },
+    { id: 'evaluation' as const, icon: BarChart3, label: 'Evaluation' },
   ]
 
   return (
@@ -26,7 +29,7 @@ export default function Sidebar({ activeTab, setActiveTab }: Props) {
         </div>
       </div>
 
-      <nav className="flex-1 p-3">
+      <nav className="flex-1 p-3 overflow-y-auto">
         <div className="space-y-1">
           {tabs.map((tab) => {
             const Icon = tab.icon
@@ -47,6 +50,17 @@ export default function Sidebar({ activeTab, setActiveTab }: Props) {
               </button>
             )
           })}
+        </div>
+
+        {/* Compact RAG Settings in Sidebar */}
+        <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800">
+          <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 px-3">
+            <Settings className="w-3.5 h-3.5" />
+            <span>RAG Settings</span>
+          </div>
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3">
+            <RAGSettings onSettingsChange={onRAGSettingsChange} compact={true} />
+          </div>
         </div>
       </nav>
 

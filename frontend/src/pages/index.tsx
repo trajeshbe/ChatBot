@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import Head from 'next/head'
 import ChatInterface from '@/components/ChatInterfaceEnhanced'
 import Sidebar from '@/components/Sidebar'
-import { FileText, Globe, User } from 'lucide-react'
+import EvaluationDashboard from '@/components/EvaluationDashboard'
+import type { RAGConfig } from '@/components/RAGSettings'
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'chat' | 'upload' | 'scrape'>('chat')
+  const [activeTab, setActiveTab] = useState<'chat' | 'upload' | 'scrape' | 'evaluation'>('chat')
   const [sessionId, setSessionId] = useState<string>('')
   const [currentUser, setCurrentUser] = useState<string>('Anonymous')
+  const [ragConfig, setRagConfig] = useState<RAGConfig | null>(null)
 
   useEffect(() => {
     // Get session ID from sessionStorage
@@ -23,6 +25,10 @@ export default function Home() {
     }
   }, [])
 
+  const handleRAGSettingsChange = (settings: RAGConfig) => {
+    setRagConfig(settings)
+  }
+
   return (
     <>
       <Head>
@@ -34,14 +40,33 @@ export default function Home() {
 
       <main className="flex h-screen bg-white dark:bg-slate-900">
         {/* Sidebar */}
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          onRAGSettingsChange={handleRAGSettingsChange}
+        />
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col">
-          {/* Chat Interface */}
-          <div className="flex-1 overflow-hidden">
-            <ChatInterface activeTab={activeTab} />
-          </div>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {activeTab === 'evaluation' ? (
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900">
+              <div className="max-w-7xl mx-auto">
+                <div className="mb-6">
+                  <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    Evaluation Metrics
+                  </h1>
+                  <p className="text-slate-600 dark:text-slate-400">
+                    Real-time analytics and performance insights for your RAG system
+                  </p>
+                </div>
+                <EvaluationDashboard sessionId={sessionId} />
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 overflow-hidden">
+              <ChatInterface activeTab={activeTab} ragConfig={ragConfig} />
+            </div>
+          )}
         </div>
       </main>
     </>

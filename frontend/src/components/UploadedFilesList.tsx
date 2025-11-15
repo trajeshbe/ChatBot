@@ -117,67 +117,69 @@ export default function UploadedFilesList({ sessionId, onRefresh, forceExpand = 
 
   return (
     <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-3">
+      <div className="p-3">
+        <div className="flex items-center justify-between mb-2">
           <button
             onClick={toggleCollapse}
-            className="flex items-center gap-2 hover:text-blue-600 transition-colors flex-1 text-left"
+            className="flex items-center gap-1.5 hover:text-blue-600 transition-colors flex-1 text-left"
           >
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              Uploaded Documents ({documents.length})
+            <h3 className="text-xs font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5" />
+              Documents ({documents.length})
             </h3>
             {isCollapsed ? (
-              <ChevronDown className="w-4 h-4 text-slate-500" />
+              <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
             ) : (
-              <ChevronUp className="w-4 h-4 text-slate-500" />
+              <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
             )}
           </button>
-          <button
-            onClick={loadDocuments}
-            disabled={loading}
-            className="text-sm text-blue-600 hover:text-blue-700 disabled:opacity-50 flex items-center gap-1"
-            title="Refresh list"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
+          {!isCollapsed && (
+            <button
+              onClick={loadDocuments}
+              disabled={loading}
+              className="text-xs text-blue-600 hover:text-blue-700 disabled:opacity-50 flex items-center gap-1"
+              title="Refresh list"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          )}
         </div>
 
         {!isCollapsed && (
           <>
             {error && (
-              <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-red-600 mt-0.5" />
-                <div className="text-sm text-red-800 dark:text-red-200">
+              <div className="mb-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded flex items-start gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-red-600 mt-0.5 flex-shrink-0" />
+                <div className="text-[10px] text-red-800 dark:text-red-200">
                   {error}
                 </div>
               </div>
             )}
 
             {documents.length === 0 && !loading && !error && (
-              <div className="text-center py-6 text-sm text-slate-500">
-                <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>No documents uploaded yet</p>
-                <p className="text-xs mt-1">Use the paperclip button to attach files</p>
+              <div className="text-center py-4 text-xs text-slate-500">
+                <FileText className="w-6 h-6 mx-auto mb-1.5 opacity-50" />
+                <p>No documents yet</p>
+                <p className="text-[10px] mt-0.5">Use the paperclip button</p>
               </div>
             )}
 
             {documents.length > 0 && (
-              <div className="space-y-2 max-h-64 overflow-y-auto">
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
                 {documents.map((doc) => (
               <div
                 key={doc.id}
-                className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
+                className="flex items-center justify-between p-2 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
               >
-                <div className="flex items-start gap-3 flex-1 min-w-0">
-                  <FileText className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div className="flex items-start gap-2 flex-1 min-w-0">
+                  <FileText className="w-3.5 h-3.5 text-blue-600 flex-shrink-0 mt-0.5" />
 
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                    <p className="text-[11px] font-medium text-slate-900 dark:text-white truncate">
                       {doc.filename}
                     </p>
 
-                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500">
                       <span>{formatFileSize(doc.file_size)}</span>
                       <span>•</span>
                       <span>{formatDate(doc.created_at)}</span>
@@ -185,42 +187,35 @@ export default function UploadedFilesList({ sessionId, onRefresh, forceExpand = 
                       {doc.has_embeddings && doc.chunk_count > 0 ? (
                         <>
                           <span>•</span>
-                          <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
-                            ✓ {doc.chunk_count} chunks
+                          <span className="text-green-600 dark:text-green-400">
+                            ✓ {doc.chunk_count}
                           </span>
                         </>
                       ) : doc.processing_status === 'processing' ? (
                         <>
                           <span>•</span>
                           <span className="text-yellow-600 dark:text-yellow-400">
-                            ⏳ Processing...
+                            ⏳
                           </span>
                         </>
                       ) : doc.processing_status === 'failed' ? (
                         <>
                           <span>•</span>
                           <span className="text-red-600 dark:text-red-400">
-                            ✗ Failed
+                            ✗
                           </span>
                         </>
-                      ) : (
-                        <>
-                          <span>•</span>
-                          <span className="text-orange-600 dark:text-orange-400">
-                            ⚠ Not embedded
-                          </span>
-                        </>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 </div>
 
                 <button
                   onClick={() => deleteDocument(doc.id, doc.filename)}
-                  className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors flex-shrink-0"
+                  className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors flex-shrink-0"
                   title="Delete document"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3 h-3" />
                 </button>
               </div>
             ))}

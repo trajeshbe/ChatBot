@@ -5,7 +5,7 @@ import FileUpload from './FileUpload'
 import WebScraper from './WebScraper'
 import ModelSelector from './ModelSelector'
 import UploadedFilesList from './UploadedFilesList'
-import RAGSettings, { getCurrentRAGConfig, type RAGConfig } from './RAGSettings'
+import { getCurrentRAGConfig, type RAGConfig } from './RAGSettings'
 import PerformanceMetrics from './PerformanceMetrics'
 import axios from 'axios'
 
@@ -35,7 +35,8 @@ interface Source {
 }
 
 interface Props {
-  activeTab: 'chat' | 'upload' | 'scrape'
+  activeTab: 'chat' | 'upload' | 'scrape' | 'evaluation'
+  ragConfig?: RAGConfig | null
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -53,7 +54,7 @@ const getSessionId = (): string => {
   return sessionId
 }
 
-export default function ChatInterfaceEnhanced({ activeTab }: Props) {
+export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigProp }: Props) {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
@@ -67,10 +68,12 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
   const [sessionId, setSessionId] = useState<string>('')
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [uploadingFiles, setUploadingFiles] = useState(false)
-  const [ragConfig, setRagConfig] = useState<RAGConfig>(getCurrentRAGConfig())
   const [filesJustUploaded, setFilesJustUploaded] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Use prop config if available, otherwise get from localStorage
+  const ragConfig = ragConfigProp || getCurrentRAGConfig()
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -329,9 +332,6 @@ export default function ChatInterfaceEnhanced({ activeTab }: Props) {
           </div>
         </div>
       </div>
-
-      {/* 🆕 RAG Settings Panel */}
-      <RAGSettings onSettingsChange={setRagConfig} />
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-4 py-6">

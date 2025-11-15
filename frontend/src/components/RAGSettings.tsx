@@ -3,6 +3,7 @@ import { Settings, ChevronDown, ChevronUp, Info, RotateCcw } from 'lucide-react'
 
 interface RAGSettingsProps {
   onSettingsChange?: (settings: RAGConfig) => void
+  compact?: boolean
 }
 
 export interface RAGConfig {
@@ -24,7 +25,7 @@ const DEFAULT_CONFIG: RAGConfig = {
   chunk_overlap: 150
 }
 
-export default function RAGSettings({ onSettingsChange }: RAGSettingsProps) {
+export default function RAGSettings({ onSettingsChange, compact = false }: RAGSettingsProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [config, setConfig] = useState<RAGConfig>(DEFAULT_CONFIG)
 
@@ -122,6 +123,80 @@ export default function RAGSettings({ onSettingsChange }: RAGSettingsProps) {
     }
   ]
 
+  // Compact mode for sidebar (always show key settings)
+  if (compact) {
+    const keySettings = settingsItems.filter(item =>
+      ['top_k', 'similarity_threshold'].includes(item.key)
+    )
+
+    return (
+      <div className="space-y-3">
+        {keySettings.map((item) => (
+          <div key={item.key} className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-medium text-slate-600 dark:text-slate-400">
+                {item.label}
+              </label>
+              <span className="text-[10px] font-mono text-blue-600 dark:text-blue-400">
+                {item.format(item.value)}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={item.min}
+              max={item.max}
+              step={item.step}
+              value={item.value}
+              onChange={(e) => updateConfig(item.key, parseFloat(e.target.value))}
+              className="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+            />
+          </div>
+        ))}
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="text-[10px] text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1 w-full justify-center py-1"
+        >
+          {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          {isExpanded ? 'Less' : 'More'}
+        </button>
+
+        {isExpanded && (
+          <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+            {settingsItems.filter(item => !['top_k', 'similarity_threshold'].includes(item.key)).map((item) => (
+              <div key={item.key} className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-medium text-slate-600 dark:text-slate-400">
+                    {item.label}
+                  </label>
+                  <span className="text-[10px] font-mono text-blue-600 dark:text-blue-400">
+                    {item.format(item.value)}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={item.min}
+                  max={item.max}
+                  step={item.step}
+                  value={item.value}
+                  onChange={(e) => updateConfig(item.key, parseFloat(e.target.value))}
+                  className="w-full h-1 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                />
+              </div>
+            ))}
+            <button
+              onClick={resetToDefaults}
+              className="text-[10px] text-slate-600 hover:text-slate-700 dark:text-slate-400 flex items-center gap-1 w-full justify-center py-1"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Reset All
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Full mode for main chat interface
   return (
     <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
       <div className="px-4 py-2">
