@@ -66,18 +66,59 @@ const getSessionId = (): string => {
   return sessionId
 }
 
-export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigProp }: Props) {
-  const [messages, setMessages] = useState<Message[]>([
-    {
+// Load messages from localStorage for a specific session
+const loadMessages = (sessionId: string): Message[] => {
+  if (typeof window === 'undefined' || !sessionId) {
+    return [{
       role: 'assistant',
       content: 'Hello! I\'m your enterprise RAG assistant with multi-model support. I can use OpenAI, Claude, or local models. Select your preferred model above and ask me anything! You can also upload files directly in this chat.',
       timestamp: new Date()
+    }]
+  }
+
+  try {
+    const stored = localStorage.getItem(`chat_messages_${sessionId}`)
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      // Convert timestamp strings back to Date objects
+      return parsed.map((msg: any) => ({
+        ...msg,
+        timestamp: new Date(msg.timestamp)
+      }))
     }
-  ])
+  } catch (error) {
+    console.error('Error loading messages from localStorage:', error)
+  }
+
+  // Return default message if no stored messages found
+  return [{
+    role: 'assistant',
+    content: 'Hello! I\'m your enterprise RAG assistant with multi-model support. I can use OpenAI, Claude, or local models. Select your preferred model above and ask me anything! You can also upload files directly in this chat.',
+    timestamp: new Date()
+  }]
+}
+
+// Save messages to localStorage for a specific session
+const saveMessages = (sessionId: string, messages: Message[]): void => {
+  if (typeof window === 'undefined' || !sessionId) return
+
+  try {
+    localStorage.setItem(`chat_messages_${sessionId}`, JSON.stringify(messages))
+  } catch (error) {
+    console.error('Error saving messages to localStorage:', error)
+  }
+}
+
+export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigProp }: Props) {
+  const [sessionId, setSessionId] = useState<string>('')
+  const [messages, setMessages] = useState<Message[]>(() => {
+    // Initialize messages by loading from localStorage if available
+    const initialSessionId = getSessionId()
+    return loadMessages(initialSessionId)
+  })
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [selectedModel, setSelectedModel] = useState<string | null>(null)
-  const [sessionId, setSessionId] = useState<string>('')
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [uploadingFiles, setUploadingFiles] = useState(false)
   const [filesJustUploaded, setFilesJustUploaded] = useState(false)
@@ -97,8 +138,29 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
 
   // Initialize session ID on mount
   useEffect(() => {
-    setSessionId(getSessionId())
+    const id = getSessionId()
+    setSessionId(id)
   }, [])
+
+  // Save messages to localStorage whenever they change
+  useEffect(() => {
+    if (sessionId && messages.length > 0) {
+      saveMessages(sessionId, messages)
+      console.log(`💾 Saved ${messages.length} messages for session ${sessionId}`)
+    }
+  }, [messages, sessionId])
+
+  // Load messages when sessionId changes (e.g., after clearing session)
+  useEffect(() => {
+    if (sessionId) {
+      const loadedMessages = loadMessages(sessionId)
+      // Only update if different from current messages to avoid infinite loop
+      if (JSON.stringify(loadedMessages) !== JSON.stringify(messages)) {
+        setMessages(loadedMessages)
+        console.log(`📥 Loaded ${loadedMessages.length} messages for session ${sessionId}`)
+      }
+    }
+  }, [sessionId]) // Only depend on sessionId, not messages
 
   // Handle file attachment
   const handleFileAttach = () => {
@@ -294,6 +356,9 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       // Clear session on backend
       await axios.post(`${API_URL}/api/v1/sessions/${sessionId}/clear`)
       console.log(`🧹 Cleared session: ${sessionId}`)
+
+      // Clear messages from localStorage for this session
+      localStorage.removeItem(`chat_messages_${sessionId}`)
 
       // Generate new session ID
       const newSessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
