@@ -46,19 +46,57 @@ class QueryClassifier:
 
     # Patterns for document-specific questions
     DOCUMENT_SPECIFIC_PATTERNS = [
-        r'\b(according|based\s+on|in|from)\s+the\s+(document|file|pdf|text|article)\b',
-        r'\bwhat\s+(does|is)\s+the\s+document\s+(say|mention|state)\b',
-        r'\bin\s+this\s+(file|document|pdf|text)\b',
+        r'\b(according|based\s+on|in|from)\s+(the|this)?\s*(document|file|pdf|text|article|report|upload)\b',
+        r'\bwhat\s+(does|is)\s+(the|this)?\s*(document|file|pdf)\s+(say|mention|state)\b',
+        r'\bin\s+(this|the)\s+(file|document|pdf|text|report)\b',
         r'\bfrom\s+the\s+(uploaded|attached)\s+(file|document)\b',
-        r'\bsummarize\s+(the|this)\s+(document|file|text)\b',
+        r'\bsummarize\s+(the|this|my)?\s*(document|file|text|pdf|report)\b',
+        r'\baccording\s+to\s+(the|this)?\s*(uploaded|attached)?\s*(file|document|report)\b',
+        r'\b(uploaded|attached)\s+(file|document|pdf)\b',
     ]
 
-    # General knowledge questions that might not need documents
+    # General knowledge questions that should NOT need documents
     GENERAL_KNOWLEDGE_PATTERNS = [
+        # Technology terms
         r'\bwhat\s+is\s+(python|java|javascript|machine\s+learning|ai)\b',
         r'\bhow\s+(does|do|to)\s+[a-z]+\s+work\b',
         r'\bexplain\s+[a-z\s]+\b',
         r'\bdefine\s+[a-z\s]+\b',
+
+        # Science & Geography (high confidence general knowledge)
+        r'\b(what|how|where)\s+is\s+(the\s+)?(earth|moon|sun|planet|ocean|continent|mountain|river)\b',
+        r'\blength\s+of\s+(the\s+)?(earth|equator|circumference)\b',
+        r'\bsize\s+of\s+(the\s+)?(earth|moon|sun|planet)\b',
+        r'\bhow\s+(big|large|tall|deep|long|wide)\s+is\s+(the\s+)?\b',
+
+        # Math & Calculations
+        r'\bcalculate\s+',
+        r'\bwhat\s*\'?s\s+\d+\s*[\+\-\*/]\s*\d+',
+        r'\bsquare\s+root\s+of\b',
+        r'\bconvert\s+\d+',
+
+        # History & Facts
+        r'\bwhen\s+(was|did|were)\s+',
+        r'\bwho\s+(invented|discovered|created|founded)\b',
+        r'\bwhat\s+year\s+',
+        r'\bin\s+what\s+year\b',
+
+        # Factual questions about the world
+        r'\bhow\s+many\s+(countries|states|planets|continents|oceans)\b',
+        r'\blargest\s+(country|city|ocean|mountain)\b',
+        r'\bsmallest\s+(country|city|planet)\b',
+        r'\bhighest\s+(mountain|peak|point)\b',
+        r'\blongest\s+(river|road|bridge)\b',
+
+        # Definitions
+        r'\bwhat\s+does\s+[a-z]+\s+mean\b',
+        r'\bmeaning\s+of\s+',
+        r'\betymology\s+of\b',
+
+        # Common factual questions
+        r'\bcapital\s+of\s+[a-z]+\b',
+        r'\bpopulation\s+of\s+[a-z]+\b',
+        r'\bwhat\s+language\s+is\s+spoken\b',
     ]
 
     def __init__(self):
@@ -104,14 +142,14 @@ class QueryClassifier:
         # Check for general knowledge
         general_matches = sum(1 for regex in self.general_knowledge_regex if regex.search(query))
 
-        # Default: try documents but with awareness it might be general question
+        # General knowledge - don't use documents
         if general_matches > 0:
             logger.info(f"🌍 Classified as general knowledge question: {query[:50]}...")
             return {
                 'query_type': 'general',
-                'confidence': 0.6,
-                'use_documents': True,  # Try documents, but fallback gracefully
-                'reason': 'General knowledge question - will try documents first'
+                'confidence': min(1.0, general_matches * 0.7),
+                'use_documents': False,  # General knowledge - answer directly without documents
+                'reason': 'General knowledge question (science, geography, history, math) - answering directly'
             }
 
         # Ambiguous - try documents

@@ -10,6 +10,7 @@ except ImportError:
     from app.services.llm_service import llm_service
 
 from app.services.document_service import document_service
+from app.services.query_classifier import query_classifier
 from app.core.config import settings
 import time
 
@@ -28,15 +29,67 @@ class RAGService:
         db: AsyncSession = None
     ) -> Dict:
         """
-        Process a query using RAG pipeline:
-        1. Generate query embedding
-        2. Search for similar document chunks
-        3. Generate response with context
-        4. Return response with source references
+        Process a query using intelligent RAG pipeline:
+        1. Classify query (general knowledge vs document-specific vs personal)
+        2. Route appropriately:
+           - General knowledge → Direct LLM (no RAG)
+           - Document-specific → Full RAG pipeline
+           - Personal/AI → Direct LLM
+        3. Return response with appropriate sources
         """
         start_time = time.time()
 
         try:
+            # Step 0: Classify the query BEFORE doing any retrieval
+            classification = query_classifier.classify(query_text)
+            logger.info(
+                f"Query classification: {classification['query_type']} "
+                f"(confidence: {classification['confidence']:.2f}) - {classification['reason']}"
+            )
+
+            # If this is a general knowledge or AI-personal question, skip RAG entirely
+            if not classification['use_documents']:
+                logger.info(f"⚡ Skipping RAG for {classification['query_type']} query")
+
+                # Generate appropriate system message based on query type
+                if classification['query_type'] == 'ai_personal':
+                    system_message = (
+                        "You are a helpful enterprise RAG assistant. "
+                        "Answer questions about yourself naturally and accurately."
+                    )
+                elif classification['query_type'] == 'general':
+                    system_message = (
+                        "You are a helpful AI assistant with general knowledge. "
+                        "Answer this general knowledge question accurately and concisely. "
+                        "Do not mention or reference any documents."
+                    )
+                else:
+                    system_message = "You are a helpful AI assistant."
+
+                response = await llm_service.generate(
+                    prompt=f"System: {system_message}\n\nUser: {query_text}\n\nAssistant:",
+                    messages=[
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": query_text}
+                    ],
+                    model_id=model_id
+                )
+
+                result = {
+                    'answer': response['content'],
+                    'sources': [],  # No sources for general knowledge
+                    'model': response['model'],
+                    'model_name': response.get('model_name', response['model']),
+                    'tokens_used': response['tokens'],
+                    'latency_ms': (time.time() - start_time) * 1000,
+                    'num_sources': 0,
+                    'cached': False,
+                    'query_type': classification['query_type'],
+                    'skipped_rag': True
+                }
+                return result
+
+            # Continue with RAG for document-specific queries
             # Check semantic cache first
             if use_cache:
                 cached_result = await self._check_semantic_cache(query_text, db)
@@ -47,7 +100,7 @@ class RAGService:
                     return cached_result
 
             # Step 1: Generate embedding for the query
-            logger.info(f"Processing query: {query_text[:100]}...")
+            logger.info(f"Processing document-specific query: {query_text[:100]}...")
             query_embedding = await embedding_service.get_embedding(query_text)
 
             # Step 2: Search for similar chunks using hybrid search
@@ -135,7 +188,9 @@ class RAGService:
                 'tokens_used': response['tokens'],
                 'latency_ms': (time.time() - start_time) * 1000,
                 'num_sources': len(sources),
-                'cached': False
+                'cached': False,
+                'query_type': classification['query_type'],
+                'skipped_rag': False
             }
 
             # Cache the result
