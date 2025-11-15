@@ -78,7 +78,7 @@ class EnhancedRAGService:
                 await self._ensure_session_exists(session_id, user_id, db)
 
             # STEP 0: Classify query to determine if it needs documents
-            classification = query_classifier.classify(query_text)
+            classification = await query_classifier.classify(query_text)
             logger.info(f"📊 Query classification: {classification['query_type']} (confidence: {classification['confidence']:.2f}) - {classification['reason']}")
 
             # If this is an AI-personal question, skip RAG entirely

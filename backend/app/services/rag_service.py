@@ -41,7 +41,7 @@ class RAGService:
 
         try:
             # Step 0: Classify the query BEFORE doing any retrieval
-            classification = query_classifier.classify(query_text)
+            classification = await query_classifier.classify(query_text)
             logger.info(
                 f"Query classification: {classification['query_type']} "
                 f"(confidence: {classification['confidence']:.2f}) - {classification['reason']}"

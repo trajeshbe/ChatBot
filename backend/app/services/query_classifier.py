@@ -25,8 +25,8 @@ class QueryClassifier:
 
     CLASSIFICATION_PROMPT = """You are a query classification system. Analyze the user's query and classify it into one of these categories:
 
-1. **ai_personal**: Questions about the AI assistant itself (identity, capabilities, how it works, greetings)
-   Examples: "Who are you?", "What can you do?", "Hello!", "How do you work?"
+1. **ai_personal**: Questions about the AI assistant itself (identity, capabilities, how it works, greetings, asking the AI to introduce itself)
+   Examples: "Who are you?", "What can you do?", "Hello!", "How do you work?", "Tell me about yourself", "Introduce yourself", "What are your capabilities?"
 
 2. **document_specific**: Questions that explicitly reference documents or uploaded files
    Examples: "What does the document say?", "Summarize this PDF", "According to the uploaded file..."
@@ -71,9 +71,50 @@ Rules:
             self._llm_service = llm_service
         return self._llm_service
 
-    def classify(self, query: str) -> Dict[str, any]:
+    def _rule_based_classify(self, query: str) -> Dict[str, any]:
         """
-        Classify a query using LLM
+        Simple rule-based classification for common patterns (fallback)
+
+        Returns classification or None if no rule matches
+        """
+        query_lower = query.lower().strip()
+
+        # AI-personal patterns
+        ai_patterns = [
+            'who are you', 'what are you', 'tell me about yourself', 'introduce yourself',
+            'what can you do', 'what are your capabilities', 'how do you work',
+            'hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening'
+        ]
+
+        for pattern in ai_patterns:
+            if pattern in query_lower:
+                return {
+                    'query_type': 'ai_personal',
+                    'confidence': 0.9,
+                    'use_documents': False,
+                    'reason': f'Matched AI-personal pattern: "{pattern}"'
+                }
+
+        # Document-specific patterns
+        doc_patterns = [
+            'according to the document', 'in the file', 'the pdf says',
+            'what does the document', 'summarize the', 'from the uploaded'
+        ]
+
+        for pattern in doc_patterns:
+            if pattern in query_lower:
+                return {
+                    'query_type': 'document_specific',
+                    'confidence': 0.95,
+                    'use_documents': True,
+                    'reason': f'Matched document-specific pattern: "{pattern}"'
+                }
+
+        return None  # No rule matched, use LLM
+
+    async def classify(self, query: str) -> Dict[str, any]:
+        """
+        Classify a query using LLM with rule-based fallback
 
         Returns:
             Dict with:
@@ -84,21 +125,27 @@ Rules:
         """
         query = query.strip()
 
+        # Try rule-based classification first (fast and deterministic)
+        rule_result = self._rule_based_classify(query)
+        if rule_result:
+            logger.info(f"🎯 Rule-based classification: {rule_result['query_type']} - {rule_result['reason']}")
+            return rule_result
+
         try:
             # Use LLM to classify the query
             prompt = self.CLASSIFICATION_PROMPT.format(query=query)
 
             # Use a fast model for classification (prefer cheaper/faster models)
-            response = self.llm_service.generate_response(
+            # Note: Using the correct generate() method with proper parameters
+            result = await self.llm_service.generate(
                 prompt=prompt,
-                model_preference=['ollama/mistral', 'gpt-3.5-turbo', 'claude-3-haiku-20240307'],
                 max_tokens=200,  # Short response expected
-                temperature=0.0  # Deterministic classification
+                temperature=0.0,  # Deterministic classification
+                model_id=None  # Use default model
             )
 
-            # Parse the JSON response
-            # Remove markdown code blocks if present
-            response_text = response.strip()
+            # Extract the response content
+            response_text = result.get('content', '').strip()
             if response_text.startswith('```'):
                 # Remove code block markers
                 lines = response_text.split('\n')
@@ -145,12 +192,12 @@ Rules:
                 'reason': f'Classification error - defaulting to document retrieval. Error: {str(e)[:100]}'
             }
 
-    def should_skip_rag(self, query: str) -> bool:
+    async def should_skip_rag(self, query: str) -> bool:
         """
         Quick check if we should skip RAG entirely
         (for AI-personal questions)
         """
-        classification = self.classify(query)
+        classification = await self.classify(query)
         return not classification['use_documents']
 
 
