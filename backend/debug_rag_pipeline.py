@@ -79,7 +79,9 @@ class RAGPipelineDebugger:
     """Debug the RAG pipeline end-to-end"""
 
     def __init__(self):
-        self.db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/ragchatbot")
+        # Use 'postgres' service name in Docker, fallback to localhost for local development
+        default_db_url = "postgresql://postgres:postgres@postgres:5432/ragchatbot"
+        self.db_url = os.getenv("DATABASE_URL", default_db_url)
         self.engine = create_engine(self.db_url)
         self.SessionLocal = sessionmaker(bind=self.engine)
 
