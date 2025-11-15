@@ -117,6 +117,57 @@ tenacity==8.2.3                   # Retry logic - handles transient failures in 
 aiofiles==23.2.1                  # Async file operations - improves I/O performance
 pyyaml==6.0.1                     # YAML parsing - reads configuration files
 
+# ----------------------------------------------------------------------------
+# RAG EVALUATION & QUALITY METRICS (Optional - Advanced Features)
+# Used by: evaluation scripts, quality metrics dashboard
+# Note: Some packages require torch/transformers - see warnings below
+# ----------------------------------------------------------------------------
+
+# Core evaluation frameworks
+ragas==0.1.7                      # Comprehensive RAG evaluation framework
+                                  # Dependencies: Compatible with existing langchain, openai versions
+                                  # Requires: numpy, datasets, tiktoken, pysbd, nest-asyncio, appdirs
+
+# WARNING: deepeval has specific protobuf version requirement (==4.25.1)
+# This may conflict with other packages that require different protobuf versions
+deepeval==0.21.0                  # Modern evaluation framework with metrics
+                                  # Dependencies: requests, tqdm, pytest, tabulate, typer, rich
+                                  # Requires: protobuf==4.25.1, pydantic, sentry-sdk, pytest-repeat, pytest-xdist
+
+# Similarity and quality metrics
+rouge-score==0.1.2                # ROUGE metrics for text similarity
+                                  # Dependencies: absl-py, nltk, numpy, six>=1.14.0
+
+nltk==3.8.1                       # Natural language processing toolkit
+                                  # Dependencies: click, joblib, regex>=2021.8.3, tqdm
+
+# WARNING: The following packages require torch and transformers (currently commented out)
+# Uncomment torch/transformers lines in the "AI & LLM" section above if using these:
+bert-score==0.3.13                # Semantic similarity evaluation using BERT
+                                  # Dependencies: torch>=1.0.0, transformers>=3.0.0, pandas>=1.0.1
+                                  # Also requires: numpy, requests, tqdm, matplotlib, packaging
+
+detoxify==0.5.2                   # Toxicity detection for generated content
+                                  # Dependencies: torch>=1.7.0, transformers, sentencepiece>=0.1.94
+
+# Bias and fairness evaluation
+fairlearn==0.9.0                  # Bias and fairness metrics for ML models
+                                  # Dependencies: numpy>=1.18.0, pandas>=0.25.2, scikit-learn>=0.22.1, scipy>=1.5.0
+
+# Additional dependencies for evaluation packages (auto-installed)
+# These are pulled in automatically by the packages above:
+# - datasets (for ragas)
+# - tiktoken (for ragas)
+# - pysbd>=0.3.4 (for ragas)
+# - nest-asyncio (for ragas)
+# - appdirs (for ragas)
+# - absl-py (for rouge-score)
+# - six>=1.14.0 (for rouge-score)
+# - click, joblib, regex>=2021.8.3 (for nltk)
+# - tabulate, typer, rich, sentry-sdk, pytest-repeat, pytest-xdist, portalocker (for deepeval)
+# - pandas, matplotlib, packaging, sentencepiece (for various packages)
+# - scikit-learn, scipy (for fairlearn)
+
 # ============================================================================
 # INSTALLATION NOTES
 # ============================================================================
@@ -126,22 +177,45 @@ pyyaml==6.0.1                     # YAML parsing - reads configuration files
 #   This installs core functionality without heavy ML packages
 #
 # FULL INSTALL (With Local LLM):
-#   1. Uncomment torch, transformers, vllm lines above
+#   1. Uncomment torch, transformers, vllm lines in "AI & LLM" section
 #   2. pip install -r requirements.txt
 #   Note: This adds ~3GB of downloads
 #
+# RAG EVALUATION INSTALL:
+#   The evaluation packages are now included by default but have dependencies:
+#   - ragas, deepeval, rouge-score, nltk, fairlearn: Work without torch
+#   - bert-score, detoxify: REQUIRE torch and transformers
+#
+#   To use ALL evaluation features:
+#   1. Uncomment torch, transformers lines in "AI & LLM" section
+#   2. pip install -r requirements.txt
+#
+#   WARNING about deepeval:
+#   - Requires protobuf==4.25.1 (specific version)
+#   - May conflict if other packages need different protobuf versions
+#   - Monitor for dependency resolution conflicts during install
+#
 # OPTIONAL FEATURES:
-#   - LangChain/LangGraph: Uncomment langchain packages for agent workflows
-#   - Prefect: Uncomment prefect packages for workflow orchestration
+#   - LangChain/LangGraph: Already included for agent workflows
+#   - Prefect: Already included for workflow orchestration
 #   - Docling: Install separately if available: pip install docling
 #
 # PLAYWRIGHT SETUP:
 #   After pip install, run: playwright install chromium
 #   This downloads browser binaries for web scraping
 #
+# NLTK DATA DOWNLOAD:
+#   After installing nltk, download required data:
+#   python -m nltk.downloader punkt stopwords wordnet averaged_perceptron_tagger
+#
 # SYSTEM DEPENDENCIES:
 #   - PostgreSQL development headers (for psycopg2)
 #   - Build tools (gcc, g++, make)
 #   - See Dockerfile for complete list
+#
+# DEPENDENCY COMPATIBILITY:
+#   Validated on: 2024-11-15
+#   Python: 3.11+
+#   Key versions: pydantic 2.8.2, fastapi 0.111.0, langchain 0.2.16
 #
 # ============================================================================
