@@ -1432,7 +1432,7 @@ async def db_console_documents(
             LEFT JOIN document_chunks dc ON d.id = dc.document_id
             LEFT JOIN session_documents sd ON d.id = sd.document_id
             LEFT JOIN chat_sessions cs ON sd.session_id = cs.id
-            WHERE (:search IS NULL OR d.filename ILIKE :search_pattern)
+            WHERE (:search::VARCHAR IS NULL OR d.filename ILIKE :search_pattern)
             GROUP BY d.id, d.filename, d.file_type, d.file_size, d.source_type, d.source_url, d.upload_date, d.processed, d.processing_error
             ORDER BY d.upload_date DESC
             LIMIT :limit OFFSET :offset
@@ -1477,7 +1477,7 @@ async def db_console_documents(
         count_query = sql_text("""
             SELECT COUNT(DISTINCT d.id)
             FROM documents d
-            WHERE (:search IS NULL OR d.filename ILIKE :search_pattern)
+            WHERE (:search::VARCHAR IS NULL OR d.filename ILIKE :search_pattern)
         """)
         count_result = await db.execute(
             count_query,
