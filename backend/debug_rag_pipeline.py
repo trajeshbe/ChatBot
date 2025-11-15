@@ -96,8 +96,7 @@ class RAGPipelineDebugger:
         """Get RAG service instance"""
         try:
             from app.services.rag_service import RAGService
-            db = self.SessionLocal()
-            return RAGService(db)
+            return RAGService()
         except Exception as e:
             print_error(f"Failed to import RAGService: {e}")
             return None
@@ -111,8 +110,7 @@ class RAGPipelineDebugger:
         # Try to get the query classifier
         try:
             from app.services.rag_service import RAGService
-            db = self.SessionLocal()
-            rag_service = RAGService(db)
+            rag_service = RAGService()
 
             # Check if should_skip_rag method exists
             if hasattr(rag_service, 'should_skip_rag'):
@@ -165,7 +163,7 @@ class RAGPipelineDebugger:
 
             # Generate embedding
             start_time = datetime.now()
-            embedding = await embedding_service.generate_embedding(query)
+            embedding = await embedding_service.get_embedding(query)
             duration = (datetime.now() - start_time).total_seconds()
 
             print_success(f"Embedding generated in {duration:.3f}s")
@@ -541,65 +539,75 @@ class RAGPipelineDebugger:
 
         try:
             from app.services.rag_service import RAGService
-            from app.schemas.rag import QueryRequest
+            from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+            from sqlalchemy.orm import sessionmaker
 
-            db = self.SessionLocal()
-            rag_service = RAGService(db)
-
-            # Create query request
-            query_request = QueryRequest(
-                query=query,
-                session_id=session_id,
-                model="gpt-4-turbo",
-                top_k=5
+            # Create async engine for RAG service
+            async_db_url = self.db_url.replace('postgresql://', 'postgresql+asyncpg://')
+            async_engine = create_async_engine(async_db_url)
+            async_session_factory = sessionmaker(
+                async_engine, class_=AsyncSession, expire_on_commit=False
             )
 
-            print_info("Calling RAG service", "query_with_rag()")
+            rag_service = RAGService()
+
+            print_info("Calling RAG service", "query()")
             print_info("Parameters", json.dumps({
                 "query": query,
                 "session_id": session_id,
-                "top_k": 5
+                "model_id": "gpt-4-turbo"
             }, indent=2))
 
-            # Call RAG service
-            start_time = datetime.now()
-            response = await rag_service.query_with_rag(query_request)
-            duration = (datetime.now() - start_time).total_seconds()
+            # Call RAG service with async session
+            async with async_session_factory() as db:
+                start_time = datetime.now()
+                response = await rag_service.query(
+                    query_text=query,
+                    conversation_history=None,
+                    use_cache=True,
+                    model_id="gpt-4-turbo",
+                    db=db
+                )
+                duration = (datetime.now() - start_time).total_seconds()
 
             print_success(f"RAG service completed in {duration:.3f}s")
 
             # Analyze response
             print_subsection("Response Analysis")
-            print_info("Answer Length", len(response.answer))
-            print_info("Number of Sources", len(response.sources))
-            print_info("Model Used", response.model_used)
+            print_info("Answer Length", len(response['answer']))
+            print_info("Number of Sources", len(response.get('sources', [])))
+            print_info("Model Used", response.get('model', 'unknown'))
+            print_info("Query Type", response.get('query_type', 'unknown'))
+            print_info("Skipped RAG", response.get('skipped_rag', False))
 
-            if hasattr(response, 'tokens'):
-                print_info("Tokens Used", response.tokens)
+            if 'tokens_used' in response:
+                print_info("Tokens Used", response['tokens_used'])
 
-            if response.sources:
+            if response.get('sources'):
                 print_subsection("Sources Used")
-                for i, source in enumerate(response.sources, 1):
+                for i, source in enumerate(response['sources'], 1):
                     print(f"\n{Colors.BOLD}Source {i}:{Colors.ENDC}")
-                    print_info("  Document", source.filename, indent=1)
-                    print_info("  Score", f"{source.score:.4f}", indent=1)
-                    preview = source.content[:200] + "..." if len(source.content) > 200 else source.content
-                    print_info("  Content", f'"{preview}"', indent=1)
+                    print_info("  Document", source.get('filename', 'unknown'), indent=1)
+                    print_info("  Relevance", f"{source.get('relevance', 0):.4f}", indent=1)
+                    preview = source.get('excerpt', '')[:200]
+                    if len(source.get('excerpt', '')) > 200:
+                        preview += "..."
+                    print_info("  Excerpt", f'"{preview}"', indent=1)
             else:
                 print_warning("No sources returned - likely answered without retrieval")
 
             # Show answer preview
             print_subsection("Answer Preview")
-            answer_preview = response.answer[:500] + "..." if len(response.answer) > 500 else response.answer
+            answer_preview = response['answer'][:500] + "..." if len(response['answer']) > 500 else response['answer']
             print(f"{answer_preview}\n")
+
+            # Clean up async engine
+            await async_engine.dispose()
 
         except Exception as e:
             print_error(f"RAG service call failed: {e}")
             import traceback
             traceback.print_exc()
-        finally:
-            if 'db' in locals():
-                db.close()
 
     def check_pgvector_installation(self):
         """Check if pgvector extension is properly installed"""
