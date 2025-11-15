@@ -1399,6 +1399,249 @@ async def regenerate_embeddings_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/v1/admin/db-console/documents")
+async def db_console_documents(
+    search: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db)
+):
+    """Database console: Get all documents with detailed chunk and embedding information"""
+    try:
+        from app.models.database import Document, DocumentChunk
+        from app.models.database_enhanced import SessionDocument, ChatSession
+        from sqlalchemy import text as sql_text
+
+        # Build complex query with all the details we need
+        query = sql_text("""
+            SELECT
+                d.id,
+                d.filename,
+                d.file_type,
+                d.file_size,
+                d.source_type,
+                d.source_url,
+                d.upload_date,
+                d.processed,
+                d.processing_error,
+                COUNT(DISTINCT dc.id) as total_chunks,
+                COUNT(DISTINCT CASE WHEN dc.embedding IS NOT NULL THEN dc.id END) as chunks_with_embeddings,
+                COUNT(DISTINCT sd.session_id) as session_count,
+                STRING_AGG(DISTINCT cs.session_id, ', ') as session_ids
+            FROM documents d
+            LEFT JOIN document_chunks dc ON d.id = dc.document_id
+            LEFT JOIN session_documents sd ON d.id = sd.document_id
+            LEFT JOIN chat_sessions cs ON sd.session_id = cs.id
+            WHERE (:search IS NULL OR d.filename ILIKE :search_pattern)
+            GROUP BY d.id, d.filename, d.file_type, d.file_size, d.source_type, d.source_url, d.upload_date, d.processed, d.processing_error
+            ORDER BY d.upload_date DESC
+            LIMIT :limit OFFSET :offset
+        """)
+
+        search_pattern = f"%{search}%" if search else None
+        result = await db.execute(
+            query,
+            {
+                "search": search,
+                "search_pattern": search_pattern,
+                "limit": limit,
+                "offset": offset
+            }
+        )
+        rows = result.fetchall()
+
+        documents = []
+        for row in rows:
+            embedding_percentage = 0
+            if row.total_chunks > 0:
+                embedding_percentage = (row.chunks_with_embeddings / row.total_chunks) * 100
+
+            documents.append({
+                "id": str(row.id),
+                "filename": row.filename,
+                "file_type": row.file_type,
+                "file_size": row.file_size,
+                "source_type": row.source_type,
+                "source_url": row.source_url,
+                "upload_date": row.upload_date.isoformat() if row.upload_date else None,
+                "processed": row.processed,
+                "processing_error": row.processing_error,
+                "total_chunks": row.total_chunks,
+                "chunks_with_embeddings": row.chunks_with_embeddings,
+                "embedding_percentage": round(embedding_percentage, 2),
+                "session_count": row.session_count,
+                "session_ids": row.session_ids.split(", ") if row.session_ids else []
+            })
+
+        # Get total count
+        count_query = sql_text("""
+            SELECT COUNT(DISTINCT d.id)
+            FROM documents d
+            WHERE (:search IS NULL OR d.filename ILIKE :search_pattern)
+        """)
+        count_result = await db.execute(
+            count_query,
+            {"search": search, "search_pattern": search_pattern}
+        )
+        total = count_result.scalar()
+
+        return {
+            "documents": documents,
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        }
+
+    except Exception as e:
+        logger.error(f"Error in DB console documents: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/admin/db-console/document/{document_id}/chunks")
+async def db_console_document_chunks(
+    document_id: str,
+    limit: int = 100,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db)
+):
+    """Database console: Get all chunks for a specific document with embedding details"""
+    try:
+        from app.models.database import Document, DocumentChunk
+        from sqlalchemy import text as sql_text
+
+        # Verify document exists
+        doc_query = select(Document).where(Document.id == uuid.UUID(document_id))
+        doc_result = await db.execute(doc_query)
+        document = doc_result.scalar_one_or_none()
+
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        # Get chunks with embedding information
+        chunks_query = sql_text("""
+            SELECT
+                id,
+                chunk_index,
+                content,
+                embedding IS NOT NULL as has_embedding,
+                CASE WHEN embedding IS NOT NULL
+                     THEN array_length(embedding::float[], 1)
+                     ELSE NULL
+                END as embedding_dimensions,
+                meta_info,
+                created_at
+            FROM document_chunks
+            WHERE document_id = :document_id
+            ORDER BY chunk_index
+            LIMIT :limit OFFSET :offset
+        """)
+
+        result = await db.execute(
+            chunks_query,
+            {"document_id": uuid.UUID(document_id), "limit": limit, "offset": offset}
+        )
+        rows = result.fetchall()
+
+        chunks = []
+        for row in rows:
+            chunks.append({
+                "id": str(row.id),
+                "chunk_index": row.chunk_index,
+                "content": row.content,
+                "content_length": len(row.content),
+                "has_embedding": row.has_embedding,
+                "embedding_dimensions": row.embedding_dimensions,
+                "meta_info": row.meta_info,
+                "created_at": row.created_at.isoformat() if row.created_at else None
+            })
+
+        # Get total chunk count
+        count_query = sql_text("""
+            SELECT COUNT(*) FROM document_chunks WHERE document_id = :document_id
+        """)
+        count_result = await db.execute(count_query, {"document_id": uuid.UUID(document_id)})
+        total = count_result.scalar()
+
+        return {
+            "document": {
+                "id": str(document.id),
+                "filename": document.filename,
+                "file_type": document.file_type,
+                "upload_date": document.upload_date.isoformat() if document.upload_date else None
+            },
+            "chunks": chunks,
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting document chunks: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/admin/db-console/stats")
+async def db_console_stats(db: AsyncSession = Depends(get_db)):
+    """Database console: Get database statistics"""
+    try:
+        from sqlalchemy import text as sql_text
+
+        stats_query = sql_text("""
+            SELECT
+                (SELECT COUNT(*) FROM documents) as total_documents,
+                (SELECT COUNT(*) FROM documents WHERE processed = true) as processed_documents,
+                (SELECT COUNT(*) FROM documents WHERE processing_error IS NOT NULL) as failed_documents,
+                (SELECT COUNT(*) FROM document_chunks) as total_chunks,
+                (SELECT COUNT(*) FROM document_chunks WHERE embedding IS NOT NULL) as chunks_with_embeddings,
+                (SELECT COUNT(DISTINCT session_id) FROM session_documents) as total_sessions,
+                (SELECT COUNT(DISTINCT session_id) FROM chat_sessions WHERE is_active = true) as active_sessions,
+                (SELECT SUM(file_size) FROM documents) as total_storage_bytes,
+                (SELECT COUNT(*) FROM users) as total_users,
+                (SELECT COUNT(*) FROM audit_logs) as total_audit_logs
+        """)
+
+        result = await db.execute(stats_query)
+        row = result.fetchone()
+
+        embedding_coverage = 0
+        if row.total_chunks > 0:
+            embedding_coverage = (row.chunks_with_embeddings / row.total_chunks) * 100
+
+        return {
+            "documents": {
+                "total": row.total_documents,
+                "processed": row.processed_documents,
+                "failed": row.failed_documents
+            },
+            "chunks": {
+                "total": row.total_chunks,
+                "with_embeddings": row.chunks_with_embeddings,
+                "coverage_percentage": round(embedding_coverage, 2)
+            },
+            "sessions": {
+                "total": row.total_sessions,
+                "active": row.active_sessions
+            },
+            "storage": {
+                "total_bytes": row.total_storage_bytes or 0,
+                "total_mb": round((row.total_storage_bytes or 0) / (1024 * 1024), 2),
+                "total_gb": round((row.total_storage_bytes or 0) / (1024 * 1024 * 1024), 2)
+            },
+            "users": {
+                "total": row.total_users
+            },
+            "audit": {
+                "total_logs": row.total_audit_logs
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting DB stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/v1/debug/embeddings")
 async def debug_embeddings(db: AsyncSession = Depends(get_db)):
     """
