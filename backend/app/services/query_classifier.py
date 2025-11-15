@@ -1,7 +1,7 @@
 """
 Query Classification Service
 
-Classifies queries to determine if they are:
+Classifies queries using LLM to determine if they are:
 1. AI-personal questions (about the AI itself, capabilities, identity)
 2. Document-based questions (requiring RAG retrieval)
 3. General knowledge questions (can be answered without documents)
@@ -10,103 +10,70 @@ This prevents the system from returning irrelevant documents for queries
 that don't require document context.
 """
 
-import re
-from typing import Dict, Literal
+import json
+from typing import Dict, TYPE_CHECKING
 import logging
+
+if TYPE_CHECKING:
+    from app.services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 
 
 class QueryClassifier:
-    """Classify queries to improve RAG relevance"""
+    """Classify queries using LLM to improve RAG relevance"""
 
-    # Patterns for AI-personal questions
-    AI_PERSONAL_PATTERNS = [
-        # Direct questions about the AI
-        r'\b(who|what)\s+(are|is)\s+you\b',
-        r'\byour\s+(name|identity|purpose|capabilities)\b',
-        r'\btell\s+me\s+about\s+(yourself|you)\b',
-        r'\bwho\s+(created|made|built|developed)\s+you\b',
-        r'\bwhat\s+(can|do)\s+you\s+do\b',
-        r'\bhow\s+(do|does)\s+you\s+work\b',
-        r'\bwhat\s+ai\s+are\s+you\b',
-        r'\bwhat\s+model\s+are\s+you\b',
-        r'\bwhat\s+language\s+model\b',
-        r'\bare\s+you\s+(an|a)\s+(ai|bot|assistant|chatbot)\b',
+    CLASSIFICATION_PROMPT = """You are a query classification system. Analyze the user's query and classify it into one of these categories:
 
-        # Greetings and small talk
-        r'^(hi|hello|hey|greetings|good\s+(morning|afternoon|evening))[!.,]?\s*$',
-        r'^how\s+are\s+you[?!.]?\s*$',
-        r'^what\'?s\s+up[?!.]?\s*$',
+1. **ai_personal**: Questions about the AI assistant itself (identity, capabilities, how it works, greetings)
+   Examples: "Who are you?", "What can you do?", "Hello!", "How do you work?"
 
-        # Questions about capabilities
-        r'\bcan\s+you\s+(help|assist|answer|explain)\b',
-        r'\bwhat\s+do\s+you\s+know\s+about\b(?!.*\bdocument)',
-    ]
+2. **document_specific**: Questions that explicitly reference documents or uploaded files
+   Examples: "What does the document say?", "Summarize this PDF", "According to the uploaded file..."
 
-    # Patterns for document-specific questions
-    DOCUMENT_SPECIFIC_PATTERNS = [
-        r'\b(according|based\s+on|in|from)\s+(the|this)?\s*(document|file|pdf|text|article|report|upload)\b',
-        r'\bwhat\s+(does|is)\s+(the|this)?\s*(document|file|pdf)\s+(say|mention|state)\b',
-        r'\bin\s+(this|the)\s+(file|document|pdf|text|report)\b',
-        r'\bfrom\s+the\s+(uploaded|attached)\s+(file|document)\b',
-        r'\bsummarize\s+(the|this|my)?\s*(document|file|text|pdf|report)\b',
-        r'\baccording\s+to\s+(the|this)?\s*(uploaded|attached)?\s*(file|document|report)\b',
-        r'\b(uploaded|attached)\s+(file|document|pdf)\b',
-    ]
+3. **general**: General knowledge questions about the world (science, history, math, facts)
+   Examples: "What is the capital of France?", "How does photosynthesis work?", "When was World War 2?"
 
-    # General knowledge questions that should NOT need documents
-    GENERAL_KNOWLEDGE_PATTERNS = [
-        # Technology terms
-        r'\bwhat\s+is\s+(python|java|javascript|machine\s+learning|ai)\b',
-        r'\bhow\s+(does|do|to)\s+[a-z]+\s+work\b',
-        r'\bexplain\s+[a-z\s]+\b',
-        r'\bdefine\s+[a-z\s]+\b',
+4. **ambiguous**: Questions that could require documents but don't explicitly reference them
+   Examples: "Tell me about machine learning", "What are the key findings?", "Explain the methodology"
 
-        # Science & Geography (high confidence general knowledge)
-        r'\b(what|how|where)\s+is\s+(the\s+)?(earth|moon|sun|planet|ocean|continent|mountain|river)\b',
-        r'\blength\s+of\s+(the\s+)?(earth|equator|circumference)\b',
-        r'\bsize\s+of\s+(the\s+)?(earth|moon|sun|planet)\b',
-        r'\bhow\s+(big|large|tall|deep|long|wide)\s+is\s+(the\s+)?\b',
+User Query: "{query}"
 
-        # Math & Calculations
-        r'\bcalculate\s+',
-        r'\bwhat\s*\'?s\s+\d+\s*[\+\-\*/]\s*\d+',
-        r'\bsquare\s+root\s+of\b',
-        r'\bconvert\s+\d+',
+Respond with ONLY a JSON object in this exact format (no markdown, no code blocks):
+{{
+    "query_type": "ai_personal" | "document_specific" | "general" | "ambiguous",
+    "confidence": 0.0 to 1.0,
+    "use_documents": true | false,
+    "reason": "brief explanation of classification"
+}}
 
-        # History & Facts
-        r'\bwhen\s+(was|did|were)\s+',
-        r'\bwho\s+(invented|discovered|created|founded)\b',
-        r'\bwhat\s+year\s+',
-        r'\bin\s+what\s+year\b',
+Rules:
+- ai_personal: use_documents = false
+- document_specific: use_documents = true
+- general: use_documents = false
+- ambiguous: use_documents = true (default to checking documents when uncertain)
+"""
 
-        # Factual questions about the world
-        r'\bhow\s+many\s+(countries|states|planets|continents|oceans)\b',
-        r'\blargest\s+(country|city|ocean|mountain)\b',
-        r'\bsmallest\s+(country|city|planet)\b',
-        r'\bhighest\s+(mountain|peak|point)\b',
-        r'\blongest\s+(river|road|bridge)\b',
+    def __init__(self, llm_service: 'LLMService' = None):
+        """
+        Initialize the query classifier with an LLM service.
 
-        # Definitions
-        r'\bwhat\s+does\s+[a-z]+\s+mean\b',
-        r'\bmeaning\s+of\s+',
-        r'\betymology\s+of\b',
+        Args:
+            llm_service: LLM service instance for classification. If None, will be imported lazily.
+        """
+        self._llm_service = llm_service
 
-        # Common factual questions
-        r'\bcapital\s+of\s+[a-z]+\b',
-        r'\bpopulation\s+of\s+[a-z]+\b',
-        r'\bwhat\s+language\s+is\s+spoken\b',
-    ]
-
-    def __init__(self):
-        self.ai_personal_regex = [re.compile(pattern, re.IGNORECASE) for pattern in self.AI_PERSONAL_PATTERNS]
-        self.document_specific_regex = [re.compile(pattern, re.IGNORECASE) for pattern in self.DOCUMENT_SPECIFIC_PATTERNS]
-        self.general_knowledge_regex = [re.compile(pattern, re.IGNORECASE) for pattern in self.GENERAL_KNOWLEDGE_PATTERNS]
+    @property
+    def llm_service(self) -> 'LLMService':
+        """Lazy load LLM service to avoid circular imports"""
+        if self._llm_service is None:
+            from app.services.llm_service import llm_service
+            self._llm_service = llm_service
+        return self._llm_service
 
     def classify(self, query: str) -> Dict[str, any]:
         """
-        Classify a query
+        Classify a query using LLM
 
         Returns:
             Dict with:
@@ -117,49 +84,66 @@ class QueryClassifier:
         """
         query = query.strip()
 
-        # Check for AI-personal questions
-        ai_personal_matches = sum(1 for regex in self.ai_personal_regex if regex.search(query))
-        if ai_personal_matches > 0:
-            logger.info(f"🤖 Classified as AI-personal question: {query[:50]}...")
-            return {
-                'query_type': 'ai_personal',
-                'confidence': min(1.0, ai_personal_matches * 0.5),
-                'use_documents': False,  # Don't use documents for AI-personal questions
-                'reason': 'Question is about the AI assistant itself, not document content'
+        try:
+            # Use LLM to classify the query
+            prompt = self.CLASSIFICATION_PROMPT.format(query=query)
+
+            # Use a fast model for classification (prefer cheaper/faster models)
+            response = self.llm_service.generate_response(
+                prompt=prompt,
+                model_preference=['ollama/mistral', 'gpt-3.5-turbo', 'claude-3-haiku-20240307'],
+                max_tokens=200,  # Short response expected
+                temperature=0.0  # Deterministic classification
+            )
+
+            # Parse the JSON response
+            # Remove markdown code blocks if present
+            response_text = response.strip()
+            if response_text.startswith('```'):
+                # Remove code block markers
+                lines = response_text.split('\n')
+                response_text = '\n'.join(lines[1:-1]) if len(lines) > 2 else response_text
+                response_text = response_text.replace('```json', '').replace('```', '').strip()
+
+            classification = json.loads(response_text)
+
+            # Validate response format
+            required_fields = {'query_type', 'confidence', 'use_documents', 'reason'}
+            if not all(field in classification for field in required_fields):
+                raise ValueError(f"Missing required fields in classification response. Got: {classification.keys()}")
+
+            # Validate query_type
+            valid_types = {'ai_personal', 'document_specific', 'general', 'ambiguous'}
+            if classification['query_type'] not in valid_types:
+                raise ValueError(f"Invalid query_type: {classification['query_type']}")
+
+            # Ensure confidence is a float between 0 and 1
+            classification['confidence'] = max(0.0, min(1.0, float(classification['confidence'])))
+
+            # Log classification
+            emoji_map = {
+                'ai_personal': '🤖',
+                'document_specific': '📄',
+                'general': '🌍',
+                'ambiguous': '❓'
             }
+            emoji = emoji_map.get(classification['query_type'], '❓')
+            logger.info(
+                f"{emoji} Classified as {classification['query_type']} "
+                f"(confidence: {classification['confidence']:.2f}): {query[:50]}... - {classification['reason']}"
+            )
 
-        # Check for explicit document-specific questions
-        doc_specific_matches = sum(1 for regex in self.document_specific_regex if regex.search(query))
-        if doc_specific_matches > 0:
-            logger.info(f"📄 Classified as document-specific question: {query[:50]}...")
+            return classification
+
+        except Exception as e:
+            # Fallback to ambiguous classification on error
+            logger.error(f"Error classifying query: {e}. Falling back to ambiguous classification.")
             return {
-                'query_type': 'document_specific',
-                'confidence': min(1.0, doc_specific_matches * 0.6),
-                'use_documents': True,  # Definitely use documents
-                'reason': 'Question explicitly references documents'
+                'query_type': 'ambiguous',
+                'confidence': 0.5,
+                'use_documents': True,
+                'reason': f'Classification error - defaulting to document retrieval. Error: {str(e)[:100]}'
             }
-
-        # Check for general knowledge
-        general_matches = sum(1 for regex in self.general_knowledge_regex if regex.search(query))
-
-        # General knowledge - don't use documents
-        if general_matches > 0:
-            logger.info(f"🌍 Classified as general knowledge question: {query[:50]}...")
-            return {
-                'query_type': 'general',
-                'confidence': min(1.0, general_matches * 0.7),
-                'use_documents': False,  # General knowledge - answer directly without documents
-                'reason': 'General knowledge question (science, geography, history, math) - answering directly'
-            }
-
-        # Ambiguous - try documents
-        logger.info(f"❓ Ambiguous classification: {query[:50]}...")
-        return {
-            'query_type': 'ambiguous',
-            'confidence': 0.5,
-            'use_documents': True,
-            'reason': 'Query type unclear - trying document retrieval'
-        }
 
     def should_skip_rag(self, query: str) -> bool:
         """
