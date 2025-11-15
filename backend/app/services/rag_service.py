@@ -129,9 +129,22 @@ class RAGService:
             # Step 3: Generate response with context
             if filtered_chunks:
                 # We have relevant documents - use RAG
+                # Further filter to only use high-quality chunks for LLM context
+                # This ensures the LLM only sees the most relevant information
+                context_threshold = settings.SOURCE_DISPLAY_THRESHOLD
+                high_quality_chunks = [
+                    chunk for chunk in filtered_chunks
+                    if chunk.get('similarity', 0) >= context_threshold
+                ]
+
+                # If no high-quality chunks, use all filtered chunks
+                chunks_for_context = high_quality_chunks if high_quality_chunks else filtered_chunks
+
+                logger.info(f"📝 Using {len(chunks_for_context)} chunks for LLM context (filtered from {len(filtered_chunks)})")
+
                 response = await llm_service.generate_with_context(
                     query=query_text,
-                    context_chunks=filtered_chunks,
+                    context_chunks=chunks_for_context,
                     conversation_history=conversation_history,
                     model_id=model_id
                 )
@@ -176,9 +189,27 @@ class RAGService:
                     model_id=model_id
                 )
 
-            # Step 4: Extract and format sources
-            # Only show sources if we used them (filtered_chunks)
-            sources = self._format_sources(filtered_chunks)
+            # Step 4: Extract and format sources with quality filtering
+            # Only show high-quality sources that likely contributed to the answer
+            all_sources = self._format_sources(filtered_chunks)
+
+            # Filter sources by quality threshold
+            high_quality_sources = self._filter_high_quality_sources(all_sources)
+
+            # If we have high-quality sources, use them; otherwise show all above display threshold
+            if high_quality_sources:
+                sources = high_quality_sources
+                logger.info(f"✨ Showing {len(sources)} high-quality sources (>={settings.HIGH_QUALITY_SOURCE_THRESHOLD:.0%})")
+            else:
+                # Fall back to showing sources above display threshold
+                sources = [s for s in all_sources if s['relevance'] >= settings.SOURCE_DISPLAY_THRESHOLD]
+                if sources:
+                    logger.info(f"📊 Showing {len(sources)} sources above display threshold (>={settings.SOURCE_DISPLAY_THRESHOLD:.0%})")
+                else:
+                    # Last resort: show top 2 sources if any exist
+                    sources = all_sources[:2] if all_sources else []
+                    if sources:
+                        logger.warning(f"⚠️ Showing top {len(sources)} sources (below quality thresholds)")
 
             result = {
                 'answer': response['content'],
@@ -222,6 +253,25 @@ class RAGService:
                 seen_docs.add(doc_id)
 
         return sources
+
+    def _filter_high_quality_sources(self, sources: List[Dict]) -> List[Dict]:
+        """
+        Filter sources to only include high-quality matches.
+        High-quality sources are those with relevance scores above the threshold.
+        """
+        if not sources:
+            return []
+
+        # Filter by high quality threshold
+        high_quality = [
+            source for source in sources
+            if source['relevance'] >= settings.HIGH_QUALITY_SOURCE_THRESHOLD
+        ]
+
+        # Sort by relevance descending
+        high_quality.sort(key=lambda x: x['relevance'], reverse=True)
+
+        return high_quality
 
     async def _check_semantic_cache(
         self,

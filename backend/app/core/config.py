@@ -89,12 +89,16 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 800  # Increased from 500 for better context (optimal for embeddings)
     CHUNK_OVERLAP: int = 150  # Increased from 50 for better continuity (20% overlap)
     TOP_K_RESULTS: int = 5
-    SIMILARITY_THRESHOLD: float = 0.70  # INCREASED to 70% to reduce false positives (stricter matching)
-    MIN_SIMILARITY_THRESHOLD: float = 0.55  # Minimum threshold for fallback (0.55 = 55% similarity)
+    SIMILARITY_THRESHOLD: float = 0.75  # INCREASED to 75% for higher quality matches
+    MIN_SIMILARITY_THRESHOLD: float = 0.60  # Minimum threshold for fallback (60% minimum quality)
+
+    # Source quality thresholds
+    HIGH_QUALITY_SOURCE_THRESHOLD: float = 0.75  # Only show sources above 75% confidence
+    SOURCE_DISPLAY_THRESHOLD: float = 0.70  # Minimum threshold to display a source (70%)
 
     # Query classification thresholds
     # If best match is below this, likely not document-related query
-    NO_RELEVANT_DOCS_THRESHOLD: float = 0.65  # INCREASED to 65% - stricter threshold to prevent irrelevant document retrieval
+    NO_RELEVANT_DOCS_THRESHOLD: float = 0.70  # INCREASED to 70% - stricter threshold to prevent irrelevant document retrieval
 
     class Config:
         env_file = ".env"

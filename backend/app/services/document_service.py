@@ -385,17 +385,16 @@ class DocumentService:
             logger.info(f"📊 Database status: {chunk_count} total chunks, {embedding_count} with embeddings")
 
             # Cascading fallback strategy: try multiple thresholds
-            # More conservative approach to avoid irrelevant results
+            # Conservative approach to avoid irrelevant results
             thresholds_to_try = [threshold]
             if use_cascading_fallback:
-                # Add progressively lower thresholds (but not too low)
-                # Only try 2 fallback levels instead of 3
-                thresholds_to_try.extend([
-                    max(threshold - 0.1, settings.MIN_SIMILARITY_THRESHOLD),
-                    settings.MIN_SIMILARITY_THRESHOLD,  # Final fallback (0.3)
-                ])
+                # Add only ONE fallback level to minimum threshold
+                # This prevents too many low-quality matches
+                if settings.MIN_SIMILARITY_THRESHOLD < threshold:
+                    thresholds_to_try.append(settings.MIN_SIMILARITY_THRESHOLD)
                 # Remove duplicates and sort descending
                 thresholds_to_try = sorted(list(set(thresholds_to_try)), reverse=True)
+                logger.info(f"🔄 Cascading fallback enabled: will try thresholds {[f'{t:.0%}' for t in thresholds_to_try]}")
 
             chunks = []
             threshold_used = threshold
@@ -716,7 +715,7 @@ class DocumentService:
     def _diversify_chunks(self, chunks: List[Dict], top_k: int) -> List[Dict]:
         """
         Diversify results to avoid too many chunks from the same document.
-        Ensures we get variety in sources.
+        Ensures we get variety in sources while maintaining quality.
         """
         if len(chunks) <= top_k:
             return chunks
@@ -727,18 +726,29 @@ class DocumentService:
         for chunk in chunks:
             doc_chunks[chunk['document_id']].append(chunk)
 
-        # Select diverse chunks
+        # Select diverse chunks with quality consideration
         diversified = []
         max_per_doc = max(2, top_k // len(doc_chunks))  # At least 2 per doc if we have few docs
 
-        # First pass: add top chunk from each document
+        # First pass: add top chunk from each document (only if high quality)
         for doc_id, doc_chunk_list in doc_chunks.items():
             if len(diversified) < top_k:
-                diversified.append(doc_chunk_list[0])
+                top_chunk = doc_chunk_list[0]
+                # Only include if it meets minimum display quality
+                if top_chunk.get('similarity', 0) >= settings.SOURCE_DISPLAY_THRESHOLD:
+                    diversified.append(top_chunk)
 
-        # Second pass: fill remaining slots with best chunks
-        remaining = [c for c in chunks if c not in diversified]
+        # Second pass: fill remaining slots with best chunks (maintaining quality)
+        remaining = [
+            c for c in chunks
+            if c not in diversified and c.get('similarity', 0) >= settings.SOURCE_DISPLAY_THRESHOLD
+        ]
         diversified.extend(remaining[:top_k - len(diversified)])
+
+        # Sort by similarity descending to show best sources first
+        diversified.sort(key=lambda x: x.get('similarity', 0), reverse=True)
+
+        logger.info(f"🎯 Diversified to {len(diversified)} chunks from {len(set(c['document_id'] for c in diversified))} documents")
 
         return diversified[:top_k]
 

@@ -179,23 +179,30 @@ class LLMService:
         model_id: Optional[str] = None
     ) -> Dict:
         """Generate response with RAG context"""
-        # Build context from chunks
+        # Build context from chunks with quality indicators
         context_text = "\n\n".join([
-            f"Source {i+1} ({chunk.get('source', 'unknown')}):\n{chunk['content']}"
+            f"Source {i+1} - {chunk.get('filename', 'unknown')} (Relevance: {chunk.get('similarity', 0):.0%}):\n{chunk['content']}"
             for i, chunk in enumerate(context_chunks)
         ])
 
-        # Build prompt
+        # Build improved prompt
         system_prompt = """You are a helpful AI assistant with access to relevant documents and information.
-Use the provided context to answer questions accurately. Always cite your sources using [Source N] notation.
-If the context doesn't contain enough information to answer the question, say so clearly."""
+Your task is to answer questions based ONLY on the provided context.
 
-        user_prompt = f"""Context:
+IMPORTANT RULES:
+1. Use ONLY information from the provided sources to answer the question
+2. Always cite your sources using [Source N] notation when using information
+3. If the sources don't contain enough information to answer the question completely, say so clearly
+4. Do not make up information or use knowledge outside the provided context
+5. Focus on the most relevant sources (those with higher relevance scores)
+6. Be concise and accurate"""
+
+        user_prompt = f"""Context (sources with relevance scores):
 {context_text}
 
 Question: {query}
 
-Please provide a detailed answer based on the context above, and cite your sources."""
+Based on the context above, provide a clear and accurate answer. Cite your sources using [Source N] format. If the sources don't fully answer the question, acknowledge this limitation."""
 
         # Prepare messages
         messages = [
