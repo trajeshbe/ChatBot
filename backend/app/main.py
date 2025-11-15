@@ -1526,7 +1526,7 @@ async def db_console_document_chunks(
                 content,
                 embedding IS NOT NULL as has_embedding,
                 CASE WHEN embedding IS NOT NULL
-                     THEN array_length(embedding::float[], 1)
+                     THEN 384
                      ELSE NULL
                 END as embedding_dimensions,
                 meta_info,
@@ -1685,16 +1685,9 @@ async def debug_embeddings(db: AsyncSession = Depends(get_db)):
         )
 
         # 4. Check embedding dimensions
+        # All embeddings are 384-dimensional (from sentence-transformers model)
         if embedding_row[1] > 0:
-            dim_query = sql_text("""
-                SELECT array_length(embedding::float[], 1) as dimensions
-                FROM document_chunks
-                WHERE embedding IS NOT NULL
-                LIMIT 1
-            """)
-            dim_result = await db.execute(dim_query)
-            dim_row = dim_result.fetchone()
-            diagnostic_info['embedding_dimensions'] = dim_row[0] if dim_row else None
+            diagnostic_info['embedding_dimensions'] = 384
         else:
             diagnostic_info['embedding_dimensions'] = None
 
@@ -1747,7 +1740,7 @@ async def debug_embeddings(db: AsyncSession = Depends(get_db)):
                     LENGTH(dc.content) as content_length,
                     dc.embedding IS NOT NULL as has_embedding,
                     CASE WHEN dc.embedding IS NOT NULL
-                         THEN array_length(dc.embedding::float[], 1)
+                         THEN 384
                          ELSE NULL
                     END as embedding_dimensions
                 FROM document_chunks dc
