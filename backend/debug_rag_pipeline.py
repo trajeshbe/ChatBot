@@ -84,6 +84,11 @@ class RAGPipelineDebugger:
             os.environ["OPENAI_API_KEY"] = openai_key
             print_success(f"OpenAI API key set (length: {len(openai_key)})")
 
+            # CRITICAL: Clear settings cache and reload to pick up the new environment variable
+            from app.core.config import get_settings
+            get_settings.cache_clear()
+            print_success("Settings cache cleared - API key will be picked up on next load")
+
         # Use 'postgres' service name in Docker, fallback to localhost for local development
         default_db_url = "postgresql://postgres:postgres@postgres:5432/ragchatbot"
         self.db_url = os.getenv("DATABASE_URL", default_db_url)
@@ -692,6 +697,26 @@ class RAGPipelineDebugger:
             if 'estimated_cost' in self.metrics['performance']:
                 print_info("Estimated Cost", f"${self.metrics['performance']['estimated_cost']:.4f}")
 
+        # RAGAS Evaluation Metrics (if available)
+        if 'ragas' in self.metrics and self.metrics['ragas'].get('summary'):
+            print_subsection("📊 RAGAS Evaluation Metrics")
+            ragas = self.metrics['ragas']
+
+            if ragas.get('faithfulness') is not None:
+                print_info("Faithfulness", f"{ragas['faithfulness']:.4f}")
+            if ragas.get('answer_relevancy') is not None:
+                print_info("Answer Relevancy", f"{ragas['answer_relevancy']:.4f}")
+            if ragas.get('context_precision') is not None:
+                print_info("Context Precision", f"{ragas['context_precision']:.4f}")
+            if ragas.get('context_recall') is not None:
+                print_info("Context Recall", f"{ragas['context_recall']:.4f}")
+
+            summary = ragas['summary']
+            if summary.get('average') is not None:
+                avg = summary['average']
+                quality = "EXCELLENT" if avg > 0.8 else "GOOD" if avg > 0.6 else "FAIR" if avg > 0.4 else "POOR"
+                print_info("Average RAGAS Score", f"{avg:.4f} ({quality})")
+
     async def analyze_rag_service_call(self, query: str, session_id: Optional[str]):
         """Analyze what the RAG service would actually return"""
         print_section("RAG SERVICE CALL SIMULATION")
@@ -700,6 +725,16 @@ class RAGPipelineDebugger:
             from app.services.rag_service import RAGService
             from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
             from sqlalchemy.orm import sessionmaker
+            # Import LLM service to initialize it
+            try:
+                from app.services.llm_service_enhanced import llm_service
+            except ImportError:
+                from app.services.llm_service import llm_service
+
+            # Initialize LLM service (CRITICAL: must be called before RAG service)
+            print_info("Initializing LLM service", "...")
+            await llm_service.initialize()
+            print_success("LLM service initialized successfully")
 
             # Create async engine for RAG service
             async_db_url = self.db_url.replace('postgresql://', 'postgresql+asyncpg://')
@@ -770,11 +805,112 @@ class RAGPipelineDebugger:
             answer_preview = response['answer'][:500] + "..." if len(response['answer']) > 500 else response['answer']
             print(f"{answer_preview}\n")
 
+            # RAGAS Evaluation
+            await self.evaluate_with_ragas(query, response)
+
             # Clean up async engine
             await async_engine.dispose()
 
         except Exception as e:
             print_error(f"RAG service call failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+    async def evaluate_with_ragas(self, query: str, response: Dict):
+        """
+        Evaluate RAG response using RAGAS metrics
+
+        Args:
+            query: The user's question
+            response: The RAG service response
+        """
+        print_section("RAGAS EVALUATION METRICS")
+
+        try:
+            from app.services.ragas_evaluator import ragas_evaluator
+
+            # Initialize RAGAS evaluator
+            print_info("Initializing RAGAS evaluator", "...")
+            initialized = await ragas_evaluator.initialize()
+
+            if not initialized:
+                print_warning("RAGAS not available - skipping evaluation")
+                print_info("Install with", "pip install ragas")
+                return
+
+            print_success("RAGAS evaluator initialized")
+
+            # Extract contexts from sources
+            contexts = []
+            if response.get('sources'):
+                for source in response['sources']:
+                    content = source.get('excerpt', source.get('content', ''))
+                    if content:
+                        contexts.append(content)
+
+            if not contexts:
+                print_warning("No contexts available for RAGAS evaluation")
+                return
+
+            # Evaluate
+            print_info("Running RAGAS evaluation", f"{len(contexts)} contexts")
+            metrics = await ragas_evaluator.evaluate(
+                question=query,
+                answer=response['answer'],
+                contexts=contexts,
+                ground_truth=None  # No ground truth available in debug mode
+            )
+
+            # Display metrics
+            print_subsection("RAGAS Scores (0.0 - 1.0)")
+
+            if metrics.faithfulness is not None:
+                score = metrics.faithfulness
+                quality = "Excellent" if score > 0.8 else "Good" if score > 0.6 else "Fair" if score > 0.4 else "Poor"
+                print_info("Faithfulness", f"{score:.4f} ({quality})")
+                print(f"    {'→ How factually accurate is the answer based on context'}")
+
+            if metrics.answer_relevancy is not None:
+                score = metrics.answer_relevancy
+                quality = "Excellent" if score > 0.8 else "Good" if score > 0.6 else "Fair" if score > 0.4 else "Poor"
+                print_info("Answer Relevancy", f"{score:.4f} ({quality})")
+                print(f"    {'→ How relevant is the answer to the question'}")
+
+            if metrics.context_precision is not None:
+                score = metrics.context_precision
+                quality = "Excellent" if score > 0.8 else "Good" if score > 0.6 else "Fair" if score > 0.4 else "Poor"
+                print_info("Context Precision", f"{score:.4f} ({quality})")
+                print(f"    {'→ How precise is the retrieved context'}")
+
+            if metrics.context_recall is not None:
+                score = metrics.context_recall
+                quality = "Excellent" if score > 0.8 else "Good" if score > 0.6 else "Fair" if score > 0.4 else "Poor"
+                print_info("Context Recall", f"{score:.4f} ({quality})")
+                print(f"    {'→ How well context supports the answer'}")
+
+            # Summary
+            summary = metrics.get_summary()
+            if summary['average'] is not None:
+                print_subsection("Overall RAGAS Quality")
+                avg_score = summary['average']
+                if avg_score > 0.8:
+                    print_success(f"EXCELLENT - Average Score: {avg_score:.4f}")
+                elif avg_score > 0.6:
+                    print_success(f"GOOD - Average Score: {avg_score:.4f}")
+                elif avg_score > 0.4:
+                    print_warning(f"FAIR - Average Score: {avg_score:.4f}")
+                else:
+                    print_error(f"POOR - Average Score: {avg_score:.4f}")
+
+                print_info("Min Score", f"{summary['min']:.4f}")
+                print_info("Max Score", f"{summary['max']:.4f}")
+
+                # Store in metrics
+                self.metrics['ragas'] = metrics.to_dict()
+                self.metrics['ragas']['summary'] = summary
+
+        except Exception as e:
+            print_error(f"RAGAS evaluation failed: {e}")
             import traceback
             traceback.print_exc()
 
