@@ -137,8 +137,10 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Use prop config if available, otherwise get from localStorage
-  const ragConfig = ragConfigProp || getCurrentRAGConfig()
+  // Helper function to get current RAG config - always fresh
+  const getCurrentConfig = (): RAGConfig => {
+    return ragConfigProp || getCurrentRAGConfig()
+  }
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -279,6 +281,9 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
     setIsLoading(true)
 
     try {
+      // 🆕 Get fresh RAG config to ensure we use latest slider values
+      const currentRagConfig = getCurrentConfig()
+
       const formData = new FormData()
       formData.append('query', input)
       formData.append('session_id', sessionId) // 🎯 Pass session ID!
@@ -289,11 +294,11 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
         formData.append('model_id', selectedModel)
       }
 
-      // 🆕 Add RAG configuration parameters
-      formData.append('top_k', ragConfig.top_k.toString())
-      formData.append('similarity_threshold', ragConfig.similarity_threshold.toString())
-      formData.append('min_similarity_threshold', ragConfig.min_similarity_threshold.toString())
-      formData.append('no_relevant_docs_threshold', ragConfig.no_relevant_docs_threshold.toString())
+      // 🆕 Add RAG configuration parameters (using fresh config)
+      formData.append('top_k', currentRagConfig.top_k.toString())
+      formData.append('similarity_threshold', currentRagConfig.similarity_threshold.toString())
+      formData.append('min_similarity_threshold', currentRagConfig.min_similarity_threshold.toString())
+      formData.append('no_relevant_docs_threshold', currentRagConfig.no_relevant_docs_threshold.toString())
 
       // 🆕 Pass conversation history for context continuity
       // Include last 10 messages (5 exchanges) for context window
