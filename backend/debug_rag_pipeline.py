@@ -78,12 +78,36 @@ def print_info(label: str, value: Any, indent: int = 0):
 class RAGPipelineDebugger:
     """Debug the RAG pipeline end-to-end"""
 
-    def __init__(self):
+    def __init__(self, openai_key: Optional[str] = None):
+        # Set OpenAI API key if provided
+        if openai_key:
+            os.environ["OPENAI_API_KEY"] = openai_key
+            print_success(f"OpenAI API key set (length: {len(openai_key)})")
+
         # Use 'postgres' service name in Docker, fallback to localhost for local development
         default_db_url = "postgresql://postgres:postgres@postgres:5432/ragchatbot"
         self.db_url = os.getenv("DATABASE_URL", default_db_url)
         self.engine = create_engine(self.db_url)
         self.SessionLocal = sessionmaker(bind=self.engine)
+
+        # Initialize metrics tracking
+        self.metrics = {
+            'timing': {},
+            'similarity_scores': [],
+            'thresholds': {
+                'excellent': 0.7,
+                'good': 0.5,
+                'fair': 0.3
+            },
+            'results_quality': {
+                'excellent': 0,
+                'good': 0,
+                'fair': 0,
+                'poor': 0
+            },
+            'performance': {},
+            'evaluation': {}
+        }
 
     def get_embedding_service(self):
         """Get embedding service instance"""
@@ -167,6 +191,9 @@ class RAGPipelineDebugger:
             start_time = datetime.now()
             embedding = await embedding_service.get_embedding(query)
             duration = (datetime.now() - start_time).total_seconds()
+
+            # Track timing
+            self.metrics['timing']['embedding_generation'] = duration
 
             print_success(f"Embedding generated in {duration:.3f}s")
             print_info("Embedding dimension", len(embedding))
@@ -356,6 +383,9 @@ class RAGPipelineDebugger:
             # Perform vector search
             print_subsection("Searching for similar chunks...")
 
+            # Time the search
+            start_time = datetime.now()
+
             # Use f-string for embedding since it's already a sanitized string representation
             sql = text(f"""
                 SELECT
@@ -381,6 +411,10 @@ class RAGPipelineDebugger:
 
             results = result.fetchall()
 
+            # Track search timing
+            search_duration = (datetime.now() - start_time).total_seconds()
+            self.metrics['timing']['vector_search'] = search_duration
+
             if not results:
                 print_warning("No results found! This could indicate:")
                 print_warning("  1. No chunks have embeddings")
@@ -388,7 +422,31 @@ class RAGPipelineDebugger:
                 print_warning("  3. pgvector extension is not installed")
                 return []
 
-            print_success(f"Found {len(results)} results")
+            print_success(f"Found {len(results)} results in {search_duration:.3f}s")
+
+            # Collect similarity scores for metrics
+            scores = [float(row[5]) for row in results]
+            self.metrics['similarity_scores'] = scores
+
+            # Calculate quality distribution
+            thresholds = self.metrics['thresholds']
+            for score in scores:
+                if score > thresholds['excellent']:
+                    self.metrics['results_quality']['excellent'] += 1
+                elif score > thresholds['good']:
+                    self.metrics['results_quality']['good'] += 1
+                elif score > thresholds['fair']:
+                    self.metrics['results_quality']['fair'] += 1
+                else:
+                    self.metrics['results_quality']['poor'] += 1
+
+            # Store evaluation metrics
+            if scores:
+                self.metrics['evaluation']['max_score'] = max(scores)
+                self.metrics['evaluation']['min_score'] = min(scores)
+                self.metrics['evaluation']['avg_score'] = sum(scores) / len(scores)
+                self.metrics['evaluation']['median_score'] = sorted(scores)[len(scores) // 2]
+                self.metrics['evaluation']['score_std'] = np.std(scores)
 
             print_subsection("Search Results")
             for i, row in enumerate(results, 1):
@@ -535,6 +593,105 @@ class RAGPipelineDebugger:
             print_success("Pipeline appears to be working correctly")
             print_info("Best similarity score", f"{float(results[0][5]):.4f}")
 
+        # Print comprehensive metrics summary
+        self.print_comprehensive_metrics()
+
+    def print_comprehensive_metrics(self):
+        """Print comprehensive metrics summary"""
+        print_section("COMPREHENSIVE METRICS SUMMARY")
+
+        # Timing Metrics
+        print_subsection("⏱️  Performance Metrics (Timing)")
+        if self.metrics['timing']:
+            total_time = sum(self.metrics['timing'].values())
+            print_info("Total Pipeline Time", f"{total_time:.3f}s")
+
+            for operation, duration in self.metrics['timing'].items():
+                percentage = (duration / total_time * 100) if total_time > 0 else 0
+                print_info(f"  {operation.replace('_', ' ').title()}",
+                          f"{duration:.3f}s ({percentage:.1f}%)", indent=1)
+
+            self.metrics['performance']['total_time'] = total_time
+        else:
+            print_warning("No timing metrics collected")
+
+        # Threshold Configuration
+        print_subsection("📊 Similarity Score Thresholds")
+        thresholds = self.metrics['thresholds']
+        print_info("Excellent Match", f"> {thresholds['excellent']}")
+        print_info("Good Match", f"> {thresholds['good']}")
+        print_info("Fair Match", f"> {thresholds['fair']}")
+        print_info("Poor Match", f"< {thresholds['fair']}")
+
+        # Quality Distribution
+        print_subsection("🎯 Results Quality Distribution")
+        quality = self.metrics['results_quality']
+        total_results = sum(quality.values())
+
+        if total_results > 0:
+            for level in ['excellent', 'good', 'fair', 'poor']:
+                count = quality[level]
+                percentage = (count / total_results * 100)
+                bar_length = int(percentage / 2)  # Max 50 chars
+                bar = '█' * bar_length
+                print(f"{Colors.OKBLUE}{level.capitalize():10s}:{Colors.ENDC} {count:2d} ({percentage:5.1f}%) {bar}")
+        else:
+            print_warning("No quality metrics collected")
+
+        # Evaluation Metrics
+        if self.metrics['evaluation']:
+            print_subsection("📈 Evaluation Metrics")
+            eval_metrics = self.metrics['evaluation']
+
+            print_info("Maximum Similarity Score", f"{eval_metrics.get('max_score', 0):.4f}")
+            print_info("Minimum Similarity Score", f"{eval_metrics.get('min_score', 0):.4f}")
+            print_info("Average Similarity Score", f"{eval_metrics.get('avg_score', 0):.4f}")
+            print_info("Median Similarity Score", f"{eval_metrics.get('median_score', 0):.4f}")
+            print_info("Score Standard Deviation", f"{eval_metrics.get('score_std', 0):.4f}")
+
+            # Score distribution visualization
+            if self.metrics['similarity_scores']:
+                print_subsection("📉 Score Distribution")
+                scores = self.metrics['similarity_scores']
+                bins = [0.0, 0.3, 0.5, 0.7, 1.0]
+                bin_labels = ['0.0-0.3', '0.3-0.5', '0.5-0.7', '0.7-1.0']
+
+                for i in range(len(bins) - 1):
+                    count = sum(1 for s in scores if bins[i] <= s < bins[i+1])
+                    if i == len(bins) - 2:  # Last bin includes upper bound
+                        count = sum(1 for s in scores if bins[i] <= s <= bins[i+1])
+                    percentage = (count / len(scores) * 100) if len(scores) > 0 else 0
+                    bar_length = int(percentage / 2)
+                    bar = '▓' * bar_length
+                    print(f"{Colors.OKCYAN}{bin_labels[i]:10s}:{Colors.ENDC} {count:2d} ({percentage:5.1f}%) {bar}")
+
+        # Relevance Analysis
+        print_subsection("🔍 Relevance Analysis")
+        if self.metrics['similarity_scores']:
+            scores = self.metrics['similarity_scores']
+            above_threshold = sum(1 for s in scores if s > thresholds['fair'])
+            print_info("Total Results", len(scores))
+            print_info("Results Above Fair Threshold",
+                      f"{above_threshold} ({above_threshold/len(scores)*100:.1f}%)")
+
+            # Determine overall quality
+            avg_score = self.metrics['evaluation'].get('avg_score', 0)
+            if avg_score > thresholds['excellent']:
+                print_success("Overall Quality: EXCELLENT - Results highly relevant")
+            elif avg_score > thresholds['good']:
+                print_success("Overall Quality: GOOD - Results are relevant")
+            elif avg_score > thresholds['fair']:
+                print_warning("Overall Quality: FAIR - Results moderately relevant")
+            else:
+                print_error("Overall Quality: POOR - Results may not be relevant")
+
+        # Token and Cost Metrics (if available)
+        if 'tokens_used' in self.metrics.get('performance', {}):
+            print_subsection("💰 Token Usage & Cost Metrics")
+            print_info("Total Tokens Used", self.metrics['performance']['tokens_used'])
+            if 'estimated_cost' in self.metrics['performance']:
+                print_info("Estimated Cost", f"${self.metrics['performance']['estimated_cost']:.4f}")
+
     async def analyze_rag_service_call(self, query: str, session_id: Optional[str]):
         """Analyze what the RAG service would actually return"""
         print_section("RAG SERVICE CALL SIMULATION")
@@ -572,6 +729,9 @@ class RAGPipelineDebugger:
                 )
                 duration = (datetime.now() - start_time).total_seconds()
 
+            # Track RAG service timing
+            self.metrics['timing']['rag_service_call'] = duration
+
             print_success(f"RAG service completed in {duration:.3f}s")
 
             # Analyze response
@@ -584,6 +744,13 @@ class RAGPipelineDebugger:
 
             if 'tokens_used' in response:
                 print_info("Tokens Used", response['tokens_used'])
+                self.metrics['performance']['tokens_used'] = response['tokens_used']
+
+                # Estimate cost (rough estimates for GPT-4)
+                # Input: ~$0.01/1K tokens, Output: ~$0.03/1K tokens
+                # For simplicity, use average of $0.02/1K tokens
+                estimated_cost = (response['tokens_used'] / 1000) * 0.02
+                self.metrics['performance']['estimated_cost'] = estimated_cost
 
             if response.get('sources'):
                 print_subsection("Sources Used")
@@ -672,10 +839,12 @@ async def main():
     parser.add_argument("--check-pgvector", action="store_true", help="Check pgvector installation")
     parser.add_argument("--test-embedding", help="Test embedding generation for text")
     parser.add_argument("--full-trace", action="store_true", help="Run full pipeline trace")
+    parser.add_argument("--openai-key", help="OpenAI API key (alternative to OPENAI_API_KEY env var)")
 
     args = parser.parse_args()
 
-    debugger = RAGPipelineDebugger()
+    # Initialize debugger with OpenAI key if provided
+    debugger = RAGPipelineDebugger(openai_key=args.openai_key)
 
     # Run requested analyses
     if args.check_pgvector:

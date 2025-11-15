@@ -28,17 +28,21 @@ show_usage() {
     echo -e "${BLUE}RAG Pipeline Debug Tool${NC}"
     echo ""
     echo "Usage:"
-    echo "  $0 query \"your question here\"              # Debug a specific query"
-    echo "  $0 trace \"your question\" [session-id]      # Full pipeline trace"
-    echo "  $0 docs                                     # Analyze all documents"
-    echo "  $0 chunks                                   # Analyze document chunks"
-    echo "  $0 pgvector                                 # Check pgvector installation"
-    echo "  $0 embedding \"test text\"                   # Test embedding generation"
-    echo "  $0 full                                     # Run all checks"
+    echo "  $0 query \"your question here\" [--openai-key KEY]       # Debug a specific query"
+    echo "  $0 trace \"your question\" [session-id] [--openai-key KEY] # Full pipeline trace"
+    echo "  $0 docs                                                  # Analyze all documents"
+    echo "  $0 chunks                                                # Analyze document chunks"
+    echo "  $0 pgvector                                              # Check pgvector installation"
+    echo "  $0 embedding \"test text\"                                # Test embedding generation"
+    echo "  $0 full                                                  # Run all checks"
+    echo ""
+    echo "Options:"
+    echo "  --openai-key KEY    OpenAI API key (alternative to OPENAI_API_KEY env var)"
     echo ""
     echo "Examples:"
     echo "  $0 query \"what is the revenue of TCS?\""
     echo "  $0 trace \"tell me about TCS\" abc123"
+    echo "  $0 trace \"your question\" --openai-key sk-xxxxx"
     echo "  $0 docs"
     echo ""
 }
@@ -53,27 +57,49 @@ case "${1:-}" in
     query)
         if [ -z "$2" ]; then
             echo -e "${RED}Error: Query text required${NC}"
-            echo "Usage: $0 query \"your question\""
+            echo "Usage: $0 query \"your question\" [--openai-key KEY]"
             exit 1
         fi
         check_backend
         echo -e "${GREEN}Debugging query: $2${NC}"
+        # Pass all remaining arguments (including --openai-key if present)
         run_in_docker "$2" "${@:3}"
         ;;
 
     trace)
         if [ -z "$2" ]; then
             echo -e "${RED}Error: Query text required${NC}"
-            echo "Usage: $0 trace \"your question\" [session-id]"
+            echo "Usage: $0 trace \"your question\" [session-id] [--openai-key KEY]"
             exit 1
         fi
         check_backend
         echo -e "${GREEN}Full pipeline trace for: $2${NC}"
-        if [ -n "$3" ]; then
-            run_in_docker "$2" --session-id "$3" --full-trace
-        else
-            run_in_docker "$2" --full-trace
-        fi
+
+        # Parse arguments to handle session-id and --openai-key
+        QUERY="$2"
+        shift 2  # Remove script name and query
+
+        # Build arguments for Python script
+        PYTHON_ARGS="$QUERY --full-trace"
+
+        # Parse remaining arguments
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --openai-key)
+                    PYTHON_ARGS="$PYTHON_ARGS --openai-key $2"
+                    shift 2
+                    ;;
+                *)
+                    # Assume it's a session ID if it doesn't start with --
+                    if [[ ! "$1" =~ ^-- ]]; then
+                        PYTHON_ARGS="$PYTHON_ARGS --session-id $1"
+                    fi
+                    shift
+                    ;;
+            esac
+        done
+
+        run_in_docker $PYTHON_ARGS
         ;;
 
     docs|documents)
