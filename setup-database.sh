@@ -4,7 +4,7 @@ echo "=============================================="
 echo "  Database Setup & Migration Tool"
 echo "=============================================="
 echo ""
-echo "NOTE: All tables are created in ONE database: 'rag_chatbot'"
+echo "NOTE: All tables are created in ONE database: 'ragchatbot'"
 echo "      - Base tables (documents, chunks, cache, conversations)"
 echo "      - Enhanced tables (users, sessions, audit_logs)"
 echo ""
@@ -32,15 +32,15 @@ echo ""
 echo -e "${BLUE}Step 2: Creating database if not exists...${NC}"
 
 # Check if database exists
-DB_EXISTS=$(docker exec rag-postgres psql -U postgres -t -c "SELECT 1 FROM pg_database WHERE datname = 'rag_chatbot';" | tr -d '[:space:]')
+DB_EXISTS=$(docker exec rag-postgres psql -U postgres -t -c "SELECT 1 FROM pg_database WHERE datname = 'ragchatbot';" | tr -d '[:space:]')
 
 if [ "$DB_EXISTS" = "1" ]; then
-    echo -e "${GREEN}✓ Database 'rag_chatbot' already exists${NC}"
+    echo -e "${GREEN}✓ Database 'ragchatbot' already exists${NC}"
 else
-    echo -e "${YELLOW}Creating database 'rag_chatbot'...${NC}"
-    docker exec rag-postgres psql -U postgres -c "CREATE DATABASE rag_chatbot;" 2>&1
+    echo -e "${YELLOW}Creating database 'ragchatbot'...${NC}"
+    docker exec rag-postgres psql -U postgres -c "CREATE DATABASE ragchatbot;" 2>&1
     if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓ Database 'rag_chatbot' created${NC}"
+        echo -e "${GREEN}✓ Database 'ragchatbot' created${NC}"
     else
         echo -e "${RED}✗ Failed to create database${NC}"
         exit 1
@@ -55,7 +55,7 @@ BASE_MIGRATION="$MIGRATIONS_DIR/000_base_schema.sql"
 
 if [ -f "$BASE_MIGRATION" ]; then
     echo -e "${YELLOW}Applying base schema...${NC}"
-    docker exec -i rag-postgres psql -U postgres -d rag_chatbot < "$BASE_MIGRATION" 2>&1 | \
+    docker exec -i rag-postgres psql -U postgres -d ragchatbot < "$BASE_MIGRATION" 2>&1 | \
         grep -v "already exists" | grep -v "skipping" || true
     echo -e "${GREEN}✓ Base schema applied${NC}"
 else
@@ -73,7 +73,7 @@ ENHANCED_MIGRATION="$MIGRATIONS_DIR/001_add_rbac_and_audit.sql"
 
 if [ -f "$ENHANCED_MIGRATION" ]; then
     echo -e "${YELLOW}Applying RBAC and audit tables...${NC}"
-    docker exec -i rag-postgres psql -U postgres -d rag_chatbot < "$ENHANCED_MIGRATION" 2>&1 | \
+    docker exec -i rag-postgres psql -U postgres -d ragchatbot < "$ENHANCED_MIGRATION" 2>&1 | \
         grep -v "already exists" | grep -v "skipping" || true
     echo -e "${GREEN}✓ Enhanced schema applied${NC}"
 else
@@ -88,7 +88,7 @@ DIMENSION_FIX_MIGRATION="$MIGRATIONS_DIR/002_fix_embedding_dimensions.sql"
 
 if [ -f "$DIMENSION_FIX_MIGRATION" ]; then
     echo -e "${YELLOW}Fixing embedding dimensions (1536 → 384)...${NC}"
-    docker exec -i rag-postgres psql -U postgres -d rag_chatbot < "$DIMENSION_FIX_MIGRATION" 2>&1 | \
+    docker exec -i rag-postgres psql -U postgres -d ragchatbot < "$DIMENSION_FIX_MIGRATION" 2>&1 | \
         grep -v "does not exist, skipping" || true
     echo -e "${GREEN}✓ Embedding dimensions fixed${NC}"
     echo -e "${YELLOW}⚠  Note: Existing embeddings have been dropped and will be regenerated${NC}"
@@ -100,26 +100,26 @@ echo ""
 echo -e "${BLUE}Step 6: Verifying tables...${NC}"
 
 # Get table count
-TABLE_COUNT=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';" | tr -d '[:space:]')
+TABLE_COUNT=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';" | tr -d '[:space:]')
 
 echo ""
 echo "Database tables created:"
-docker exec rag-postgres psql -U postgres -d rag_chatbot -c "\dt" 2>&1
+docker exec rag-postgres psql -U postgres -d ragchatbot -c "\dt" 2>&1
 
 echo ""
 echo -e "${BLUE}Step 7: Verifying extensions...${NC}"
-docker exec rag-postgres psql -U postgres -d rag_chatbot -c "SELECT extname FROM pg_extension WHERE extname IN ('uuid-ossp', 'vector');" 2>&1
+docker exec rag-postgres psql -U postgres -d ragchatbot -c "SELECT extname FROM pg_extension WHERE extname IN ('uuid-ossp', 'vector');" 2>&1
 
 echo ""
 echo -e "${BLUE}Step 8: Checking default users...${NC}"
-USER_COUNT=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "SELECT COUNT(*) FROM users;" 2>/dev/null | tr -d '[:space:]')
+USER_COUNT=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c "SELECT COUNT(*) FROM users;" 2>/dev/null | tr -d '[:space:]')
 
 if [ -z "$USER_COUNT" ] || [ "$USER_COUNT" = "0" ]; then
     echo -e "${YELLOW}No default users found. This is OK if you just created the database.${NC}"
 else
     echo ""
     echo "Default users:"
-    docker exec rag-postgres psql -U postgres -d rag_chatbot -c "SELECT username, email, role, is_active FROM users;" 2>&1
+    docker exec rag-postgres psql -U postgres -d ragchatbot -c "SELECT username, email, role, is_active FROM users;" 2>&1
 fi
 
 echo ""
@@ -127,7 +127,7 @@ echo "=============================================="
 echo -e "${GREEN}✅ Database setup complete!${NC}"
 echo "=============================================="
 echo ""
-echo "Summary - ONE Database: 'rag_chatbot'"
+echo "Summary - ONE Database: 'ragchatbot'"
 echo "  ✓ Total tables created: ${TABLE_COUNT}"
 echo "  ✓ Extensions enabled (uuid-ossp, vector)"
 echo ""

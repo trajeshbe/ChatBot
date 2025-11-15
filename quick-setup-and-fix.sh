@@ -7,10 +7,10 @@ echo ""
 
 # Check if database exists
 echo "Step 1: Checking if database exists..."
-DB_EXISTS=$(docker exec rag-postgres psql -U postgres -t -c "SELECT 1 FROM pg_database WHERE datname = 'rag_chatbot';" 2>/dev/null | tr -d '[:space:]')
+DB_EXISTS=$(docker exec rag-postgres psql -U postgres -t -c "SELECT 1 FROM pg_database WHERE datname = 'ragchatbot';" 2>/dev/null | tr -d '[:space:]')
 
 if [ "$DB_EXISTS" != "1" ]; then
-    echo "❌ Database 'rag_chatbot' does not exist!"
+    echo "❌ Database 'ragchatbot' does not exist!"
     echo "   Running setup script..."
     ./setup-database.sh
 else
@@ -20,7 +20,7 @@ fi
 # Check if tables exist
 echo ""
 echo "Step 2: Checking if tables exist..."
-TABLES=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('documents', 'document_chunks', 'session_documents');" 2>/dev/null | tr -d '[:space:]')
+TABLES=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('documents', 'document_chunks', 'session_documents');" 2>/dev/null | tr -d '[:space:]')
 
 if [ "$TABLES" != "3" ]; then
     echo "❌ Required tables missing (found $TABLES/3)"
@@ -33,8 +33,8 @@ fi
 # Check document count
 echo ""
 echo "Step 3: Checking current documents..."
-DOC_COUNT=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "SELECT COUNT(*) FROM documents;" 2>/dev/null | tr -d '[:space:]')
-CHUNK_COUNT=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "SELECT COUNT(*) FROM document_chunks;" 2>/dev/null | tr -d '[:space:]')
+DOC_COUNT=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c "SELECT COUNT(*) FROM documents;" 2>/dev/null | tr -d '[:space:]')
+CHUNK_COUNT=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c "SELECT COUNT(*) FROM document_chunks;" 2>/dev/null | tr -d '[:space:]')
 
 echo "Documents in database: ${DOC_COUNT:-0}"
 echo "Document chunks (embeddings): ${CHUNK_COUNT:-0}"

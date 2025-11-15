@@ -30,17 +30,17 @@ check_warn() {
 
 # 1. Check database exists
 echo "1. Checking database..."
-DB_EXISTS=$(docker exec rag-postgres psql -U postgres -t -c "SELECT 1 FROM pg_database WHERE datname = 'rag_chatbot';" 2>/dev/null | tr -d '[:space:]')
+DB_EXISTS=$(docker exec rag-postgres psql -U postgres -t -c "SELECT 1 FROM pg_database WHERE datname = 'ragchatbot';" 2>/dev/null | tr -d '[:space:]')
 if [ "$DB_EXISTS" == "1" ]; then
-    check_pass "Database 'rag_chatbot' exists"
+    check_pass "Database 'ragchatbot' exists"
 else
-    check_fail "Database 'rag_chatbot' NOT found"
+    check_fail "Database 'ragchatbot' NOT found"
 fi
 
 # 2. Check base tables
 echo ""
 echo "2. Checking base tables..."
-TABLES=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('documents', 'document_chunks', 'session_documents');" 2>/dev/null | tr -d '[:space:]')
+TABLES=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('documents', 'document_chunks', 'session_documents');" 2>/dev/null | tr -d '[:space:]')
 if [ "$TABLES" == "3" ]; then
     check_pass "All 3 base tables exist (documents, document_chunks, session_documents)"
 else
@@ -50,7 +50,7 @@ fi
 # 3. Check enhanced tables
 echo ""
 echo "3. Checking enhanced tables..."
-ENHANCED_TABLES=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('users', 'chat_sessions', 'audit_logs');" 2>/dev/null | tr -d '[:space:]')
+ENHANCED_TABLES=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('users', 'chat_sessions', 'audit_logs');" 2>/dev/null | tr -d '[:space:]')
 if [ "$ENHANCED_TABLES" == "3" ]; then
     check_pass "Enhanced tables exist (users, chat_sessions, audit_logs)"
 else
@@ -60,7 +60,7 @@ fi
 # 4. Check pgvector extension
 echo ""
 echo "4. Checking pgvector extension..."
-PGVECTOR=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "SELECT 1 FROM pg_extension WHERE extname='vector';" 2>/dev/null | tr -d '[:space:]')
+PGVECTOR=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c "SELECT 1 FROM pg_extension WHERE extname='vector';" 2>/dev/null | tr -d '[:space:]')
 if [ "$PGVECTOR" == "1" ]; then
     check_pass "pgvector extension installed"
 else
@@ -90,8 +90,8 @@ fi
 # 7. Check documents
 echo ""
 echo "7. Checking documents in database..."
-DOC_COUNT=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "SELECT COUNT(*) FROM documents;" 2>/dev/null | tr -d '[:space:]')
-CHUNK_COUNT=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "SELECT COUNT(*) FROM document_chunks;" 2>/dev/null | tr -d '[:space:]')
+DOC_COUNT=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c "SELECT COUNT(*) FROM documents;" 2>/dev/null | tr -d '[:space:]')
+CHUNK_COUNT=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c "SELECT COUNT(*) FROM document_chunks;" 2>/dev/null | tr -d '[:space:]')
 
 echo "   Documents: ${DOC_COUNT:-0}"
 echo "   Chunks (embeddings): ${CHUNK_COUNT:-0}"

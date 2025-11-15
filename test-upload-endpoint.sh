@@ -53,9 +53,9 @@ if [ "$HTTP_CODE" == "200" ]; then
     sleep 2  # Wait for processing
 
     # Check documents in database
-    DOC_COUNT=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "SELECT COUNT(*) FROM documents;" 2>/dev/null | tr -d '[:space:]')
-    CHUNK_COUNT=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "SELECT COUNT(*) FROM document_chunks;" 2>/dev/null | tr -d '[:space:]')
-    SESSION_DOCS=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "SELECT COUNT(*) FROM session_documents WHERE session_id IN (SELECT id FROM chat_sessions WHERE session_id = '$SESSION_ID');" 2>/dev/null | tr -d '[:space:]')
+    DOC_COUNT=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c "SELECT COUNT(*) FROM documents;" 2>/dev/null | tr -d '[:space:]')
+    CHUNK_COUNT=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c "SELECT COUNT(*) FROM document_chunks;" 2>/dev/null | tr -d '[:space:]')
+    SESSION_DOCS=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c "SELECT COUNT(*) FROM session_documents WHERE session_id IN (SELECT id FROM chat_sessions WHERE session_id = '$SESSION_ID');" 2>/dev/null | tr -d '[:space:]')
 
     echo "   Documents: $DOC_COUNT"
     echo "   Chunks: $CHUNK_COUNT"

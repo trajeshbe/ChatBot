@@ -11,12 +11,12 @@ echo "---"
 
 # Check documents table
 echo "Documents in database:"
-docker exec rag-postgres psql -U postgres -d rag_chatbot -c \
+docker exec rag-postgres psql -U postgres -d ragchatbot -c \
   "SELECT id, filename, created_at, processing_status FROM documents ORDER BY created_at DESC LIMIT 5;" 2>/dev/null
 
 echo ""
 echo "Document chunks (embeddings):"
-docker exec rag-postgres psql -U postgres -d rag_chatbot -c \
+docker exec rag-postgres psql -U postgres -d ragchatbot -c \
   "SELECT d.filename, COUNT(dc.id) as chunk_count
    FROM documents d
    LEFT JOIN document_chunks dc ON d.id = dc.document_id
@@ -25,7 +25,7 @@ docker exec rag-postgres psql -U postgres -d rag_chatbot -c \
 
 echo ""
 echo "Session documents (short-term memory):"
-docker exec rag-postgres psql -U postgres -d rag_chatbot -c \
+docker exec rag-postgres psql -U postgres -d ragchatbot -c \
   "SELECT cs.session_id, d.filename, sd.priority, sd.added_at
    FROM session_documents sd
    JOIN documents d ON sd.document_id = d.id
@@ -54,13 +54,13 @@ echo "=========================================="
 echo ""
 
 # Count documents
-doc_count=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c \
+doc_count=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c \
   "SELECT COUNT(*) FROM documents;" 2>/dev/null | tr -d ' ')
 
-chunk_count=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c \
+chunk_count=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c \
   "SELECT COUNT(*) FROM document_chunks;" 2>/dev/null | tr -d ' ')
 
-session_doc_count=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c \
+session_doc_count=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c \
   "SELECT COUNT(*) FROM session_documents;" 2>/dev/null | tr -d ' ')
 
 echo "Total documents: ${doc_count:-0}"

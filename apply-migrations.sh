@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 MIGRATIONS_DIR="/home/user/ChatBot/backend/migrations"
 
 echo -e "${BLUE}Checking database connection...${NC}"
-if ! docker exec rag-postgres psql -U postgres -d rag_chatbot -c "SELECT 1;" > /dev/null 2>&1; then
+if ! docker exec rag-postgres psql -U postgres -d ragchatbot -c "SELECT 1;" > /dev/null 2>&1; then
     echo -e "${RED}✗ Cannot connect to database${NC}"
     echo "  Make sure PostgreSQL container is running: docker compose up -d postgres"
     exit 1
@@ -27,7 +27,7 @@ echo -e "${BLUE}Applying migrations...${NC}"
 
 # Apply migration 001
 echo -e "\n${YELLOW}Migration 001: RBAC and Audit Logging${NC}"
-if docker exec -i rag-postgres psql -U postgres -d rag_chatbot < "$MIGRATIONS_DIR/001_add_rbac_and_audit.sql" 2>&1 | tee /tmp/migration_output.log | grep -i error; then
+if docker exec -i rag-postgres psql -U postgres -d ragchatbot < "$MIGRATIONS_DIR/001_add_rbac_and_audit.sql" 2>&1 | tee /tmp/migration_output.log | grep -i error; then
     echo -e "${RED}✗ Migration failed - check errors above${NC}"
     exit 1
 else
@@ -39,11 +39,11 @@ echo -e "${BLUE}Verifying new tables...${NC}"
 
 # List all tables
 echo -e "\n${YELLOW}Database tables:${NC}"
-docker exec rag-postgres psql -U postgres -d rag_chatbot -c "\dt" | grep -E "users|chat_sessions|audit_logs|session_documents|session_contexts" && echo -e "${GREEN}✓ New tables created${NC}" || echo -e "${RED}✗ Tables not found${NC}"
+docker exec rag-postgres psql -U postgres -d ragchatbot -c "\dt" | grep -E "users|chat_sessions|audit_logs|session_documents|session_contexts" && echo -e "${GREEN}✓ New tables created${NC}" || echo -e "${RED}✗ Tables not found${NC}"
 
 # Check default users
 echo -e "\n${YELLOW}Default users:${NC}"
-docker exec rag-postgres psql -U postgres -d rag_chatbot -c "SELECT username, email, role, is_active FROM users;"
+docker exec rag-postgres psql -U postgres -d ragchatbot -c "SELECT username, email, role, is_active FROM users;"
 
 echo ""
 echo "=============================================="

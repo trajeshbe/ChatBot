@@ -7,13 +7,13 @@ echo ""
 
 # Check if documents exist
 echo "1. Checking documents in database..."
-DOC_COUNT=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "SELECT COUNT(*) FROM documents;" 2>/dev/null | tr -d ' ')
+DOC_COUNT=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c "SELECT COUNT(*) FROM documents;" 2>/dev/null | tr -d ' ')
 echo "   Total documents: ${DOC_COUNT:-0}"
 
 if [ "${DOC_COUNT:-0}" -gt 0 ]; then
     echo ""
     echo "2. Recent documents:"
-    docker exec rag-postgres psql -U postgres -d rag_chatbot -c "
+    docker exec rag-postgres psql -U postgres -d ragchatbot -c "
         SELECT filename, processed, upload_date, processing_error
         FROM documents
         ORDER BY upload_date DESC
@@ -22,7 +22,7 @@ if [ "${DOC_COUNT:-0}" -gt 0 ]; then
     
     echo ""
     echo "3. Document chunks (embeddings):"
-    docker exec rag-postgres psql -U postgres -d rag_chatbot -c "
+    docker exec rag-postgres psql -U postgres -d ragchatbot -c "
         SELECT d.filename, COUNT(dc.id) as chunk_count,
                CASE WHEN COUNT(dc.id) > 0 THEN 'Yes' ELSE 'No' END as has_chunks
         FROM documents d
@@ -34,7 +34,7 @@ if [ "${DOC_COUNT:-0}" -gt 0 ]; then
     
     echo ""
     echo "4. Checking if embeddings exist:"
-    EMBEDDINGS=$(docker exec rag-postgres psql -U postgres -d rag_chatbot -t -c "
+    EMBEDDINGS=$(docker exec rag-postgres psql -U postgres -d ragchatbot -t -c "
         SELECT COUNT(*) FROM document_chunks WHERE embedding IS NOT NULL;
     " 2>/dev/null | tr -d ' ')
     echo "   Chunks with embeddings: ${EMBEDDINGS:-0}"

@@ -49,14 +49,14 @@ if [ ! -f "$MIGRATION_FILE" ]; then
     exit 1
 fi
 
-docker exec -i rag-postgres psql -U postgres -d rag_chatbot < "$MIGRATION_FILE" 2>&1
+docker exec -i rag-postgres psql -U postgres -d ragchatbot < "$MIGRATION_FILE" 2>&1
 
 if [ $? -eq 0 ]; then
     echo ""
     echo -e "${GREEN}✅ Embedding dimensions fixed successfully!${NC}"
     echo ""
     echo "Verification:"
-    docker exec rag-postgres psql -U postgres -d rag_chatbot -c \
+    docker exec rag-postgres psql -U postgres -d ragchatbot -c \
         "SELECT column_name, data_type FROM information_schema.columns WHERE table_name='document_chunks' AND column_name='embedding';"
 
     echo ""
