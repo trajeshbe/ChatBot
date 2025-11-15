@@ -269,7 +269,18 @@ class EnhancedRAGService:
                 'session_id': session_id,
                 'cached': False,
                 'context_info': f"Used {num_short_term} session document(s) and {num_long_term} global document(s)" if sources else "No documents found",
-                'query_classification': classification['query_type']
+                'query_classification': classification['query_type'],
+                # 🆕 Include RAG settings used for this query
+                'rag_settings': {
+                    'top_k': _top_k,
+                    'similarity_threshold': _similarity_threshold,
+                    'min_similarity_threshold': _min_similarity_threshold,
+                    'no_relevant_docs_threshold': _no_relevant_docs_threshold,
+                    'chunk_size': settings.CHUNK_SIZE,
+                    'chunk_overlap': settings.CHUNK_OVERLAP,
+                    'search_type': 'hybrid',  # Indicates we're using hybrid search
+                    'memory_type': 'hierarchical'  # Indicates two-tier memory hierarchy
+                }
             }
 
             # Step 7.5: Calculate quality metrics for the response

@@ -8,6 +8,7 @@ import UploadedFilesList from './UploadedFilesList'
 import { getCurrentRAGConfig, type RAGConfig } from './RAGSettings'
 import PerformanceMetrics from './PerformanceMetrics'
 import EvaluationMetrics from './EvaluationMetrics'
+import RAGSettingsDisplay from './RAGSettingsDisplay'
 import axios from 'axios'
 
 interface Message {
@@ -33,6 +34,17 @@ interface Message {
     context_precision?: number
     evaluation_time_ms?: number
     enabled_methods?: string[]
+  }
+  // RAG settings used for this query
+  rag_settings?: {
+    top_k?: number
+    similarity_threshold?: number
+    min_similarity_threshold?: number
+    no_relevant_docs_threshold?: number
+    chunk_size?: number
+    chunk_overlap?: number
+    search_type?: string
+    memory_type?: string
   }
 }
 
@@ -313,7 +325,9 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
         num_sources: response.data.sources?.length || 0,
         cached: response.data.cached || false,
         // 🆕 Capture evaluation metrics
-        quality_metrics: response.data.quality_metrics
+        quality_metrics: response.data.quality_metrics,
+        // 🆕 Capture RAG settings used for this query
+        rag_settings: response.data.rag_settings
       }
 
       // Log context usage
@@ -324,6 +338,11 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       // Log quality metrics if available
       if (response.data.quality_metrics) {
         console.log(`📊 Quality Metrics:`, response.data.quality_metrics)
+      }
+
+      // Log RAG settings if available
+      if (response.data.rag_settings) {
+        console.log(`⚙️ RAG Settings:`, response.data.rag_settings)
       }
 
       setMessages(prev => [...prev, assistantMessage])
@@ -474,6 +493,11 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
               {/* 🆕 Evaluation Metrics */}
               {message.role === 'assistant' && message.quality_metrics && (
                 <EvaluationMetrics metrics={message.quality_metrics} />
+              )}
+
+              {/* 🆕 RAG Settings Used */}
+              {message.role === 'assistant' && message.rag_settings && (
+                <RAGSettingsDisplay settings={message.rag_settings} />
               )}
 
               {/* Sources */}
