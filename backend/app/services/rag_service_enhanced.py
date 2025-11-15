@@ -538,7 +538,7 @@ class EnhancedRAGService:
                                 WHEN ({keyword_condition}) THEN 1.0
                                 ELSE 0.0
                             END as keyword_score
-                        FROM document_chunks
+                        FROM document_chunks dc
                     )
                     SELECT
                         ss.id,

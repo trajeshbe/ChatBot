@@ -356,25 +356,25 @@ class RAGPipelineDebugger:
             # Perform vector search
             print_subsection("Searching for similar chunks...")
 
-            sql = text("""
+            # Use f-string for embedding since it's already a sanitized string representation
+            sql = text(f"""
                 SELECT
                     c.id,
                     c.document_id,
                     d.filename,
                     c.chunk_index,
                     c.content,
-                    1 - (c.embedding <=> :query_embedding::vector) as similarity_score
+                    1 - (c.embedding <=> '{embedding_str}'::vector) as similarity_score
                 FROM document_chunks c
                 JOIN documents d ON c.document_id = d.id
                 WHERE c.embedding IS NOT NULL
-                ORDER BY c.embedding <=> :query_embedding::vector
+                ORDER BY c.embedding <=> '{embedding_str}'::vector
                 LIMIT :top_k
             """)
 
             result = db.execute(
                 sql,
                 {
-                    "query_embedding": embedding_str,
                     "top_k": top_k
                 }
             )
