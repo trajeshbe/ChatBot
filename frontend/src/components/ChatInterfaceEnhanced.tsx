@@ -7,6 +7,7 @@ import ModelSelector from './ModelSelector'
 import UploadedFilesList from './UploadedFilesList'
 import { getCurrentRAGConfig, type RAGConfig } from './RAGSettings'
 import PerformanceMetrics from './PerformanceMetrics'
+import EvaluationMetrics from './EvaluationMetrics'
 import axios from 'axios'
 
 interface Message {
@@ -22,6 +23,17 @@ interface Message {
   tokens_used?: number
   num_sources?: number
   cached?: boolean
+  // Evaluation metrics
+  quality_metrics?: {
+    quality_level?: string
+    rag_score?: number
+    faithfulness?: number
+    answer_relevancy?: number
+    context_relevancy?: number
+    context_precision?: number
+    evaluation_time_ms?: number
+    enabled_methods?: string[]
+  }
 }
 
 interface Source {
@@ -237,12 +249,19 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
         latency_ms: response.data.latency_ms,
         tokens_used: response.data.tokens_used,
         num_sources: response.data.sources?.length || 0,
-        cached: response.data.cached || false
+        cached: response.data.cached || false,
+        // 🆕 Capture evaluation metrics
+        quality_metrics: response.data.quality_metrics
       }
 
       // Log context usage
       if (response.data.context_info) {
         console.log(`📚 Context: ${response.data.context_info}`)
+      }
+
+      // Log quality metrics if available
+      if (response.data.quality_metrics) {
+        console.log(`📊 Quality Metrics:`, response.data.quality_metrics)
       }
 
       setMessages(prev => [...prev, assistantMessage])
@@ -385,6 +404,11 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                     model_name: message.model_name
                   }}
                 />
+              )}
+
+              {/* 🆕 Evaluation Metrics */}
+              {message.role === 'assistant' && message.quality_metrics && (
+                <EvaluationMetrics metrics={message.quality_metrics} />
               )}
 
               {/* Sources */}
