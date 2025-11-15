@@ -1,6 +1,54 @@
 import { Target, TrendingUp, Shield, CheckCircle, AlertTriangle, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { useState } from 'react'
 
+interface ClaimAnalysis {
+  claim: string
+  supported: boolean
+  overlap_score: number
+  supporting_chunks?: Array<{
+    content: string
+    filename: string
+    overlap: number
+  }>
+}
+
+interface FaithfulnessDetails {
+  total_claims: number
+  supported_claims: number
+  claims_analysis: ClaimAnalysis[]
+}
+
+interface ChunkBreakdown {
+  filename: string
+  similarity: number
+  semantic_score: number
+  keyword_score: number
+  memory_type: string
+  excerpt: string
+}
+
+interface ContextRelevancyDetails {
+  chunks_count: number
+  avg_similarity: number
+  min_similarity: number
+  max_similarity: number
+  chunks_breakdown: ChunkBreakdown[]
+}
+
+interface RankingDetail {
+  rank: number
+  filename: string
+  similarity: number
+  ideal_rank: number
+}
+
+interface ContextPrecisionDetails {
+  is_perfectly_sorted: boolean
+  total_chunks: number
+  correctly_ranked: number
+  ranking_details: RankingDetail[]
+}
+
 interface EvaluationMetricsProps {
   metrics?: {
     // Backend field names (from quality_metrics_service)
@@ -10,6 +58,10 @@ interface EvaluationMetricsProps {
     answer_relevancy?: number
     context_relevancy?: number
     context_precision?: number
+    // Detailed analysis
+    faithfulness_details?: FaithfulnessDetails
+    context_relevancy_details?: ContextRelevancyDetails
+    context_precision_details?: ContextPrecisionDetails
     // Alternative field names (for compatibility)
     faithfulness_score?: number
     relevance_score?: number
@@ -147,33 +199,167 @@ export default function EvaluationMetrics({ metrics }: EvaluationMetricsProps) {
             </div>
           )}
 
-          {/* Faithfulness */}
+          {/* Faithfulness with Tooltip */}
           {(metrics.faithfulness ?? metrics.faithfulness_score) !== undefined && (
-            <div className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded">
-              <span className="text-slate-600 dark:text-slate-400">Faithfulness</span>
-              <span className={`font-mono font-medium ${getScoreColor(metrics.faithfulness ?? metrics.faithfulness_score)}`}>
-                {formatScore(metrics.faithfulness ?? metrics.faithfulness_score)}
-              </span>
+            <div className="relative group">
+              <div className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded cursor-help">
+                <span className="text-slate-600 dark:text-slate-400">Faithfulness</span>
+                <span className={`font-mono font-medium ${getScoreColor(metrics.faithfulness ?? metrics.faithfulness_score)}`}>
+                  {formatScore(metrics.faithfulness ?? metrics.faithfulness_score)}
+                </span>
+              </div>
+
+              {/* Tooltip for Faithfulness */}
+              {metrics.faithfulness_details && (
+                <div className="hidden group-hover:block absolute z-50 left-0 mt-1 w-96 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl">
+                  <div className="text-xs space-y-2">
+                    <div className="font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 pb-1">
+                      Faithfulness Analysis
+                    </div>
+                    <div className="text-[10px] text-slate-600 dark:text-slate-400">
+                      {metrics.faithfulness_details.supported_claims} of {metrics.faithfulness_details.total_claims} claims verified from context
+                    </div>
+
+                    <div className="max-h-64 overflow-y-auto space-y-2">
+                      {metrics.faithfulness_details.claims_analysis.slice(0, 5).map((claim, i) => (
+                        <div key={i} className="text-[10px] border-l-2 pl-2 py-1" style={{ borderColor: claim.supported ? '#10b981' : '#ef4444' }}>
+                          <div className="flex items-start gap-1">
+                            <span className="mt-0.5">{claim.supported ? '✅' : '❌'}</span>
+                            <div className="flex-1">
+                              <div className="text-slate-700 dark:text-slate-300 font-medium mb-1">
+                                "{claim.claim.slice(0, 100)}{claim.claim.length > 100 ? '...' : ''}"
+                              </div>
+                              {claim.supported && claim.supporting_chunks && claim.supporting_chunks.length > 0 && (
+                                <div className="mt-1 space-y-1">
+                                  {claim.supporting_chunks.slice(0, 1).map((chunk, j) => (
+                                    <div key={j} className="bg-slate-100 dark:bg-slate-900 p-1.5 rounded text-slate-600 dark:text-slate-400">
+                                      <div className="font-semibold text-blue-600 dark:text-blue-400 mb-0.5">
+                                        {chunk.filename} ({(chunk.overlap * 100).toFixed(0)}% overlap)
+                                      </div>
+                                      <div className="italic">"{chunk.content.slice(0, 120)}..."</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {metrics.faithfulness_details.claims_analysis.length > 5 && (
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 italic text-center">
+                          +{metrics.faithfulness_details.claims_analysis.length - 5} more claims...
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Context Precision */}
+          {/* Context Precision with Tooltip */}
           {(metrics.context_precision ?? metrics.context_precision_score) !== undefined && (
-            <div className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded">
-              <span className="text-slate-600 dark:text-slate-400">Context Precision</span>
-              <span className={`font-mono font-medium ${getScoreColor(metrics.context_precision ?? metrics.context_precision_score)}`}>
-                {formatScore(metrics.context_precision ?? metrics.context_precision_score)}
-              </span>
+            <div className="relative group">
+              <div className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded cursor-help">
+                <span className="text-slate-600 dark:text-slate-400">Context Precision</span>
+                <span className={`font-mono font-medium ${getScoreColor(metrics.context_precision ?? metrics.context_precision_score)}`}>
+                  {formatScore(metrics.context_precision ?? metrics.context_precision_score)}
+                </span>
+              </div>
+
+              {/* Tooltip for Context Precision */}
+              {metrics.context_precision_details && (
+                <div className="hidden group-hover:block absolute z-50 left-0 mt-1 w-80 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl">
+                  <div className="text-xs space-y-2">
+                    <div className="font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 pb-1">
+                      Context Precision Analysis
+                    </div>
+                    <div className="text-[10px] text-slate-600 dark:text-slate-400">
+                      {metrics.context_precision_details.correctly_ranked} of {metrics.context_precision_details.total_chunks} chunks correctly ranked
+                      {metrics.context_precision_details.is_perfectly_sorted && " ✨ Perfect!"}
+                    </div>
+
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                      {metrics.context_precision_details.ranking_details.map((detail, i) => (
+                        <div key={i} className="flex items-center justify-between text-[10px] bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-slate-500">#{detail.rank}</span>
+                            <span className="text-slate-700 dark:text-slate-300">{detail.filename}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`font-mono ${getScoreColor(detail.similarity)}`}>
+                              {(detail.similarity * 100).toFixed(0)}%
+                            </span>
+                            {detail.rank !== detail.ideal_rank && (
+                              <span className="text-yellow-600 dark:text-yellow-400" title="Should be ranked differently">
+                                ⚠️
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Context Relevance */}
+          {/* Context Relevance with Tooltip */}
           {(metrics.context_relevancy ?? metrics.context_relevance_score) !== undefined && (
-            <div className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded">
-              <span className="text-slate-600 dark:text-slate-400">Context Relevance</span>
-              <span className={`font-mono font-medium ${getScoreColor(metrics.context_relevancy ?? metrics.context_relevance_score)}`}>
-                {formatScore(metrics.context_relevancy ?? metrics.context_relevance_score)}
-              </span>
+            <div className="relative group">
+              <div className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded cursor-help">
+                <span className="text-slate-600 dark:text-slate-400">Context Relevance</span>
+                <span className={`font-mono font-medium ${getScoreColor(metrics.context_relevancy ?? metrics.context_relevance_score)}`}>
+                  {formatScore(metrics.context_relevancy ?? metrics.context_relevance_score)}
+                </span>
+              </div>
+
+              {/* Tooltip for Context Relevance */}
+              {metrics.context_relevancy_details && (
+                <div className="hidden group-hover:block absolute z-50 left-0 mt-1 w-96 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl">
+                  <div className="text-xs space-y-2">
+                    <div className="font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700 pb-1">
+                      Context Relevance Analysis
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-[10px]">
+                      <div className="bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">
+                        <div className="text-slate-500">Avg</div>
+                        <div className="font-mono font-semibold">{(metrics.context_relevancy_details.avg_similarity * 100).toFixed(0)}%</div>
+                      </div>
+                      <div className="bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">
+                        <div className="text-slate-500">Min</div>
+                        <div className="font-mono font-semibold">{(metrics.context_relevancy_details.min_similarity * 100).toFixed(0)}%</div>
+                      </div>
+                      <div className="bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded">
+                        <div className="text-slate-500">Max</div>
+                        <div className="font-mono font-semibold">{(metrics.context_relevancy_details.max_similarity * 100).toFixed(0)}%</div>
+                      </div>
+                    </div>
+
+                    <div className="max-h-64 overflow-y-auto space-y-2">
+                      {metrics.context_relevancy_details.chunks_breakdown.map((chunk, i) => (
+                        <div key={i} className="text-[10px] bg-slate-100 dark:bg-slate-900 p-2 rounded">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-semibold text-blue-600 dark:text-blue-400">{chunk.filename}</span>
+                            <span className={`font-mono ${getScoreColor(chunk.similarity)}`}>
+                              {(chunk.similarity * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="flex gap-2 text-[9px] text-slate-500 dark:text-slate-400 mb-1">
+                            <span>Semantic: {(chunk.semantic_score * 100).toFixed(0)}%</span>
+                            <span>Keyword: {(chunk.keyword_score * 100).toFixed(0)}%</span>
+                            <span className="capitalize">{chunk.memory_type}</span>
+                          </div>
+                          <div className="text-slate-600 dark:text-slate-400 italic">
+                            "{chunk.excerpt}"
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

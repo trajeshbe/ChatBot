@@ -47,24 +47,33 @@ class QualityMetricsService:
         try:
             # 1. Faithfulness: Is answer grounded in context?
             if context_chunks:
-                metrics['faithfulness'] = await self._calculate_faithfulness(answer, context_chunks)
+                faithfulness_result = await self._calculate_faithfulness(answer, context_chunks)
+                metrics['faithfulness'] = faithfulness_result['score']
+                metrics['faithfulness_details'] = faithfulness_result['details']
             else:
                 metrics['faithfulness'] = 0.0  # No context means no grounding
+                metrics['faithfulness_details'] = None
 
             # 2. Answer Relevancy: Does answer address the query?
             metrics['answer_relevancy'] = await self._calculate_answer_relevancy(query, answer)
 
             # 3. Context Relevancy: Are retrieved chunks relevant to query?
             if context_chunks:
-                metrics['context_relevancy'] = self._calculate_context_relevancy(context_chunks)
+                context_relevancy_result = self._calculate_context_relevancy(context_chunks)
+                metrics['context_relevancy'] = context_relevancy_result['score']
+                metrics['context_relevancy_details'] = context_relevancy_result['details']
             else:
                 metrics['context_relevancy'] = 0.0
+                metrics['context_relevancy_details'] = None
 
             # 4. Context Precision: Are most relevant chunks ranked high?
             if context_chunks:
-                metrics['context_precision'] = self._calculate_context_precision(context_chunks)
+                context_precision_result = self._calculate_context_precision(context_chunks)
+                metrics['context_precision'] = context_precision_result['score']
+                metrics['context_precision_details'] = context_precision_result['details']
             else:
                 metrics['context_precision'] = 0.0
+                metrics['context_precision_details'] = None
 
             # 5. Answer Correctness (if expected answer provided)
             if expected_answer:
@@ -92,27 +101,39 @@ class QualityMetricsService:
                 'error': str(e)
             }
 
-    async def _calculate_faithfulness(self, answer: str, context_chunks: List[Dict]) -> float:
+    async def _calculate_faithfulness(self, answer: str, context_chunks: List[Dict]) -> Dict:
         """
         Faithfulness: Proportion of answer that can be verified from context
 
         Method:
         1. Split answer into claims (sentences)
         2. Check if each claim is supported by context
-        3. Return proportion of supported claims
+        3. Return proportion of supported claims with detailed analysis
+
+        Returns:
+            Dict with 'score' and 'details' containing claim-by-claim analysis
         """
         # Split answer into sentences (claims)
         sentences = re.split(r'[.!?]+', answer)
         claims = [s.strip() for s in sentences if len(s.strip()) > 10]
 
         if not claims:
-            return 0.5  # Neutral if no substantial claims
+            return {
+                'score': 0.5,
+                'details': {
+                    'total_claims': 0,
+                    'supported_claims': 0,
+                    'claims_analysis': []
+                }
+            }
 
         # Combine context
         context_text = " ".join([chunk['content'] for chunk in context_chunks])
 
         # Calculate embedding similarity between each claim and context
         supported_count = 0
+        claims_analysis = []
+
         for claim in claims:
             # Simple check: is claim mentioned in context? (can be enhanced with embeddings)
             claim_lower = claim.lower()
@@ -128,15 +149,46 @@ class QualityMetricsService:
             context_words = context_words - stop_words
 
             # Check overlap
+            overlap = 0
+            is_supported = False
+            supporting_chunks = []
+
             if claim_words:
                 overlap = len(claim_words & context_words) / len(claim_words)
-                if overlap > 0.3:  # At least 30% word overlap
+                is_supported = overlap > 0.3  # At least 30% word overlap
+                if is_supported:
                     supported_count += 1
+
+                    # Find which chunks support this claim
+                    for chunk in context_chunks:
+                        chunk_words = set(re.findall(r'\b\w+\b', chunk['content'].lower()))
+                        chunk_words = chunk_words - stop_words
+                        claim_chunk_overlap = len(claim_words & chunk_words) / len(claim_words) if claim_words else 0
+                        if claim_chunk_overlap > 0.2:  # At least 20% overlap with this chunk
+                            supporting_chunks.append({
+                                'content': chunk['content'][:200] + '...' if len(chunk['content']) > 200 else chunk['content'],
+                                'filename': chunk.get('filename', 'Unknown'),
+                                'overlap': claim_chunk_overlap
+                            })
+
+            claims_analysis.append({
+                'claim': claim,
+                'supported': is_supported,
+                'overlap_score': overlap,
+                'supporting_chunks': supporting_chunks[:2]  # Limit to top 2 supporting chunks
+            })
 
         faithfulness_score = supported_count / len(claims) if claims else 0.5
         logger.debug(f"Faithfulness: {supported_count}/{len(claims)} claims supported = {faithfulness_score:.2f}")
 
-        return faithfulness_score
+        return {
+            'score': faithfulness_score,
+            'details': {
+                'total_claims': len(claims),
+                'supported_claims': supported_count,
+                'claims_analysis': claims_analysis
+            }
+        }
 
     async def _calculate_answer_relevancy(self, query: str, answer: str) -> float:
         """
@@ -161,22 +213,48 @@ class QualityMetricsService:
             logger.warning(f"Error calculating answer relevancy: {e}")
             return 0.5  # Neutral on error
 
-    def _calculate_context_relevancy(self, context_chunks: List[Dict]) -> float:
+    def _calculate_context_relevancy(self, context_chunks: List[Dict]) -> Dict:
         """
         Context Relevancy: Average relevance score of retrieved chunks
 
         Uses the similarity scores from the retrieval
+
+        Returns:
+            Dict with 'score' and 'details' containing per-chunk analysis
         """
         if not context_chunks:
-            return 0.0
+            return {'score': 0.0, 'details': None}
 
         relevance_scores = [chunk.get('similarity', 0) for chunk in context_chunks]
         avg_relevance = sum(relevance_scores) / len(relevance_scores)
 
-        logger.debug(f"Context Relevancy: {avg_relevance:.2f} (avg of {len(relevance_scores)} chunks)")
-        return avg_relevance
+        # Prepare detailed breakdown
+        chunks_breakdown = [
+            {
+                'filename': chunk.get('filename', 'Unknown'),
+                'similarity': chunk.get('similarity', 0),
+                'semantic_score': chunk.get('semantic_score', 0),
+                'keyword_score': chunk.get('keyword_score', 0),
+                'memory_type': chunk.get('memory_type', 'long-term'),
+                'excerpt': chunk['content'][:150] + '...' if len(chunk['content']) > 150 else chunk['content']
+            }
+            for chunk in context_chunks
+        ]
 
-    def _calculate_context_precision(self, context_chunks: List[Dict]) -> float:
+        logger.debug(f"Context Relevancy: {avg_relevance:.2f} (avg of {len(relevance_scores)} chunks)")
+
+        return {
+            'score': avg_relevance,
+            'details': {
+                'chunks_count': len(context_chunks),
+                'avg_similarity': avg_relevance,
+                'min_similarity': min(relevance_scores) if relevance_scores else 0,
+                'max_similarity': max(relevance_scores) if relevance_scores else 0,
+                'chunks_breakdown': chunks_breakdown
+            }
+        }
+
+    def _calculate_context_precision(self, context_chunks: List[Dict]) -> Dict:
         """
         Context Precision: Are the most relevant chunks ranked highest?
 
@@ -184,9 +262,12 @@ class QualityMetricsService:
         1. Check if chunks are sorted by relevance
         2. Calculate precision@k for different k values
         3. Reward configurations where high-relevance chunks come first
+
+        Returns:
+            Dict with 'score' and 'details' containing ranking analysis
         """
         if not context_chunks:
-            return 0.0
+            return {'score': 0.0, 'details': None}
 
         # Get relevance scores
         scores = [chunk.get('similarity', 0) for chunk in context_chunks]
@@ -203,8 +284,28 @@ class QualityMetricsService:
             matches = sum(1 for i, score in enumerate(scores) if score == ideal_order[i])
             precision = matches / len(scores)
 
+        # Prepare ranking details
+        ranking_details = [
+            {
+                'rank': i + 1,
+                'filename': chunk.get('filename', 'Unknown'),
+                'similarity': chunk.get('similarity', 0),
+                'ideal_rank': sorted(range(len(scores)), key=lambda x: scores[x], reverse=True).index(i) + 1
+            }
+            for i, chunk in enumerate(context_chunks)
+        ]
+
         logger.debug(f"Context Precision: {precision:.2f}")
-        return precision
+
+        return {
+            'score': precision,
+            'details': {
+                'is_perfectly_sorted': is_sorted,
+                'total_chunks': len(context_chunks),
+                'correctly_ranked': int(precision * len(context_chunks)),
+                'ranking_details': ranking_details
+            }
+        }
 
     async def _calculate_answer_correctness(self, answer: str, expected_answer: str) -> float:
         """
