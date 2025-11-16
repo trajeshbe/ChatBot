@@ -1572,7 +1572,22 @@ function JobMonitorTab() {
     setIsLoading(true)
     try {
       const response = await axios.get(`${API_URL}/api/v1/extraction/jobs`)
-      setJobs(response.data.jobs || [])
+      console.log('Jobs response:', response.data)
+
+      // The API returns { jobs: ExtractionJobResponse[], total: number }
+      // ExtractionJobResponse has: job_id, status, created_at, urls_count, output_format, delivery_method
+      // We need to map it to our ExtractionJob interface
+      const mappedJobs = (response.data.jobs || []).map((job: any) => ({
+        job_id: job.job_id,
+        status: job.status as JobStatus,
+        urls_total: job.urls_count || 0,
+        urls_processed: 0, // Not available in list response
+        progress_percentage: job.status === 'completed' ? 100 : job.status === 'running' ? 50 : 0,
+        output_format: job.output_format as OutputFormat,
+        delivery_method: job.delivery_method as DeliveryMethod
+      }))
+
+      setJobs(mappedJobs)
     } catch (error) {
       console.error('Failed to fetch jobs:', error)
     }
@@ -1706,9 +1721,9 @@ function JobMonitorTab() {
                 </span>
                 <StatusBadge status={job.status} />
               </div>
-              {job.urls_total && (
+              {job.urls_total !== undefined && job.urls_total > 0 && (
                 <p className="text-sm text-slate-600 dark:text-slate-400">
-                  {job.urls_processed || 0} / {job.urls_total} URLs
+                  {job.urls_processed !== undefined ? `${job.urls_processed} / ` : ''}{job.urls_total} URLs
                 </p>
               )}
               {job.progress_percentage !== undefined && job.status === 'running' && (

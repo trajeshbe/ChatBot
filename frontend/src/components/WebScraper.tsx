@@ -57,11 +57,15 @@ export default function WebScraper() {
           formData.append('scrape_prompt', scrapePrompt)
         }
 
+        console.log(`Scraping URL ${i + 1}/${validUrls.length}:`, validUrls[i])
+
         const response = await axios.post(`${API_URL}/api/v1/scrape`, formData, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
         })
+
+        console.log('Scrape response:', response.data)
 
         setJobs(prev =>
           prev.map(job =>
@@ -76,15 +80,16 @@ export default function WebScraper() {
               : job
           )
         )
-      } catch (error) {
+      } catch (error: any) {
         console.error('Scrape error:', error)
+        const errorMessage = error.response?.data?.detail || error.message || 'Scraping failed'
         setJobs(prev =>
           prev.map(job =>
             job.url === validUrls[i] && job.status === 'processing'
               ? {
                   ...job,
                   status: 'error',
-                  error: 'Scraping failed'
+                  error: errorMessage
                 }
               : job
           )
