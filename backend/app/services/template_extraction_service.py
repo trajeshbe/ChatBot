@@ -101,7 +101,7 @@ class TemplateExtractionService:
 
             # Wait for key element if specified
             if template.wait_for_selector:
-                await page.wait_for_selector(template.wait_for_selector, timeout=10000)
+                await page.wait_for_selector(template.wait_for_selector, timeout=60000)
                 logger.info(f"Waited for selector: {template.wait_for_selector}")
 
             # Extract data from current page

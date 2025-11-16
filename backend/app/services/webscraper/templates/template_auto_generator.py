@@ -76,7 +76,11 @@ class TemplateAutoGenerator:
             page_content = await self._fetch_webpage_content(url)
 
             if not page_content:
-                self.logger.error("Failed to fetch webpage content")
+                self.logger.error(f"Failed to fetch webpage content from {url}. The site may be blocking automated access or may be down.")
+                return None
+
+            if not page_content.get('text') and not page_content.get('html'):
+                self.logger.error(f"Webpage content is empty for {url}")
                 return None
 
             # Step 2: Analyze content structure with LLM
@@ -171,31 +175,52 @@ class TemplateAutoGenerator:
         try:
             if self.scraper_service:
                 # Use existing scraper service
+                self.logger.info(f"Using scraper service to fetch: {url}")
                 result = await self.scraper_service.scrape_url(url)
+
+                if not result:
+                    self.logger.error(f"Scraper service returned None for {url}")
+                    return None
+
+                html_content = result.get('html', '')
+                text_content = result.get('text', '')
+
+                if not html_content and not text_content:
+                    self.logger.error(f"Scraper service returned empty content for {url}")
+                    return None
+
+                self.logger.info(f"Successfully fetched {len(html_content)} bytes of HTML, {len(text_content)} bytes of text")
+
                 return {
-                    'html': result.get('html', ''),
-                    'text': result.get('text', ''),
+                    'html': html_content,
+                    'text': text_content,
                     'structure': result.get('structure', {})
                 }
             else:
                 # Fallback to basic fetch
+                self.logger.info(f"Using fallback httpx client to fetch: {url}")
                 import httpx
                 from bs4 import BeautifulSoup
 
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(timeout=60.0) as client:
                     response = await client.get(url, follow_redirects=True)
                     response.raise_for_status()
 
                     soup = BeautifulSoup(response.text, 'html.parser')
 
+                    html_limited = response.text[:10000]  # Limit for LLM
+                    text_limited = soup.get_text()[:5000]
+
+                    self.logger.info(f"Successfully fetched {len(response.text)} bytes (limited to {len(html_limited)} for analysis)")
+
                     return {
-                        'html': response.text[:10000],  # Limit for LLM
-                        'text': soup.get_text()[:5000],
+                        'html': html_limited,
+                        'text': text_limited,
                         'structure': self._analyze_html_structure(soup)
                     }
 
         except Exception as e:
-            self.logger.error(f"Failed to fetch webpage: {str(e)}")
+            self.logger.error(f"Failed to fetch webpage from {url}: {str(e)}", exc_info=True)
             return None
 
     def _analyze_html_structure(self, soup) -> Dict[str, Any]:
@@ -289,18 +314,27 @@ Analyze the content and return the JSON object with suggested fields."""
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": analysis_prompt}
             ]
-            llm_result = await self.llm_service.generate(
-                prompt=analysis_prompt,
-                messages=messages,
-                max_tokens=2000,
-                temperature=0.2
-            )
 
-            if not llm_result:
-                return None
+            try:
+                llm_result = await self.llm_service.generate(
+                    prompt=analysis_prompt,
+                    messages=messages,
+                    max_tokens=2000,
+                    temperature=0.2
+                )
 
-            response = llm_result.get('content', '')
-            if not response:
+                if not llm_result:
+                    self.logger.error("LLM service returned None. Check if LLM service is properly configured.")
+                    return None
+
+                response = llm_result.get('content', '')
+                if not response:
+                    self.logger.error("LLM service returned empty content")
+                    return None
+
+            except Exception as llm_error:
+                self.logger.error(f"LLM service call failed: {str(llm_error)}")
+                self.logger.error("Please check: 1) OpenAI API key is set, 2) vLLM/Ollama services are running, 3) Network connectivity")
                 return None
 
             # Parse JSON response

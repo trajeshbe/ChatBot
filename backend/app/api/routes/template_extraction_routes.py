@@ -456,9 +456,18 @@ async def smart_extract_without_template(
         )
 
         if not template:
+            error_msg = (
+                "Failed to auto-generate template from instructions. "
+                "This may be due to: "
+                "1) LLM service not properly configured (check OpenAI API key in .env), "
+                "2) Website blocking automated access, "
+                "3) Ollama/vLLM services not running. "
+                "Please check backend logs for details."
+            )
+            logger.error(error_msg)
             raise HTTPException(
                 status_code=500,
-                detail="Failed to auto-generate template from instructions"
+                detail=error_msg
             )
 
         logger.info(f"Generated template with {len(template.fields)} fields")
