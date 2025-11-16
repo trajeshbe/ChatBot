@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies including Playwright requirements
+# Install base system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
@@ -11,32 +11,6 @@ RUN apt-get update && apt-get install -y \
     wget \
     build-essential \
     libpq-dev \
-    # Playwright/Chromium dependencies (COMPLETE LIST)
-    libnss3 \
-    libnspr4 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libdbus-1-3 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libasound2 \
-    libatspi2.0-0 \
-    libxshmfence1 \
-    # CRITICAL MISSING DEPENDENCIES
-    libpango-1.0-0 \
-    libcairo2 \
-    libgdk-pixbuf2.0-0 \
-    libgtk-3-0 \
-    fonts-liberation \
-    libappindicator3-1 \
-    libu2f-udev \
-    xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
@@ -47,8 +21,9 @@ COPY requirements.txt .
 # Install dependencies (pip 24+ handles hashes automatically)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright browsers (without system deps since we installed them above)
-RUN playwright install chromium
+# Install Playwright browsers AND system dependencies
+# This automatically installs all required system libraries
+RUN playwright install --with-deps chromium
 
 # Copy application code
 COPY . .
