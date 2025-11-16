@@ -213,6 +213,52 @@ Extract only the relevant portions:"""
             # Fall back to original content
             return content
 
+    async def _scrape_with_playwright(self, url: str) -> tuple[str, str]:
+        """
+        Scrape using Playwright (for bot-protected sites)
+
+        Args:
+            url: The URL to scrape
+
+        Returns:
+            Tuple of (html_content, title)
+        """
+        try:
+            from playwright.async_api import async_playwright
+
+            logger.info(f"Using Playwright to bypass bot detection for {url}")
+
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(headless=True)
+                context = await browser.new_context(
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    viewport={'width': 1920, 'height': 1080}
+                )
+
+                page = await context.new_page()
+
+                try:
+                    # Navigate to page
+                    await page.goto(url, wait_until='networkidle', timeout=30000)
+
+                    # Get content
+                    html_content = await page.content()
+                    title = await page.title()
+
+                    logger.info(f"Successfully fetched {len(html_content)} bytes using Playwright")
+                    return html_content, title
+
+                finally:
+                    await context.close()
+                    await browser.close()
+
+        except ImportError:
+            logger.error("Playwright not installed. Install with: pip install playwright && playwright install chromium")
+            raise Exception("Playwright not available for bot-protected site")
+        except Exception as e:
+            logger.error(f"Playwright scraping failed: {e}")
+            raise
+
     async def scrape_url(
         self,
         url: str,
@@ -235,17 +281,36 @@ Extract only the relevant portions:"""
             Dict with scraped content and metadata
         """
         start_time = datetime.now()
+        html_content = None
+        title_text = None
+        used_playwright = False
 
         try:
-            # Make compliant request
-            response = await self.compliance.make_compliant_request(
-                url,
-                method="GET",
-                auth_config=auth_config
-            )
+            # Try standard HTTP request first
+            try:
+                response = await self.compliance.make_compliant_request(
+                    url,
+                    method="GET",
+                    auth_config=auth_config
+                )
 
-            html_content = response.text
-            logger.info(f"Fetched {len(html_content)} bytes from {url}")
+                html_content = response.text
+                logger.info(f"Fetched {len(html_content)} bytes from {url}")
+
+            except Exception as e:
+                error_str = str(e)
+                # Check if it's a 403 error (bot detection)
+                if "403" in error_str or "Forbidden" in error_str:
+                    logger.warning(f"403 Forbidden error detected, falling back to Playwright for {url}")
+                    try:
+                        html_content, title_text = await self._scrape_with_playwright(url)
+                        used_playwright = True
+                    except Exception as playwright_error:
+                        logger.error(f"Playwright fallback also failed: {playwright_error}")
+                        raise Exception(f"All strategies failed. Last error: {playwright_error}")
+                else:
+                    # Not a 403 error, re-raise original exception
+                    raise
 
             # Detect site protocols
             protocols = self._detect_site_protocol(url, html_content)
@@ -271,11 +336,13 @@ Extract only the relevant portions:"""
                 # Get text
                 main_content = soup.get_text(separator='\n', strip=True)
 
-            # Extract metadata
-            soup = BeautifulSoup(html_content, 'html.parser')
-            title = soup.find('title')
-            title_text = title.string if title else urlparse(url).netloc
+            # Extract metadata (skip if we already got it from Playwright)
+            if not title_text:
+                soup = BeautifulSoup(html_content, 'html.parser')
+                title = soup.find('title')
+                title_text = title.string if title else urlparse(url).netloc
 
+            soup = BeautifulSoup(html_content, 'html.parser')
             meta_description = soup.find('meta', attrs={'name': 'description'})
             description = meta_description.get('content', '') if meta_description else ""
 
@@ -302,12 +369,14 @@ Extract only the relevant portions:"""
                 'compliance_level': self.compliance.compliance_level.value,
                 'llm_provider': llm_provider if scrape_prompt else None,
                 'scraping_time_ms': scraping_time_ms,
+                'strategy_used': 'playwright' if used_playwright else 'httpx',
                 'metadata': {
-                    'content_type': response.headers.get('content-type', ''),
-                    'status_code': response.status_code,
+                    'content_type': response.headers.get('content-type', '') if not used_playwright else 'text/html',
+                    'status_code': response.status_code if not used_playwright else 200,
                     'scrape_prompt': scrape_prompt,
-                    'user_agent': response.request.headers.get('user-agent', ''),
-                    'proxy_used': None  # TODO: Track proxy from response
+                    'user_agent': response.request.headers.get('user-agent', '') if not used_playwright else 'Mozilla/5.0 (Playwright)',
+                    'proxy_used': None,  # TODO: Track proxy from response
+                    'playwright_fallback': used_playwright
                 }
             }
 
