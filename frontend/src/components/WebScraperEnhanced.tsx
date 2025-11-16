@@ -1246,7 +1246,6 @@ function TemplateExtractionTab() {
                   </div>
                 </div>
               )}
-            </div>
 
             {/* Existing Templates List */}
             {templates.length > 0 && (
