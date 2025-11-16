@@ -21,9 +21,37 @@ COPY requirements.txt .
 # Install dependencies (pip 24+ handles hashes automatically)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright browsers AND system dependencies
-# This automatically installs all required system libraries
-RUN playwright install --with-deps chromium
+# Install Playwright system dependencies manually (compatible with Debian trixie)
+RUN apt-get update && apt-get install -y \
+    # Core libraries for Chromium
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    libatspi2.0-0 \
+    libxshmfence1 \
+    # Fonts
+    fonts-liberation \
+    fonts-noto-color-emoji \
+    fonts-unifont \
+    # Additional dependencies
+    xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Playwright browsers (without --with-deps since we installed deps manually)
+RUN playwright install chromium
 
 # Copy application code
 COPY . .
