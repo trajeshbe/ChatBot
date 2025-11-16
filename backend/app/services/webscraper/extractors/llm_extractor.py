@@ -40,7 +40,7 @@ class LLMExtractor:
         prompt: str,
         field_name: str = "value",
         field_type: str = "string",
-        llm_provider: str = "ollama",
+        llm_provider: str = "openai",
         return_confidence: bool = False
     ) -> Optional[Any]:
         """

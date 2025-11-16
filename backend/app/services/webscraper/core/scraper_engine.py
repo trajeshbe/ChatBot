@@ -135,7 +135,7 @@ class ScraperEngine:
         self,
         content: str,
         scrape_prompt: str,
-        llm_provider: str = "ollama"
+        llm_provider: str = "openai"
     ) -> str:
         """
         Extract relevant content using LLM

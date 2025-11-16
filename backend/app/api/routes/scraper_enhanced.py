@@ -62,7 +62,7 @@ class ScrapeRequest(BaseModel):
         description="Optional prompt for LLM-powered content extraction"
     )
     llm_provider: LLMProviderEnum = Field(
-        default=LLMProviderEnum.OLLAMA,
+        default=LLMProviderEnum.OPENAI,
         description="LLM provider for smart scraping"
     )
     auth_config: Optional[AuthConfigRequest] = Field(
@@ -87,7 +87,7 @@ class BulkScrapeRequest(BaseModel):
         description="Optional prompt for LLM-powered content extraction"
     )
     llm_provider: LLMProviderEnum = Field(
-        default=LLMProviderEnum.OLLAMA,
+        default=LLMProviderEnum.OPENAI,
         description="LLM provider for smart scraping"
     )
     session_id: Optional[str] = Field(

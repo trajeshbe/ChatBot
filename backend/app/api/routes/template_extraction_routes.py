@@ -248,7 +248,7 @@ class AutoGenerateTemplateRequest(BaseModel):
                    "'Get company financial metrics like revenue and profit'"
     )
     template_name: Optional[str] = None
-    llm_provider: str = Field(default="ollama", description="LLM provider: ollama, openai, or anthropic")
+    llm_provider: str = Field(default="openai", description="LLM provider: ollama, openai, or anthropic")
     max_fields: int = Field(default=15, ge=1, le=30, description="Maximum number of fields to generate")
     session_id: Optional[str] = None
 
@@ -271,7 +271,7 @@ class SmartExtractRequest(BaseModel):
         ...,
         description="Describe what data you want to extract in natural language"
     )
-    llm_provider: str = Field(default="ollama")
+    llm_provider: str = Field(default="openai")
     output_format: str = Field(default="excel", description="Output format: excel, csv, or json")
     session_id: Optional[str] = None
 
@@ -529,7 +529,7 @@ class RefineTemplateRequest(BaseModel):
                    "'Change the price extraction to use the sale price instead'"
     )
     sample_url: str
-    llm_provider: str = Field(default="ollama")
+    llm_provider: str = Field(default="openai")
 
 
 @router.post("/refine-template")
