@@ -69,16 +69,23 @@ class LLMExtractor:
             )
 
             # Call LLM
-            response = await self.llm_service.generate_response(
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": extraction_prompt}
+            ]
+            llm_result = await self.llm_service.generate(
                 prompt=extraction_prompt,
-                system_prompt=system_prompt,
-                provider=llm_provider,
+                messages=messages,
                 max_tokens=500,
                 temperature=0.1  # Low temperature for factual extraction
             )
 
-            if not response:
+            if not llm_result:
                 self.logger.warning(f"LLM returned empty response for field '{field_name}'")
+                return None
+
+            response = llm_result.get('content', '')
+            if not response:
                 return None
 
             # Parse and validate response
@@ -143,14 +150,21 @@ Extract the following fields:
 Return the results as a JSON object with field names as keys."""
 
             # Call LLM
-            response = await self.llm_service.generate_response(
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": extraction_prompt}
+            ]
+            llm_result = await self.llm_service.generate(
                 prompt=extraction_prompt,
-                system_prompt=system_prompt,
-                provider=llm_provider,
+                messages=messages,
                 max_tokens=1000,
                 temperature=0.1
             )
 
+            if not llm_result:
+                return {}
+
+            response = llm_result.get('content', '')
             if not response:
                 return {}
 
@@ -349,14 +363,21 @@ Schema:
 
 Extract data matching the above schema from the content."""
 
-            response = await self.llm_service.generate_response(
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": extraction_prompt}
+            ]
+            llm_result = await self.llm_service.generate(
                 prompt=extraction_prompt,
-                system_prompt=system_prompt,
-                provider=llm_provider,
+                messages=messages,
                 max_tokens=1500,
                 temperature=0.1
             )
 
+            if not llm_result:
+                return None
+
+            response = llm_result.get('content', '')
             if not response:
                 return None
 

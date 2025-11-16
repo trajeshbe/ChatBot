@@ -285,14 +285,21 @@ Maximum fields to suggest: {max_fields}
 Analyze the content and return the JSON object with suggested fields."""
 
             # Call LLM
-            response = await self.llm_service.generate_response(
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": analysis_prompt}
+            ]
+            llm_result = await self.llm_service.generate(
                 prompt=analysis_prompt,
-                system_prompt=system_prompt,
-                provider=llm_provider,
+                messages=messages,
                 max_tokens=2000,
                 temperature=0.2
             )
 
+            if not llm_result:
+                return None
+
+            response = llm_result.get('content', '')
             if not response:
                 return None
 
@@ -527,14 +534,21 @@ User feedback:
 
 Based on the feedback, provide an updated list of fields with any additions, removals, or modifications."""
 
-            response = await self.llm_service.generate_response(
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": refinement_prompt}
+            ]
+            llm_result = await self.llm_service.generate(
                 prompt=refinement_prompt,
-                system_prompt=system_prompt,
-                provider=llm_provider,
+                messages=messages,
                 max_tokens=2000,
                 temperature=0.2
             )
 
+            if not llm_result:
+                return None
+
+            response = llm_result.get('content', '')
             if not response:
                 return None
 
