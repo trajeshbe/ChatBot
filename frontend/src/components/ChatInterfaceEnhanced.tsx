@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Send, Loader2, FileText, ExternalLink, Paperclip, X, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import FileUpload from './FileUpload'
-import WebScraper from './WebScraper'
+import WebScraperEnhanced from './WebScraperEnhanced'
 import ModelSelector from './ModelSelector'
 import UploadedFilesList from './UploadedFilesList'
 import { getCurrentRAGConfig, type RAGConfig } from './RAGSettings'
@@ -416,7 +416,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   }
 
   if (activeTab === 'scrape') {
-    return <WebScraper />
+    return <WebScraperEnhanced />
   }
 
   return (
