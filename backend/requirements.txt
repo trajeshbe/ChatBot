@@ -76,7 +76,7 @@ langgraph==0.2.16             # Agent workflow graphs - DAG orchestration
 docling==2.0.0              # Advanced document parsing for PDF, HTML, DOCX, PPTX
 pypdf2==3.0.1                 # PDF text extraction - processes PDF uploads
 python-docx==1.1.2            # Word document parsing - processes DOCX uploads (updated for docling 2.0.0 compatibility: requires >=1.1.2)
-python-pptx==0.6.23           # PowerPoint parsing - processes PPTX uploads
+python-pptx==1.0.2            # PowerPoint parsing - processes PPTX uploads (updated for docling 2.0.0 compatibility: requires >=1.0.2)
 openpyxl==3.1.2               # Excel file parsing - processes XLSX uploads
 beautifulsoup4==4.12.3        # HTML parsing - cleans web scraped content
 lxml==5.1.0                   # XML/HTML parser - faster than default parser
