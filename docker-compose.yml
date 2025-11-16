@@ -271,12 +271,14 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
       NEXT_PUBLIC_GRAPHQL_URL: http://localhost:8000/graphql
+      # Disable Next.js cache in development to avoid volume issues
+      NEXT_PRIVATE_STANDALONE: "true"
     ports:
       - "3001:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
-      - /app/.next
+      - frontend_nextjs_cache:/app/.next
     depends_on:
       - backend
     networks:
@@ -314,3 +316,4 @@ volumes:
   loki_data:
   grafana_data:
   flink_data:
+  frontend_nextjs_cache:
