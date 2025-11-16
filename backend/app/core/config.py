@@ -85,6 +85,11 @@ class Settings(BaseSettings):
     USE_SEMANTIC_CACHE: bool = True
     ENABLE_TRACING: bool = True
 
+    # Web Scraping Feature Flags
+    ENABLE_WEB_SCRAPING: bool = True
+    ENABLE_PLAYWRIGHT_SCRAPING: bool = False  # Requires playwright installation
+    ENABLE_SMART_SCRAPING: bool = True  # Use AI to filter scraped content
+
     # RAG settings
     CHUNK_SIZE: int = 800  # Increased from 500 for better context (optimal for embeddings)
     CHUNK_OVERLAP: int = 150  # Increased from 50 for better continuity (20% overlap)
@@ -99,6 +104,42 @@ class Settings(BaseSettings):
     # Query classification thresholds
     # If best match is below this, likely not document-related query
     NO_RELEVANT_DOCS_THRESHOLD: float = 0.70  # INCREASED to 70% - stricter threshold to prevent irrelevant document retrieval
+
+    # Web Scraping Configuration
+    SCRAPER_DEFAULT_STRATEGY: str = "auto"  # auto, trafilatura, beautifulsoup, playwright, hybrid
+    SCRAPER_TIMEOUT: float = 30.0  # Request timeout in seconds
+    SCRAPER_MAX_RETRIES: int = 3  # Maximum retry attempts
+    SCRAPER_FOLLOW_REDIRECTS: bool = True
+    SCRAPER_USER_AGENT: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+    # Content extraction options
+    SCRAPER_INCLUDE_LINKS: bool = True
+    SCRAPER_INCLUDE_TABLES: bool = True
+    SCRAPER_INCLUDE_IMAGES: bool = False
+    SCRAPER_INCLUDE_METADATA: bool = True
+
+    # Content filtering
+    SCRAPER_REMOVE_NAV: bool = True
+    SCRAPER_REMOVE_FOOTER: bool = True
+    SCRAPER_REMOVE_HEADER: bool = True
+    SCRAPER_REMOVE_ADS: bool = True
+
+    # JavaScript rendering (Playwright)
+    SCRAPER_ENABLE_JAVASCRIPT: bool = False  # Enable for JS-heavy sites
+    SCRAPER_WAIT_TIMEOUT: float = 10.0  # Wait timeout for JS rendering
+
+    # Rate limiting and throttling
+    SCRAPER_RESPECT_ROBOTS_TXT: bool = True
+    SCRAPER_DELAY_BETWEEN_REQUESTS: float = 1.0  # Delay in seconds
+    SCRAPER_MAX_CONCURRENT_REQUESTS: int = 5
+
+    # Content quality
+    SCRAPER_MIN_CONTENT_LENGTH: int = 100  # Minimum content length in characters
+    SCRAPER_MAX_CONTENT_LENGTH: Optional[int] = 1000000  # Maximum content length (1MB)
+
+    # Smart scraping (AI-powered content filtering)
+    SMART_SCRAPE_MODEL: str = "gpt-3.5-turbo"  # Model for content filtering
+    SMART_SCRAPE_MAX_TOKENS: int = 2000  # Max tokens for filtered content
 
     class Config:
         env_file = ".env"

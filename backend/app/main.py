@@ -565,6 +565,26 @@ except Exception as e:
         app.include_router(models_router.router)
         logger.info("✓ Models API router registered (fallback)")
     except Exception as e2:
+
+
+# Enhanced Web Scraper API router
+try:
+    from app.api.routes import scraper_routes
+    app.include_router(scraper_routes.router)
+    logger.info("✓ Enhanced Web Scraper API router registered")
+except ImportError as e:
+    logger.warning(f"Enhanced Web Scraper API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Enhanced Web Scraper router: {e}")
+    logger.warning("Continuing with basic scraper endpoints only")
+
+# Also import the enhanced scraper service (with fallback to basic)
+try:
+    from app.services.scraper_service_enhanced import enhanced_scraper_service
+    logger.info("✓ Enhanced Scraper Service loaded")
+except ImportError as e:
+    logger.warning(f"Enhanced Scraper Service not available: {e}")
+except Exception as e2:
         logger.warning("Continuing without model selection API")
 
 
