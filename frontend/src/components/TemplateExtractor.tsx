@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { FileSpreadsheet, Globe, Download, Loader2, CheckCircle, XCircle, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { FileSpreadsheet, Globe, Download, Loader2, CheckCircle, XCircle, ChevronDown, ChevronUp, AlertCircle, Upload, FileUp } from 'lucide-react'
 import axios from 'axios'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -12,6 +12,14 @@ interface ExtractionJob {
   data?: any[]
   error?: string
   timestamp: Date
+}
+
+interface UploadedTemplate {
+  template_id: string
+  name: string
+  description?: string
+  fields_count: number
+  created_at: string
 }
 
 interface CollapsibleErrorProps {
@@ -72,6 +80,9 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
   const [jobs, setJobs] = useState<ExtractionJob[]>([])
   const [availablePresets, setAvailablePresets] = useState<any[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [isUploadingTemplate, setIsUploadingTemplate] = useState(false)
+  const [uploadedTemplates, setUploadedTemplates] = useState<UploadedTemplate[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load jobs from sessionStorage on mount
   useEffect(() => {
@@ -202,6 +213,51 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
     }
   }
 
+  const handleTemplateUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+      setError('Please upload an Excel file (.xlsx or .xls)')
+      return
+    }
+
+    setIsUploadingTemplate(true)
+    setError(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('template_name', file.name)
+
+      const response = await axios.post(
+        `${API_URL}/api/v1/extraction/templates/upload-excel`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      )
+
+      if (response.data) {
+        setUploadedTemplates(prev => [response.data, ...prev])
+        alert(`Template "${response.data.name}" uploaded successfully with ${response.data.fields_count} columns!`)
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+      }
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to upload template'
+      setError(errorMessage)
+      console.error('Error uploading template:', error)
+    } finally {
+      setIsUploadingTemplate(false)
+    }
+  }
+
   return (
     <div className="h-full p-6 overflow-y-auto">
       <div className="max-w-4xl mx-auto">
@@ -226,10 +282,66 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
             Extract Data
           </h3>
 
+          {/* Template Upload Section */}
+          <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <h4 className="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                  <FileUp className="w-5 h-5 text-blue-600" />
+                  Upload Excel Template
+                </h4>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                  Upload an Excel file with column headers. The system will extract data and populate those columns automatically.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleTemplateUpload}
+                className="hidden"
+                id="template-upload"
+              />
+              <label
+                htmlFor="template-upload"
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isUploadingTemplate ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" />
+                    Choose Excel File
+                  </>
+                )}
+              </label>
+            </div>
+            {uploadedTemplates.length > 0 && (
+              <div className="mt-3 p-2 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700">
+                <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Uploaded Templates ({uploadedTemplates.length}):
+                </p>
+                <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-1">
+                  {uploadedTemplates.slice(0, 3).map((template) => (
+                    <li key={template.template_id} className="flex items-center gap-2">
+                      <CheckCircle className="w-3 h-3 text-green-600" />
+                      {template.name} ({template.fields_count} columns)
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
           {/* Preset Selection */}
           <div className="mb-4">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              Template Preset
+              Or Use a Preset Template
             </label>
             <select
               value={preset}

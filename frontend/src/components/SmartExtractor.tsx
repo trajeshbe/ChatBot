@@ -186,25 +186,25 @@ export const SmartExtractor = () => {
   // ============================================================================
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-6 border border-slate-200 dark:border-slate-700">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg">
           <Sparkles className="h-6 w-6 text-white" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Smart Extractor</h2>
-          <p className="text-sm text-gray-600">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Smart Extractor</h2>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
             Extract data with AI - no template needed! Just describe what you want.
           </p>
         </div>
       </div>
 
       {/* Info Banner */}
-      <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-4 mb-6">
+      <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-6">
         <div className="flex items-start gap-3">
-          <Info className="h-5 w-5 text-purple-600 mt-0.5 flex-shrink-0" />
-          <div className="text-sm text-gray-700">
+          <Info className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
+          <div className="text-sm text-slate-700 dark:text-slate-300">
             <p className="font-semibold mb-1">How it works:</p>
             <ol className="list-decimal ml-4 space-y-1">
               <li>Enter a URL and describe what data you want to extract in plain English</li>
@@ -217,7 +217,7 @@ export const SmartExtractor = () => {
 
       {/* URL Input */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Website URL
         </label>
         <input
@@ -225,13 +225,13 @@ export const SmartExtractor = () => {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://example.com/page-to-scrape"
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent placeholder-slate-400"
         />
       </div>
 
       {/* User Instructions */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           <div className="flex items-center gap-2">
             <Lightbulb className="h-4 w-4 text-yellow-500" />
             What data do you want to extract?
@@ -242,18 +242,18 @@ export const SmartExtractor = () => {
           onChange={(e) => setUserInstructions(e.target.value)}
           placeholder="Describe what you want to extract in natural language...&#10;&#10;Example: Extract product names, prices, ratings, and availability status"
           rows={4}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+          className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none placeholder-slate-400"
         />
 
         {/* Example Prompts */}
         <div className="mt-3">
-          <p className="text-xs text-gray-500 mb-2">Try these examples:</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Try these examples:</p>
           <div className="flex flex-wrap gap-2">
             {examplePrompts.map((prompt, idx) => (
               <button
                 key={idx}
                 onClick={() => useExamplePrompt(prompt)}
-                className="text-xs px-3 py-1 bg-purple-50 text-purple-700 rounded-full hover:bg-purple-100 transition-colors"
+                className="text-xs px-3 py-1 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
               >
                 {prompt.substring(0, 50)}...
               </button>
@@ -266,13 +266,13 @@ export const SmartExtractor = () => {
       <div className="grid grid-cols-3 gap-4 mb-4">
         {/* LLM Provider */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
             AI Provider
           </label>
           <select
             value={llmProvider}
             onChange={(e) => setLlmProvider(e.target.value as LLMProvider)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
             <option value="ollama">Ollama (Local)</option>
             <option value="openai">OpenAI GPT-4</option>
@@ -282,13 +282,13 @@ export const SmartExtractor = () => {
 
         {/* Output Format */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
             Output Format
           </label>
           <select
             value={outputFormat}
             onChange={(e) => setOutputFormat(e.target.value as OutputFormat)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
             <option value="excel">Excel (.xlsx)</option>
             <option value="csv">CSV (.csv)</option>
@@ -298,7 +298,7 @@ export const SmartExtractor = () => {
 
         {/* Max Fields */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
             Max Fields
           </label>
           <input
@@ -307,7 +307,7 @@ export const SmartExtractor = () => {
             onChange={(e) => setMaxFields(parseInt(e.target.value))}
             min={1}
             max={30}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           />
         </div>
       </div>
@@ -316,16 +316,16 @@ export const SmartExtractor = () => {
       <div className="mb-4">
         <button
           onClick={() => setShowAdvanced(!showAdvanced)}
-          className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800"
+          className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
         >
           {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           Advanced Options
         </button>
 
         {showAdvanced && (
-          <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="text-sm text-gray-600">
-              <p className="mb-2 font-medium">Two-Step Workflow:</p>
+          <div className="mt-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+            <div className="text-sm text-slate-600 dark:text-slate-400">
+              <p className="mb-2 font-medium text-slate-700 dark:text-slate-300">Two-Step Workflow:</p>
               <p className="mb-4">
                 You can either generate a template first to review it, or directly extract data in one step.
               </p>
@@ -333,7 +333,7 @@ export const SmartExtractor = () => {
               <button
                 onClick={handleAutoGenerate}
                 disabled={isGenerating || !url || !userInstructions}
-                className="w-full mb-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full mb-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isGenerating ? (
                   <>
@@ -387,34 +387,34 @@ export const SmartExtractor = () => {
 
       {/* Generated Template Display */}
       {generatedTemplate && generatedTemplate.success && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6">
           <div className="flex items-start gap-3 mb-4">
             <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
             <div className="flex-1">
-              <p className="font-semibold text-green-800">Template Generated Successfully!</p>
-              <p className="text-sm text-green-700">{generatedTemplate.message}</p>
+              <p className="font-semibold text-green-800 dark:text-green-200">Template Generated Successfully!</p>
+              <p className="text-sm text-green-700 dark:text-green-300">{generatedTemplate.message}</p>
             </div>
           </div>
 
           {generatedTemplate.template && (
-            <div className="bg-white rounded-lg p-4 mb-4">
-              <h3 className="font-semibold text-gray-800 mb-2">Template Details:</h3>
+            <div className="bg-white dark:bg-slate-800 rounded-lg p-4 mb-4 border border-slate-200 dark:border-slate-700">
+              <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-2">Template Details:</h3>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
-                  <span className="text-gray-600">Name:</span>{' '}
-                  <span className="font-medium">{generatedTemplate.template.name}</span>
+                  <span className="text-slate-600 dark:text-slate-400">Name:</span>{' '}
+                  <span className="font-medium text-slate-900 dark:text-white">{generatedTemplate.template.name}</span>
                 </div>
                 <div>
-                  <span className="text-gray-600">Type:</span>{' '}
-                  <span className="font-medium">{generatedTemplate.template.template_type}</span>
+                  <span className="text-slate-600 dark:text-slate-400">Type:</span>{' '}
+                  <span className="font-medium text-slate-900 dark:text-white">{generatedTemplate.template.template_type}</span>
                 </div>
                 <div>
-                  <span className="text-gray-600">Fields:</span>{' '}
-                  <span className="font-medium">{generatedTemplate.template.fields_count}</span>
+                  <span className="text-slate-600 dark:text-slate-400">Fields:</span>{' '}
+                  <span className="font-medium text-slate-900 dark:text-white">{generatedTemplate.template.fields_count}</span>
                 </div>
                 <div>
-                  <span className="text-gray-600">Confidence:</span>{' '}
-                  <span className="font-medium">
+                  <span className="text-slate-600 dark:text-slate-400">Confidence:</span>{' '}
+                  <span className="font-medium text-slate-900 dark:text-white">
                     {((generatedTemplate.confidence || 0) * 100).toFixed(0)}%
                   </span>
                 </div>
@@ -423,32 +423,32 @@ export const SmartExtractor = () => {
           )}
 
           {generatedTemplate.fields && generatedTemplate.fields.length > 0 && (
-            <div className="bg-white rounded-lg p-4">
-              <h3 className="font-semibold text-gray-800 mb-3">Generated Fields:</h3>
+            <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
+              <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-3">Generated Fields:</h3>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {generatedTemplate.fields.map((field, idx) => (
-                  <div key={idx} className="border border-gray-200 rounded p-3">
+                  <div key={idx} className="border border-slate-200 dark:border-slate-700 rounded p-3">
                     <div className="flex items-start justify-between mb-2">
                       <div>
-                        <p className="font-medium text-gray-800">
+                        <p className="font-medium text-slate-800 dark:text-slate-200">
                           {field.display_name || field.name}
                         </p>
                         {field.description && (
-                          <p className="text-xs text-gray-600">{field.description}</p>
+                          <p className="text-xs text-slate-600 dark:text-slate-400">{field.description}</p>
                         )}
                       </div>
                       <div className="flex gap-2">
-                        <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                        <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
                           {field.type}
                         </span>
                         {field.required && (
-                          <span className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded">
+                          <span className="text-xs px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded">
                             required
                           </span>
                         )}
                       </div>
                     </div>
-                    <div className="text-xs text-gray-600">
+                    <div className="text-xs text-slate-600 dark:text-slate-400">
                       <span className="font-medium">Strategy:</span> {field.extraction_strategy}
                       {field.extraction_hint !== 'N/A' && (
                         <span className="ml-2">
@@ -466,13 +466,13 @@ export const SmartExtractor = () => {
 
       {/* Extracted Data Display */}
       {extractedData && extractedData.success && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-start gap-3">
               <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
               <div>
-                <p className="font-semibold text-green-800">Data Extracted Successfully!</p>
-                <p className="text-sm text-green-700">
+                <p className="font-semibold text-green-800 dark:text-green-200">Data Extracted Successfully!</p>
+                <p className="text-sm text-green-700 dark:text-green-300">
                   Extracted {extractedData.row_count} records from {extractedData.url}
                 </p>
               </div>
@@ -488,14 +488,14 @@ export const SmartExtractor = () => {
 
           {/* Data Preview */}
           {extractedData.data && extractedData.data.length > 0 && (
-            <div className="bg-white rounded-lg p-4 max-h-96 overflow-auto">
-              <h3 className="font-semibold text-gray-800 mb-3">Data Preview:</h3>
+            <div className="bg-white dark:bg-slate-800 rounded-lg p-4 max-h-96 overflow-auto border border-slate-200 dark:border-slate-700">
+              <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-3">Data Preview:</h3>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead>
-                    <tr className="bg-gray-100">
+                    <tr className="bg-slate-100 dark:bg-slate-900">
                       {Object.keys(extractedData.data[0]).map((key) => (
-                        <th key={key} className="px-4 py-2 text-left font-medium text-gray-700">
+                        <th key={key} className="px-4 py-2 text-left font-medium text-slate-700 dark:text-slate-300">
                           {key}
                         </th>
                       ))}
@@ -503,9 +503,9 @@ export const SmartExtractor = () => {
                   </thead>
                   <tbody>
                     {extractedData.data.slice(0, 10).map((row, idx) => (
-                      <tr key={idx} className="border-t border-gray-200">
+                      <tr key={idx} className="border-t border-slate-200 dark:border-slate-700">
                         {Object.values(row).map((value: any, colIdx) => (
-                          <td key={colIdx} className="px-4 py-2 text-gray-600">
+                          <td key={colIdx} className="px-4 py-2 text-slate-600 dark:text-slate-400">
                             {String(value)}
                           </td>
                         ))}
@@ -514,7 +514,7 @@ export const SmartExtractor = () => {
                   </tbody>
                 </table>
                 {extractedData.data.length > 10 && (
-                  <p className="text-xs text-gray-500 mt-2 text-center">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 text-center">
                     Showing 10 of {extractedData.data.length} rows
                   </p>
                 )}
