@@ -77,6 +77,7 @@ class DocumentService:
         file_type: str,
         source_type: str = "upload",
         source_url: Optional[str] = None,
+        session_id: Optional[str] = None,
         db: AsyncSession = None
     ) -> Document:
         """Upload file to MinIO and create database record"""
@@ -116,6 +117,21 @@ class DocumentService:
                 db.add(document)
                 await db.flush()  # Flush to get ID without committing
                 await db.refresh(document)
+
+                # Associate with session if session_id provided
+                if session_id:
+                    try:
+                        from app.models.database_enhanced import SessionDocument
+                        session_doc = SessionDocument(
+                            session_id=uuid.UUID(session_id) if isinstance(session_id, str) else session_id,
+                            document_id=document.id
+                        )
+                        db.add(session_doc)
+                        await db.flush()
+                        logger.info(f"Associated document {document.id} with session {session_id}")
+                    except Exception as e:
+                        # Log warning but don't fail the upload
+                        logger.warning(f"Could not associate document with session {session_id}: {e}")
 
             return document
 
