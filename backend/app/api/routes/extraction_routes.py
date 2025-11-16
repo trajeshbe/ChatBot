@@ -4,12 +4,14 @@ Extraction Workflow API Routes
 Provides API endpoints for the Phase 3 LangGraph extraction workflow.
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 import uuid
 import logging
+import pandas as pd
+import io
 
 from app.services.webscraper.workflows import ExtractionWorkflow, extract_data_from_urls
 
@@ -419,7 +421,13 @@ async def delete_job(job_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/jobs", response_model=List[ExtractionJobResponse])
+class JobsListResponse(BaseModel):
+    """Response model for job list"""
+    jobs: List[ExtractionJobResponse]
+    total: int
+
+
+@router.get("/jobs", response_model=JobsListResponse)
 async def list_jobs(
     status: Optional[str] = None,
     limit: int = 100
@@ -442,7 +450,7 @@ async def list_jobs(
         # Limit results
         jobs = jobs[:limit]
 
-        return [
+        job_list = [
             ExtractionJobResponse(
                 job_id=job['job_id'],
                 status=job.get('status', 'unknown'),
@@ -453,6 +461,11 @@ async def list_jobs(
             )
             for job in jobs
         ]
+
+        return JobsListResponse(
+            jobs=job_list,
+            total=len(job_list)
+        )
 
     except Exception as e:
         logger.error(f"Error listing jobs: {str(e)}")
@@ -568,10 +581,125 @@ class TemplateResponse(BaseModel):
     updated_at: datetime
 
 
+@router.post("/templates/upload-excel", response_model=TemplateResponse)
+async def upload_excel_template(
+    file: UploadFile = File(...),
+    template_name: Optional[str] = None,
+    template_description: Optional[str] = None
+):
+    """
+    Upload an Excel template file
+
+    This endpoint allows you to upload an Excel file (.xlsx, .xls) with column headers.
+    The column headers will be used to create an extraction template that uses LLM-based
+    intelligent mapping to extract data from scraped web pages and populate the Excel columns.
+
+    How it works:
+    1. Upload an Excel file with column headers (e.g., "Product Name", "Price", "Description")
+    2. The system reads the column names from the first row
+    3. Creates an extraction template with LLM prompts for each column
+    4. When scraping URLs, the LLM will intelligently map scraped data to these columns
+
+    Example Excel structure:
+    | Product Name | Price | Description | Rating | URL |
+    |--------------|-------|-------------|--------|-----|
+    | (empty rows - will be populated by scraper) |
+    """
+    try:
+        # Validate file type
+        if not file.filename.endswith(('.xlsx', '.xls')):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid file type. Only Excel files (.xlsx, .xls) are supported"
+            )
+
+        # Read the Excel file
+        contents = await file.read()
+        df = pd.read_excel(io.BytesIO(contents))
+
+        # Extract column names
+        column_names = df.columns.tolist()
+
+        if not column_names:
+            raise HTTPException(
+                status_code=400,
+                detail="Excel file has no columns. Please add column headers in the first row."
+            )
+
+        # Create fields from column names
+        fields = []
+        llm_extraction_prompts = {}
+
+        for col_name in column_names:
+            # Determine field type from column name (basic heuristics)
+            field_type = "string"  # Default
+            col_lower = str(col_name).lower()
+
+            if any(keyword in col_lower for keyword in ['price', 'cost', 'amount', 'rating', 'score', 'count', 'number']):
+                field_type = "number"
+            elif any(keyword in col_lower for keyword in ['url', 'link', 'website']):
+                field_type = "url"
+            elif any(keyword in col_lower for keyword in ['date', 'time', 'timestamp']):
+                field_type = "date"
+            elif any(keyword in col_lower for keyword in ['email']):
+                field_type = "email"
+            elif any(keyword in col_lower for keyword in ['phone', 'telephone']):
+                field_type = "phone"
+
+            fields.append({
+                "name": col_name,
+                "type": field_type,
+                "required": False  # All fields optional by default
+            })
+
+            # Create intelligent LLM prompt based on column name
+            llm_extraction_prompts[col_name] = f"Extract the {col_name.lower()} from the webpage content. Look for information related to '{col_name}' and return the most relevant value. If not found, return an empty string."
+
+        # Create template
+        template_id = str(uuid.uuid4())
+        now = datetime.utcnow()
+
+        template_data = {
+            'template_id': template_id,
+            'name': template_name or f"Excel Template: {file.filename}",
+            'description': template_description or f"Auto-generated template from Excel file with columns: {', '.join(column_names[:5])}{'...' if len(column_names) > 5 else ''}",
+            'fields': fields,
+            'css_selectors': {},  # Will be populated by LLM if needed
+            'xpath_selectors': {},
+            'json_paths': {},
+            'llm_extraction_prompts': llm_extraction_prompts,
+            'validation_rules': {},
+            'preprocessing': {},
+            'created_at': now,
+            'updated_at': now,
+            'source': 'excel_upload',
+            'original_filename': file.filename
+        }
+
+        templates_store[template_id] = template_data
+
+        logger.info(f"Created Excel template {template_id} from {file.filename} with {len(column_names)} columns")
+
+        return TemplateResponse(
+            template_id=template_id,
+            name=template_data['name'],
+            description=template_data['description'],
+            fields_count=len(fields),
+            created_at=now,
+            updated_at=now
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading Excel template: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process Excel file: {str(e)}")
+
+
 @router.post("/templates", response_model=TemplateResponse)
 async def create_template(template: ExtractionTemplate):
     """
-    Upload/Create a custom extraction template
+    Upload/Create a custom extraction template (JSON format)
 
     Templates define how to extract structured data from web pages.
     You can specify CSS selectors, XPath, JSON paths, or LLM prompts for extraction.

@@ -923,6 +923,9 @@ function TemplateExtractionTab() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [showTemplateUpload, setShowTemplateUpload] = useState(false)
   const [templateJson, setTemplateJson] = useState('')
+  const [showExcelUpload, setShowExcelUpload] = useState(false)
+  const [excelFile, setExcelFile] = useState<File | null>(null)
+  const [isUploadingExcel, setIsUploadingExcel] = useState(false)
 
   // Fetch templates on mount
   useEffect(() => {
@@ -949,6 +952,52 @@ function TemplateExtractionTab() {
     } catch (error: any) {
       console.error('Template upload error:', error)
       alert(error.response?.data?.detail || 'Failed to upload template. Please check the JSON format.')
+    }
+  }
+
+  const handleUploadExcelTemplate = async () => {
+    if (!excelFile) {
+      alert('Please select an Excel file first')
+      return
+    }
+
+    setIsUploadingExcel(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', excelFile)
+
+      const response = await axios.post(
+        `${API_URL}/api/v1/extraction/templates/upload-excel`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        }
+      )
+
+      alert(`Excel template uploaded successfully! Template ID: ${response.data.template_id}`)
+      setExcelFile(null)
+      setShowExcelUpload(false)
+      fetchTemplates()
+    } catch (error: any) {
+      console.error('Excel upload error:', error)
+      alert(error.response?.data?.detail || 'Failed to upload Excel file')
+    }
+
+    setIsUploadingExcel(false)
+  }
+
+  const handleExcelFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+        setExcelFile(file)
+      } else {
+        alert('Please select a valid Excel file (.xlsx or .xls)')
+        e.target.value = ''
+      }
     }
   }
 
@@ -1063,18 +1112,98 @@ function TemplateExtractionTab() {
             </div>
 
             {/* Template Upload Section */}
-            <div>
+            <div className="flex gap-3">
               <button
-                onClick={() => setShowTemplateUpload(!showTemplateUpload)}
+                onClick={() => {
+                  setShowExcelUpload(!showExcelUpload)
+                  if (!showExcelUpload) setShowTemplateUpload(false)
+                }}
+                className="flex items-center gap-2 px-4 py-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+              >
+                <FileText className="w-4 h-4" />
+                {showExcelUpload ? 'Hide' : 'Upload Excel Template'}
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowTemplateUpload(!showTemplateUpload)
+                  if (!showTemplateUpload) setShowExcelUpload(false)
+                }}
                 className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
               >
                 <Plus className="w-4 h-4" />
-                {showTemplateUpload ? 'Hide' : 'Upload New Template'}
+                {showTemplateUpload ? 'Hide' : 'Upload JSON Template'}
               </button>
+            </div>
 
-              {showTemplateUpload && (
-                <div className="mt-3 space-y-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <div>
+            {/* Excel Upload Section */}
+            {showExcelUpload && (
+              <div className="mt-3 space-y-3 p-4 bg-green-50 dark:bg-green-900/10 rounded-lg border border-green-200 dark:border-green-800">
+                <div>
+                  <h4 className="text-sm font-semibold text-green-900 dark:text-green-100 mb-2">
+                    Upload Excel Template
+                  </h4>
+                  <p className="text-xs text-green-800 dark:text-green-200 mb-3">
+                    Upload an Excel file (.xlsx or .xls) with column headers. The system will intelligently map
+                    scraped data to these columns using LLM-powered extraction.
+                  </p>
+                  <p className="text-xs text-green-700 dark:text-green-300 mb-3 font-mono bg-green-100 dark:bg-green-900/30 p-2 rounded">
+                    Example: Create an Excel file with columns like: "Product Name", "Price", "Description", "Rating"
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Select Excel File
+                  </label>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleExcelFileChange}
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                  {excelFile && (
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-2">
+                      Selected: {excelFile.name} ({(excelFile.size / 1024).toFixed(2)} KB)
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleUploadExcelTemplate}
+                    disabled={!excelFile || isUploadingExcel}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  >
+                    {isUploadingExcel ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="w-4 h-4" />
+                        Upload Excel Template
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowExcelUpload(false)
+                      setExcelFile(null)
+                    }}
+                    className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* JSON Template Upload Section */}
+            {showTemplateUpload && (
+              <div className="mt-3 space-y-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       Template JSON
                     </label>
