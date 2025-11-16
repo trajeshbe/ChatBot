@@ -598,6 +598,16 @@ except ImportError as e:
     logger.warning(f"Enterprise Web Scraper API not available: {e}")
 except Exception as e:
     logger.warning(f"Could not register Enterprise Web Scraper router: {e}")
+
+# Phase 3: Extraction Workflow API (LangGraph-based)
+try:
+    from app.api.routes import extraction_routes
+    app.include_router(extraction_routes.router)
+    logger.info("✓ Extraction Workflow API router registered (Phase 3: LangGraph workflows)")
+except ImportError as e:
+    logger.warning(f"Extraction Workflow API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Extraction Workflow router: {e}")
     logger.warning("Continuing without enterprise scraper features")
 
 
