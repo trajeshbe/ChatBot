@@ -437,9 +437,9 @@ class HybridStrategy(BaseScraperStrategy):
             BeautifulSoupStrategy(config),
         ]
 
-        # Add Playwright if JavaScript is enabled
-        if config.enable_javascript:
-            self.strategies.append(PlaywrightStrategy(config))
+        # Always add Playwright as a fallback (critical for bot-protected sites)
+        # Playwright can bypass 403 errors from sites like Wikipedia
+        self.strategies.append(PlaywrightStrategy(config))
 
     async def scrape(self, url: str, html_content: Optional[str] = None) -> ScrapedContent:
         """Try multiple strategies until one succeeds"""
@@ -498,6 +498,13 @@ class AutoStrategy(BaseScraperStrategy):
     def _select_strategy(self, url: str) -> BaseScraperStrategy:
         """Select best strategy based on URL patterns"""
         url_lower = url.lower()
+
+        # Sites that have strong bot detection and need Playwright
+        # These sites will return 403 Forbidden or block simple HTTP clients
+        bot_protected_sites = ['wikipedia.org', 'wikimedia.org', 'linkedin.com']
+        if any(site in url_lower for site in bot_protected_sites):
+            # Always use hybrid with Playwright to bypass bot detection
+            return self.strategies['hybrid']
 
         # JavaScript-heavy sites
         js_sites = ['youtube.com', 'twitter.com', 'facebook.com', 'instagram.com']

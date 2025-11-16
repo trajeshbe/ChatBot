@@ -84,7 +84,11 @@ fi
 
 # Ollama models
 echo -n "Checking Ollama Models... "
-ollama_models=$(docker exec rag-ollama ollama list 2>/dev/null | grep -c "instruct" || echo "0")
+ollama_models=$(docker exec rag-ollama ollama list 2>/dev/null | grep -c "instruct" 2>/dev/null || echo "0")
+# Ensure it's a valid integer by stripping any non-numeric characters
+ollama_models=$(echo "$ollama_models" | tr -cd '0-9' | head -c 10)
+# Default to 0 if empty
+[ -z "$ollama_models" ] && ollama_models=0
 if [ "$ollama_models" -ge 2 ]; then
     echo -e "${GREEN}✅ OK${NC} - $ollama_models models installed"
     ((success_count++))
@@ -99,8 +103,16 @@ echo "=== Available Models ==="
 # Get models from API
 models_response=$(curl -s http://localhost:8000/api/v1/models/ 2>/dev/null)
 if [ -n "$models_response" ]; then
-    echo "$models_response" | jq -r '.[] | "  • \(.name) (\(.provider))"' 2>/dev/null || echo "  Unable to parse models (jq not installed)"
-    model_count=$(echo "$models_response" | jq '. | length' 2>/dev/null || echo "?")
+    # Check if jq is available
+    if command -v jq &> /dev/null; then
+        echo "$models_response" | jq -r '.[] | "  • \(.name) (\(.provider))"' 2>/dev/null
+        model_count=$(echo "$models_response" | jq '. | length' 2>/dev/null || echo "?")
+    else
+        # Fallback without jq
+        echo "  (Install jq for better formatting: apt-get install jq)"
+        echo "$models_response" | grep -o '"name":"[^"]*"' | sed 's/"name":"//g' | sed 's/"//g' | sed 's/^/  • /'
+        model_count=$(echo "$models_response" | grep -o '"name"' | wc -l)
+    fi
     echo ""
     echo "Total models available: $model_count"
 else

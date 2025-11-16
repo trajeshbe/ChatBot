@@ -117,7 +117,7 @@ async def create_extraction_job(
         # Generate job ID
         job_id = str(uuid.uuid4())
 
-        # Store initial job info
+        # Store initial job info (including original request for retry capability)
         jobs_store[job_id] = {
             'job_id': job_id,
             'status': 'pending',
@@ -126,7 +126,13 @@ async def create_extraction_job(
             'output_format': request.output_format,
             'delivery_method': request.delivery_method,
             'current_step': 'pending',
-            'progress_percentage': 0.0
+            'progress_percentage': 0.0,
+            # Store original request parameters for retry
+            'urls': request.urls,
+            'template_id': request.template_id,
+            'scrape_config': request.scrape_config or {},
+            'delivery_config': request.delivery_config or {},
+            'session_id': request.session_id
         }
 
         # Run workflow in background
@@ -296,6 +302,84 @@ async def download_job_result(job_id: str):
         raise
     except Exception as e:
         logger.error(f"Error downloading file: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/jobs/{job_id}/retry")
+async def retry_job(
+    job_id: str,
+    background_tasks: BackgroundTasks
+):
+    """
+    Retry a failed extraction job
+
+    This endpoint allows retrying a failed job with the same configuration.
+    Useful for transient failures (network issues, rate limits, etc.)
+
+    Returns:
+        New job ID for the retry attempt
+    """
+    try:
+        if job_id not in jobs_store:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+        original_job = jobs_store[job_id]
+
+        # Only allow retry for failed or completed jobs
+        if original_job['status'] not in ['failed', 'completed']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Can only retry failed or completed jobs. Current status: {original_job['status']}"
+            )
+
+        # Create new job with same configuration
+        new_job_id = str(uuid.uuid4())
+
+        jobs_store[new_job_id] = {
+            'job_id': new_job_id,
+            'status': 'pending',
+            'created_at': datetime.utcnow(),
+            'urls_count': original_job.get('urls_count', 0),
+            'output_format': original_job.get('output_format', 'excel'),
+            'delivery_method': original_job.get('delivery_method', 'download'),
+            'current_step': 'pending',
+            'progress_percentage': 0.0,
+            'retried_from': job_id  # Track the original job
+        }
+
+        # Extract URLs from original job request (stored in job)
+        urls = original_job.get('urls', [])
+        template_id = original_job.get('template_id')
+        scrape_config = original_job.get('scrape_config', {})
+        delivery_config = original_job.get('delivery_config', {})
+        session_id = original_job.get('session_id')
+
+        # Run workflow in background
+        background_tasks.add_task(
+            run_extraction_workflow,
+            job_id=new_job_id,
+            urls=urls,
+            template_id=template_id,
+            output_format=original_job['output_format'],
+            delivery_method=original_job['delivery_method'],
+            delivery_config=delivery_config,
+            scrape_config=scrape_config,
+            session_id=session_id
+        )
+
+        logger.info(f"Created retry job {new_job_id} from original job {job_id}")
+
+        return {
+            "message": f"Retry job created",
+            "new_job_id": new_job_id,
+            "original_job_id": job_id,
+            "status": "pending"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrying job: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

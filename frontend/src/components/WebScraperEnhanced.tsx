@@ -1479,6 +1479,24 @@ function JobMonitorTab() {
     }
   }
 
+  const handleRetry = async (jobId: string) => {
+    if (!confirm('Retry this job with the same configuration?')) return
+
+    try {
+      const response = await axios.post(`${API_URL}/api/v1/extraction/jobs/${jobId}/retry`)
+      alert(`Retry job created successfully! New Job ID: ${response.data.new_job_id}`)
+      // Refresh jobs list
+      fetchJobs()
+      // Select the new job
+      if (response.data.new_job_id) {
+        setTimeout(() => fetchJobDetails(response.data.new_job_id), 1000)
+      }
+    } catch (error: any) {
+      console.error('Retry failed:', error)
+      alert(error.response?.data?.detail || 'Failed to retry job')
+    }
+  }
+
   const handleDelete = async (jobId: string) => {
     if (!confirm('Are you sure you want to delete this job?')) return
 
@@ -1786,6 +1804,15 @@ function JobMonitorTab() {
                 >
                   <Download className="w-5 h-5" />
                   Download Results
+                </button>
+              )}
+              {selectedJob.status === 'failed' && (
+                <button
+                  onClick={() => handleRetry(selectedJob.job_id)}
+                  className="flex-1 px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                  Retry Job
                 </button>
               )}
               {(selectedJob.status === 'completed' || selectedJob.status === 'failed') && (
