@@ -134,7 +134,7 @@ class TemplateExtractionService:
             return {
                 'success': True,
                 'url': url,
-                'template': template.name,
+                'template_name': template.name,
                 'data': all_data,
                 'row_count': len(all_data),
                 'extracted_at': datetime.utcnow().isoformat(),
@@ -146,8 +146,11 @@ class TemplateExtractionService:
             return {
                 'success': False,
                 'url': url,
+                'template_name': template.name,
+                'data': [],
+                'row_count': 0,
+                'extracted_at': datetime.utcnow().isoformat(),
                 'error': str(e),
-                'template': template.name,
                 'session_id': session_id
             }
         finally:
