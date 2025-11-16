@@ -589,6 +589,17 @@ except Exception as e2:
     logger.warning(f"Could not load Enhanced Scraper Service: {e2}")
     logger.warning("Continuing with basic scraper service")
 
+# Enterprise Web Scraper with Compliance Engine
+try:
+    from app.api.routes import scraper_enhanced
+    app.include_router(scraper_enhanced.router)
+    logger.info("✓ Enterprise Web Scraper API router registered (compliance engine, LLM integration)")
+except ImportError as e:
+    logger.warning(f"Enterprise Web Scraper API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Enterprise Web Scraper router: {e}")
+    logger.warning("Continuing without enterprise scraper features")
+
 
 # === Admin API Endpoints ===
 

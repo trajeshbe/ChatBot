@@ -83,11 +83,16 @@ lxml==5.1.0                   # XML/HTML parser - faster than default parser
 
 # ----------------------------------------------------------------------------
 # WEB SCRAPING (Required)
-# Used by: app/services/scraper_service.py
+# Used by: app/services/scraper_service.py, app/services/webscraper/*
 # ----------------------------------------------------------------------------
 playwright==1.41.0            # Browser automation - scrapes JavaScript-heavy sites
 httpx==0.27.0                 # Async HTTP client - makes HTTP requests (updated for compatibility)
 trafilatura==1.6.3            # Content extraction - extracts main content from HTML
+
+# Enterprise scraping compliance and advanced features
+# Used by: app/services/webscraper/compliance/*
+robotexclusionrulesparser==1.7.1  # Robots.txt parser - ensures compliance with scraping policies
+urllib3==2.1.0                    # HTTP library - used by robots.txt checker
 
 # ----------------------------------------------------------------------------
 # WORKFLOW ORCHESTRATION (Required for document ingestion pipelines)

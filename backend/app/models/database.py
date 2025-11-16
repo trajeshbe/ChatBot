@@ -73,6 +73,15 @@ class WebScrapeJob(Base):
     completed_at = Column(DateTime(timezone=True), nullable=True)
     meta_info = Column(JSON, nullable=True)
 
+    # Enhanced scraping fields
+    compliance_level = Column(String(50), default='balanced')  # strict, balanced, aggressive
+    proxy_used = Column(String(255), nullable=True)
+    user_agent_used = Column(String(512), nullable=True)
+    auth_method = Column(String(50), nullable=True)  # none, basic, bearer, api_key, etc.
+    llm_provider = Column(String(50), nullable=True)  # ollama, openai, anthropic
+    scraping_time_ms = Column(Float, nullable=True)
+    protocols_detected = Column(JSON, nullable=True)
+
 
 class QueryCache(Base):
     __tablename__ = "query_cache"
