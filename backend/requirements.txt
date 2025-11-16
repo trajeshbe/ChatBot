@@ -94,6 +94,14 @@ trafilatura==1.6.3            # Content extraction - extracts main content from 
 robotexclusionrulesparser==1.7.1  # Robots.txt parser - ensures compliance with scraping policies
 urllib3==2.1.0                    # HTTP library - used by robots.txt checker
 
+# Phase 2: Template System & Data Extraction
+# Used by: app/services/webscraper/extractors/*, app/services/webscraper/templates/*
+jsonpath-ng==1.6.1               # JSONPath support - extract from JSON data
+pandas>=2.0.0                    # Data manipulation - template parsing and output generation
+xlsxwriter>=3.1.9                # Excel writing - output generation
+fastexcel>=0.2.0                 # Fast Excel reading - template parsing
+pyarrow>=14.0.0                  # Parquet support - analytics output format
+
 # ----------------------------------------------------------------------------
 # WORKFLOW ORCHESTRATION (Required for document ingestion pipelines)
 # Used by: app/agents/rag_agent.py
