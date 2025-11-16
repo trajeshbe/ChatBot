@@ -109,22 +109,47 @@ ChatBot/
 ├── devops/                   # DevOps tooling
 │   └── skaffold/            # Local K8s development
 │
-├── scripts/                  # Utility scripts
+├── docs/                     # Documentation (organized by category)
+│   ├── guides/              # User guides
+│   │   ├── QUICKSTART.md
+│   │   ├── ADMIN_GUIDE.md
+│   │   └── GRAPHQL_EXAMPLES.md
+│   ├── architecture/        # Architecture documentation
+│   │   ├── MEMORY_HIERARCHY_GUIDE.md
+│   │   └── DEPLOYMENT.md
+│   ├── setup/               # Setup guides
+│   │   ├── LOCAL_LLM_SETUP.md
+│   │   ├── LOCAL_MODELS_QUICK_START.md
+│   │   └── MULTI_MODEL_SETUP.md
+│   ├── debugging/           # Debugging guides
+│   │   ├── DEBUG_QUICK_REFERENCE.md
+│   │   ├── DEBUG_TOOLS_README.md
+│   │   ├── RAG_DEBUGGING_GUIDE.md
+│   │   └── RAG_DEBUG_QUICK_REFERENCE.md
+│   ├── evaluation/          # Evaluation guides
+│   │   ├── EVALUATION_GUIDE.md
+│   │   ├── EVALUATION_QUICK_REFERENCE.md
+│   │   ├── RAG_EVALUATION_AND_IMPROVEMENTS.md
+│   │   └── RAG_EVALUATION_ARCHITECTURE.md
+│   └── archive/             # Historical documentation
+│
+├── scripts/                  # Utility scripts (organized by category)
+│   ├── setup/               # Setup scripts
+│   ├── testing/             # Test scripts
+│   ├── debugging/           # Debug scripts
+│   ├── maintenance/         # Maintenance scripts
+│   └── archive/             # Deprecated scripts
 │
 ├── docker-compose.yml        # Local development stack
 ├── Makefile                  # Common development commands
 ├── .env.example              # Environment variable template
 ├── .gitignore                # Git ignore patterns
 │
-└── Documentation Files:
+└── Root Documentation Files:
     ├── README.md                      # Main project documentation
+    ├── CLAUDE.md                      # This file - AI assistant guide
     ├── CONTRIBUTING.md                # Contribution guidelines
-    ├── DEPLOYMENT.md                  # Deployment instructions
-    ├── ADMIN_GUIDE.md                 # Admin dashboard guide
-    ├── MEMORY_HIERARCHY_GUIDE.md      # Architecture deep dive
-    ├── QUICKSTART.md                  # Quick start guide
-    ├── STATUS.md                      # Current project status
-    └── CLAUDE.md                      # This file
+    └── STATUS.md                      # Current project status
 ```
 
 ---
@@ -1385,14 +1410,31 @@ docker-compose exec postgres psql -U postgres -d ragchatbot -c \
 
 ### Diagnostic Scripts
 
+All scripts are now organized in the `scripts/` directory:
+
 ```bash
-./diagnose-backend.sh        # Backend health check
-./diagnose-documents.sh      # Document processing status
-./diagnose-llama.sh          # LLM service status
-./validate-services.sh       # All services health check
-./check-documents.sh         # Document database status
-./check-backend-errors.sh    # Backend error logs
+# Debugging (scripts/debugging/)
+./scripts/debugging/diagnose-backend.sh        # Backend health check
+./scripts/debugging/diagnose-documents.sh      # Document processing status
+./scripts/debugging/diagnose-llama.sh          # LLM service status
+./scripts/debugging/check-documents.sh         # Document database status
+./scripts/debugging/check-backend-errors.sh    # Backend error logs
+./scripts/debugging/debug-rag.sh               # RAG pipeline debugging
+
+# Maintenance (scripts/maintenance/)
+./scripts/maintenance/validate-services.sh     # All services health check
+./scripts/maintenance/verify-complete-setup.sh # Verify complete setup
+
+# Setup (scripts/setup/)
+./scripts/setup/setup-database.sh              # Database setup
+./scripts/setup/start-services.sh              # Start all services
+
+# Testing (scripts/testing/)
+./scripts/testing/test-integration.sh          # Integration tests
+./scripts/testing/test-upload-endpoint.sh      # Test uploads
 ```
+
+See `scripts/README.md` for complete script documentation.
 
 ### Service Endpoints for Testing
 
@@ -1420,7 +1462,7 @@ open http://localhost:8002
 docker-compose down -v
 docker system prune -a -f
 make up
-./setup-database.sh
+./scripts/setup/setup-database.sh
 ```
 
 ---
@@ -1428,13 +1470,34 @@ make up
 ## Additional Resources
 
 ### Documentation Files
+
+#### Root Documentation
 - **README.md**: Main project documentation
 - **CONTRIBUTING.md**: Contribution guidelines
-- **DEPLOYMENT.md**: Detailed deployment instructions
-- **ADMIN_GUIDE.md**: Admin dashboard usage
-- **MEMORY_HIERARCHY_GUIDE.md**: Architecture deep dive (600+ lines)
-- **QUICKSTART.md**: Quick reference guide
 - **STATUS.md**: Current project status
+
+#### User Guides (docs/guides/)
+- **QUICKSTART.md**: Quick reference guide
+- **ADMIN_GUIDE.md**: Admin dashboard usage
+- **GRAPHQL_EXAMPLES.md**: GraphQL API examples
+
+#### Architecture (docs/architecture/)
+- **MEMORY_HIERARCHY_GUIDE.md**: Architecture deep dive (600+ lines)
+- **DEPLOYMENT.md**: Detailed deployment instructions
+
+#### Setup Guides (docs/setup/)
+- **LOCAL_LLM_SETUP.md**: Local LLM setup
+- **LOCAL_MODELS_QUICK_START.md**: Quick start for local models
+- **MULTI_MODEL_SETUP.md**: Multi-provider setup
+
+#### Debugging (docs/debugging/)
+- **RAG_DEBUGGING_GUIDE.md**: RAG system debugging
+- **DEBUG_QUICK_REFERENCE.md**: Quick debug reference
+- **DEBUG_TOOLS_README.md**: Debugging tools guide
+
+#### Evaluation (docs/evaluation/)
+- **EVALUATION_GUIDE.md**: Comprehensive evaluation guide
+- **RAG_EVALUATION_AND_IMPROVEMENTS.md**: Evaluation and improvements
 
 ### External Documentation
 - FastAPI: https://fastapi.tiangolo.com
@@ -1459,6 +1522,7 @@ make up
 | Date       | Version | Changes                                      |
 |------------|---------|----------------------------------------------|
 | 2025-11-14 | 1.0.0   | Initial comprehensive CLAUDE.md created      |
+| 2025-11-16 | 1.1.0   | Repository reorganization - docs and scripts |
 
 ---
 
@@ -1467,9 +1531,14 @@ make up
 If you encounter issues or have questions:
 1. Check this documentation first
 2. Review STATUS.md for known issues
-3. Check existing documentation in the repository
+3. Check the organized documentation in `docs/`:
+   - **Setup issues**: See `docs/setup/`
+   - **Debugging**: See `docs/debugging/`
+   - **Architecture questions**: See `docs/architecture/`
+   - **Evaluation**: See `docs/evaluation/`
 4. Review recent git commits for context
-5. Run diagnostic scripts for debugging
+5. Run diagnostic scripts from `scripts/debugging/` for debugging
+6. Check the README in each docs subdirectory for navigation
 
 ---
 

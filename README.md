@@ -68,6 +68,28 @@ A state-of-the-art, production-ready RAG (Retrieval-Augmented Generation) chatbo
 - **Kube-Ray** - Distributed Ray clusters
 - **Docling** - Document processing
 
+## 📚 Documentation
+
+Comprehensive documentation is available in the [`docs/`](./docs/) directory:
+
+- **[Quick Start Guide](./docs/guides/QUICKSTART.md)** - Get started quickly
+- **[Admin Guide](./docs/guides/ADMIN_GUIDE.md)** - System administration
+- **[Architecture Guide](./docs/architecture/MEMORY_HIERARCHY_GUIDE.md)** - System architecture
+- **[Deployment Guide](./docs/architecture/DEPLOYMENT.md)** - Production deployment
+- **[Setup Guides](./docs/setup/)** - Component setup (LLM, local dev)
+- **[Debugging Guides](./docs/debugging/)** - Troubleshooting and debugging
+- **[Evaluation Guides](./docs/evaluation/)** - RAG system evaluation
+- **[CLAUDE.md](./CLAUDE.md)** - AI assistant development guide
+
+## 🔧 Scripts
+
+Utility scripts are organized in [`scripts/`](./scripts/) by category:
+
+- **[scripts/setup/](./scripts/setup/)** - Initial setup and configuration
+- **[scripts/testing/](./scripts/testing/)** - Testing and validation
+- **[scripts/debugging/](./scripts/debugging/)** - Diagnostics and debugging
+- **[scripts/maintenance/](./scripts/maintenance/)** - System maintenance
+
 ## 📋 Prerequisites
 
 - Docker 20.10+ and Docker Compose
@@ -107,8 +129,14 @@ VLLM_MODEL=TinyLlama/TinyLlama-1.1B-Chat-v1.0
 # Start all services with Docker Compose
 docker-compose up -d
 
-# Wait for services to be healthy (2-3 minutes)
-docker-compose ps
+# Or use setup script
+./scripts/setup/start-services.sh
+
+# Setup database
+./scripts/setup/setup-database.sh
+
+# Validate all services
+./scripts/maintenance/validate-services.sh
 
 # Check logs
 docker-compose logs -f backend
@@ -250,8 +278,16 @@ npm run test:e2e
 docker-compose up -d
 
 # Run integration tests
-python scripts/test_integration.py
+./scripts/testing/test-integration.sh
+
+# Test RAG pipeline
+./scripts/testing/test_rag_validation.py
+
+# Test document upload
+./scripts/testing/test-upload-endpoint.sh
 ```
+
+See [scripts/testing/](./scripts/testing/) for all available test scripts.
 
 ## 📊 Monitoring & Observability
 
@@ -344,6 +380,9 @@ vllm-service:
 ### Services won't start
 
 ```bash
+# Diagnose backend issues
+./scripts/debugging/diagnose-backend.sh
+
 # Check Docker resources
 docker system df
 
@@ -358,17 +397,41 @@ docker-compose up -d
 ### Database connection errors
 
 ```bash
+# Check documents
+./scripts/debugging/check-documents.sh
+
 # Check PostgreSQL
 docker-compose logs postgres
 
 # Reset database
 docker-compose down -v postgres
 docker-compose up -d postgres
+./scripts/setup/setup-database.sh
+```
+
+### Document processing issues
+
+```bash
+# Diagnose document processing
+./scripts/debugging/diagnose-documents.sh
+
+# Check embeddings
+python ./scripts/debugging/check_embeddings.py
+```
+
+### RAG query issues
+
+```bash
+# Debug RAG pipeline
+./scripts/debugging/debug-rag.sh
 ```
 
 ### LLM service issues
 
 ```bash
+# Diagnose LLM service
+./scripts/debugging/diagnose-llama.sh
+
 # For vLLM (requires GPU)
 # Use llama.cpp fallback instead
 docker-compose up -d llama-cpp
@@ -376,6 +439,11 @@ docker-compose up -d llama-cpp
 # Update backend config to use llama.cpp
 # LLAMA_CPP_ENDPOINT=http://llama-cpp:8080
 ```
+
+For more debugging tools and guides, see:
+- **[Debugging Guide](./docs/debugging/RAG_DEBUGGING_GUIDE.md)**
+- **[Debug Quick Reference](./docs/debugging/DEBUG_QUICK_REFERENCE.md)**
+- **[Debugging Scripts](./scripts/debugging/)**
 
 ## 📝 License
 
@@ -393,7 +461,10 @@ MIT License - see LICENSE file for details
 
 For issues and questions:
 - GitHub Issues: <repository-url>/issues
-- Documentation: See `/docs` folder
+- **Documentation**: See [`docs/`](./docs/) directory
+- **Quick Reference**: [docs/guides/QUICKSTART.md](./docs/guides/QUICKSTART.md)
+- **Admin Guide**: [docs/guides/ADMIN_GUIDE.md](./docs/guides/ADMIN_GUIDE.md)
+- **AI Development**: [CLAUDE.md](./CLAUDE.md)
 
 ## 🎯 Roadmap
 
