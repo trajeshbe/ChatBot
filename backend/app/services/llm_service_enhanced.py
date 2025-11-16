@@ -37,6 +37,7 @@ class EnhancedLLMService:
 
         # HTTP clients for local models
         self.vllm_client = httpx.AsyncClient(timeout=120.0)
+        self.ollama_client = httpx.AsyncClient(timeout=120.0)
         self.llama_cpp_client = httpx.AsyncClient(timeout=120.0)
 
         # Model registry and GPU detector
@@ -135,6 +136,7 @@ class EnhancedLLMService:
     async def close(self):
         """Close HTTP clients"""
         await self.vllm_client.aclose()
+        await self.ollama_client.aclose()
         await self.llama_cpp_client.aclose()
 
     # ============================================================================
@@ -266,7 +268,7 @@ class EnhancedLLMService:
     ) -> Dict:
         """Call Ollama service (local CPU/GPU)"""
         try:
-            response = await self.llama_cpp_client.post(
+            response = await self.ollama_client.post(
                 f"{settings.OLLAMA_ENDPOINT}/api/generate",
                 json={
                     "model": model_info.model_path,
