@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Any, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import get_async_db
+from app.core.database import get_db
 from app.services.template_extraction_service import (
     template_extraction_service,
     ExtractionField,
@@ -70,7 +70,7 @@ class ExtractionResponse(BaseModel):
 @router.post("/custom", response_model=ExtractionResponse)
 async def extract_with_custom_template(
     request: ExtractTemplateRequest,
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Extract data from a URL using a custom template
@@ -133,7 +133,7 @@ async def extract_with_custom_template(
 async def extract_with_preset_template(
     preset_name: str,
     request: ExtractPresetRequest,
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Extract data from a URL using a preset template
@@ -279,7 +279,7 @@ class SmartExtractRequest(BaseModel):
 @router.post("/auto-generate", response_model=AutoGenerateResponse)
 async def auto_generate_template(
     request: AutoGenerateTemplateRequest,
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     **AUTO-GENERATE EXTRACTION TEMPLATE (Feature #2)**
@@ -393,7 +393,7 @@ async def auto_generate_template(
 @router.post("/smart-extract", response_model=ExtractionResponse)
 async def smart_extract_without_template(
     request: SmartExtractRequest,
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     **SMART EXTRACTION WITHOUT PREDEFINED TEMPLATE**
@@ -526,7 +526,7 @@ class RefineTemplateRequest(BaseModel):
 @router.post("/refine-template")
 async def refine_template_with_feedback(
     request: RefineTemplateRequest,
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     **REFINE TEMPLATE WITH USER FEEDBACK**

@@ -189,7 +189,7 @@ export const SmartExtractor = () => {
     <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-6 border border-slate-200 dark:border-slate-700">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg">
+        <div className="p-2 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg">
           <Sparkles className="h-6 w-6 text-white" />
         </div>
         <div>
@@ -201,9 +201,9 @@ export const SmartExtractor = () => {
       </div>
 
       {/* Info Banner */}
-      <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-6">
+      <div className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
         <div className="flex items-start gap-3">
-          <Info className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
+          <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
           <div className="text-sm text-slate-700 dark:text-slate-300">
             <p className="font-semibold mb-1">How it works:</p>
             <ol className="list-decimal ml-4 space-y-1">
@@ -225,7 +225,7 @@ export const SmartExtractor = () => {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://example.com/page-to-scrape"
-          className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent placeholder-slate-400"
+          className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400"
         />
       </div>
 
@@ -242,7 +242,7 @@ export const SmartExtractor = () => {
           onChange={(e) => setUserInstructions(e.target.value)}
           placeholder="Describe what you want to extract in natural language...&#10;&#10;Example: Extract product names, prices, ratings, and availability status"
           rows={4}
-          className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none placeholder-slate-400"
+          className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-slate-400"
         />
 
         {/* Example Prompts */}
@@ -253,7 +253,7 @@ export const SmartExtractor = () => {
               <button
                 key={idx}
                 onClick={() => useExamplePrompt(prompt)}
-                className="text-xs px-3 py-1 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
+                className="text-xs px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
               >
                 {prompt.substring(0, 50)}...
               </button>
@@ -272,7 +272,7 @@ export const SmartExtractor = () => {
           <select
             value={llmProvider}
             onChange={(e) => setLlmProvider(e.target.value as LLMProvider)}
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="ollama">Ollama (Local)</option>
             <option value="openai">OpenAI GPT-4</option>
@@ -288,7 +288,7 @@ export const SmartExtractor = () => {
           <select
             value={outputFormat}
             onChange={(e) => setOutputFormat(e.target.value as OutputFormat)}
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="excel">Excel (.xlsx)</option>
             <option value="csv">CSV (.csv)</option>
@@ -307,7 +307,7 @@ export const SmartExtractor = () => {
             onChange={(e) => setMaxFields(parseInt(e.target.value))}
             min={1}
             max={30}
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
       </div>
@@ -333,7 +333,7 @@ export const SmartExtractor = () => {
               <button
                 onClick={handleAutoGenerate}
                 disabled={isGenerating || !url || !userInstructions}
-                className="w-full mb-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full mb-2 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isGenerating ? (
                   <>
@@ -357,7 +357,7 @@ export const SmartExtractor = () => {
         <button
           onClick={handleSmartExtract}
           disabled={isExtracting || !url || !userInstructions}
-          className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold shadow-md"
+          className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg hover:from-blue-700 hover:to-cyan-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold shadow-md"
         >
           {isExtracting ? (
             <>
