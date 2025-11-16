@@ -5,6 +5,7 @@ from typing import Dict, Optional
 import logging
 from urllib.parse import urlparse
 import uuid
+import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.database import Document, WebScrapeJob
 from app.services.document_service import document_service
@@ -14,11 +15,23 @@ logger = logging.getLogger(__name__)
 
 class ScraperService:
     def __init__(self):
+        # Realistic browser headers to avoid 403 errors
         self.http_client = httpx.AsyncClient(
             timeout=30.0,
             follow_redirects=True,
             headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Cache-Control': 'max-age=0'
             }
         )
 
@@ -58,9 +71,40 @@ class ScraperService:
 
             logger.info(f"Starting scrape job for URL: {url}")
 
-            # Fetch the page
-            response = await self.http_client.get(url)
-            response.raise_for_status()
+            # Fetch the page with retry logic
+            max_retries = 3
+            retry_delay = 1  # Start with 1 second
+
+            for attempt in range(max_retries):
+                try:
+                    logger.info(f"Fetching URL (attempt {attempt + 1}/{max_retries}): {url}")
+                    response = await self.http_client.get(url)
+                    response.raise_for_status()
+                    break  # Success, exit retry loop
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 403:
+                        logger.warning(f"403 Forbidden for {url} on attempt {attempt + 1}")
+                        if attempt < max_retries - 1:
+                            # Add delay before retry
+                            await asyncio.sleep(retry_delay)
+                            retry_delay *= 2  # Exponential backoff
+                        else:
+                            # Last attempt failed
+                            raise Exception(
+                                f"Failed to access {url} after {max_retries} attempts. "
+                                f"The website may be blocking automated access. "
+                                f"Try a different URL or check if the site allows scraping."
+                            )
+                    else:
+                        # Other HTTP errors, don't retry
+                        raise
+                except httpx.RequestError as e:
+                    logger.error(f"Request error on attempt {attempt + 1}: {e}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2
+                    else:
+                        raise
 
             html_content = response.text
             logger.info(f"Fetched {len(html_content)} bytes from {url}")
