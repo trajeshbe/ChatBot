@@ -149,8 +149,8 @@ class ScraperEngine:
             Filtered/extracted content
         """
         try:
-            # Import LLM service
-            from app.services.llm_service import llm_service
+            # Import RAG pipeline LLM client with proper Ollama support
+            from app.rag_pipeline.llm import get_llm_client
 
             # Truncate content if too long (to fit in context window)
             max_content_length = 8000
@@ -174,44 +174,38 @@ Raw content from webpage:
 
 Extract only the relevant portions:"""
 
-            # Call LLM based on provider
+            # Prepare messages for LLM
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+
+            # Select model based on provider
             if llm_provider == "ollama":
-                # Use Ollama with a local model (qwen or llama)
-                response = await llm_service.generate_response(
-                    prompt=user_prompt,
-                    system_prompt=system_prompt,
-                    model="ollama/qwen2.5:latest",  # Default to qwen, fallback to llama
-                    temperature=0.1,  # Low temperature for precise extraction
-                    max_tokens=4000
-                )
+                model_name = "qwen2.5:latest"  # Ollama model (no prefix needed)
             elif llm_provider == "openai":
-                response = await llm_service.generate_response(
-                    prompt=user_prompt,
-                    system_prompt=system_prompt,
-                    model="gpt-3.5-turbo",
-                    temperature=0.1,
-                    max_tokens=4000
-                )
+                model_name = "gpt-3.5-turbo"
             elif llm_provider == "anthropic":
-                response = await llm_service.generate_response(
-                    prompt=user_prompt,
-                    system_prompt=system_prompt,
-                    model="claude-3-haiku-20240307",
-                    temperature=0.1,
-                    max_tokens=4000
-                )
+                model_name = "claude-3-haiku-20240307"
             else:
                 logger.warning(f"Unknown LLM provider: {llm_provider}, using original content")
                 return content
 
-            extracted_content = response.get("response", content)
+            # Get LLM client and generate response
+            client = await get_llm_client()
+            extracted_content, tokens = await client.generate(
+                messages=messages,
+                model_name=model_name,
+                temperature=0.1,  # Low temperature for precise extraction
+                max_tokens=4000
+            )
 
             # Check if LLM found relevant information
             if "no relevant information found" in extracted_content.lower():
                 logger.warning("LLM did not find relevant information, using original content")
                 return content
 
-            logger.info(f"Successfully extracted content using {llm_provider} LLM")
+            logger.info(f"Successfully extracted content using {llm_provider} LLM ({tokens} tokens)")
             return extracted_content
 
         except Exception as e:

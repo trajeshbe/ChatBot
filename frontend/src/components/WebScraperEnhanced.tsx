@@ -200,41 +200,143 @@ function TabButton({ active, onClick, icon, label }: TabButtonProps) {
 // ============================================================================
 
 function BasicScrapingTab() {
-  const [urls, setUrls] = useState<string[]>([''])
-  const [scrapePrompt, setScrapePrompt] = useState('')
-  const [jobs, setJobs] = useState<ScrapeJob[]>([])
-  const [isProcessing, setIsProcessing] = useState(false)
   const [sessionId] = useState(() => localStorage.getItem('sessionId') || undefined)
 
+  // Initialize state from localStorage with defaults
+  const [urls, setUrls] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('webScraper_basic_urls')
+      return saved ? JSON.parse(saved) : ['']
+    } catch {
+      return ['']
+    }
+  })
+
+  const [scrapePrompt, setScrapePrompt] = useState(() => {
+    return localStorage.getItem('webScraper_basic_prompt') || ''
+  })
+
+  const [jobs, setJobs] = useState<ScrapeJob[]>(() => {
+    try {
+      const saved = localStorage.getItem('webScraper_basic_jobs')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
+
+  const [isProcessing, setIsProcessing] = useState(false)
+
   // Phase 1 Settings
-  const [complianceLevel, setComplianceLevel] = useState<ComplianceLevel>('balanced')
-  const [enableSmartScraping, setEnableSmartScraping] = useState(true)
-  const [llmProvider, setLLMProvider] = useState<LLMProvider>('ollama')
+  const [complianceLevel, setComplianceLevel] = useState<ComplianceLevel>(() => {
+    const saved = localStorage.getItem('webScraper_basic_complianceLevel')
+    return (saved as ComplianceLevel) || 'balanced'
+  })
+
+  const [enableSmartScraping, setEnableSmartScraping] = useState(() => {
+    const saved = localStorage.getItem('webScraper_basic_enableSmartScraping')
+    return saved !== null ? saved === 'true' : true
+  })
+
+  const [llmProvider, setLLMProvider] = useState<LLMProvider>(() => {
+    const saved = localStorage.getItem('webScraper_basic_llmProvider')
+    return (saved as LLMProvider) || 'ollama'
+  })
+
   const [showAuthConfig, setShowAuthConfig] = useState(false)
-  const [authConfig, setAuthConfig] = useState<AuthConfig>({
-    auth_type: 'none',
-    credentials: {}
+
+  const [authConfig, setAuthConfig] = useState<AuthConfig>(() => {
+    try {
+      const saved = localStorage.getItem('webScraper_basic_authConfig')
+      return saved ? JSON.parse(saved) : { auth_type: 'none', credentials: {} }
+    } catch {
+      return { auth_type: 'none', credentials: {} }
+    }
   })
 
   // Phase 2 Settings
-  const [strategy, setStrategy] = useState<ScrapingStrategy>('auto')
-  const [showAdvanced, setShowAdvanced] = useState(false)
-  const [advancedConfig, setAdvancedConfig] = useState<AdvancedConfig>({
-    timeout: 30.0,
-    max_retries: 3,
-    include_links: true,
-    include_tables: true,
-    include_images: false,
-    include_metadata: true,
-    remove_nav: true,
-    remove_footer: true,
-    remove_header: true,
-    remove_ads: true,
-    enable_javascript: false,
-    wait_for_selector: '',
-    wait_timeout: 10.0,
-    min_content_length: 100
+  const [strategy, setStrategy] = useState<ScrapingStrategy>(() => {
+    const saved = localStorage.getItem('webScraper_basic_strategy')
+    return (saved as ScrapingStrategy) || 'auto'
   })
+
+  const [showAdvanced, setShowAdvanced] = useState(false)
+
+  const [advancedConfig, setAdvancedConfig] = useState<AdvancedConfig>(() => {
+    try {
+      const saved = localStorage.getItem('webScraper_basic_advancedConfig')
+      return saved ? JSON.parse(saved) : {
+        timeout: 30.0,
+        max_retries: 3,
+        include_links: true,
+        include_tables: true,
+        include_images: false,
+        include_metadata: true,
+        remove_nav: true,
+        remove_footer: true,
+        remove_header: true,
+        remove_ads: true,
+        enable_javascript: false,
+        wait_for_selector: '',
+        wait_timeout: 10.0,
+        min_content_length: 100
+      }
+    } catch {
+      return {
+        timeout: 30.0,
+        max_retries: 3,
+        include_links: true,
+        include_tables: true,
+        include_images: false,
+        include_metadata: true,
+        remove_nav: true,
+        remove_footer: true,
+        remove_header: true,
+        remove_ads: true,
+        enable_javascript: false,
+        wait_for_selector: '',
+        wait_timeout: 10.0,
+        min_content_length: 100
+      }
+    }
+  })
+
+  // Persist state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('webScraper_basic_urls', JSON.stringify(urls))
+  }, [urls])
+
+  useEffect(() => {
+    localStorage.setItem('webScraper_basic_prompt', scrapePrompt)
+  }, [scrapePrompt])
+
+  useEffect(() => {
+    localStorage.setItem('webScraper_basic_jobs', JSON.stringify(jobs))
+  }, [jobs])
+
+  useEffect(() => {
+    localStorage.setItem('webScraper_basic_complianceLevel', complianceLevel)
+  }, [complianceLevel])
+
+  useEffect(() => {
+    localStorage.setItem('webScraper_basic_enableSmartScraping', String(enableSmartScraping))
+  }, [enableSmartScraping])
+
+  useEffect(() => {
+    localStorage.setItem('webScraper_basic_llmProvider', llmProvider)
+  }, [llmProvider])
+
+  useEffect(() => {
+    localStorage.setItem('webScraper_basic_authConfig', JSON.stringify(authConfig))
+  }, [authConfig])
+
+  useEffect(() => {
+    localStorage.setItem('webScraper_basic_strategy', strategy)
+  }, [strategy])
+
+  useEffect(() => {
+    localStorage.setItem('webScraper_basic_advancedConfig', JSON.stringify(advancedConfig))
+  }, [advancedConfig])
 
   const addUrlField = () => setUrls([...urls, ''])
   const removeUrlField = (index: number) => setUrls(urls.filter((_, i) => i !== index))
@@ -738,15 +840,129 @@ function BasicScrapingTab() {
 // ============================================================================
 
 function TemplateExtractionTab() {
-  const [urls, setUrls] = useState<string[]>([''])
   const [sessionId] = useState(() => localStorage.getItem('sessionId') || undefined)
-  const [outputFormat, setOutputFormat] = useState<OutputFormat>('excel')
-  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>('download')
-  const [deliveryConfig, setDeliveryConfig] = useState<DeliveryConfig>({})
-  const [complianceLevel, setComplianceLevel] = useState<ComplianceLevel>('balanced')
-  const [maxConcurrent, setMaxConcurrent] = useState(5)
+
+  // Initialize state from localStorage with defaults
+  const [urls, setUrls] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('webScraper_template_urls')
+      return saved ? JSON.parse(saved) : ['']
+    } catch {
+      return ['']
+    }
+  })
+
+  const [outputFormat, setOutputFormat] = useState<OutputFormat>(() => {
+    const saved = localStorage.getItem('webScraper_template_outputFormat')
+    return (saved as OutputFormat) || 'excel'
+  })
+
+  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>(() => {
+    const saved = localStorage.getItem('webScraper_template_deliveryMethod')
+    return (saved as DeliveryMethod) || 'download'
+  })
+
+  const [deliveryConfig, setDeliveryConfig] = useState<DeliveryConfig>(() => {
+    try {
+      const saved = localStorage.getItem('webScraper_template_deliveryConfig')
+      return saved ? JSON.parse(saved) : {}
+    } catch {
+      return {}
+    }
+  })
+
+  const [complianceLevel, setComplianceLevel] = useState<ComplianceLevel>(() => {
+    const saved = localStorage.getItem('webScraper_template_complianceLevel')
+    return (saved as ComplianceLevel) || 'balanced'
+  })
+
+  const [maxConcurrent, setMaxConcurrent] = useState(() => {
+    const saved = localStorage.getItem('webScraper_template_maxConcurrent')
+    return saved ? parseInt(saved) : 5
+  })
+
   const [isCreating, setIsCreating] = useState(false)
-  const [createdJobId, setCreatedJobId] = useState<string | null>(null)
+
+  const [createdJobId, setCreatedJobId] = useState<string | null>(() => {
+    return localStorage.getItem('webScraper_template_createdJobId') || null
+  })
+
+  // Persist state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('webScraper_template_urls', JSON.stringify(urls))
+  }, [urls])
+
+  useEffect(() => {
+    localStorage.setItem('webScraper_template_outputFormat', outputFormat)
+  }, [outputFormat])
+
+  useEffect(() => {
+    localStorage.setItem('webScraper_template_deliveryMethod', deliveryMethod)
+  }, [deliveryMethod])
+
+  useEffect(() => {
+    localStorage.setItem('webScraper_template_deliveryConfig', JSON.stringify(deliveryConfig))
+  }, [deliveryConfig])
+
+  useEffect(() => {
+    localStorage.setItem('webScraper_template_complianceLevel', complianceLevel)
+  }, [complianceLevel])
+
+  useEffect(() => {
+    localStorage.setItem('webScraper_template_maxConcurrent', String(maxConcurrent))
+  }, [maxConcurrent])
+
+  useEffect(() => {
+    if (createdJobId) {
+      localStorage.setItem('webScraper_template_createdJobId', createdJobId)
+    }
+  }, [createdJobId])
+
+  // Template management state
+  const [templates, setTemplates] = useState<any[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [showTemplateUpload, setShowTemplateUpload] = useState(false)
+  const [templateJson, setTemplateJson] = useState('')
+
+  // Fetch templates on mount
+  useEffect(() => {
+    fetchTemplates()
+  }, [])
+
+  const fetchTemplates = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/v1/extraction/templates`)
+      setTemplates(response.data || [])
+    } catch (error) {
+      console.error('Failed to fetch templates:', error)
+    }
+  }
+
+  const handleUploadTemplate = async () => {
+    try {
+      const template = JSON.parse(templateJson)
+      await axios.post(`${API_URL}/api/v1/extraction/templates`, template)
+      alert('Template uploaded successfully!')
+      setTemplateJson('')
+      setShowTemplateUpload(false)
+      fetchTemplates()
+    } catch (error: any) {
+      console.error('Template upload error:', error)
+      alert(error.response?.data?.detail || 'Failed to upload template. Please check the JSON format.')
+    }
+  }
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    if (!confirm('Are you sure you want to delete this template?')) return
+
+    try {
+      await axios.delete(`${API_URL}/api/v1/extraction/templates/${templateId}`)
+      fetchTemplates()
+    } catch (error) {
+      console.error('Template delete error:', error)
+      alert('Failed to delete template')
+    }
+  }
 
   const addUrlField = () => setUrls([...urls, ''])
   const removeUrlField = (index: number) => setUrls(urls.filter((_, i) => i !== index))
@@ -777,6 +993,7 @@ function TemplateExtractionTab() {
 
     const payload = {
       urls: validUrls,
+      template_id: selectedTemplateId || undefined,
       output_format: outputFormat,
       delivery_method: deliveryMethod,
       delivery_config: deliveryMethod !== 'download' ? deliveryConfig : undefined,
@@ -817,6 +1034,122 @@ function TemplateExtractionTab() {
             </div>
           </div>
         </div>
+
+        {/* Template Management */}
+        <ConfigSection title="Extraction Template (Optional)" icon={<FileText className="w-5 h-5" />}>
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Use extraction templates to define structured data fields and extraction rules.
+              Templates support CSS selectors, XPath, JSON paths, and LLM-based extraction.
+            </p>
+
+            {/* Template Selection */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Select Template
+              </label>
+              <select
+                value={selectedTemplateId || ''}
+                onChange={(e) => setSelectedTemplateId(e.target.value || null)}
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">No Template (Basic Extraction)</option>
+                {templates.map(t => (
+                  <option key={t.template_id} value={t.template_id}>
+                    {t.name} ({t.fields_count} fields)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Template Upload Section */}
+            <div>
+              <button
+                onClick={() => setShowTemplateUpload(!showTemplateUpload)}
+                className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                {showTemplateUpload ? 'Hide' : 'Upload New Template'}
+              </button>
+
+              {showTemplateUpload && (
+                <div className="mt-3 space-y-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Template JSON
+                    </label>
+                    <textarea
+                      value={templateJson}
+                      onChange={(e) => setTemplateJson(e.target.value)}
+                      placeholder={`{
+  "name": "Product Template",
+  "description": "Extract product data",
+  "fields": [
+    {"name": "title", "type": "string", "required": true},
+    {"name": "price", "type": "number", "required": true}
+  ],
+  "css_selectors": {
+    "title": "h1.product-title",
+    "price": "span.price"
+  }
+}`}
+                      rows={12}
+                      className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleUploadTemplate}
+                      disabled={!templateJson.trim()}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Upload Template
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowTemplateUpload(false)
+                        setTemplateJson('')
+                      }}
+                      className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Existing Templates List */}
+            {templates.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Available Templates ({templates.length})
+                </h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {templates.map(t => (
+                    <div
+                      key={t.template_id}
+                      className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
+                    >
+                      <div>
+                        <p className="font-medium text-slate-900 dark:text-white">{t.name}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {t.fields_count} fields • {t.description || 'No description'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteTemplate(t.template_id)}
+                        className="px-2 py-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </ConfigSection>
 
         {/* URLs Input */}
         <ConfigSection title="Target URLs (Max 100)" icon={<Globe className="w-5 h-5" />}>
@@ -1064,10 +1397,48 @@ function TemplateExtractionTab() {
 // ============================================================================
 
 function JobMonitorTab() {
-  const [jobs, setJobs] = useState<ExtractionJob[]>([])
+  // Initialize state from localStorage with defaults
+  const [jobs, setJobs] = useState<ExtractionJob[]>(() => {
+    try {
+      const saved = localStorage.getItem('webScraper_monitor_jobs')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
+
   const [isLoading, setIsLoading] = useState(false)
-  const [selectedJob, setSelectedJob] = useState<ExtractionJob | null>(null)
-  const [autoRefresh, setAutoRefresh] = useState(true)
+
+  const [selectedJob, setSelectedJob] = useState<ExtractionJob | null>(() => {
+    try {
+      const saved = localStorage.getItem('webScraper_monitor_selectedJob')
+      return saved ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
+  })
+
+  const [autoRefresh, setAutoRefresh] = useState(() => {
+    const saved = localStorage.getItem('webScraper_monitor_autoRefresh')
+    return saved !== null ? saved === 'true' : true
+  })
+
+  // Persist state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('webScraper_monitor_jobs', JSON.stringify(jobs))
+  }, [jobs])
+
+  useEffect(() => {
+    if (selectedJob) {
+      localStorage.setItem('webScraper_monitor_selectedJob', JSON.stringify(selectedJob))
+    } else {
+      localStorage.removeItem('webScraper_monitor_selectedJob')
+    }
+  }, [selectedJob])
+
+  useEffect(() => {
+    localStorage.setItem('webScraper_monitor_autoRefresh', String(autoRefresh))
+  }, [autoRefresh])
 
   const fetchJobs = async () => {
     setIsLoading(true)

@@ -452,3 +452,176 @@ async def run_extraction_workflow(
             }],
             'completed_at': datetime.utcnow()
         })
+
+
+# ============================================================================
+# Template Management (In-memory storage - replace with database in production)
+# ============================================================================
+
+templates_store: Dict[str, Dict[str, Any]] = {}
+
+
+class ExtractionTemplate(BaseModel):
+    """Extraction template definition"""
+    name: str = Field(..., description="Template name")
+    description: Optional[str] = Field(None, description="Template description")
+    fields: List[Dict[str, Any]] = Field(..., description="Fields to extract")
+    css_selectors: Optional[Dict[str, str]] = Field(None, description="CSS selectors for fields")
+    xpath_selectors: Optional[Dict[str, str]] = Field(None, description="XPath selectors for fields")
+    json_paths: Optional[Dict[str, str]] = Field(None, description="JSON paths for API responses")
+    llm_extraction_prompts: Optional[Dict[str, str]] = Field(None, description="LLM prompts for intelligent extraction")
+    validation_rules: Optional[Dict[str, Any]] = Field(None, description="Validation rules for extracted data")
+    preprocessing: Optional[Dict[str, Any]] = Field(None, description="Data preprocessing rules")
+
+
+class TemplateResponse(BaseModel):
+    """Template response"""
+    template_id: str
+    name: str
+    description: Optional[str]
+    fields_count: int
+    created_at: datetime
+    updated_at: datetime
+
+
+@router.post("/templates", response_model=TemplateResponse)
+async def create_template(template: ExtractionTemplate):
+    """
+    Upload/Create a custom extraction template
+
+    Templates define how to extract structured data from web pages.
+    You can specify CSS selectors, XPath, JSON paths, or LLM prompts for extraction.
+
+    Example:
+    ```json
+    {
+      "name": "Product Listing Template",
+      "description": "Extracts product information from e-commerce sites",
+      "fields": [
+        {"name": "title", "type": "string", "required": true},
+        {"name": "price", "type": "number", "required": true},
+        {"name": "description", "type": "string", "required": false}
+      ],
+      "css_selectors": {
+        "title": "h1.product-title",
+        "price": "span.price-value",
+        "description": "div.product-description"
+      },
+      "llm_extraction_prompts": {
+        "title": "Extract the product title from the page",
+        "price": "Extract the numerical price value",
+        "description": "Extract the product description"
+      }
+    }
+    ```
+    """
+    try:
+        template_id = str(uuid.uuid4())
+        now = datetime.utcnow()
+
+        template_data = {
+            'template_id': template_id,
+            'name': template.name,
+            'description': template.description,
+            'fields': template.fields,
+            'css_selectors': template.css_selectors or {},
+            'xpath_selectors': template.xpath_selectors or {},
+            'json_paths': template.json_paths or {},
+            'llm_extraction_prompts': template.llm_extraction_prompts or {},
+            'validation_rules': template.validation_rules or {},
+            'preprocessing': template.preprocessing or {},
+            'created_at': now,
+            'updated_at': now
+        }
+
+        templates_store[template_id] = template_data
+
+        logger.info(f"Created template {template_id}: {template.name}")
+
+        return TemplateResponse(
+            template_id=template_id,
+            name=template.name,
+            description=template.description,
+            fields_count=len(template.fields),
+            created_at=now,
+            updated_at=now
+        )
+
+    except Exception as e:
+        logger.error(f"Error creating template: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/templates", response_model=List[TemplateResponse])
+async def list_templates():
+    """
+    List all available extraction templates
+
+    Returns a list of all templates that can be used for structured data extraction.
+    """
+    try:
+        templates = list(templates_store.values())
+
+        # Sort by created_at descending
+        templates.sort(key=lambda x: x.get('created_at', datetime.min), reverse=True)
+
+        return [
+            TemplateResponse(
+                template_id=t['template_id'],
+                name=t['name'],
+                description=t.get('description'),
+                fields_count=len(t.get('fields', [])),
+                created_at=t.get('created_at', datetime.utcnow()),
+                updated_at=t.get('updated_at', datetime.utcnow())
+            )
+            for t in templates
+        ]
+
+    except Exception as e:
+        logger.error(f"Error listing templates: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/templates/{template_id}")
+async def get_template(template_id: str):
+    """
+    Get a specific extraction template by ID
+
+    Returns the full template definition including all selectors and configuration.
+    """
+    try:
+        if template_id not in templates_store:
+            raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
+
+        return templates_store[template_id]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting template: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/templates/{template_id}")
+async def delete_template(template_id: str):
+    """
+    Delete an extraction template
+
+    Removes the template from the system. Jobs using this template will fail if started.
+    """
+    try:
+        if template_id not in templates_store:
+            raise HTTPException(status_code=404, detail=f"Template {template_id} not found")
+
+        template_name = templates_store[template_id].get('name', 'Unknown')
+        del templates_store[template_id]
+
+        logger.info(f"Deleted template {template_id}: {template_name}")
+
+        return {"message": f"Template {template_id} deleted successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting template: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
