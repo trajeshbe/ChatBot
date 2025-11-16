@@ -122,11 +122,12 @@ const saveMessages = (sessionId: string, messages: Message[]): void => {
 
 export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigProp }: Props) {
   const [sessionId, setSessionId] = useState<string>('')
-  const [messages, setMessages] = useState<Message[]>(() => {
-    // Initialize messages by loading from localStorage if available
-    const initialSessionId = getSessionId()
-    return loadMessages(initialSessionId)
-  })
+  const [messages, setMessages] = useState<Message[]>([{
+    role: 'assistant',
+    content: 'Hello! I\'m your enterprise RAG assistant with multi-model support. I can use OpenAI, Claude, or local models. Select your preferred model above and ask me anything! You can also upload files directly in this chat.',
+    timestamp: new Date()
+  }])
+  const [isHydrated, setIsHydrated] = useState(false)
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [selectedModel, setSelectedModel] = useState<string | null>(null)
@@ -158,31 +159,28 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
     scrollToBottom()
   }, [messages])
 
-  // Initialize session ID on mount
+  // Initialize session ID and load messages on mount (client-side only)
   useEffect(() => {
     const id = getSessionId()
     setSessionId(id)
+
+    // Load messages from localStorage after hydration
+    if (id) {
+      const loadedMessages = loadMessages(id)
+      setMessages(loadedMessages)
+      console.log(`📥 Loaded ${loadedMessages.length} messages for session ${id}`)
+    }
+
+    setIsHydrated(true)
   }, [])
 
-  // Save messages to localStorage whenever they change
+  // Save messages to localStorage whenever they change (only after hydration)
   useEffect(() => {
-    if (sessionId && messages.length > 0) {
+    if (isHydrated && sessionId && messages.length > 0) {
       saveMessages(sessionId, messages)
       console.log(`💾 Saved ${messages.length} messages for session ${sessionId}`)
     }
-  }, [messages, sessionId])
-
-  // Load messages when sessionId changes (e.g., after clearing session)
-  useEffect(() => {
-    if (sessionId) {
-      const loadedMessages = loadMessages(sessionId)
-      // Only update if different from current messages to avoid infinite loop
-      if (JSON.stringify(loadedMessages) !== JSON.stringify(messages)) {
-        setMessages(loadedMessages)
-        console.log(`📥 Loaded ${loadedMessages.length} messages for session ${sessionId}`)
-      }
-    }
-  }, [sessionId]) // Only depend on sessionId, not messages
+  }, [messages, sessionId, isHydrated])
 
   // Handle file attachment
   const handleFileAttach = () => {
@@ -416,7 +414,9 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   }
 
   if (activeTab === 'scrape') {
-    return <WebScraperEnhanced />
+    // Use simple WebScraper with session management
+    const WebScraperComponent = require('./WebScraper').default
+    return <WebScraperComponent sessionId={sessionId} />
   }
 
   return (

@@ -610,6 +610,16 @@ except Exception as e:
     logger.warning(f"Could not register Extraction Workflow router: {e}")
     logger.warning("Continuing without enterprise scraper features")
 
+# Template-based Extraction API
+try:
+    from app.api.routes import template_extraction_routes
+    app.include_router(template_extraction_routes.router)
+    logger.info("✓ Template Extraction API router registered (Excel export, preset templates)")
+except ImportError as e:
+    logger.warning(f"Template Extraction API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Template Extraction router: {e}")
+
 
 # === Admin API Endpoints ===
 

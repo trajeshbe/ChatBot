@@ -3,10 +3,11 @@ import Head from 'next/head'
 import ChatInterface from '@/components/ChatInterfaceEnhanced'
 import Sidebar from '@/components/Sidebar'
 import EvaluationDashboard from '@/components/EvaluationDashboard'
+import TemplateExtractor from '@/components/TemplateExtractor'
 import type { RAGConfig } from '@/components/RAGSettings'
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'chat' | 'upload' | 'scrape' | 'evaluation'>('chat')
+  const [activeTab, setActiveTab] = useState<'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation'>('chat')
   const [sessionId, setSessionId] = useState<string>('')
   const [currentUser, setCurrentUser] = useState<string>('Anonymous')
   const [ragConfig, setRagConfig] = useState<RAGConfig | null>(null)
@@ -61,6 +62,10 @@ export default function Home() {
                 </div>
                 <EvaluationDashboard sessionId={sessionId} />
               </div>
+            </div>
+          ) : activeTab === 'extract' ? (
+            <div className="flex-1 overflow-y-auto">
+              <TemplateExtractor sessionId={sessionId} />
             </div>
           ) : (
             <div className="flex-1 overflow-hidden">

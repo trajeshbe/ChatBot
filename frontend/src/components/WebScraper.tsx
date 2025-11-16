@@ -1,8 +1,9 @@
-import { useState } from 'react'
-import { Globe, Plus, Trash2, Loader2, CheckCircle, XCircle } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Globe, Plus, Trash2, Loader2, CheckCircle, XCircle, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react'
 import axios from 'axios'
 
 interface ScrapeJob {
+  id: string
   url: string
   prompt?: string
   status: 'pending' | 'processing' | 'success' | 'error'
@@ -10,15 +11,87 @@ interface ScrapeJob {
   title?: string
   contentLength?: number
   error?: string
+  timestamp: Date
+}
+
+interface CollapsibleErrorProps {
+  error: string
+}
+
+const CollapsibleError: React.FC<CollapsibleErrorProps> = ({ error }) => {
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  return (
+    <div className="mb-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full px-4 py-2 flex items-center justify-between hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+      >
+        <div className="flex items-center gap-2 text-red-800 dark:text-red-200">
+          <AlertCircle className="w-4 h-4" />
+          <span className="text-sm font-medium">Scraping error</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {!isExpanded && (
+            <span className="text-xs text-red-600 dark:text-red-400 max-w-md truncate">
+              {error}
+            </span>
+          )}
+          {isExpanded ? (
+            <ChevronUp className="w-4 h-4 text-red-600" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-red-600" />
+          )}
+        </div>
+      </button>
+
+      {isExpanded && (
+        <div className="px-4 py-3 border-t border-red-200 dark:border-red-800 bg-red-100 dark:bg-red-900/10">
+          <p className="text-sm text-red-800 dark:text-red-200 font-mono whitespace-pre-wrap">
+            {error}
+          </p>
+        </div>
+      )}
+    </div>
+  )
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-export default function WebScraper() {
+interface WebScraperProps {
+  sessionId?: string
+}
+
+export default function WebScraper({ sessionId }: WebScraperProps) {
   const [urls, setUrls] = useState<string[]>([''])
   const [scrapePrompt, setScrapePrompt] = useState('')
   const [jobs, setJobs] = useState<ScrapeJob[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+
+  // Load jobs from sessionStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && sessionId) {
+      const stored = sessionStorage.getItem(`scrape_jobs_${sessionId}`)
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored)
+          setJobs(parsed.map((j: any) => ({
+            ...j,
+            timestamp: new Date(j.timestamp)
+          })))
+        } catch (e) {
+          console.error('Error loading scrape jobs:', e)
+        }
+      }
+    }
+  }, [sessionId])
+
+  // Save jobs to sessionStorage whenever they change
+  useEffect(() => {
+    if (typeof window !== 'undefined' && sessionId && jobs.length > 0) {
+      sessionStorage.setItem(`scrape_jobs_${sessionId}`, JSON.stringify(jobs))
+    }
+  }, [jobs, sessionId])
 
   const addUrlField = () => {
     setUrls([...urls, ''])
@@ -40,13 +113,15 @@ export default function WebScraper() {
 
     setIsProcessing(true)
 
-    // Initialize jobs
+    // Initialize jobs with unique IDs and timestamps
     const newJobs: ScrapeJob[] = validUrls.map(url => ({
+      id: `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       url,
       prompt: scrapePrompt,
-      status: 'processing'
+      status: 'processing',
+      timestamp: new Date()
     }))
-    setJobs(prev => [...prev, ...newJobs])
+    setJobs(prev => [...newJobs, ...prev])
 
     // Process each URL
     for (let i = 0; i < validUrls.length; i++) {
@@ -55,6 +130,9 @@ export default function WebScraper() {
         formData.append('url', validUrls[i])
         if (scrapePrompt) {
           formData.append('scrape_prompt', scrapePrompt)
+        }
+        if (sessionId) {
+          formData.append('session_id', sessionId)
         }
 
         console.log(`Scraping URL ${i + 1}/${validUrls.length}:`, validUrls[i])
@@ -188,55 +266,56 @@ export default function WebScraper() {
         {jobs.length > 0 && (
           <div>
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-              Scrape Jobs
+              Scrape History ({jobs.length})
             </h3>
             <div className="space-y-3">
-              {jobs.map((job, index) => (
+              {jobs.map((job) => (
                 <div
-                  key={index}
+                  key={job.id}
                   className="bg-white dark:bg-slate-800 rounded-lg p-4 shadow-sm border border-slate-200 dark:border-slate-700"
                 >
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Globe className="w-5 h-5 text-blue-600" />
-                        <p className="font-medium text-slate-900 dark:text-white break-all">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Globe className="w-4 h-4 text-blue-600" />
+                        <p className="text-sm font-medium text-slate-900 dark:text-white break-all">
                           {job.url}
                         </p>
                       </div>
+                      <p className="text-xs text-slate-500">
+                        {job.timestamp.toLocaleString()}
+                      </p>
                       {job.title && (
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
-                          Title: {job.title}
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">
+                          <strong>Title:</strong> {job.title}
                         </p>
                       )}
                       {job.contentLength && (
                         <p className="text-sm text-slate-600 dark:text-slate-400">
-                          Content: {job.contentLength.toLocaleString()} characters
+                          <strong>Content:</strong> {job.contentLength.toLocaleString()} characters
                         </p>
                       )}
                     </div>
 
                     <div className="flex items-center gap-2 ml-4">
                       {job.status === 'processing' && (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-                          <span className="text-sm text-slate-600">Scraping...</span>
-                        </>
+                        <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
                       )}
                       {job.status === 'success' && (
-                        <>
-                          <CheckCircle className="w-5 h-5 text-green-600" />
-                          <span className="text-sm text-green-600">Complete</span>
-                        </>
+                        <CheckCircle className="w-5 h-5 text-green-600" />
                       )}
                       {job.status === 'error' && (
-                        <>
-                          <XCircle className="w-5 h-5 text-red-600" />
-                          <span className="text-sm text-red-600">{job.error}</span>
-                        </>
+                        <XCircle className="w-5 h-5 text-red-600" />
                       )}
                     </div>
                   </div>
+
+                  {/* Error: Collapsible */}
+                  {job.status === 'error' && job.error && (
+                    <div className="mt-3">
+                      <CollapsibleError error={job.error} />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

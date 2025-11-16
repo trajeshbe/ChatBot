@@ -73,7 +73,7 @@ langgraph==0.2.16             # Agent workflow graphs - DAG orchestration
 # DOCUMENT PROCESSING (Required)
 # Used by: app/services/document_service.py
 # ----------------------------------------------------------------------------
-# docling==1.0.0              # Advanced document parsing (not in PyPI - install separately)
+docling==2.0.0              # Advanced document parsing for PDF, HTML, DOCX, PPTX
 pypdf2==3.0.1                 # PDF text extraction - processes PDF uploads
 python-docx==1.1.0            # Word document parsing - processes DOCX uploads
 python-pptx==0.6.23           # PowerPoint parsing - processes PPTX uploads
@@ -129,6 +129,7 @@ python-dotenv==1.0.0              # Environment variables - loads .env file
 tenacity==8.2.3                   # Retry logic - handles transient failures in API calls
 aiofiles==23.2.1                  # Async file operations - improves I/O performance
 pyyaml==6.0.1                     # YAML parsing - reads configuration files
+python-dateutil==2.8.2            # Date parsing - flexible date parsing for template extraction
 
 # ----------------------------------------------------------------------------
 # RAG EVALUATION & QUALITY METRICS (Optional - Advanced Features)

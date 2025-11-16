@@ -1,9 +1,9 @@
-import { MessageSquare, Upload, Globe, FileText, BarChart3, Settings } from 'lucide-react'
+import { MessageSquare, Upload, Globe, FileText, BarChart3, Settings, FileSpreadsheet } from 'lucide-react'
 import RAGSettings, { type RAGConfig } from './RAGSettings'
 
 interface Props {
-  activeTab: 'chat' | 'upload' | 'scrape' | 'evaluation'
-  setActiveTab: (tab: 'chat' | 'upload' | 'scrape' | 'evaluation') => void
+  activeTab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation'
+  setActiveTab: (tab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation') => void
   onRAGSettingsChange?: (settings: RAGConfig) => void
 }
 
@@ -12,6 +12,7 @@ export default function Sidebar({ activeTab, setActiveTab, onRAGSettingsChange }
     { id: 'chat' as const, icon: MessageSquare, label: 'Chat' },
     { id: 'upload' as const, icon: Upload, label: 'Upload Files' },
     { id: 'scrape' as const, icon: Globe, label: 'Web Scraping' },
+    { id: 'extract' as const, icon: FileSpreadsheet, label: 'Data Extraction' },
     { id: 'evaluation' as const, icon: BarChart3, label: 'Evaluation' },
   ]
 
