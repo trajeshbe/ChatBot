@@ -3,7 +3,7 @@ import Head from 'next/head'
 import ChatInterface from '@/components/ChatInterfaceEnhanced'
 import Sidebar from '@/components/Sidebar'
 import EvaluationDashboard from '@/components/EvaluationDashboard'
-import TemplateExtractor from '@/components/TemplateExtractor'
+import DataExtractionHub from '@/components/DataExtractionHub'
 import type { RAGConfig } from '@/components/RAGSettings'
 
 export default function Home() {
@@ -65,7 +65,7 @@ export default function Home() {
             </div>
           ) : activeTab === 'extract' ? (
             <div className="flex-1 overflow-y-auto">
-              <TemplateExtractor sessionId={sessionId} />
+              <DataExtractionHub sessionId={sessionId} />
             </div>
           ) : (
             <div className="flex-1 overflow-hidden">
