@@ -58,6 +58,49 @@ Check document database status and statistics.
 
 ---
 
+### Web Scraping & Data Extraction
+
+#### `extract-screener.sh` ⭐ NEW
+Extract financial data from screener.in company pages to Excel.
+```bash
+# Basic usage (auto-generates filename)
+./extract-screener.sh https://www.screener.in/company/BHARTIARTL/consolidated/
+
+# Specify output filename
+./extract-screener.sh https://www.screener.in/company/BHARTIARTL/consolidated/ bharti_data.xlsx
+
+# Other companies
+./extract-screener.sh https://www.screener.in/company/TCS/consolidated/ tcs_data.xlsx
+```
+
+**Features:**
+- ✅ Handles JavaScript-rendered content (uses Playwright)
+- ✅ Extracts multiple tables (financials, ratios, quarterly results)
+- ✅ Exports to multi-sheet Excel workbook with formatting
+- ✅ Comprehensive diagnostics and logging
+- ✅ Error recovery and retry logic
+- ✅ Saves HTML debug file for troubleshooting
+
+**Output Files:**
+- `screener_<company>_<timestamp>.xlsx` - Main Excel output
+- `screener_<company>_<timestamp>_debug.html` - HTML debug file
+- `screener_extraction.log` - Detailed execution log
+
+**Requirements:**
+```bash
+cd ../../backend
+pip install playwright pandas beautifulsoup4 lxml openpyxl
+playwright install chromium
+```
+
+#### `diagnose-screener-extraction.py` ⭐ NEW
+Python script for advanced screener.in data extraction (used by extract-screener.sh).
+```bash
+python3 diagnose-screener-extraction.py <url> [output_file]
+```
+
+---
+
 ### RAG Debugging
 
 #### `debug-rag.sh`
@@ -142,6 +185,21 @@ python debug_session_query.py
 
 # 2. Check Ollama status
 curl http://localhost:11434/api/tags
+```
+
+### Web Scraping Issues
+```bash
+# 1. Test extraction with diagnostics
+./extract-screener.sh https://www.screener.in/company/BHARTIARTL/consolidated/
+
+# 2. Review logs for errors
+cat screener_extraction.log
+
+# 3. Check HTML debug file
+# Open screener_*_debug.html in browser to see actual page content
+
+# 4. Verify dependencies
+python3 -c "import playwright, pandas, openpyxl; print('All dependencies OK')"
 ```
 
 ---

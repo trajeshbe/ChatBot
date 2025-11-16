@@ -71,6 +71,10 @@ Deprecated and historical scripts (kept for reference).
 
 # Debug RAG queries
 ./debugging/debug-rag.sh
+
+# Extract data from screener.in to Excel
+./debugging/extract-screener.sh <url> [output_file]
+./debugging/extract-screener.sh https://www.screener.in/company/BHARTIARTL/consolidated/
 ```
 
 ### Maintenance
