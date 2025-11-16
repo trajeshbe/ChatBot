@@ -51,30 +51,23 @@ class ScraperService:
         Args:
             url: URL to scrape
             scrape_prompt: Optional prompt to guide content extraction
-            db: Database session
+            db: Database session (optional - if None, returns content without saving to DB)
 
         Returns:
             Dict with scraped content and metadata
+            - If db is None: returns {'html': str, 'text': str, 'structure': dict}
+            - If db is provided: returns {'success': bool, 'document_id': str, ...}
         """
+        job = None  # Initialize to avoid UnboundLocalError
+
         try:
-            # Create scrape job
-            job = WebScrapeJob(
-                url=url,
-                scrape_prompt=scrape_prompt,
-                status="processing"
-            )
-
-            if db:
-                db.add(job)
-                await db.commit()
-                await db.refresh(job)
-
             logger.info(f"Starting scrape job for URL: {url}")
 
             # Fetch the page with retry logic
             max_retries = 3
             retry_delay = 1  # Start with 1 second
 
+            response = None  # Initialize to avoid UnboundLocalError
             for attempt in range(max_retries):
                 try:
                     logger.info(f"Fetching URL (attempt {attempt + 1}/{max_retries}): {url}")
@@ -142,6 +135,49 @@ class ScraperService:
                 # For now, we'll just use the full content
                 pass
 
+            # Analyze HTML structure for template generation
+            structure = {
+                'tables': len(soup.find_all('table')),
+                'lists': len(soup.find_all(['ul', 'ol'])),
+                'forms': len(soup.find_all('form')),
+                'divs_with_classes': len([d for d in soup.find_all('div') if d.get('class')]),
+                'common_classes': [],
+                'common_ids': []
+            }
+
+            # Find common class patterns
+            classes = []
+            for elem in soup.find_all(class_=True):
+                classes.extend(elem.get('class', []))
+
+            if classes:
+                from collections import Counter
+                common = Counter(classes).most_common(10)
+                structure['common_classes'] = [c[0] for c in common]
+
+            # If no database session provided, return content directly (for template generation)
+            if db is None:
+                logger.info(f"No DB session provided - returning raw content for {url}")
+                return {
+                    'html': html_content[:10000],  # Limit for LLM analysis
+                    'text': main_content[:5000] if main_content else "",
+                    'structure': structure,
+                    'title': title_text,
+                    'description': description
+                }
+
+            # Below this point, we have a DB session - create and save document
+
+            # Create scrape job
+            job = WebScrapeJob(
+                url=url,
+                scrape_prompt=scrape_prompt,
+                status="processing"
+            )
+            db.add(job)
+            await db.commit()
+            await db.refresh(job)
+
             # Create document from scraped content
             document_data = {
                 'title': title_text,
@@ -172,18 +208,17 @@ class ScraperService:
             await document_service.process_document(document.id, db)
 
             # Update job status
-            if db and job:
-                job.status = "completed"
-                job.document_id = document.id
-                from sqlalchemy import func
-                job.completed_at = func.now()
-                await db.commit()
+            job.status = "completed"
+            job.document_id = document.id
+            from sqlalchemy import func
+            job.completed_at = func.now()
+            await db.commit()
 
             logger.info(f"Successfully scraped and processed {url}")
 
             return {
                 'success': True,
-                'job_id': str(job.id) if job else None,
+                'job_id': str(job.id),
                 'document_id': str(document.id),
                 'title': title_text,
                 'content_length': len(main_content),
@@ -193,11 +228,14 @@ class ScraperService:
         except Exception as e:
             logger.error(f"Error scraping URL {url}: {e}")
 
-            # Update job status
+            # Update job status if it was created
             if db and job:
-                job.status = "failed"
-                job.error_message = str(e)
-                await db.commit()
+                try:
+                    job.status = "failed"
+                    job.error_message = str(e)
+                    await db.commit()
+                except Exception as commit_error:
+                    logger.error(f"Failed to update job status: {commit_error}")
 
             raise
 
