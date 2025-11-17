@@ -21,6 +21,50 @@ from app.services.webscraper.templates.template_models import (
 logger = logging.getLogger(__name__)
 
 
+def sanitize_field_name(field_name: str) -> str:
+    """
+    Sanitize a field name to be a valid Python identifier
+
+    Handles special characters like /, (, ), spaces, etc.
+
+    Args:
+        field_name: Raw field name (e.g., "P/E Ratio", "Revenue (Annual)")
+
+    Returns:
+        Valid Python identifier (e.g., "p_e_ratio", "revenue_annual")
+    """
+    import re
+
+    # Convert to lowercase
+    name = field_name.lower()
+
+    # Replace common special characters with underscores or remove them
+    # Handle parentheses - extract content and append
+    name = re.sub(r'\(([^)]+)\)', r'_\1', name)  # (Annual) -> _annual
+
+    # Replace slashes, dashes, spaces with underscores
+    name = re.sub(r'[/\-\s]+', '_', name)
+
+    # Remove any remaining non-alphanumeric characters except underscores
+    name = re.sub(r'[^a-z0-9_]', '', name)
+
+    # Remove multiple consecutive underscores
+    name = re.sub(r'_+', '_', name)
+
+    # Remove leading/trailing underscores
+    name = name.strip('_')
+
+    # Ensure it doesn't start with a number
+    if name and name[0].isdigit():
+        name = 'field_' + name
+
+    # Ensure it's not empty
+    if not name:
+        name = 'field'
+
+    return name
+
+
 class TemplateAutoGenerator:
     """
     Automatically generate extraction templates using LLM analysis
@@ -447,10 +491,13 @@ Analyze the content and return the JSON object with suggested fields."""
                 # Create transformation rules if needed
                 transformation = self._create_transformation_rule(suggested_field)
 
-                # Build field definition
+                # Build field definition with sanitized name
+                raw_name = suggested_field.get('name', '')
+                sanitized_name = sanitize_field_name(raw_name)
+
                 field_def = FieldDefinition(
-                    name=suggested_field.get('name', '').replace(' ', '_').lower(),
-                    display_name=suggested_field.get('display_name'),
+                    name=sanitized_name,
+                    display_name=suggested_field.get('display_name') or raw_name,
                     description=suggested_field.get('description'),
                     type=suggested_field.get('type', 'string'),
                     required=suggested_field.get('priority') == 'high',

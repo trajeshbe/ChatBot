@@ -613,7 +613,6 @@ async def smart_extract_without_template(
         logger.info("Scraping webpage content...")
         scrape_result = await scraper_service.scrape_url(
             url=request.url,
-            strategy='auto',
             scrape_prompt=None
         )
 
