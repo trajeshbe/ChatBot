@@ -303,8 +303,13 @@ class ExtractionWorkflowNodes:
 
                         logger.info(
                             f"Mapping scraped data from {scraped_item.get('url')} "
-                            f"to {len(template_columns)} template columns using LLM..."
+                            f"({len(scraped_content)} chars) to {len(template_columns)} "
+                            f"template columns using LLM..."
                         )
+
+                        # Log a preview of the scraped content for debugging
+                        content_preview = scraped_content[:200].replace('\n', ' ')
+                        logger.debug(f"Content preview: {content_preview}...")
 
                         # Use LLM to map scraped data to template columns
                         mapping_result = await extractor.map_to_custom_template(
@@ -318,28 +323,51 @@ class ExtractionWorkflowNodes:
                             mapped_data = mapping_result.get('mapped_data', {})
                             missing_fields = mapping_result.get('missing_fields', [])
 
+                            # Validate that we have some data
+                            non_empty_fields = [
+                                k for k, v in mapped_data.items()
+                                if v and v != "—" and v != "— (requires additional research)"
+                            ]
+
+                            if not non_empty_fields:
+                                logger.warning(
+                                    f"LLM extraction returned no data for {scraped_item.get('url')}. "
+                                    f"All fields are empty or marked as missing."
+                                )
+                            else:
+                                logger.info(
+                                    f"✓ Extracted {len(non_empty_fields)}/{len(template_columns)} "
+                                    f"fields from {scraped_item.get('url')}"
+                                )
+
                             # Add URL to the record
-                            mapped_data['url'] = scraped_item.get('url')
+                            mapped_data['URL'] = scraped_item.get('url')
 
                             all_records.append(mapped_data)
 
-                            logger.info(
-                                f"Extracted {len(mapped_data) - len(missing_fields)}/{len(template_columns)} "
-                                f"fields from {scraped_item.get('url')}"
-                            )
-
                             if missing_fields:
-                                logger.info(f"Missing fields: {', '.join(missing_fields)}")
+                                logger.debug(f"Missing fields: {', '.join(missing_fields)}")
+
                         else:
                             logger.error(
-                                f"LLM mapping failed for {scraped_item.get('url')}"
+                                f"✗ LLM mapping returned None for {scraped_item.get('url')}. "
+                                f"This usually means the LLM failed to parse the response or "
+                                f"the LLM service is not responding correctly."
                             )
+                            # Add a record with empty values and the URL so we don't lose the URL
+                            empty_record = {col: "—" for col in template_columns}
+                            empty_record['URL'] = scraped_item.get('url')
+                            all_records.append(empty_record)
 
                     except Exception as e:
                         logger.error(
-                            f"Error extracting from {scraped_item.get('url')}: {str(e)}",
+                            f"✗ Error extracting from {scraped_item.get('url')}: {str(e)}",
                             exc_info=True
                         )
+                        # Add a record with error indication and the URL
+                        error_record = {col: "— (extraction error)" for col in template_columns}
+                        error_record['URL'] = scraped_item.get('url')
+                        all_records.append(error_record)
 
                 # Convert list of records to column-based dict for pandas
                 if all_records:
@@ -348,19 +376,27 @@ class ExtractionWorkflowNodes:
                     for col in template_columns:
                         extracted_data[col] = [record.get(col, '') for record in all_records]
 
-                    # Add URL column
-                    extracted_data['url'] = [record.get('url', '') for record in all_records]
+                    # Add URL column (check both 'URL' and 'url' keys)
+                    extracted_data['URL'] = [record.get('URL', record.get('url', '')) for record in all_records]
 
                     state['extracted_data'] = extracted_data
 
                     logger.info(
-                        f"LLM extraction complete: {len(all_records)} records with "
-                        f"{len(template_columns)} fields"
+                        f"✓ LLM extraction complete: {len(all_records)} records with "
+                        f"{len(template_columns)} template fields + URL column"
                     )
                 else:
-                    logger.warning("No records extracted from any pages")
+                    logger.error(
+                        "✗ No records extracted from any pages! This means the LLM extraction "
+                        "failed for all URLs or all content was empty."
+                    )
                     state['extracted_data'] = {col: [] for col in template_columns}
-                    state['extracted_data']['url'] = []
+                    state['extracted_data']['URL'] = []
+                    state['errors'].append({
+                        'step': 'extract_data',
+                        'error': 'No records extracted from any pages',
+                        'timestamp': datetime.utcnow()
+                    })
 
             else:
                 # Selector-based extraction (CSS/XPath)

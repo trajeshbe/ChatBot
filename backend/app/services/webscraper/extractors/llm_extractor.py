@@ -294,33 +294,60 @@ Return only the extracted value."""
             return value
 
     def _parse_json_response(self, response: str) -> Dict[str, Any]:
-        """Parse JSON from LLM response"""
+        """Parse JSON from LLM response with improved error handling"""
+        if not response:
+            self.logger.error("Empty response from LLM")
+            return {}
+
+        # Clean the response first
+        response_cleaned = response.strip()
+
         try:
             # Try direct JSON parse
-            return json.loads(response)
-        except json.JSONDecodeError:
-            pass
+            result = json.loads(response_cleaned)
+            self.logger.debug(f"✓ Successfully parsed JSON directly")
+            return result
+        except json.JSONDecodeError as e:
+            self.logger.debug(f"Direct JSON parse failed: {str(e)}")
 
         # Try to extract JSON from markdown code blocks (```json ... ```)
-        markdown_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response, re.DOTALL | re.IGNORECASE)
+        markdown_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response_cleaned, re.DOTALL | re.IGNORECASE)
         if markdown_match:
             try:
-                return json.loads(markdown_match.group(1))
-            except json.JSONDecodeError:
-                pass
+                result = json.loads(markdown_match.group(1))
+                self.logger.debug(f"✓ Successfully parsed JSON from markdown code block")
+                return result
+            except json.JSONDecodeError as e:
+                self.logger.debug(f"Markdown JSON parse failed: {str(e)}")
 
         # Try to extract JSON object from anywhere in the response (more robust regex)
-        # Match nested objects properly
-        json_match = re.search(r'\{(?:[^{}]|\{[^{}]*\})*\}', response, re.DOTALL)
+        # Match nested objects properly - improved to handle more complex nesting
+        json_match = re.search(r'\{[^}]*"mapped_data"[^}]*\{.*?\}[^}]*\}', response_cleaned, re.DOTALL)
         if json_match:
             try:
-                return json.loads(json_match.group())
-            except json.JSONDecodeError:
-                pass
+                result = json.loads(json_match.group())
+                self.logger.debug(f"✓ Successfully parsed JSON using regex extraction")
+                return result
+            except json.JSONDecodeError as e:
+                self.logger.debug(f"Regex JSON parse failed: {str(e)}")
+
+        # Last resort: try to find any JSON object in the response
+        json_match_generic = re.search(r'\{(?:[^{}]|\{[^{}]*\})*\}', response_cleaned, re.DOTALL)
+        if json_match_generic:
+            try:
+                result = json.loads(json_match_generic.group())
+                self.logger.warning(f"Parsed JSON using generic regex - may not have expected structure")
+                return result
+            except json.JSONDecodeError as e:
+                self.logger.debug(f"Generic regex JSON parse failed: {str(e)}")
 
         # Log the actual response for debugging
-        self.logger.warning(f"Could not parse JSON from LLM response. Response preview: {response[:200]}")
-        self.logger.error(f"Failed to parse LLM response as JSON")
+        response_preview = response_cleaned[:500] if len(response_cleaned) > 500 else response_cleaned
+        self.logger.error(
+            f"✗ Failed to parse LLM response as JSON after trying all methods.\n"
+            f"Response preview (first 500 chars):\n{response_preview}\n"
+            f"Response length: {len(response_cleaned)} chars"
+        )
         return {}
 
     def _extract_confidence(self, response: str) -> float:
@@ -451,61 +478,57 @@ Extract data matching the above schema from the content."""
 
         try:
             # Build the system prompt with clear instructions
-            system_prompt = """You are a professional data transformation assistant.
+            system_prompt = """You are a professional data extraction and mapping assistant.
 
-Your task is to extract data from scraped webpage content and map it to a custom template.
+Your task: Extract data from scraped webpage content and map it to template columns.
 
 CRITICAL RULES:
-1. Extract ONLY values that exist in the scraped data
-2. NEVER hallucinate or make up values
-3. If a field does not exist in the scraped data, mark it as "— (requires additional research)"
-4. Never fill values you do not see in the input
-5. Extract all numeric and text values accurately from the scraped data
-6. Map every scraped value to the correct column in the template
+1. Extract ONLY values that actually exist in the scraped data
+2. NEVER make up, infer, or hallucinate values
+3. If a field is not found in the scraped data, use: "—"
+4. Return VALID JSON ONLY - no markdown, no code blocks, no explanations
+5. Extract exact values as they appear (preserve numbers, text, formatting)
 
-Return your response as a JSON object with two sections:
-1. "mapped_data": Object with template columns as keys and extracted values
-2. "missing_fields": Array of field names that require external research
-
-Format:
+OUTPUT FORMAT - You MUST return a JSON object exactly like this:
 {
   "mapped_data": {
-    "Column1": "extracted_value_1",
-    "Column2": "extracted_value_2",
-    "Column3": "— (requires additional research)"
+    "Column1": "value found in data",
+    "Column2": "another value",
+    "Column3": "—"
   },
-  "missing_fields": ["Column3", "Column5"]
-}"""
+  "missing_fields": ["Column3"]
+}
+
+IMPORTANT: Return ONLY the JSON object. No markdown formatting. No code blocks. No explanations."""
 
             # Build the extraction prompt
-            template_info = "Template columns:\n"
+            template_info = "TEMPLATE COLUMNS TO EXTRACT:\n"
             for i, col in enumerate(template_columns, 1):
                 example_val = ""
                 if template_examples and col in template_examples:
-                    example_val = f" (example: {template_examples[col]})"
+                    example_val = f" (expected format: {template_examples[col]})"
                 template_info += f"{i}. {col}{example_val}\n"
 
-            # Truncate scraped data if too long (keep first 8000 chars)
-            truncated_data = scraped_data[:8000]
-            if len(scraped_data) > 8000:
-                truncated_data += "\n... [content truncated]"
+            # Truncate scraped data if too long (keep first 10000 chars for better context)
+            truncated_data = scraped_data[:10000]
+            if len(scraped_data) > 10000:
+                truncated_data += "\n\n[... content truncated ...]"
 
-            extraction_prompt = f"""Here is the raw scraped data to process:
-
-=== SCRAPED DATA START ===
+            extraction_prompt = f"""SCRAPED WEBPAGE CONTENT:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {truncated_data}
-=== SCRAPED DATA END ===
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 {template_info}
 
-Your tasks:
-1. Extract all numeric and text values from the scraped data
-2. Map every scraped value to the correct column in the template
-3. If a field does not exist in the scraped data, mark it as "— (requires additional research)"
-4. Never fill values you do not see in the input
-5. Provide a list of fields that need external sources
+INSTRUCTIONS:
+1. Read the scraped content carefully
+2. For EACH column, find the matching value in the scraped data
+3. If a value exists, extract it exactly as shown
+4. If a value does NOT exist, use "—"
+5. Return a valid JSON object with "mapped_data" and "missing_fields"
 
-Return the mapped values as a clean JSON object following the format specified in the system prompt."""
+Return your response as PURE JSON (no markdown, no code blocks):"""
 
             # Log the mapping attempt
             self.logger.info(
@@ -538,30 +561,58 @@ Return the mapped values as a clean JSON object following the format specified i
             result = self._parse_json_response(response)
 
             if not result:
-                self.logger.error("Failed to parse LLM response as JSON")
+                self.logger.error(
+                    "✗ Failed to parse LLM response as JSON. "
+                    "Returning None to indicate extraction failure."
+                )
                 return None
 
             # Extract mapped_data and missing_fields
             mapped_data = result.get('mapped_data', {})
             missing_fields = result.get('missing_fields', [])
 
-            if missing_fields:
+            # Validate the structure
+            if not isinstance(mapped_data, dict):
+                self.logger.error(
+                    f"✗ Invalid LLM response structure: 'mapped_data' is not a dict. "
+                    f"Got type: {type(mapped_data)}"
+                )
+                return None
+
+            # Count non-empty extracted values
+            non_empty_values = sum(
+                1 for v in mapped_data.values()
+                if v and v not in ["—", "— (requires additional research)", "", None]
+            )
+
+            if non_empty_values == 0:
+                self.logger.warning(
+                    f"⚠ LLM extraction returned 0 non-empty values out of {len(template_columns)} fields. "
+                    f"This may indicate the scraped data doesn't contain the requested information."
+                )
+            elif missing_fields:
                 self.logger.info(
-                    f"Mapped {len(mapped_data)} fields successfully. "
+                    f"✓ Mapped {non_empty_values}/{len(template_columns)} fields successfully. "
                     f"{len(missing_fields)} fields require additional research: {', '.join(missing_fields)}"
                 )
             else:
-                self.logger.info(f"Successfully mapped all {len(mapped_data)} template fields")
+                self.logger.info(
+                    f"✓ Successfully mapped all {len(mapped_data)} template fields "
+                    f"({non_empty_values} non-empty values)"
+                )
 
             # Ensure all template columns are present in the result
             for col in template_columns:
                 if col not in mapped_data:
-                    mapped_data[col] = "— (requires additional research)"
+                    mapped_data[col] = "—"
+                    if col not in missing_fields:
+                        missing_fields.append(col)
 
             return {
                 'mapped_data': mapped_data,
                 'missing_fields': missing_fields,
-                'extraction_complete': len(missing_fields) == 0
+                'extraction_complete': len(missing_fields) == 0,
+                'non_empty_count': non_empty_values
             }
 
         except Exception as e:
