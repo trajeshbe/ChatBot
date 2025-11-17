@@ -87,16 +87,21 @@ class TemplateExtractionService:
 
         logger.info(f"Extracting data from {url} using template: {template.name}")
 
+        # Create context with increased default timeout (60 seconds instead of 10)
         context = await self.browser.new_context(
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         )
+        # Set default navigation timeout to 60 seconds
+        context.set_default_navigation_timeout(60000)
+        context.set_default_timeout(60000)
+
         page = await context.new_page()
 
         all_data = []
 
         try:
-            # Navigate to URL
-            await page.goto(url, wait_until='networkidle', timeout=30000)
+            # Navigate to URL with extended timeout for slow sites like screener.in
+            await page.goto(url, wait_until='networkidle', timeout=90000)
             logger.info(f"Page loaded: {url}")
 
             # Wait for key element if specified

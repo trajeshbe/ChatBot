@@ -260,6 +260,17 @@ class TemplateAutoGenerator:
         when no template is provided.
         """
         try:
+            # Validate that we have content to analyze
+            text_content = page_content.get('text', '')
+            html_content = page_content.get('html', '')
+
+            if not text_content and not html_content:
+                self.logger.error("No content available to analyze - both text and HTML are empty")
+                return None
+
+            # Truncate content to fit in LLM context window
+            text_preview = text_content[:5000] if text_content else html_content[:5000]
+
             # Prepare analysis prompt
             system_prompt = """You are a data extraction expert. Analyze the provided webpage content and determine the best fields/columns to extract.
 
@@ -296,7 +307,7 @@ Return ONLY a valid JSON object with this structure:
             analysis_prompt = f"""Analyze this webpage content and suggest the best fields to extract:
 
 Webpage Text Preview:
-{page_content.get('text', '')[:3000]}
+{text_preview}
 
 HTML Structure Info:
 - Tables: {page_content.get('structure', {}).get('tables', 0)}
@@ -309,13 +320,20 @@ Maximum fields to suggest: {max_fields}
 
 Analyze the content and return the JSON object with suggested fields."""
 
-            # Call LLM
+            # Call LLM with error handling
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": analysis_prompt}
             ]
 
             try:
+                self.logger.info(f"Calling LLM service with provider: {llm_provider}")
+
+                # Check if LLM service has the generate method
+                if not hasattr(self.llm_service, 'generate'):
+                    self.logger.error("LLM service does not have 'generate' method")
+                    return self._get_fallback_analysis(page_content, user_instructions)
+
                 llm_result = await self.llm_service.generate(
                     prompt=analysis_prompt,
                     messages=messages,
@@ -324,31 +342,39 @@ Analyze the content and return the JSON object with suggested fields."""
                 )
 
                 if not llm_result:
-                    self.logger.error("LLM service returned None. Check if LLM service is properly configured.")
-                    return None
+                    self.logger.error("LLM service returned None. Using fallback analysis.")
+                    return self._get_fallback_analysis(page_content, user_instructions)
 
                 response = llm_result.get('content', '')
                 if not response:
-                    self.logger.error("LLM service returned empty content")
-                    return None
+                    self.logger.error("LLM service returned empty content. Using fallback analysis.")
+                    return self._get_fallback_analysis(page_content, user_instructions)
 
+                self.logger.info(f"LLM response received: {len(response)} characters")
+
+            except AttributeError as attr_error:
+                self.logger.error(f"LLM service method error: {str(attr_error)}")
+                self.logger.info("Using fallback analysis due to LLM service error")
+                return self._get_fallback_analysis(page_content, user_instructions)
             except Exception as llm_error:
-                self.logger.error(f"LLM service call failed: {str(llm_error)}")
-                self.logger.error("Please check: 1) OpenAI API key is set, 2) vLLM/Ollama services are running, 3) Network connectivity")
-                return None
+                self.logger.error(f"LLM service call failed: {str(llm_error)}", exc_info=True)
+                self.logger.error("Please check: 1) OpenAI API key is set in .env, 2) vLLM/Ollama services are running, 3) Network connectivity")
+                self.logger.info("Using fallback analysis")
+                return self._get_fallback_analysis(page_content, user_instructions)
 
             # Parse JSON response
             result = self._parse_json_response(response)
 
             if not result or 'suggested_fields' not in result:
-                self.logger.warning("LLM response missing suggested_fields")
-                return None
+                self.logger.warning("LLM response missing suggested_fields, using fallback")
+                return self._get_fallback_analysis(page_content, user_instructions)
 
+            self.logger.info(f"Successfully parsed {len(result.get('suggested_fields', []))} fields from LLM")
             return result
 
         except Exception as e:
-            self.logger.error(f"Content analysis failed: {str(e)}")
-            return None
+            self.logger.error(f"Content analysis failed: {str(e)}", exc_info=True)
+            return self._get_fallback_analysis(page_content, user_instructions)
 
     async def _generate_field_definitions(
         self,
@@ -491,6 +517,86 @@ Analyze the content and return the JSON object with suggested fields."""
             )
 
         return None
+
+    def _get_fallback_analysis(
+        self,
+        page_content: Dict[str, Any],
+        user_instructions: Optional[str]
+    ) -> Dict[str, Any]:
+        """
+        Provide fallback analysis when LLM is unavailable
+
+        This creates a basic template based on HTML structure analysis
+        without requiring LLM.
+        """
+        self.logger.info("Using fallback analysis (no LLM)")
+
+        # Extract basic structure information
+        structure = page_content.get('structure', {})
+        text_content = page_content.get('text', '')
+
+        # Create basic fields based on structure
+        suggested_fields = []
+
+        # If there are tables, suggest extracting table data
+        if structure.get('tables', 0) > 0:
+            suggested_fields.extend([
+                {
+                    "name": "table_data",
+                    "display_name": "Table Data",
+                    "description": "Data extracted from tables",
+                    "type": "string",
+                    "extraction_strategy": "css",
+                    "extraction_hint": "table",
+                    "priority": "high",
+                    "likely_location": "HTML tables"
+                }
+            ])
+
+        # Always include a content field
+        suggested_fields.append({
+            "name": "content",
+            "display_name": "Main Content",
+            "description": "Main text content from the page",
+            "type": "string",
+            "extraction_strategy": "llm",
+            "extraction_hint": user_instructions or "Extract main content",
+            "priority": "high",
+            "likely_location": "Page body"
+        })
+
+        # Add title field
+        suggested_fields.append({
+            "name": "title",
+            "display_name": "Page Title",
+            "description": "Title of the page",
+            "type": "string",
+            "extraction_strategy": "css",
+            "extraction_hint": "h1, title",
+            "priority": "high",
+            "likely_location": "Page header"
+        })
+
+        # If lists are present, add list extraction
+        if structure.get('lists', 0) > 0:
+            suggested_fields.append({
+                "name": "list_items",
+                "display_name": "List Items",
+                "description": "Items from lists",
+                "type": "string",
+                "extraction_strategy": "css",
+                "extraction_hint": "ul li, ol li",
+                "priority": "medium",
+                "likely_location": "HTML lists"
+            })
+
+        return {
+            "template_type": "general_data",
+            "suggested_fields": suggested_fields,
+            "data_structure": "mixed",
+            "confidence": 0.5,
+            "fallback": True
+        }
 
     def _parse_json_response(self, response: str) -> Optional[Dict[str, Any]]:
         """Parse JSON from LLM response"""

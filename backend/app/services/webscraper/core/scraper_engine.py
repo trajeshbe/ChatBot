@@ -235,11 +235,15 @@ Extract only the relevant portions:"""
                     viewport={'width': 1920, 'height': 1080}
                 )
 
+                # Set increased default timeouts for slow sites like screener.in
+                context.set_default_navigation_timeout(90000)  # 90 seconds
+                context.set_default_timeout(90000)
+
                 page = await context.new_page()
 
                 try:
-                    # Navigate to page
-                    await page.goto(url, wait_until='networkidle', timeout=30000)
+                    # Navigate to page with extended timeout
+                    await page.goto(url, wait_until='networkidle', timeout=90000)
 
                     # Get content
                     html_content = await page.content()
