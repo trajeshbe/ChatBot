@@ -278,14 +278,24 @@ class TemplateAutoGenerator:
             # Truncate content to fit in LLM context window
             text_preview = text_content[:5000] if text_content else html_content[:5000]
 
+            # ENHANCEMENT: Extract explicit column names from user instructions if provided
+            explicit_columns = self._extract_column_names_from_instructions(user_instructions) if user_instructions else []
+
             # Prepare analysis prompt
             system_prompt = """You are a data extraction expert. Analyze the provided webpage content and determine the best fields/columns to extract.
 
 Your task:
 1. Identify structured data present in the content
 2. Suggest optimal field names and types
-3. Provide extraction strategies for each field
-4. Return results as a JSON object
+3. If user specifies column names, USE THOSE EXACT NAMES
+4. If no column names specified, suggest appropriate field names
+5. Provide extraction strategies for each field
+6. Return results as a JSON object
+
+IMPORTANT RULES:
+- If user specifies column names like "Revenue (Annual)", "EBITDA", use those EXACT names
+- If user describes data without specific column names, auto-generate appropriate column names
+- Always use 'llm' as extraction_strategy for smart mapping (don't rely on CSS selectors)
 
 Return ONLY a valid JSON object with this structure:
 {
@@ -296,8 +306,8 @@ Return ONLY a valid JSON object with this structure:
             "display_name": "Field Display Name",
             "description": "What this field represents",
             "type": "string|integer|float|boolean|date",
-            "extraction_strategy": "css|xpath|regex|llm",
-            "extraction_hint": "CSS selector, XPath, regex pattern, or LLM prompt",
+            "extraction_strategy": "llm",
+            "extraction_hint": "LLM prompt describing what to extract",
             "priority": "high|medium|low",
             "likely_location": "Description of where this data appears"
         }
@@ -310,6 +320,13 @@ Return ONLY a valid JSON object with this structure:
             instructions_section = ""
             if user_instructions:
                 instructions_section = f"\n\nUser's Extraction Requirements:\n{user_instructions}\n"
+
+                if explicit_columns:
+                    instructions_section += f"\n**IMPORTANT**: User specified these exact column names - USE THEM:\n"
+                    instructions_section += ", ".join(f'"{col}"' for col in explicit_columns)
+                    instructions_section += "\n"
+                    self.logger.info(f"✓ Detected {len(explicit_columns)} explicit column names: {explicit_columns}")
+
                 # Log that user instructions are being used
                 self.logger.info(f"✓ User instructions will be sent to LLM for analysis: {user_instructions[:150]}{'...' if len(user_instructions) > 150 else ''}")
             else:
@@ -692,6 +709,58 @@ Analyze the content and return the JSON object with suggested fields."""
             "fallback": True,
             "message": "Template generated using rule-based analysis. For better results, configure an LLM provider."
         }
+
+    def _extract_column_names_from_instructions(self, user_instructions: str) -> List[str]:
+        """
+        Extract explicit column names from user instructions
+
+        Looks for patterns like:
+        - "map to columns like Revenue (Annual), EBITDA, Net Profit"
+        - "extract Revenue, EBITDA Margin, and ROE"
+        - "get Company Name, Market Cap, Stock P/E"
+
+        Returns:
+            List of extracted column names
+        """
+        if not user_instructions:
+            return []
+
+        import re
+
+        column_names = []
+
+        # Pattern 1: "map to columns like X, Y, Z" or "map to Revenue, EBITDA"
+        pattern1 = r'(?:map\s+to\s+(?:columns?\s+like\s+)?|extract\s+|get\s+)([A-Z][^.!?]+?)(?:\.|$|and\s+map|and\s+deliver)'
+        matches = re.findall(pattern1, user_instructions, re.IGNORECASE)
+
+        for match in matches:
+            # Split by common separators
+            potential_columns = re.split(r',\s*|\s+and\s+', match.strip())
+
+            for col in potential_columns:
+                col = col.strip()
+                # Filter out noise words
+                noise_words = {'data', 'it', 'them', 'these', 'those', 'to', 'into', 'in', 'format'}
+                if col and col.lower() not in noise_words and len(col) > 2:
+                    # Capitalize properly
+                    column_names.append(col.strip())
+
+        # Pattern 2: Look for quoted column names
+        quoted_pattern = r'["\']([^"\']+?)["\']'
+        quoted_matches = re.findall(quoted_pattern, user_instructions)
+        column_names.extend(quoted_matches)
+
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_columns = []
+        for col in column_names:
+            if col not in seen and col.strip():
+                seen.add(col)
+                unique_columns.append(col.strip())
+
+        self.logger.info(f"Extracted {len(unique_columns)} potential column names from instructions: {unique_columns}")
+
+        return unique_columns
 
     def _parse_json_response(self, response: str) -> Optional[Dict[str, Any]]:
         """Parse JSON from LLM response"""

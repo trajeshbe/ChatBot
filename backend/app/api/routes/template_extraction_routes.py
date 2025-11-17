@@ -506,36 +506,60 @@ async def smart_extract_without_template(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    **SMART EXTRACTION WITHOUT PREDEFINED TEMPLATE**
+    **SMART EXTRACTION WITHOUT PREDEFINED TEMPLATE (ENHANCED)**
 
     Extract data from a webpage using only natural language instructions - no template needed!
 
-    This endpoint combines Features #2 and #3:
-    1. Auto-generates a template based on your instructions
-    2. Immediately uses that template to extract data
-    3. Returns the extracted data in your chosen format (Excel/CSV/JSON)
+    This endpoint now uses **LLM-based mapping** for more reliable extraction:
+    1. Auto-generates column names based on your instructions (or auto-detects if not specified)
+    2. Scrapes the webpage content
+    3. Uses AI to intelligently map scraped data to columns
+    4. Returns the extracted data in your chosen format (Excel/CSV/JSON)
+
+    **Two Modes of Operation:**
+
+    **Mode 1: User Specifies Column Names**
+    - Example: "Extract financial data and map to columns like Revenue (Annual), EBITDA, EBITDA Margin, Net Profit"
+    - The system will extract those exact column names and map data to them
+
+    **Mode 2: Auto-Generate Column Names**
+    - Example: "Extract product information from this page"
+    - The system will analyze the page and create appropriate column names automatically
 
     **How it works:**
     1. You provide a URL and describe what you want to extract
-    2. AI analyzes the webpage and creates a custom template
-    3. Data is extracted using intelligent field mappings
-    4. Results are returned in your preferred format
+    2. If you specify column names, they're used; otherwise, AI auto-generates them
+    3. Webpage is scraped
+    4. AI maps scraped data to the columns (never hallucinates missing values)
+    5. Results are returned in your preferred format
 
-    **Example Usage:**
+    **Example Usage - With Column Names:**
+    ```json
+    {
+        "url": "https://www.screener.in/company/RELIANCE/",
+        "user_instructions": "Extract financial data and map to columns like Market Cap, Stock P/E, ROE, ROCE",
+        "llm_provider": "openai",
+        "output_format": "excel"
+    }
+    ```
+
+    **Example Usage - Auto Column Names:**
     ```json
     {
         "url": "https://example.com/products",
-        "user_instructions": "Extract all products with their names, prices, descriptions, and stock status",
-        "llm_provider": "ollama",
+        "user_instructions": "Extract all product information from this page",
+        "llm_provider": "openai",
         "output_format": "excel"
     }
     ```
 
     **Benefits:**
-    - No need to create templates manually
+    - No need to create templates or write selectors
     - Natural language interface - just describe what you need
-    - Intelligent field mapping using LLM
-    - Immediate results
+    - Intelligent field mapping using LLM (no selector failures)
+    - Respects user-specified column names when provided
+    - Auto-generates appropriate column names when not specified
+    - Never hallucinates - marks missing fields clearly
 
     **Perfect for:**
     - One-time data extraction tasks
@@ -548,11 +572,12 @@ async def smart_extract_without_template(
         from app.services.webscraper.templates.template_auto_generator import TemplateAutoGenerator
         from app.services.llm_service import llm_service
         from app.services.scraper_service import scraper_service
+        from app.services.webscraper.extractors.llm_extractor import LLMExtractor
 
-        # Step 1: Auto-generate template
         logger.info(f"Smart extraction from: {request.url}")
         logger.info(f"Instructions: {request.user_instructions}")
 
+        # Step 1: Auto-generate template to determine column names
         auto_gen = TemplateAutoGenerator(
             llm_service=llm_service,
             scraper_service=scraper_service
@@ -580,49 +605,88 @@ async def smart_extract_without_template(
                 detail=error_msg
             )
 
-        logger.info(f"Generated template with {len(template.fields)} fields")
+        # Extract column names from generated template
+        template_columns = [f.display_name or f.name for f in template.fields]
+        logger.info(f"Generated {len(template_columns)} columns: {template_columns}")
 
-        # Step 2: Use the template to extract data
-        # Convert our ExtractionTemplate to the format expected by template_extraction_service
-        extraction_fields = []
-        for field in template.fields:
-            extraction_field = ExtractionField(
-                name=field.name,
-                selector=field.source_hint.selector if field.source_hint and field.source_hint.type == 'css' else None,
-                xpath=field.source_hint.xpath if field.source_hint and field.source_hint.type == 'xpath' else None,
-                regex=field.source_hint.pattern if field.source_hint and field.source_hint.type == 'regex' else None,
-                attribute=field.source_hint.attribute if field.source_hint else None,
-                data_type=field.type,
-                required=field.required
-            )
-            extraction_fields.append(extraction_field)
-
-        extraction_template = ExtractionTemplate(
-            name=template.name,
-            description=template.description,
-            fields=extraction_fields
-        )
-
-        # Step 3: Extract data
-        result = await template_extraction_service.extract_data(
+        # Step 2: Scrape the webpage
+        logger.info("Scraping webpage content...")
+        scrape_result = await scraper_service.scrape_url(
             url=request.url,
-            template=extraction_template,
-            session_id=request.session_id
+            strategy='auto',
+            scrape_prompt=None
         )
 
-        # Store scrape job
-        if result['success']:
-            job = WebScrapeJob(
-                url=request.url,
-                scrape_prompt=f"Smart extraction: {request.user_instructions}",
-                status="completed",
-                completed_at=datetime.utcnow()
+        if not scrape_result or not scrape_result.get('success'):
+            error_msg = scrape_result.get('error', 'Failed to scrape URL') if scrape_result else 'Scraper returned None'
+            logger.error(f"Scraping failed: {error_msg}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to scrape URL: {error_msg}"
             )
-            db.add(job)
-            await db.commit()
 
-        return ExtractionResponse(**result)
+        # Get scraped content
+        scraped_data = scrape_result.get('html') or scrape_result.get('text', '')
 
+        if not scraped_data:
+            raise HTTPException(
+                status_code=500,
+                detail="Scraped content is empty"
+            )
+
+        logger.info(f"Successfully scraped {len(scraped_data)} characters")
+
+        # Step 3: Use LLM to intelligently map scraped data to columns
+        logger.info(f"Mapping scraped data to {len(template_columns)} columns using LLM...")
+
+        await llm_service.initialize()
+        extractor = LLMExtractor(llm_service=llm_service)
+
+        mapping_result = await extractor.map_to_custom_template(
+            scraped_data=scraped_data,
+            template_columns=template_columns,
+            template_examples=None,
+            llm_provider=request.llm_provider
+        )
+
+        if not mapping_result:
+            raise HTTPException(
+                status_code=500,
+                detail="LLM-based mapping failed. Check LLM service configuration and logs."
+            )
+
+        mapped_data = mapping_result['mapped_data']
+        missing_fields = mapping_result['missing_fields']
+
+        logger.info(
+            f"Mapping complete: {len(mapped_data) - len(missing_fields)}/{len(mapped_data)} fields extracted. "
+            f"Missing: {missing_fields}"
+        )
+
+        # Step 4: Store scrape job
+        job = WebScrapeJob(
+            url=request.url,
+            scrape_prompt=f"Smart extraction: {request.user_instructions}",
+            status="completed",
+            completed_at=datetime.utcnow()
+        )
+        db.add(job)
+        await db.commit()
+
+        # Step 5: Return response
+        return ExtractionResponse(
+            success=True,
+            url=request.url,
+            template_name="Smart Extraction (Auto-generated + LLM Mapping)",
+            data=[mapped_data],
+            row_count=1,
+            extracted_at=datetime.utcnow().isoformat(),
+            session_id=request.session_id,
+            error=None
+        )
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in smart extract: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
