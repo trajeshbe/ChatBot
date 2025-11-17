@@ -328,6 +328,9 @@ class ComplianceEngine:
         # Apply rate limiting
         await self.apply_rate_limiting(url)
 
+        # Track current proxy for retry logic
+        current_proxy = self.get_proxy()
+
         # Create HTTP client
         client = self.create_http_client(auth_config)
 
@@ -341,9 +344,8 @@ class ComplianceEngine:
                 response.raise_for_status()
 
                 # Report proxy success if using proxy
-                if client.proxies:
-                    proxy_url = list(client.proxies.values())[0]
-                    proxy_manager.report_success(proxy_url)
+                if current_proxy:
+                    proxy_manager.report_success(current_proxy)
 
                 await client.aclose()
                 return response
@@ -362,15 +364,17 @@ class ComplianceEngine:
                 last_error = e
 
                 # Report proxy failure if using proxy
-                if client.proxies:
-                    proxy_url = list(client.proxies.values())[0]
-                    proxy_manager.report_failure(proxy_url)
+                if current_proxy:
+                    proxy_manager.report_failure(current_proxy)
 
-                # Try with different proxy on next attempt
-                if proxy_manager.is_enabled():
-                    new_proxy = proxy_manager.get_next()
-                    if new_proxy:
-                        client.proxies = proxy_manager.get_proxy_dict(new_proxy)
+                # Close current client and create new one with different proxy for next attempt
+                await client.aclose()
+
+                if proxy_manager.is_enabled() and attempt < max_retries:
+                    current_proxy = proxy_manager.get_next()
+                    if current_proxy:
+                        logger.info(f"Retrying with different proxy: {current_proxy}")
+                    client = self.create_http_client(auth_config)
 
         await client.aclose()
 
