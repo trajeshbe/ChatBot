@@ -87,6 +87,7 @@ lxml==5.1.0                   # XML/HTML parser - faster than default parser
 # ----------------------------------------------------------------------------
 playwright==1.41.0            # Browser automation - scrapes JavaScript-heavy sites
 httpx==0.27.0                 # Async HTTP client - makes HTTP requests (updated for compatibility)
+aiohttp>=3.9.0                # Async HTTP library - used by various dependencies (explicit version to avoid charset-normalizer conflict)
 trafilatura==1.6.3            # Content extraction - extracts main content from HTML
 
 # Enterprise scraping compliance and advanced features
