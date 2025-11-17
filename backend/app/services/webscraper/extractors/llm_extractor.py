@@ -477,6 +477,18 @@ Extract data matching the above schema from the content."""
             return None
 
         try:
+            logger.info("="*80)
+            logger.info("🤖 LLM TEMPLATE MAPPING STARTED")
+            logger.info("="*80)
+            logger.info(f"📊 Template columns to map: {len(template_columns)}")
+            logger.info(f"📋 Columns: {', '.join(template_columns)}")
+            logger.info(f"📏 Scraped data length: {len(scraped_data):,} characters")
+            logger.info(f"🤖 LLM Provider: {llm_provider}")
+            logger.info(f"📝 Template examples provided: {'Yes' if template_examples else 'No'}")
+            if template_examples:
+                logger.info(f"   Examples: {template_examples}")
+            logger.info("="*80)
+
             # Build the system prompt with clear instructions
             system_prompt = """You are a professional data extraction and mapping assistant specialized in extracting structured data from webpages.
 
@@ -547,9 +559,12 @@ EXAMPLE PATTERNS TO LOOK FOR:
 Return your response as PURE JSON (no markdown, no code blocks):"""
 
             # Log the mapping attempt
-            self.logger.info(
-                f"Mapping scraped data to {len(template_columns)} template columns using LLM"
-            )
+            logger.info("─"*80)
+            logger.info(f"📡 Calling LLM service...")
+            logger.info(f"🤖 Provider: {llm_provider}")
+            logger.info(f"🎯 Max tokens: 3000")
+            logger.info(f"🌡️  Temperature: 0.0 (deterministic)")
+            logger.info("─"*80)
 
             # Call LLM
             messages = [
@@ -565,15 +580,33 @@ Return your response as PURE JSON (no markdown, no code blocks):"""
             )
 
             if not llm_result:
-                self.logger.warning("LLM returned empty response for template mapping")
+                logger.error("❌ LLM returned empty response for template mapping")
+                logger.error("💡 Possible causes:")
+                logger.error("   - LLM service not properly configured")
+                logger.error("   - API key missing or invalid")
+                logger.error("   - Network connectivity issues")
+                logger.error("   - LLM service timeout")
                 return None
+
+            logger.info("✅ LLM response received")
+            logger.info(f"📊 Response metadata: {llm_result.get('model', 'unknown')} model")
+            if 'tokens' in llm_result:
+                logger.info(f"🔢 Tokens used: {llm_result.get('tokens', 0)}")
+            if 'latency_ms' in llm_result:
+                logger.info(f"⏱️  Latency: {llm_result.get('latency_ms', 0):.0f}ms")
 
             response = llm_result.get('content', '')
             if not response:
-                self.logger.warning("LLM response content is empty")
+                logger.error("❌ LLM response content is empty")
                 return None
 
+            logger.info(f"📏 Response length: {len(response):,} characters")
+            logger.info(f"📝 Response preview (first 500 chars):")
+            logger.info(f"   {response[:500]}")
+            logger.info("─"*80)
+
             # Parse the JSON response
+            logger.info("🔍 Parsing LLM response as JSON...")
             result = self._parse_json_response(response)
 
             if not result:

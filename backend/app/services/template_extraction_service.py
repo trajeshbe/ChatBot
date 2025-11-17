@@ -67,7 +67,7 @@ class TemplateExtractionService:
 
     async def extract_data(
         self,
-        url: str,
+            url: str,
         template: ExtractionTemplate,
         session_id: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -85,7 +85,13 @@ class TemplateExtractionService:
         if not self.browser:
             await self.initialize()
 
-        logger.info(f"Extracting data from {url} using template: {template.name}")
+        logger.info("="*80)
+        logger.info(f"🔍 TEMPLATE EXTRACTION STARTED")
+        logger.info(f"📍 URL: {url}")
+        logger.info(f"📋 Template: {template.name}")
+        logger.info(f"🔢 Fields to extract: {len(template.fields)}")
+        logger.info(f"🆔 Session ID: {session_id or 'None'}")
+        logger.info("="*80)
 
         # Create context with increased default timeout (60 seconds instead of 10)
         context = await self.browser.new_context(
@@ -101,36 +107,53 @@ class TemplateExtractionService:
 
         try:
             # Navigate to URL with extended timeout for slow sites like screener.in
+            logger.info(f"🌐 Navigating to {url}...")
+            logger.info(f"⏱️  Timeout set to 90 seconds, waiting for networkidle...")
             await page.goto(url, wait_until='networkidle', timeout=90000)
-            logger.info(f"Page loaded: {url}")
+            logger.info(f"✅ Page loaded successfully: {url}")
+            logger.info(f"📄 Page title: {await page.title()}")
 
             # Wait for key element if specified
             if template.wait_for_selector:
+                logger.info(f"⏳ Waiting for selector: {template.wait_for_selector}")
                 await page.wait_for_selector(template.wait_for_selector, timeout=60000)
-                logger.info(f"Waited for selector: {template.wait_for_selector}")
+                logger.info(f"✅ Selector found: {template.wait_for_selector}")
 
             # Extract data from current page
             page_num = 1
             while page_num <= template.max_pages:
-                logger.info(f"Extracting data from page {page_num}")
+                logger.info("="*60)
+                logger.info(f"📃 Extracting data from page {page_num}/{template.max_pages}")
+                logger.info("="*60)
 
                 # Get page HTML
+                logger.info(f"📥 Fetching page HTML content...")
                 html_content = await page.content()
+                html_length = len(html_content)
+                logger.info(f"✅ HTML fetched: {html_length:,} characters")
+                logger.info(f"🔍 Parsing HTML with BeautifulSoup (lxml parser)...")
                 soup = BeautifulSoup(html_content, 'lxml')
+                logger.info(f"✅ HTML parsed successfully")
 
                 # Extract each field
+                logger.info(f"🎯 Starting field extraction for {len(template.fields)} fields...")
                 extracted_row, field_errors = await self._extract_fields(page, soup, template.fields)
                 all_data.append(extracted_row)
 
                 # Log field extraction results
                 successful_fields = len([v for v in extracted_row.values() if v is not None])
                 total_fields = len(template.fields)
-                logger.info(f"Extracted {successful_fields}/{total_fields} fields successfully")
+                logger.info("="*60)
+                logger.info(f"📊 EXTRACTION RESULTS FOR PAGE {page_num}")
+                logger.info(f"✅ Successfully extracted: {successful_fields}/{total_fields} fields ({successful_fields/total_fields*100:.1f}%)")
+                logger.info("="*60)
 
                 if field_errors:
-                    logger.warning(f"Field extraction issues: {len(field_errors)} fields had errors")
+                    logger.warning(f"⚠️  Field extraction issues: {len(field_errors)} fields had errors")
                     for field_name, error in field_errors.items():
-                        logger.warning(f"  - {field_name}: {error}")
+                        logger.warning(f"   ✗ {field_name}: {error}")
+                else:
+                    logger.info(f"✅ All fields extracted without errors!")
 
                 # Check for pagination
                 if page_num < template.max_pages and template.pagination_selector:
@@ -144,7 +167,13 @@ class TemplateExtractionService:
                 else:
                     break
 
-            logger.info(f"Extracted {len(all_data)} rows of data")
+            logger.info("="*80)
+            logger.info(f"🎉 EXTRACTION COMPLETED SUCCESSFULLY")
+            logger.info(f"📊 Total rows extracted: {len(all_data)}")
+            logger.info(f"📋 Template: {template.name}")
+            logger.info(f"🔢 Fields per row: {len(template.fields)}")
+            logger.info(f"✅ Success: True")
+            logger.info("="*80)
 
             return {
                 'success': True,
@@ -157,7 +186,15 @@ class TemplateExtractionService:
             }
 
         except Exception as e:
-            logger.error(f"Error extracting data from {url}: {e}")
+            logger.error("="*80)
+            logger.error(f"❌ EXTRACTION FAILED")
+            logger.error(f"📍 URL: {url}")
+            logger.error(f"📋 Template: {template.name}")
+            logger.error(f"❌ Error: {str(e)}")
+            logger.error(f"📝 Error type: {type(e).__name__}")
+            logger.error("="*80)
+            logger.error(f"Full traceback:", exc_info=True)
+
             return {
                 'success': False,
                 'url': url,
@@ -188,27 +225,51 @@ class TemplateExtractionService:
         extracted = {}
         field_errors = {}
 
-        for field in fields:
+        logger.info("─"*60)
+        logger.info(f"🔍 FIELD-BY-FIELD EXTRACTION STARTING")
+        logger.info("─"*60)
+
+        for idx, field in enumerate(fields, 1):
             try:
+                logger.info(f"\n[{idx}/{len(fields)}] Extracting: '{field.name}'")
+                logger.info(f"  📌 Selector: {field.selector or 'None'}")
+                logger.info(f"  📌 XPath: {field.xpath or 'None'}")
+                logger.info(f"  📌 Regex: {field.regex or 'None'}")
+                logger.info(f"  📌 Attribute: {field.attribute or 'None'}")
+                logger.info(f"  📌 Data type: {field.data_type}")
+                logger.info(f"  📌 Required: {field.required}")
+                logger.info(f"  📌 Default value: {field.default_value}")
+
                 value = await self._extract_single_field(page, soup, field)
                 extracted[field.name] = value
 
                 # Track if we got a None or default value (potential extraction failure)
                 if value is None and field.required:
                     field_errors[field.name] = f"Required field returned None (selector: {field.selector or field.xpath or 'N/A'})"
-                    logger.warning(f"⚠ Field '{field.name}' extraction returned None. Selector: {field.selector}")
+                    logger.warning(f"  ⚠️  Field '{field.name}' extraction returned None. Selector: {field.selector}")
+                    logger.warning(f"  ⚠️  This is a REQUIRED field! Data quality may be affected.")
                 elif value == field.default_value and field.default_value is not None:
-                    logger.info(f"Field '{field.name}' used default value: {field.default_value}")
+                    logger.info(f"  ℹ️  Field '{field.name}' used default value: {field.default_value}")
+                    logger.info(f"  ✅ Extracted value: {value}")
+                else:
+                    logger.info(f"  ✅ Extracted value: {value}")
 
             except Exception as e:
                 error_msg = f"Error extracting field: {str(e)}"
                 field_errors[field.name] = error_msg
-                logger.error(f"✗ Error extracting field '{field.name}': {e}")
+                logger.error(f"  ❌ Error extracting field '{field.name}': {e}")
+                logger.error(f"  📝 Error type: {type(e).__name__}")
 
                 if field.required:
                     extracted[field.name] = None
+                    logger.error(f"  ⚠️  Setting REQUIRED field to None due to error")
                 else:
                     extracted[field.name] = field.default_value
+                    logger.info(f"  ℹ️  Using default value: {field.default_value}")
+
+        logger.info("─"*60)
+        logger.info(f"✅ FIELD EXTRACTION COMPLETED")
+        logger.info("─"*60)
 
         return extracted, field_errors
 
