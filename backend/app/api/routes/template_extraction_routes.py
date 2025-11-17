@@ -281,6 +281,15 @@ async def export_extraction_to_excel(
     Accepts a list of dictionaries and returns an Excel file.
     """
     try:
+        # Log received data for diagnostics
+        logger.info(f"Received Excel export request with {len(data) if data else 0} rows, filename: {filename}")
+        logger.debug(f"First row of data: {data[0] if data and len(data) > 0 else 'No data'}")
+
+        # Validate data
+        if not data or len(data) == 0:
+            logger.error("Empty data received in /to-excel endpoint")
+            raise HTTPException(status_code=400, detail="No data provided for Excel export")
+
         # Generate Excel file
         excel_data = await template_extraction_service.export_to_excel(data, filename)
 

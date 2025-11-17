@@ -326,14 +326,40 @@ class TemplateExtractionService:
             BytesIO object containing Excel file
         """
         try:
+            # Log incoming data for diagnostics
+            logger.info(f"export_to_excel called with {len(data)} rows")
+            logger.debug(f"Data structure: {data[:1] if data else 'empty'}")  # Log first row
+
+            # Validate data
+            if not data:
+                logger.error("Empty data list provided to export_to_excel")
+                raise ValueError("Cannot export empty data to Excel")
+
+            if not isinstance(data, list):
+                logger.error(f"Data is not a list, got type: {type(data)}")
+                raise ValueError(f"Data must be a list, got {type(data)}")
+
             # Create DataFrame
             df = pd.DataFrame(data)
+            logger.info(f"Created DataFrame with shape: {df.shape} (rows, columns)")
+            logger.info(f"DataFrame columns: {df.columns.tolist()}")
+            logger.debug(f"DataFrame preview:\n{df.head()}")
+
+            # Log sample of actual values for diagnostics
+            if len(data) > 0:
+                first_row = data[0]
+                logger.info(f"First row data sample: {dict(list(first_row.items())[:3])}")  # First 3 columns
+
+                # Count non-empty values in first row
+                non_empty_count = sum(1 for v in first_row.values() if v and v not in ['—', '', None])
+                logger.info(f"Non-empty values in first row: {non_empty_count}/{len(first_row)}")
 
             # Create Excel file in memory
             output = BytesIO()
 
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 df.to_excel(writer, sheet_name='Extracted Data', index=False)
+                logger.info(f"DataFrame written to Excel sheet 'Extracted Data'")
 
                 # Get workbook and worksheet
                 workbook = writer.book
@@ -360,25 +386,56 @@ class TemplateExtractionService:
                     worksheet.write(0, col_num, value, header_format)
 
                 # Format data rows and highlight missing fields
+                logger.info(f"Writing {len(data)} data rows to Excel worksheet")
                 for row_num, row_data in enumerate(data, start=1):
+                    logger.debug(f"Writing row {row_num}: {list(row_data.keys())}")
                     for col_num, col_name in enumerate(df.columns):
                         value = row_data.get(col_name, '')
                         # Check if value is missing (—, empty, or null)
                         if value in ['—', '', None] or (isinstance(value, str) and value.strip() == '—'):
                             worksheet.write(row_num, col_num, value, missing_format)
+                            logger.debug(f"  Row {row_num}, Col {col_num} ({col_name}): MISSING VALUE")
                         else:
                             worksheet.write(row_num, col_num, value)
+                            logger.debug(f"  Row {row_num}, Col {col_num} ({col_name}): {str(value)[:50]}")
 
-                # Auto-adjust column widths
+                # Auto-adjust column widths with better error handling
+                logger.info("Adjusting column widths")
                 for i, col in enumerate(df.columns):
-                    max_len = max(
-                        df[col].astype(str).str.len().max(),
-                        len(str(col))
-                    ) + 2
-                    worksheet.set_column(i, i, min(max_len, 50))
+                    try:
+                        # Calculate max length safely
+                        col_values = df[col].astype(str)
+                        if len(col_values) > 0:
+                            max_value_len = col_values.str.len().max()
+                            # Handle NaN or None from max()
+                            if pd.isna(max_value_len):
+                                max_value_len = 0
+                        else:
+                            max_value_len = 0
+
+                        max_len = max(
+                            int(max_value_len),
+                            len(str(col))
+                        ) + 2
+
+                        adjusted_width = min(max_len, 50)
+                        # Ensure minimum width of 12
+                        adjusted_width = max(adjusted_width, 12)
+
+                        worksheet.set_column(i, i, adjusted_width)
+                        logger.debug(f"Column {i} ({col}): width set to {adjusted_width}")
+
+                    except Exception as col_error:
+                        logger.warning(f"Error setting width for column {i} ({col}): {col_error}")
+                        # Fallback to default width
+                        worksheet.set_column(i, i, 15)
 
             output.seek(0)
-            logger.info(f"Exported {len(data)} rows to Excel")
+            output_size = len(output.getvalue())
+            logger.info(f"Exported {len(data)} rows to Excel, file size: {output_size} bytes")
+
+            if output_size < 1000:
+                logger.warning(f"Excel file size is suspiciously small: {output_size} bytes")
 
             return output
 
