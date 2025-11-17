@@ -342,7 +342,11 @@ async def auto_generate_template(
         if not template:
             return AutoGenerateResponse(
                 success=False,
-                error="Failed to auto-generate template. The LLM could not analyze the webpage."
+                error="Failed to auto-generate template. This may be due to: "
+                      "1) Website blocking automated access, "
+                      "2) Invalid or unreachable URL, "
+                      "3) Empty webpage content. "
+                      "Please check the URL and try again."
             )
 
         # Format response
@@ -373,13 +377,20 @@ async def auto_generate_template(
             "metadata": template.schema_definition.metadata
         }
 
+        # Check if this was generated using fallback
+        is_fallback = template.schema_definition.metadata.get('fallback', False)
+        success_message = f"Successfully generated template with {len(template.fields)} fields"
+
+        if is_fallback:
+            success_message += " (using rule-based analysis). For AI-powered analysis, configure OpenAI API key."
+
         return AutoGenerateResponse(
             success=True,
             template=template_data,
             fields=fields_data,
             template_type=template.schema_definition.type,
             confidence=template.schema_definition.metadata.get('confidence', 0.8),
-            message=f"Successfully generated template with {len(template.fields)} fields"
+            message=success_message
         )
 
     except Exception as e:

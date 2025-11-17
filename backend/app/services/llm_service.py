@@ -100,7 +100,13 @@ class LLMService:
                 "tokens": response.usage.total_tokens
             }
         except Exception as e:
-            logger.error(f"OpenAI call failed: {e}")
+            error_str = str(e).lower()
+            if "api_key" in error_str or "authentication" in error_str or "401" in error_str:
+                logger.error(f"OpenAI authentication failed: {e}. Please check OPENAI_API_KEY in .env")
+            elif "rate_limit" in error_str or "429" in error_str:
+                logger.error(f"OpenAI rate limit exceeded: {e}")
+            else:
+                logger.error(f"OpenAI call failed: {e}")
             raise
 
     async def generate(
@@ -162,11 +168,16 @@ class LLMService:
         error_msg = (
             "No LLM backend available. Please configure one of the following:\n"
             "1. Set OPENAI_API_KEY environment variable for OpenAI API (recommended)\n"
+            "   - Get your key from: https://platform.openai.com/api-keys\n"
+            "   - Add to .env file: OPENAI_API_KEY=sk-...\n"
             "2. Enable and start vLLM service (requires GPU)\n"
+            "   - Set USE_VLLM=true in .env\n"
             "3. Enable and start llama.cpp service (requires CPU + model file)\n"
-            "See docker-compose.yml and .env.example for configuration details."
+            "   - Configure LLAMA_CPP_ENDPOINT in .env\n"
+            "\n"
+            "Note: Some features will use fallback analysis when LLM is unavailable."
         )
-        logger.error(error_msg)
+        logger.warning(error_msg)
         raise Exception(error_msg)
 
     async def generate_with_context(

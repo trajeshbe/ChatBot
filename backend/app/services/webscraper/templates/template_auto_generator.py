@@ -109,6 +109,9 @@ class TemplateAutoGenerator:
                 return None
 
             # Step 4: Create template with metadata
+            is_fallback = analysis_result.get('fallback', False)
+            generated_by = 'Rule-based fallback' if is_fallback else 'LLM'
+
             template = ExtractionTemplate(
                 name=template_name or f"auto_generated_{url.split('//')[-1].split('/')[0]}",
                 description=f"Auto-generated template for {url}" +
@@ -121,8 +124,10 @@ class TemplateAutoGenerator:
                         'source_url': url,
                         'auto_generated': True,
                         'user_instructions': user_instructions,
-                        'generated_by': 'LLM',
-                        'llm_provider': llm_provider
+                        'generated_by': generated_by,
+                        'llm_provider': llm_provider,
+                        'fallback': is_fallback,
+                        'confidence': analysis_result.get('confidence', 0.8)
                     }
                 ),
                 fields=fields
@@ -331,8 +336,14 @@ Analyze the content and return the JSON object with suggested fields."""
 
                 # Check if LLM service has the generate method
                 if not hasattr(self.llm_service, 'generate'):
-                    self.logger.error("LLM service does not have 'generate' method")
+                    self.logger.warning("LLM service does not have 'generate' method - using fallback analysis")
                     return self._get_fallback_analysis(page_content, user_instructions)
+
+                # Ensure LLM service is initialized
+                if hasattr(self.llm_service, 'initialize') and hasattr(self.llm_service, '_initialized'):
+                    if not self.llm_service._initialized:
+                        self.logger.info("Initializing LLM service...")
+                        await self.llm_service.initialize()
 
                 llm_result = await self.llm_service.generate(
                     prompt=analysis_prompt,
@@ -342,24 +353,31 @@ Analyze the content and return the JSON object with suggested fields."""
                 )
 
                 if not llm_result:
-                    self.logger.error("LLM service returned None. Using fallback analysis.")
+                    self.logger.warning("LLM service returned None - using fallback analysis")
                     return self._get_fallback_analysis(page_content, user_instructions)
 
                 response = llm_result.get('content', '')
                 if not response:
-                    self.logger.error("LLM service returned empty content. Using fallback analysis.")
+                    self.logger.warning("LLM service returned empty content - using fallback analysis")
                     return self._get_fallback_analysis(page_content, user_instructions)
 
                 self.logger.info(f"LLM response received: {len(response)} characters")
 
             except AttributeError as attr_error:
-                self.logger.error(f"LLM service method error: {str(attr_error)}")
-                self.logger.info("Using fallback analysis due to LLM service error")
+                self.logger.warning(f"LLM service method error: {str(attr_error)} - using fallback analysis")
                 return self._get_fallback_analysis(page_content, user_instructions)
             except Exception as llm_error:
-                self.logger.error(f"LLM service call failed: {str(llm_error)}", exc_info=True)
-                self.logger.error("Please check: 1) OpenAI API key is set in .env, 2) vLLM/Ollama services are running, 3) Network connectivity")
-                self.logger.info("Using fallback analysis")
+                # More graceful error handling - don't make it look like a critical error
+                error_msg = str(llm_error)
+                if "No LLM backend available" in error_msg:
+                    self.logger.warning(
+                        "No LLM backend available for template analysis. "
+                        "Using rule-based fallback analysis. "
+                        "For better results, configure OpenAI API key in .env"
+                    )
+                else:
+                    self.logger.warning(f"LLM service call failed: {error_msg} - using fallback analysis")
+
                 return self._get_fallback_analysis(page_content, user_instructions)
 
             # Parse JSON response
@@ -529,14 +547,27 @@ Analyze the content and return the JSON object with suggested fields."""
         This creates a basic template based on HTML structure analysis
         without requiring LLM.
         """
-        self.logger.info("Using fallback analysis (no LLM)")
+        self.logger.info("Using rule-based fallback analysis (LLM unavailable)")
 
         # Extract basic structure information
         structure = page_content.get('structure', {})
         text_content = page_content.get('text', '')
+        html_content = page_content.get('html', '')
 
         # Create basic fields based on structure
         suggested_fields = []
+
+        # Add title field (essential for most pages)
+        suggested_fields.append({
+            "name": "title",
+            "display_name": "Page Title",
+            "description": "Title of the page",
+            "type": "string",
+            "extraction_strategy": "css",
+            "extraction_hint": "h1, .title, title",
+            "priority": "high",
+            "likely_location": "Page header"
+        })
 
         # If there are tables, suggest extracting table data
         if structure.get('tables', 0) > 0:
@@ -544,38 +575,39 @@ Analyze the content and return the JSON object with suggested fields."""
                 {
                     "name": "table_data",
                     "display_name": "Table Data",
-                    "description": "Data extracted from tables",
+                    "description": "Structured data from HTML tables",
                     "type": "string",
                     "extraction_strategy": "css",
-                    "extraction_hint": "table",
+                    "extraction_hint": "table tbody tr",
                     "priority": "high",
                     "likely_location": "HTML tables"
                 }
             ])
 
-        # Always include a content field
-        suggested_fields.append({
-            "name": "content",
-            "display_name": "Main Content",
-            "description": "Main text content from the page",
-            "type": "string",
-            "extraction_strategy": "llm",
-            "extraction_hint": user_instructions or "Extract main content",
-            "priority": "high",
-            "likely_location": "Page body"
-        })
-
-        # Add title field
-        suggested_fields.append({
-            "name": "title",
-            "display_name": "Page Title",
-            "description": "Title of the page",
-            "type": "string",
-            "extraction_strategy": "css",
-            "extraction_hint": "h1, title",
-            "priority": "high",
-            "likely_location": "Page header"
-        })
+        # Check for common e-commerce/product patterns
+        if any(keyword in text_content.lower() for keyword in ['price', 'buy', 'cart', 'product']):
+            suggested_fields.extend([
+                {
+                    "name": "price",
+                    "display_name": "Price",
+                    "description": "Product or item price",
+                    "type": "string",
+                    "extraction_strategy": "css",
+                    "extraction_hint": ".price, .amount, [class*='price']",
+                    "priority": "high",
+                    "likely_location": "Product details"
+                },
+                {
+                    "name": "description",
+                    "display_name": "Description",
+                    "description": "Product or item description",
+                    "type": "string",
+                    "extraction_strategy": "css",
+                    "extraction_hint": ".description, [class*='description'], p",
+                    "priority": "medium",
+                    "likely_location": "Product details"
+                }
+            ])
 
         # If lists are present, add list extraction
         if structure.get('lists', 0) > 0:
@@ -590,12 +622,65 @@ Analyze the content and return the JSON object with suggested fields."""
                 "likely_location": "HTML lists"
             })
 
+        # Check for article/blog patterns
+        if any(keyword in html_content.lower() for keyword in ['article', 'post', 'author', 'published']):
+            suggested_fields.extend([
+                {
+                    "name": "author",
+                    "display_name": "Author",
+                    "description": "Article author",
+                    "type": "string",
+                    "extraction_strategy": "css",
+                    "extraction_hint": ".author, [class*='author'], [rel='author']",
+                    "priority": "medium",
+                    "likely_location": "Article metadata"
+                },
+                {
+                    "name": "date",
+                    "display_name": "Publication Date",
+                    "description": "Publication date",
+                    "type": "date",
+                    "extraction_strategy": "css",
+                    "extraction_hint": "time, .date, [class*='date']",
+                    "priority": "medium",
+                    "likely_location": "Article metadata"
+                }
+            ])
+
+        # Always include a main content field with user instructions if provided
+        content_hint = "Extract main content"
+        if user_instructions:
+            content_hint = user_instructions
+
+        suggested_fields.append({
+            "name": "content",
+            "display_name": "Main Content",
+            "description": "Main text content from the page",
+            "type": "string",
+            "extraction_strategy": "css",
+            "extraction_hint": "main, article, .content, [role='main']",
+            "priority": "high",
+            "likely_location": "Page body"
+        })
+
+        # Determine template type based on content
+        template_type = "general_data"
+        if any(keyword in text_content.lower() for keyword in ['price', 'buy', 'cart', 'product']):
+            template_type = "product_data"
+        elif any(keyword in html_content.lower() for keyword in ['article', 'post', 'author']):
+            template_type = "article"
+        elif structure.get('tables', 0) > 0:
+            template_type = "tabular_data"
+
+        self.logger.info(f"Fallback analysis generated {len(suggested_fields)} fields for {template_type}")
+
         return {
-            "template_type": "general_data",
+            "template_type": template_type,
             "suggested_fields": suggested_fields,
             "data_structure": "mixed",
-            "confidence": 0.5,
-            "fallback": True
+            "confidence": 0.6,
+            "fallback": True,
+            "message": "Template generated using rule-based analysis. For better results, configure an LLM provider."
         }
 
     def _parse_json_response(self, response: str) -> Optional[Dict[str, Any]]:
