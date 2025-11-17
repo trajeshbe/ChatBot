@@ -172,8 +172,8 @@ class ExtractionWorkflowNodes:
                         logger.info(f"Scraping: {url}")
                         result = await scraper.scrape_url(
                             url=url,
-                            strategy=plan['strategy'],
-                            scrape_prompt=state['scrape_config'].get('scrape_prompt')
+                            scrape_prompt=state['scrape_config'].get('scrape_prompt'),
+                            llm_provider="openai"  # Use OpenAI for best results
                         )
 
                         return ScrapedContent(
@@ -624,7 +624,17 @@ class ExtractionWorkflowNodes:
                 import os
 
                 output_dir = tempfile.mkdtemp()
-                output_filename = f"{state['job_id']}.{state['output_format']}"
+
+                # Map output format to proper file extension
+                format_to_ext = {
+                    'excel': 'xlsx',
+                    'csv': 'csv',
+                    'json': 'json',
+                    'xml': 'xml',
+                    'parquet': 'parquet'
+                }
+                file_ext = format_to_ext.get(state['output_format'], state['output_format'])
+                output_filename = f"{state['job_id']}.{file_ext}"
                 output_path = os.path.join(output_dir, output_filename)
 
                 # Generate output based on format
@@ -637,8 +647,8 @@ class ExtractionWorkflowNodes:
                 elif state['output_format'] == 'parquet':
                     df.to_parquet(output_path, index=False)
                 else:
-                    # Default to CSV
-                    output_path = output_path.replace(f'.{state["output_format"]}', '.csv')
+                    # Default to CSV for unknown formats
+                    logger.warning(f"Unknown output format '{state['output_format']}', defaulting to CSV")
                     df.to_csv(output_path, index=False)
 
                 file_size = os.path.getsize(output_path)

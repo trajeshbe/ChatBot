@@ -267,7 +267,7 @@ Extract only the relevant portions:"""
         self,
         url: str,
         scrape_prompt: Optional[str] = None,
-        llm_provider: str = "ollama",
+        llm_provider: str = "openai",
         auth_config: Optional[Dict[str, Any]] = None,
         custom_headers: Optional[Dict[str, str]] = None
     ) -> Dict[str, Any]:
@@ -404,7 +404,7 @@ Extract only the relevant portions:"""
         self,
         urls: List[str],
         scrape_prompt: Optional[str] = None,
-        llm_provider: str = "ollama",
+        llm_provider: str = "openai",
         auth_config: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
@@ -453,8 +453,8 @@ Extract only the relevant portions:"""
             "compliance_level": self.compliance.compliance_level.value,
             "smart_scraping_enabled": self.enable_smart_scraping,
             "compliance_settings": self.compliance.get_settings(),
-            "supported_llm_providers": ["ollama", "openai", "anthropic"],
-            "default_llm_provider": "ollama",
+            "supported_llm_providers": ["openai", "anthropic", "ollama"],
+            "default_llm_provider": "openai",
             "ollama_models": ["qwen2.5:latest", "llama3.2:latest", "mistral:latest"]
         }
 
