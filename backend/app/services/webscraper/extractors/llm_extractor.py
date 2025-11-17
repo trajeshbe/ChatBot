@@ -299,16 +299,29 @@ Return only the extracted value."""
             # Try direct JSON parse
             return json.loads(response)
         except json.JSONDecodeError:
-            # Try to extract JSON from response
-            match = re.search(r'\{[^}]+\}', response, re.DOTALL)
-            if match:
-                try:
-                    return json.loads(match.group())
-                except json.JSONDecodeError:
-                    pass
+            pass
 
-            self.logger.warning("Could not parse JSON from LLM response")
-            return {}
+        # Try to extract JSON from markdown code blocks (```json ... ```)
+        markdown_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', response, re.DOTALL | re.IGNORECASE)
+        if markdown_match:
+            try:
+                return json.loads(markdown_match.group(1))
+            except json.JSONDecodeError:
+                pass
+
+        # Try to extract JSON object from anywhere in the response (more robust regex)
+        # Match nested objects properly
+        json_match = re.search(r'\{(?:[^{}]|\{[^{}]*\})*\}', response, re.DOTALL)
+        if json_match:
+            try:
+                return json.loads(json_match.group())
+            except json.JSONDecodeError:
+                pass
+
+        # Log the actual response for debugging
+        self.logger.warning(f"Could not parse JSON from LLM response. Response preview: {response[:200]}")
+        self.logger.error(f"Failed to parse LLM response as JSON")
+        return {}
 
     def _extract_confidence(self, response: str) -> float:
         """Extract confidence score from response if present"""

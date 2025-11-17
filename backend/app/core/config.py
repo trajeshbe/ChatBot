@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     FEAST_REPO_PATH: str = "/app/feast"
 
     # OpenTelemetry
-    OTEL_EXPORTER_OTLP_ENDPOINT: str = "http://tempo:4317"
+    OTEL_EXPORTER_OTLP_ENDPOINT: str = "tempo:4317"  # gRPC endpoint (no http://)
     OTEL_SERVICE_NAME: str = "rag-chatbot-api"
 
     # Feature flags
