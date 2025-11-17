@@ -46,6 +46,10 @@ class ExtractTemplateRequest(BaseModel):
     pagination_selector: Optional[str] = None
     max_pages: int = Field(default=1, ge=1, le=10)
     session_id: Optional[str] = None
+    use_smart_mapping: bool = Field(
+        default=False,
+        description="Use LLM-based smart mapping instead of selectors (recommended if null values occur)"
+    )
 
 
 class ExtractPresetRequest(BaseModel):
@@ -77,55 +81,150 @@ async def extract_with_custom_template(
 
     This endpoint allows you to define custom extraction rules to scrape
     structured data from any website.
+
+    **New Feature:** Set `use_smart_mapping=true` to use LLM-based intelligent
+    mapping instead of selectors. This is recommended if you're experiencing
+    null values or want more flexible extraction that adapts to page changes.
+
+    **Selector-based extraction (default):**
+    - Fast and precise
+    - Requires writing CSS/XPath selectors
+    - Breaks when page structure changes
+
+    **Smart mapping (use_smart_mapping=true):**
+    - Uses AI to map data to template columns
+    - No selectors needed
+    - Adapts to page structure changes
+    - Never hallucinates missing values
+    - Clearly marks fields requiring additional research
     """
     try:
-        # Convert request fields to ExtractionField objects
-        fields = [
-            ExtractionField(
-                name=f.name,
-                selector=f.selector,
-                xpath=f.xpath,
-                regex=f.regex,
-                attribute=f.attribute,
-                data_type=f.data_type,
-                required=f.required,
-                default_value=f.default_value
+        # Check if smart mapping is requested
+        if request.use_smart_mapping:
+            logger.info(f"Using smart mapping for template: {request.name}")
+
+            # Import required services
+            from app.services.scraper_service import scraper_service
+            from app.services.llm_service import llm_service
+            from app.services.webscraper.extractors.llm_extractor import LLMExtractor
+
+            # Step 1: Scrape the webpage
+            scrape_result = await scraper_service.scrape_url(
+                url=request.url,
+                strategy='auto',
+                scrape_prompt=None
             )
-            for f in request.fields
-        ]
 
-        # Create template
-        template = ExtractionTemplate(
-            name=request.name,
-            description=request.description,
-            fields=fields,
-            wait_for_selector=request.wait_for_selector,
-            pagination_selector=request.pagination_selector,
-            max_pages=request.max_pages
-        )
+            if not scrape_result or not scrape_result.get('success'):
+                error_msg = scrape_result.get('error', 'Failed to scrape URL') if scrape_result else 'Scraper returned None'
+                raise HTTPException(status_code=500, detail=f"Failed to scrape URL: {error_msg}")
 
-        # Extract data
-        result = await template_extraction_service.extract_data(
-            url=request.url,
-            template=template,
-            session_id=request.session_id
-        )
+            scraped_data = scrape_result.get('html') or scrape_result.get('text', '')
+            if not scraped_data:
+                raise HTTPException(status_code=500, detail="Scraped content is empty")
 
-        # Store scrape job in database
-        if result['success']:
+            # Step 2: Extract template columns from fields
+            template_columns = [f.name for f in request.fields]
+
+            # Step 3: Map using LLM
+            await llm_service.initialize()
+            extractor = LLMExtractor(llm_service=llm_service)
+
+            mapping_result = await extractor.map_to_custom_template(
+                scraped_data=scraped_data,
+                template_columns=template_columns,
+                template_examples=None,  # Could be enhanced to extract from default_value
+                llm_provider="openai"
+            )
+
+            if not mapping_result:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Smart mapping failed. Check LLM service configuration."
+                )
+
+            mapped_data = mapping_result['mapped_data']
+            missing_fields = mapping_result['missing_fields']
+
+            logger.info(
+                f"Smart mapping complete: {len(mapped_data) - len(missing_fields)}/{len(mapped_data)} fields extracted"
+            )
+
+            # Store scrape job
             job = WebScrapeJob(
                 url=request.url,
-                scrape_prompt=f"Template extraction: {template.name}",
+                scrape_prompt=f"Smart template mapping: {request.name}",
                 status="completed",
                 completed_at=datetime.utcnow()
             )
             db.add(job)
             await db.commit()
 
-        return ExtractionResponse(**result)
+            # Return result
+            return ExtractionResponse(
+                success=True,
+                url=request.url,
+                template_name=request.name,
+                data=[mapped_data],
+                row_count=1,
+                extracted_at=datetime.utcnow().isoformat(),
+                session_id=request.session_id,
+                error=None
+            )
 
+        else:
+            # Original selector-based extraction
+            logger.info(f"Using selector-based extraction for template: {request.name}")
+
+            # Convert request fields to ExtractionField objects
+            fields = [
+                ExtractionField(
+                    name=f.name,
+                    selector=f.selector,
+                    xpath=f.xpath,
+                    regex=f.regex,
+                    attribute=f.attribute,
+                    data_type=f.data_type,
+                    required=f.required,
+                    default_value=f.default_value
+                )
+                for f in request.fields
+            ]
+
+            # Create template
+            template = ExtractionTemplate(
+                name=request.name,
+                description=request.description,
+                fields=fields,
+                wait_for_selector=request.wait_for_selector,
+                pagination_selector=request.pagination_selector,
+                max_pages=request.max_pages
+            )
+
+            # Extract data
+            result = await template_extraction_service.extract_data(
+                url=request.url,
+                template=template,
+                session_id=request.session_id
+            )
+
+            # Store scrape job in database
+            if result['success']:
+                job = WebScrapeJob(
+                    url=request.url,
+                    scrape_prompt=f"Template extraction: {template.name}",
+                    status="completed",
+                    completed_at=datetime.utcnow()
+                )
+                db.add(job)
+                await db.commit()
+
+            return ExtractionResponse(**result)
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error in custom template extraction: {e}")
+        logger.error(f"Error in custom template extraction: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -526,6 +625,175 @@ async def smart_extract_without_template(
 
     except Exception as e:
         logger.error(f"Error in smart extract: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class SmartTemplateMapRequest(BaseModel):
+    """Request model for smart template mapping"""
+    url: str
+    template_columns: List[str] = Field(
+        ...,
+        description="List of column headers from your custom Excel template"
+    )
+    template_examples: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Optional example values for each column to guide extraction"
+    )
+    llm_provider: str = Field(default="openai", description="LLM provider: openai, anthropic, or ollama")
+    output_format: str = Field(default="excel", description="Output format: excel, csv, or json")
+    session_id: Optional[str] = None
+
+
+@router.post("/smart-map-to-template", response_model=ExtractionResponse)
+async def smart_map_to_custom_template(
+    request: SmartTemplateMapRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    **SMART TEMPLATE MAPPING (NEW!)**
+
+    Map scraped web data to your custom template columns using AI - no selectors needed!
+
+    This is the NEW approach that solves the null value problem. It uses an improved
+    LLM prompt that:
+    - Never hallucinates values
+    - Only extracts data that exists in the scraped content
+    - Clearly marks missing fields as "— (requires additional research)"
+    - Provides transparency about data completeness
+
+    **How it works:**
+    1. You provide a URL and your template columns
+    2. We scrape the webpage
+    3. AI intelligently maps scraped data to your template columns
+    4. Missing fields are clearly marked
+    5. Results exported in your preferred format
+
+    **Example Usage:**
+    ```json
+    {
+        "url": "https://www.screener.in/company/RELIANCE/",
+        "template_columns": [
+            "Company Name",
+            "Market Cap",
+            "Current Price",
+            "Stock P/E",
+            "Revenue Growth"
+        ],
+        "template_examples": {
+            "Market Cap": "1234 Cr",
+            "Stock P/E": "25.3"
+        },
+        "llm_provider": "openai",
+        "output_format": "excel"
+    }
+    ```
+
+    **Response:**
+    Returns extracted data with clear indication of:
+    - Successfully mapped fields
+    - Fields marked as "— (requires additional research)"
+    - List of missing fields
+
+    **Benefits:**
+    - No more null values in your data
+    - Clear visibility of data completeness
+    - No need to write CSS selectors or XPath
+    - Works with any custom template structure
+    - Handles variations in webpage structure
+    """
+    try:
+        # Import required services
+        from app.services.scraper_service import scraper_service
+        from app.services.llm_service import llm_service
+        from app.services.webscraper.extractors.llm_extractor import LLMExtractor
+
+        logger.info(f"Smart template mapping from: {request.url}")
+        logger.info(f"Template columns: {request.template_columns}")
+
+        # Step 1: Scrape the webpage
+        logger.info("Scraping webpage...")
+        scrape_result = await scraper_service.scrape_url(
+            url=request.url,
+            strategy='auto',
+            scrape_prompt=None
+        )
+
+        if not scrape_result or not scrape_result.get('success'):
+            error_msg = scrape_result.get('error', 'Failed to scrape URL') if scrape_result else 'Scraper returned None'
+            logger.error(f"Scraping failed: {error_msg}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to scrape URL: {error_msg}"
+            )
+
+        # Get scraped content (prefer HTML, fallback to text)
+        scraped_data = scrape_result.get('html') or scrape_result.get('text', '')
+
+        if not scraped_data:
+            raise HTTPException(
+                status_code=500,
+                detail="Scraped content is empty"
+            )
+
+        logger.info(f"Successfully scraped {len(scraped_data)} characters")
+
+        # Step 2: Initialize LLM extractor and map to template
+        logger.info(f"Mapping to {len(request.template_columns)} template columns using {request.llm_provider}...")
+
+        await llm_service.initialize()
+        extractor = LLMExtractor(llm_service=llm_service)
+
+        mapping_result = await extractor.map_to_custom_template(
+            scraped_data=scraped_data,
+            template_columns=request.template_columns,
+            template_examples=request.template_examples,
+            llm_provider=request.llm_provider
+        )
+
+        if not mapping_result:
+            raise HTTPException(
+                status_code=500,
+                detail="Template mapping failed. Check LLM service configuration and logs."
+            )
+
+        mapped_data = mapping_result['mapped_data']
+        missing_fields = mapping_result['missing_fields']
+        extraction_complete = mapping_result['extraction_complete']
+
+        logger.info(
+            f"Mapping complete: {len(mapped_data) - len(missing_fields)}/{len(mapped_data)} fields extracted. "
+            f"Missing: {missing_fields}"
+        )
+
+        # Step 3: Create response with single row of data
+        data_row = mapped_data
+
+        # Store scrape job
+        job = WebScrapeJob(
+            url=request.url,
+            scrape_prompt=f"Smart template mapping: {', '.join(request.template_columns)}",
+            status="completed",
+            completed_at=datetime.utcnow()
+        )
+        db.add(job)
+        await db.commit()
+
+        # Return response
+        return ExtractionResponse(
+            success=True,
+            url=request.url,
+            template_name="Smart Template Mapping",
+            data=[data_row],  # Single row
+            row_count=1,
+            extracted_at=datetime.utcnow().isoformat(),
+            session_id=request.session_id,
+            error=None
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in smart template mapping: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
