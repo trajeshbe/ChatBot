@@ -261,10 +261,11 @@ class ExtractionWorkflowNodes:
             if not state['has_template'] or not state.get('fields'):
                 # No template - just use raw content
                 logger.info("No template, skipping field extraction")
+                successful_items = [item for item in state['raw_data'] if item['success']]
                 state['extracted_data'] = {
-                    'url': [item['url'] for item in state['raw_data'] if item['success']],
-                    'title': [item['title'] for item in state['raw_data'] if item['success']],
-                    'content': [item['content'] for item in state['raw_data'] if item['success']]
+                    'url': [item.get('url', '') for item in successful_items],
+                    'title': [item.get('title', '') for item in successful_items],
+                    'content': [item.get('content', '') for item in successful_items]
                 }
             elif state.get('use_llm_extraction'):
                 # LLM-based extraction (for Excel templates)
@@ -369,9 +370,12 @@ class ExtractionWorkflowNodes:
                 )
 
                 # TODO: Implement CSS/XPath extractor factory
-                # For now, create empty structure
-                extracted_data = {field['name']: [] for field in state['fields']}
-                extracted_data['url'] = [item['url'] for item in state['raw_data'] if item['success']]
+                # For now, create empty structure with matching array lengths
+                successful_items = [item for item in state['raw_data'] if item['success']]
+                num_items = len(successful_items)
+
+                extracted_data = {field['name']: ['' for _ in range(num_items)] for field in state['fields']}
+                extracted_data['url'] = [item['url'] for item in successful_items]
 
                 state['extracted_data'] = extracted_data
 
