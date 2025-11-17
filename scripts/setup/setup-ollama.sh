@@ -21,30 +21,50 @@ echo "Step 1: Starting Ollama service..."
 $COMPOSE_CMD up -d ollama
 
 echo ""
-echo "Step 2: Waiting for Ollama to be ready (15 seconds)..."
+echo "Step 2: Finding Ollama container name..."
+OLLAMA_CONTAINER=$($COMPOSE_CMD ps --format "{{.Name}}" | grep ollama | head -1)
+
+if [ -z "$OLLAMA_CONTAINER" ]; then
+    echo "✗ Error: Ollama container not found"
+    echo "Available containers:"
+    $COMPOSE_CMD ps
+    exit 1
+fi
+
+echo "✓ Found Ollama container: $OLLAMA_CONTAINER"
+
+echo ""
+echo "Step 3: Waiting for Ollama to be ready (15 seconds)..."
 sleep 15
 
 echo ""
-echo "Step 3: Pulling Llama 3.2 3B model (~2GB download)..."
-docker exec rag-ollama ollama pull llama3.2:3b-instruct-q4_K_M
+echo "Step 4: Checking Ollama health..."
+docker exec $OLLAMA_CONTAINER ollama list || {
+    echo "⚠️  Ollama not responding yet, waiting 10 more seconds..."
+    sleep 10
+}
+
+echo ""
+echo "Step 5: Pulling Llama 3.2 3B model (~2GB download)..."
+docker exec $OLLAMA_CONTAINER ollama pull llama3.2:3b-instruct-q4_K_M
 
 if [ $? -ne 0 ]; then
     echo "Note: Specific quantization tag not found, pulling base model..."
-    docker exec rag-ollama ollama pull llama3.2:3b
+    docker exec $OLLAMA_CONTAINER ollama pull llama3.2:3b
 fi
 
 echo ""
-echo "Step 4: Pulling Qwen 2.5 1.5B model (~1GB download)..."
-docker exec rag-ollama ollama pull qwen2.5:1.5b-instruct-q4_K_M
+echo "Step 6: Pulling Qwen 2.5 1.5B model (~1GB download)..."
+docker exec $OLLAMA_CONTAINER ollama pull qwen2.5:1.5b-instruct-q4_K_M
 
 if [ $? -ne 0 ]; then
     echo "Note: Specific quantization tag not found, pulling base model..."
-    docker exec rag-ollama ollama pull qwen2.5:1.5b
+    docker exec $OLLAMA_CONTAINER ollama pull qwen2.5:1.5b
 fi
 
 echo ""
-echo "Step 5: Verifying installed models..."
-docker exec rag-ollama ollama list
+echo "Step 7: Verifying installed models..."
+docker exec $OLLAMA_CONTAINER ollama list
 
 echo ""
 echo "========================================="
