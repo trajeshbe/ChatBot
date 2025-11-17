@@ -22,75 +22,29 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ============================================================================
-# STEP 7: Install Playwright System Dependencies (Debian Trixie Compatible)
+# STEP 7 & 8: Install Playwright with Complete Dependencies
 # ============================================================================
-# Manual installation required because playwright install --with-deps
-# fails on Debian Trixie due to obsolete font package names
+# Use playwright install-deps for system dependencies, then install browser
+# This is the recommended approach from Playwright documentation
 # Compatible with: playwright==1.41.0, python:3.11-slim
 # ============================================================================
 
-RUN apt-get update && apt-get install -y \
-    # Core Chromium browser dependencies
-    libnss3 \
-    libnspr4 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libasound2 \
-    libatspi2.0-0 \
-    libxshmfence1 \
-    # Critical missing dependencies (from your error)
-    libpango-1.0-0 \
-    libcairo2 \
-    libcairo-gobject2 \
-    # X11 and rendering libraries
-    libx11-6 \
-    libx11-xcb1 \
-    libxcb1 \
-    libxcursor1 \
-    libxext6 \
-    libxi6 \
-    libxrender1 \
-    libxss1 \
-    libxtst6 \
-    # GTK and GLib dependencies
-    libglib2.0-0 \
-    libdbus-1-3 \
-    libdbus-glib-1-2 \
-    # Font rendering (Debian Trixie equivalents)
-    fonts-liberation \
-    fonts-noto-color-emoji \
-    fonts-unifont \
-    fontconfig \
-    # Additional utilities
-    xvfb \
-    # Clean up to reduce image size
-    && rm -rf /var/lib/apt/lists/*
-
-# ============================================================================
-# STEP 8: Install Chromium Browser Binary
-# ============================================================================
-# Install only the browser (no --with-deps flag since we installed deps manually)
-# This downloads ~120MB of Chromium browser binaries
-# Compatible with: playwright==1.41.0
-# ============================================================================
-
+# First, install Chromium browser binary
 RUN playwright install chromium
+
+# Then, install all required system dependencies using the official method
+# This ensures compatibility and installs all needed libraries
+RUN playwright install-deps chromium
 
 # ============================================================================
 # STEP 9: Verify Playwright Installation
 # ============================================================================
-# Optional: Add a verification step to ensure Playwright works
+# Test that Playwright can be imported and browser is accessible
 # ============================================================================
 
-RUN python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); print(f'Playwright version: {p.chromium.version}'); print('Chromium executable found: OK'); p.stop()"
+RUN python -c "from playwright.sync_api import sync_playwright; print('✅ Playwright imported successfully')" && \
+    playwright --version && \
+    echo "✅ Playwright installation verified"
 
 # Copy application code
 COPY . .
