@@ -33,7 +33,7 @@ echo ""
 # Check required packages
 echo -e "${YELLOW}📌 Checking Python packages...${NC}"
 
-PACKAGES=("playwright" "pandas" "beautifulsoup4" "lxml" "openpyxl")
+PACKAGES=("playwright" "pandas" "bs4" "lxml" "openpyxl")
 ALL_INSTALLED=true
 
 for package in "${PACKAGES[@]}"; do
