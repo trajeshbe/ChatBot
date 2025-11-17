@@ -38,30 +38,58 @@ class ExtractionWorkflowNodes:
 
         try:
             if state.get('template_id'):
-                # TODO: Load template from database/storage
-                # For now, we'll use a placeholder
-                logger.info(f"Template ID: {state['template_id']}")
+                logger.info(f"Loading template ID: {state['template_id']}")
 
-                # In a real implementation, this would load from the database
-                # from app.services.webscraper.templates import template_storage
-                # template = await template_storage.load_template(state['template_id'])
-                # state['template_schema'] = template.schema_definition
-                # state['fields'] = template.fields
-                # state['template_name'] = template.name
+                # Import templates_store from extraction_routes
+                from app.api.routes.extraction_routes import templates_store
 
-                state['has_template'] = True
-                logger.info("Template parsed successfully")
+                # Load template from in-memory store
+                if state['template_id'] in templates_store:
+                    template = templates_store[state['template_id']]
+
+                    # Extract template information
+                    state['template_name'] = template.get('name', 'Unknown Template')
+                    state['fields'] = template.get('fields', [])
+                    state['llm_extraction_prompts'] = template.get('llm_extraction_prompts', {})
+                    state['css_selectors'] = template.get('css_selectors', {})
+                    state['xpath_selectors'] = template.get('xpath_selectors', {})
+                    state['validation_rules'] = template.get('validation_rules', {})
+                    state['has_template'] = True
+
+                    logger.info(
+                        f"Template '{state['template_name']}' loaded successfully "
+                        f"with {len(state['fields'])} fields"
+                    )
+
+                    # Check if this template uses LLM extraction
+                    has_llm_prompts = len(state['llm_extraction_prompts']) > 0
+                    state['use_llm_extraction'] = has_llm_prompts
+
+                    if has_llm_prompts:
+                        logger.info(
+                            f"Template will use LLM-based extraction for "
+                            f"{len(state['llm_extraction_prompts'])} fields"
+                        )
+                else:
+                    logger.error(f"Template {state['template_id']} not found in templates_store")
+                    state['errors'].append({
+                        'step': 'parse_template',
+                        'error': f"Template {state['template_id']} not found",
+                        'timestamp': datetime.utcnow()
+                    })
+                    state['has_template'] = False
             else:
                 logger.info("No template provided, using content-only extraction")
                 state['has_template'] = False
 
         except Exception as e:
-            logger.error(f"Error parsing template: {str(e)}")
+            logger.error(f"Error parsing template: {str(e)}", exc_info=True)
             state['errors'].append({
                 'step': 'parse_template',
                 'error': str(e),
                 'timestamp': datetime.utcnow()
             })
+            state['has_template'] = False
 
         return state
 
@@ -238,19 +266,122 @@ class ExtractionWorkflowNodes:
                     'title': [item['title'] for item in state['raw_data'] if item['success']],
                     'content': [item['content'] for item in state['raw_data'] if item['success']]
                 }
-            else:
-                # Template-based extraction
-                # TODO: Implement extractor factory
-                logger.info(f"Extracting {len(state['fields'])} fields from {len(state['raw_data'])} pages")
+            elif state.get('use_llm_extraction'):
+                # LLM-based extraction (for Excel templates)
+                logger.info(
+                    f"Using LLM-based extraction for {len(state['fields'])} fields "
+                    f"from {len(state['raw_data'])} pages"
+                )
 
-                # Placeholder for field extraction
+                # Import LLM services
+                from app.services.llm_service import llm_service
+                from app.services.webscraper.extractors.llm_extractor import LLMExtractor
+
+                # Initialize LLM service
+                await llm_service.initialize()
+                extractor = LLMExtractor(llm_service=llm_service)
+
+                # Extract column names from fields
+                template_columns = [field['name'] for field in state['fields']]
+
+                # Process each scraped page
+                all_records = []
+
+                for scraped_item in state['raw_data']:
+                    if not scraped_item.get('success'):
+                        logger.warning(f"Skipping failed scrape: {scraped_item.get('url')}")
+                        continue
+
+                    try:
+                        # Get scraped content
+                        scraped_content = scraped_item.get('content', '')
+
+                        if not scraped_content:
+                            logger.warning(f"Empty content for {scraped_item.get('url')}")
+                            continue
+
+                        logger.info(
+                            f"Mapping scraped data from {scraped_item.get('url')} "
+                            f"to {len(template_columns)} template columns using LLM..."
+                        )
+
+                        # Use LLM to map scraped data to template columns
+                        mapping_result = await extractor.map_to_custom_template(
+                            scraped_data=scraped_content,
+                            template_columns=template_columns,
+                            template_examples=None,
+                            llm_provider="openai"  # Default to OpenAI for best results
+                        )
+
+                        if mapping_result:
+                            mapped_data = mapping_result.get('mapped_data', {})
+                            missing_fields = mapping_result.get('missing_fields', [])
+
+                            # Add URL to the record
+                            mapped_data['url'] = scraped_item.get('url')
+
+                            all_records.append(mapped_data)
+
+                            logger.info(
+                                f"Extracted {len(mapped_data) - len(missing_fields)}/{len(template_columns)} "
+                                f"fields from {scraped_item.get('url')}"
+                            )
+
+                            if missing_fields:
+                                logger.info(f"Missing fields: {', '.join(missing_fields)}")
+                        else:
+                            logger.error(
+                                f"LLM mapping failed for {scraped_item.get('url')}"
+                            )
+
+                    except Exception as e:
+                        logger.error(
+                            f"Error extracting from {scraped_item.get('url')}: {str(e)}",
+                            exc_info=True
+                        )
+
+                # Convert list of records to column-based dict for pandas
+                if all_records:
+                    # Convert row-based records to column-based dict
+                    extracted_data = {}
+                    for col in template_columns:
+                        extracted_data[col] = [record.get(col, '') for record in all_records]
+
+                    # Add URL column
+                    extracted_data['url'] = [record.get('url', '') for record in all_records]
+
+                    state['extracted_data'] = extracted_data
+
+                    logger.info(
+                        f"LLM extraction complete: {len(all_records)} records with "
+                        f"{len(template_columns)} fields"
+                    )
+                else:
+                    logger.warning("No records extracted from any pages")
+                    state['extracted_data'] = {col: [] for col in template_columns}
+                    state['extracted_data']['url'] = []
+
+            else:
+                # Selector-based extraction (CSS/XPath)
+                logger.info(
+                    f"Using selector-based extraction for {len(state['fields'])} fields "
+                    f"from {len(state['raw_data'])} pages"
+                )
+
+                # TODO: Implement CSS/XPath extractor factory
+                # For now, create empty structure
                 extracted_data = {field['name']: [] for field in state['fields']}
                 extracted_data['url'] = [item['url'] for item in state['raw_data'] if item['success']]
 
                 state['extracted_data'] = extracted_data
 
+                logger.warning(
+                    "Selector-based extraction not fully implemented yet. "
+                    "Consider using LLM-based templates instead."
+                )
+
         except Exception as e:
-            logger.error(f"Error extracting data: {str(e)}")
+            logger.error(f"Error extracting data: {str(e)}", exc_info=True)
             state['errors'].append({
                 'step': 'extract_data',
                 'error': str(e),
