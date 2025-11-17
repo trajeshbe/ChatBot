@@ -104,6 +104,9 @@ class ConversationMessage(Base):
     """Messages within a chat session (replaces old Message table)"""
     __tablename__ = "conversation_messages"
 
+    # Suppress Pydantic v2 warning about model_ field names
+    __pydantic_config__ = {"protected_namespaces": ()}
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False)
     role = Column(String(50), nullable=False)  # 'user' or 'assistant'
@@ -147,6 +150,9 @@ class AuditLog(Base):
 class UsageMetrics(Base):
     """Aggregated usage metrics for analytics"""
     __tablename__ = "usage_metrics"
+
+    # Suppress Pydantic v2 warning about model_ field names
+    __pydantic_config__ = {"protected_namespaces": ()}
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)

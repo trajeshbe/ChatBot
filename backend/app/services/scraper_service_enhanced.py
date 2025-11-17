@@ -65,7 +65,7 @@ class EnhancedScraperService:
 
     async def close(self):
         """Close HTTP client"""
-        await self.http_client.close()
+        await self.http_client.aclose()
 
     async def scrape_url(
         self,
