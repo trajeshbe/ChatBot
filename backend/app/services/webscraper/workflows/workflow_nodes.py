@@ -331,14 +331,20 @@ class ExtractionWorkflowNodes:
 
                             if not non_empty_fields:
                                 logger.warning(
-                                    f"LLM extraction returned no data for {scraped_item.get('url')}. "
-                                    f"All fields are empty or marked as missing."
+                                    f"⚠ LLM extraction returned no data for {scraped_item.get('url')}. "
+                                    f"All {len(template_columns)} fields are empty or marked as missing. "
+                                    f"This usually means the scraped content doesn't contain data matching your template columns."
                                 )
+                                # Log the mapped data to help debug
+                                logger.debug(f"Mapped data (all empty): {mapped_data}")
                             else:
                                 logger.info(
                                     f"✓ Extracted {len(non_empty_fields)}/{len(template_columns)} "
                                     f"fields from {scraped_item.get('url')}"
                                 )
+                                # Log extracted values for debugging
+                                extracted_preview = {k: v for k, v in mapped_data.items() if k in non_empty_fields}
+                                logger.debug(f"Successfully extracted fields: {extracted_preview}")
 
                             # Add URL to the record
                             mapped_data['URL'] = scraped_item.get('url')
@@ -607,8 +613,9 @@ class ExtractionWorkflowNodes:
                 non_null_cells = df.notna().sum().sum()
                 completeness = (non_null_cells / total_cells) * 100 if total_cells > 0 else 0
 
-                # Quality score (simplified)
-                quality_score = completeness
+                # Quality score (as decimal 0-1, not percentage)
+                # Frontend multiplies by 100 for display, so we return decimal
+                quality_score = completeness / 100.0  # Convert percentage to decimal
 
                 validation_results = ValidationReport(
                     errors=errors,
@@ -622,10 +629,10 @@ class ExtractionWorkflowNodes:
 
                 state['validation_results'] = validation_results
                 state['quality_score'] = quality_score
-                state['data_quality_passed'] = quality_score >= 70.0
+                state['data_quality_passed'] = quality_score >= 0.70  # 0.70 = 70%
 
                 logger.info(
-                    f"Validation complete: quality_score={quality_score:.2f}%, "
+                    f"Validation complete: quality_score={quality_score:.2f} ({quality_score*100:.1f}%), "
                     f"completeness={completeness:.2f}%"
                 )
             else:
@@ -657,6 +664,30 @@ class ExtractionWorkflowNodes:
         try:
             if state.get('deduplicated_data') is not None:
                 df = state['deduplicated_data']
+
+                # Check if DataFrame has any meaningful data
+                if len(df) == 0:
+                    logger.error(
+                        "⚠ DataFrame is empty! No data to export. "
+                        "The extraction likely failed or returned no results."
+                    )
+                else:
+                    # Count cells with meaningful values (not just "—" or empty)
+                    meaningful_cells = 0
+                    total_data_cells = df.size
+                    for col in df.columns:
+                        if col != 'URL':  # Skip URL column in counting
+                            meaningful_cells += df[col].apply(
+                                lambda x: x not in ["—", "— (requires additional research)", "", None] if pd.notna(x) else False
+                            ).sum()
+
+                    if meaningful_cells == 0 and len(df) > 0:
+                        logger.warning(
+                            f"⚠ DataFrame has {len(df)} row(s) but ALL data fields are empty/missing! "
+                            f"The LLM extraction marked all fields as '—' (not found). "
+                            f"This usually means the scraped content doesn't match your template columns. "
+                            f"Try using more specific column names or check if the website structure changed."
+                        )
 
                 # TODO: Use OutputFactory to generate formatted output
                 # For now, create a simple output
