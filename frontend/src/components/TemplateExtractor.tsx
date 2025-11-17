@@ -12,6 +12,7 @@ interface ExtractionJob {
   data?: any[]
   error?: string
   timestamp: Date
+  presetData?: boolean // Flag to indicate data from preset endpoint (needs Excel conversion)
 }
 
 interface UploadedTemplate {
@@ -156,11 +157,9 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
     setJobs(prev => [newJob, ...prev])
 
     try {
-      let response
-
       if (templateSource === 'uploaded' && selectedTemplateId) {
-        // Use the new extraction jobs endpoint with template_id
-        response = await axios.post(
+        // Use the new extraction jobs endpoint with uploaded template
+        const response = await axios.post(
           `${API_URL}/api/v1/extraction/jobs`,
           {
             urls: [url],
@@ -171,56 +170,34 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
           }
         )
 
-        // Poll for job completion
         const extractionJobId = response.data.job_id
-        let attempts = 0
-        const maxAttempts = 60 // 60 attempts * 2 seconds = 2 minutes max
 
-        while (attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 2000))
-
-          const statusResponse = await axios.get(
-            `${API_URL}/api/v1/extraction/jobs/${extractionJobId}`
+        // Update job with extraction job ID
+        setJobs(prev =>
+          prev.map(job =>
+            job.id === jobId
+              ? {
+                  ...job,
+                  status: 'success',
+                  data: [{
+                    job_id: extractionJobId,
+                    message: 'Job created successfully. Processing in background...',
+                    records_extracted: 0,
+                    quality_score: 0,
+                    download_url: `/api/v1/extraction/jobs/${extractionJobId}/download`
+                  }]
+                }
+              : job
           )
+        )
 
-          const status = statusResponse.data.status
-
-          if (status === 'completed' || status === 'completed_with_errors') {
-            // Get the result
-            const resultResponse = await axios.get(
-              `${API_URL}/api/v1/extraction/jobs/${extractionJobId}/result`
-            )
-
-            setJobs(prev =>
-              prev.map(job =>
-                job.id === jobId
-                  ? {
-                      ...job,
-                      status: 'success',
-                      data: [{
-                        job_id: extractionJobId,
-                        records_extracted: resultResponse.data.records_extracted,
-                        quality_score: resultResponse.data.quality_score,
-                        download_url: resultResponse.data.download_url
-                      }]
-                    }
-                  : job
-              )
-            )
-            setUrl('')
-            return
-          } else if (status === 'failed') {
-            throw new Error('Extraction job failed')
-          }
-
-          attempts++
-        }
-
-        throw new Error('Extraction job timed out')
+        setUrl('')
+        setError(null)
 
       } else {
-        // Use preset template endpoint (existing behavior)
-        response = await axios.post(
+        // Use preset template endpoint (old flow, but working)
+        // This returns data directly, not a job
+        const response = await axios.post(
           `${API_URL}/api/v1/extract/preset/${preset}`,
           {
             url,
@@ -228,14 +205,17 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
           }
         )
 
-        if (response.data.success) {
+        if (response.data.success && response.data.data) {
+          // Create a temporary download using the data
+          // We'll need to convert this to an Excel file
           setJobs(prev =>
             prev.map(job =>
               job.id === jobId
                 ? {
                     ...job,
                     status: 'success',
-                    data: response.data.data
+                    data: response.data.data,
+                    presetData: true // Flag to indicate this is preset data
                   }
                 : job
             )
@@ -265,8 +245,36 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
     }
   }
 
-  const handleExportToExcel = async (data: any[], filename: string) => {
+  const handleDownload = async (downloadUrl: string, jobId: string) => {
     try {
+      const response = await axios.get(
+        `${API_URL}${downloadUrl}`,
+        {
+          responseType: 'blob'
+        }
+      )
+
+      // Create download link
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `extraction_${jobId.substring(0, 8)}.xlsx`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error downloading file:', error)
+      alert('Failed to download file. The job may still be processing.')
+    }
+  }
+
+  const handleExportPresetData = async (data: any[], filename: string) => {
+    try {
+      // Use the /to-excel endpoint for preset data
       const response = await axios.post(
         `${API_URL}/api/v1/extract/to-excel`,
         data,
@@ -280,14 +288,14 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
       const blob = new Blob([response.data], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       })
-      const downloadUrl = window.URL.createObjectURL(blob)
+      const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
-      link.href = downloadUrl
+      link.href = url
       link.download = filename
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      window.URL.revokeObjectURL(downloadUrl)
+      window.URL.revokeObjectURL(url)
     } catch (error) {
       console.error('Error exporting to Excel:', error)
       alert('Failed to export to Excel')
@@ -578,18 +586,10 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
                           <CheckCircle className="w-5 h-5 text-green-600" />
                           {job.data && job.data.length > 0 && (
                             <>
-                              {job.data[0].download_url ? (
-                                <a
-                                  href={`${API_URL}${job.data[0].download_url}`}
-                                  download
-                                  className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
-                                >
-                                  <Download className="w-3 h-3" />
-                                  Download Excel
-                                </a>
-                              ) : (
+                              {job.presetData ? (
+                                // Preset data - use export function
                                 <button
-                                  onClick={() => handleExportToExcel(
+                                  onClick={() => handleExportPresetData(
                                     job.data!,
                                     `extraction_${new Date().getTime()}.xlsx`
                                   )}
@@ -598,7 +598,19 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
                                   <Download className="w-3 h-3" />
                                   Export Excel
                                 </button>
-                              )}
+                              ) : job.data[0].download_url ? (
+                                // Job-based download
+                                <button
+                                  onClick={() => handleDownload(
+                                    job.data![0].download_url,
+                                    job.data![0].job_id
+                                  )}
+                                  className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
+                                >
+                                  <Download className="w-3 h-3" />
+                                  Download Excel
+                                </button>
+                              ) : null}
                             </>
                           )}
                         </>
@@ -609,22 +621,43 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
                     </div>
                   </div>
 
-                  {/* Success: Show extracted data preview */}
+                  {/* Success: Show job info */}
                   {job.status === 'success' && job.data && job.data.length > 0 && (
-                    <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700">
-                      <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">
-                        {job.data[0].records_extracted !== undefined ? (
-                          <>Extracted {job.data[0].records_extracted} record(s) • Quality: {(job.data[0].quality_score * 100).toFixed(0)}%</>
-                        ) : (
-                          <>Extracted {job.data.length} row(s)</>
-                        )}
-                      </p>
-                      {!job.data[0].download_url && (
-                        <div className="text-xs font-mono text-slate-600 dark:text-slate-400 overflow-x-auto">
-                          <pre className="whitespace-pre-wrap">
-                            {JSON.stringify(job.data[0], null, 2)}
-                          </pre>
-                        </div>
+                    <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
+                      {job.presetData ? (
+                        // Preset data display
+                        <>
+                          <p className="text-sm font-medium text-green-900 dark:text-green-100 mb-2">
+                            ✓ Extraction completed successfully!
+                          </p>
+                          <div className="text-xs text-green-800 dark:text-green-200 space-y-1">
+                            <p>Extracted {job.data.length} row(s) using preset template: {job.preset}</p>
+                            <p className="text-xs mt-2 text-green-700 dark:text-green-300">
+                              Click "Export Excel" button above to download the results.
+                            </p>
+                          </div>
+                        </>
+                      ) : (
+                        // Job-based display
+                        <>
+                          <p className="text-sm font-medium text-green-900 dark:text-green-100 mb-2">
+                            ✓ Extraction job created successfully!
+                          </p>
+                          <div className="text-xs text-green-800 dark:text-green-200 space-y-1">
+                            <p>
+                              <span className="font-semibold">Job ID:</span>{' '}
+                              <code className="bg-green-100 dark:bg-green-900 px-2 py-0.5 rounded font-mono">
+                                {job.data[0].job_id?.substring(0, 12)}...
+                              </code>
+                            </p>
+                            {job.data[0].message && (
+                              <p className="text-xs">{job.data[0].message}</p>
+                            )}
+                            <p className="text-xs mt-2 text-green-700 dark:text-green-300">
+                              The job is processing in the background. Click "Download Excel" button above when ready, or check the Job Monitor tab for detailed progress.
+                            </p>
+                          </div>
+                        </>
                       )}
                     </div>
                   )}
