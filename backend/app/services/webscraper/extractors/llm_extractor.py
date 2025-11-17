@@ -386,3 +386,171 @@ Extract data matching the above schema from the content."""
         except Exception as e:
             self.logger.error(f"Structured extraction failed: {str(e)}")
             return None
+
+    async def map_to_custom_template(
+        self,
+        scraped_data: str,
+        template_columns: List[str],
+        template_examples: Optional[Dict[str, Any]] = None,
+        llm_provider: str = "openai"
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Map scraped data to custom template columns using LLM
+
+        This method takes raw scraped data and a custom template (with column headers
+        and optionally example values), and uses an LLM to intelligently map the
+        scraped values to the correct template columns.
+
+        Key features:
+        - Never hallucinates or makes up values
+        - Only extracts values that exist in the scraped data
+        - Marks missing fields as "— (requires additional research)"
+        - Provides transparency about which data points need external sources
+
+        Args:
+            scraped_data: Raw scraped content (HTML or text)
+            template_columns: List of column headers from the custom template
+            template_examples: Optional dict with example values for each column
+            llm_provider: LLM provider to use (openai recommended for accuracy)
+
+        Returns:
+            Dictionary mapping template columns to extracted values, or None if failed
+
+        Example:
+            >>> scraped = "<html>... Market Cap: ₹ 1,234 Cr ... P/E: 25.3 ...</html>"
+            >>> columns = ["Market Cap", "Stock P/E", "Revenue Growth", "Notes"]
+            >>> examples = {"Market Cap": "1234", "Stock P/E": "25.3"}
+            >>> result = await extractor.map_to_custom_template(scraped, columns, examples)
+            >>> # Result: {
+            >>>     "mapped_data": {
+            >>>         "Market Cap": "1234",
+            >>>         "Stock P/E": "25.3",
+            >>>         "Revenue Growth": "— (requires additional research)",
+            >>>         "Notes": ""
+            >>>     },
+            >>>     "missing_fields": ["Revenue Growth"],
+            >>>     "extraction_complete": False
+            >>> }
+        """
+        if not self.llm_service:
+            self.logger.error("LLM service not initialized")
+            return None
+
+        try:
+            # Build the system prompt with clear instructions
+            system_prompt = """You are a professional data transformation assistant.
+
+Your task is to extract data from scraped webpage content and map it to a custom template.
+
+CRITICAL RULES:
+1. Extract ONLY values that exist in the scraped data
+2. NEVER hallucinate or make up values
+3. If a field does not exist in the scraped data, mark it as "— (requires additional research)"
+4. Never fill values you do not see in the input
+5. Extract all numeric and text values accurately from the scraped data
+6. Map every scraped value to the correct column in the template
+
+Return your response as a JSON object with two sections:
+1. "mapped_data": Object with template columns as keys and extracted values
+2. "missing_fields": Array of field names that require external research
+
+Format:
+{
+  "mapped_data": {
+    "Column1": "extracted_value_1",
+    "Column2": "extracted_value_2",
+    "Column3": "— (requires additional research)"
+  },
+  "missing_fields": ["Column3", "Column5"]
+}"""
+
+            # Build the extraction prompt
+            template_info = "Template columns:\n"
+            for i, col in enumerate(template_columns, 1):
+                example_val = ""
+                if template_examples and col in template_examples:
+                    example_val = f" (example: {template_examples[col]})"
+                template_info += f"{i}. {col}{example_val}\n"
+
+            # Truncate scraped data if too long (keep first 8000 chars)
+            truncated_data = scraped_data[:8000]
+            if len(scraped_data) > 8000:
+                truncated_data += "\n... [content truncated]"
+
+            extraction_prompt = f"""Here is the raw scraped data to process:
+
+=== SCRAPED DATA START ===
+{truncated_data}
+=== SCRAPED DATA END ===
+
+{template_info}
+
+Your tasks:
+1. Extract all numeric and text values from the scraped data
+2. Map every scraped value to the correct column in the template
+3. If a field does not exist in the scraped data, mark it as "— (requires additional research)"
+4. Never fill values you do not see in the input
+5. Provide a list of fields that need external sources
+
+Return the mapped values as a clean JSON object following the format specified in the system prompt."""
+
+            # Log the mapping attempt
+            self.logger.info(
+                f"Mapping scraped data to {len(template_columns)} template columns using LLM"
+            )
+
+            # Call LLM
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": extraction_prompt}
+            ]
+
+            llm_result = await self.llm_service.generate(
+                prompt=extraction_prompt,
+                messages=messages,
+                max_tokens=2000,
+                temperature=0.0  # Zero temperature for maximum consistency
+            )
+
+            if not llm_result:
+                self.logger.warning("LLM returned empty response for template mapping")
+                return None
+
+            response = llm_result.get('content', '')
+            if not response:
+                self.logger.warning("LLM response content is empty")
+                return None
+
+            # Parse the JSON response
+            result = self._parse_json_response(response)
+
+            if not result:
+                self.logger.error("Failed to parse LLM response as JSON")
+                return None
+
+            # Extract mapped_data and missing_fields
+            mapped_data = result.get('mapped_data', {})
+            missing_fields = result.get('missing_fields', [])
+
+            if missing_fields:
+                self.logger.info(
+                    f"Mapped {len(mapped_data)} fields successfully. "
+                    f"{len(missing_fields)} fields require additional research: {', '.join(missing_fields)}"
+                )
+            else:
+                self.logger.info(f"Successfully mapped all {len(mapped_data)} template fields")
+
+            # Ensure all template columns are present in the result
+            for col in template_columns:
+                if col not in mapped_data:
+                    mapped_data[col] = "— (requires additional research)"
+
+            return {
+                'mapped_data': mapped_data,
+                'missing_fields': missing_fields,
+                'extraction_complete': len(missing_fields) == 0
+            }
+
+        except Exception as e:
+            self.logger.error(f"Template mapping failed: {str(e)}", exc_info=True)
+            return None
