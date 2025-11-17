@@ -111,13 +111,11 @@ async def extract_with_custom_template(
             # Step 1: Scrape the webpage
             scrape_result = await scraper_service.scrape_url(
                 url=request.url,
-                strategy='auto',
                 scrape_prompt=None
             )
 
-            if not scrape_result or not scrape_result.get('success'):
-                error_msg = scrape_result.get('error', 'Failed to scrape URL') if scrape_result else 'Scraper returned None'
-                raise HTTPException(status_code=500, detail=f"Failed to scrape URL: {error_msg}")
+            if not scrape_result:
+                raise HTTPException(status_code=500, detail="Scraper returned None")
 
             scraped_data = scrape_result.get('html') or scrape_result.get('text', '')
             if not scraped_data:
@@ -616,12 +614,11 @@ async def smart_extract_without_template(
             scrape_prompt=None
         )
 
-        if not scrape_result or not scrape_result.get('success'):
-            error_msg = scrape_result.get('error', 'Failed to scrape URL') if scrape_result else 'Scraper returned None'
-            logger.error(f"Scraping failed: {error_msg}")
+        if not scrape_result:
+            logger.error("Scraper returned None")
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to scrape URL: {error_msg}"
+                detail="Scraper returned None"
             )
 
         # Get scraped content
@@ -777,16 +774,14 @@ async def smart_map_to_custom_template(
         logger.info("Scraping webpage...")
         scrape_result = await scraper_service.scrape_url(
             url=request.url,
-            strategy='auto',
             scrape_prompt=None
         )
 
-        if not scrape_result or not scrape_result.get('success'):
-            error_msg = scrape_result.get('error', 'Failed to scrape URL') if scrape_result else 'Scraper returned None'
-            logger.error(f"Scraping failed: {error_msg}")
+        if not scrape_result:
+            logger.error("Scraper returned None")
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to scrape URL: {error_msg}"
+                detail="Scraper returned None"
             )
 
         # Get scraped content (prefer HTML, fallback to text)
