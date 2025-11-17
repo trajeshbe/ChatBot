@@ -119,8 +119,18 @@ class TemplateExtractionService:
                 soup = BeautifulSoup(html_content, 'lxml')
 
                 # Extract each field
-                extracted_row = await self._extract_fields(page, soup, template.fields)
+                extracted_row, field_errors = await self._extract_fields(page, soup, template.fields)
                 all_data.append(extracted_row)
+
+                # Log field extraction results
+                successful_fields = len([v for v in extracted_row.values() if v is not None])
+                total_fields = len(template.fields)
+                logger.info(f"Extracted {successful_fields}/{total_fields} fields successfully")
+
+                if field_errors:
+                    logger.warning(f"Field extraction issues: {len(field_errors)} fields had errors")
+                    for field_name, error in field_errors.items():
+                        logger.warning(f"  - {field_name}: {error}")
 
                 # Check for pagination
                 if page_num < template.max_pages and template.pagination_selector:
@@ -166,22 +176,41 @@ class TemplateExtractionService:
         page: Page,
         soup: BeautifulSoup,
         fields: List[ExtractionField]
-    ) -> Dict[str, Any]:
-        """Extract all fields from a page"""
+    ) -> tuple[Dict[str, Any], Dict[str, str]]:
+        """
+        Extract all fields from a page
+
+        Returns:
+            tuple: (extracted_data, field_errors)
+                - extracted_data: Dict of field_name -> extracted_value
+                - field_errors: Dict of field_name -> error_message for failed fields
+        """
         extracted = {}
+        field_errors = {}
 
         for field in fields:
             try:
                 value = await self._extract_single_field(page, soup, field)
                 extracted[field.name] = value
+
+                # Track if we got a None or default value (potential extraction failure)
+                if value is None and field.required:
+                    field_errors[field.name] = f"Required field returned None (selector: {field.selector or field.xpath or 'N/A'})"
+                    logger.warning(f"⚠ Field '{field.name}' extraction returned None. Selector: {field.selector}")
+                elif value == field.default_value and field.default_value is not None:
+                    logger.info(f"Field '{field.name}' used default value: {field.default_value}")
+
             except Exception as e:
-                logger.warning(f"Error extracting field {field.name}: {e}")
+                error_msg = f"Error extracting field: {str(e)}"
+                field_errors[field.name] = error_msg
+                logger.error(f"✗ Error extracting field '{field.name}': {e}")
+
                 if field.required:
                     extracted[field.name] = None
                 else:
                     extracted[field.name] = field.default_value
 
-        return extracted
+        return extracted, field_errors
 
     async def _extract_single_field(
         self,
@@ -201,8 +230,11 @@ class TemplateExtractionService:
                         value = await element.get_attribute(field.attribute)
                     else:
                         value = await element.text_content()
+                    logger.debug(f"✓ Playwright selector succeeded for '{field.name}': {field.selector}")
+                else:
+                    logger.debug(f"✗ Playwright selector found no element for '{field.name}': {field.selector}")
             except Exception as e:
-                logger.debug(f"Playwright selector failed for {field.name}: {e}")
+                logger.debug(f"✗ Playwright selector failed for '{field.name}': {e}")
 
         # Fallback to BeautifulSoup
         if value is None and field.selector:
@@ -212,6 +244,9 @@ class TemplateExtractionService:
                     value = element.get(field.attribute)
                 else:
                     value = element.get_text(strip=True)
+                logger.debug(f"✓ BeautifulSoup selector succeeded for '{field.name}': {field.selector}")
+            else:
+                logger.debug(f"✗ BeautifulSoup selector found no element for '{field.name}': {field.selector}")
 
         # Try XPath (Playwright only)
         if value is None and field.xpath:

@@ -111,6 +111,7 @@ class TemplateAutoGenerator:
             # Step 4: Create template with metadata
             is_fallback = analysis_result.get('fallback', False)
             generated_by = 'Rule-based fallback' if is_fallback else 'LLM'
+            user_instructions_used = user_instructions is not None and len(user_instructions) > 0
 
             template = ExtractionTemplate(
                 name=template_name or f"auto_generated_{url.split('//')[-1].split('/')[0]}",
@@ -124,6 +125,7 @@ class TemplateAutoGenerator:
                         'source_url': url,
                         'auto_generated': True,
                         'user_instructions': user_instructions,
+                        'user_instructions_used': user_instructions_used,  # NEW: Explicit flag
                         'generated_by': generated_by,
                         'llm_provider': llm_provider,
                         'fallback': is_fallback,
@@ -308,6 +310,10 @@ Return ONLY a valid JSON object with this structure:
             instructions_section = ""
             if user_instructions:
                 instructions_section = f"\n\nUser's Extraction Requirements:\n{user_instructions}\n"
+                # Log that user instructions are being used
+                self.logger.info(f"✓ User instructions will be sent to LLM for analysis: {user_instructions[:150]}{'...' if len(user_instructions) > 150 else ''}")
+            else:
+                self.logger.info("No user instructions provided - using automatic field detection")
 
             analysis_prompt = f"""Analyze this webpage content and suggest the best fields to extract:
 
@@ -333,6 +339,8 @@ Analyze the content and return the JSON object with suggested fields."""
 
             try:
                 self.logger.info(f"Calling LLM service with provider: {llm_provider}")
+                if user_instructions:
+                    self.logger.info(f"LLM will analyze page with user guidance: '{user_instructions[:100]}{'...' if len(user_instructions) > 100 else ''}'")
 
                 # Check if LLM service has the generate method
                 if not hasattr(self.llm_service, 'generate'):
@@ -548,6 +556,8 @@ Analyze the content and return the JSON object with suggested fields."""
         without requiring LLM.
         """
         self.logger.info("Using rule-based fallback analysis (LLM unavailable)")
+        if user_instructions:
+            self.logger.info(f"User instructions noted (will influence content field): {user_instructions[:100]}{'...' if len(user_instructions) > 100 else ''}")
 
         # Extract basic structure information
         structure = page_content.get('structure', {})
