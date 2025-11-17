@@ -159,18 +159,48 @@ export const SmartTemplateMapper = () => {
     URL.revokeObjectURL(url)
   }
 
+  const handleDownloadExcel = async () => {
+    if (!mappedData || !mappedData.data || mappedData.data.length === 0) return
+
+    try {
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/extract/to-excel`,
+        mappedData.data,
+        {
+          responseType: 'blob',
+          params: {
+            filename: `smart_mapped_data_${Date.now()}.xlsx`
+          },
+          timeout: 30000
+        }
+      )
+
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `smart_mapped_data_${Date.now()}.xlsx`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || err.message || 'Failed to export to Excel')
+    }
+  }
+
   // Count successfully mapped vs missing fields
   const getFieldStats = () => {
     if (!mappedData || !mappedData.data || mappedData.data.length === 0) return null
 
     const data = mappedData.data[0]
-    const missingMarker = '— (requires additional research)'
 
     let successful = 0
     let missing = 0
 
     Object.values(data).forEach(value => {
-      if (value === missingMarker || value === null || value === '') {
+      // Check for missing markers: "—", "— (requires additional research)", empty, or null
+      if (value === '—' || value === '— (requires additional research)' || value === null || value === '' || value === undefined) {
         missing++
       } else {
         successful++
@@ -391,6 +421,14 @@ export const SmartTemplateMapper = () => {
             </div>
             <div className="flex gap-2">
               <button
+                onClick={handleDownloadExcel}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2 text-sm font-semibold"
+                title="Download as Excel (.xlsx)"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Excel
+              </button>
+              <button
                 onClick={handleDownloadCSV}
                 className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 text-sm"
               >
@@ -427,14 +465,17 @@ export const SmartTemplateMapper = () => {
                 </thead>
                 <tbody>
                   {Object.entries(mappedData.data[0]).map(([key, value], idx) => {
-                    const isMissing = value === '— (requires additional research)' || value === null || value === ''
+                    // Check for missing values
+                    const isMissing = value === '—' || value === '— (requires additional research)' || value === null || value === '' || value === undefined
+                    const displayValue = isMissing ? '—' : String(value)
+
                     return (
                       <tr key={idx} className="border-t border-slate-200 dark:border-slate-700">
                         <td className="px-4 py-2 text-slate-900 dark:text-white font-medium">
                           {key}
                         </td>
                         <td className={`px-4 py-2 ${isMissing ? 'text-amber-600 dark:text-amber-400 italic' : 'text-slate-600 dark:text-slate-400'}`}>
-                          {String(value)}
+                          {displayValue}
                         </td>
                         <td className="px-4 py-2 text-center">
                           {isMissing ? (

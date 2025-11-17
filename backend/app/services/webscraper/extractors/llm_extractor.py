@@ -478,7 +478,7 @@ Extract data matching the above schema from the content."""
 
         try:
             # Build the system prompt with clear instructions
-            system_prompt = """You are a professional data extraction and mapping assistant.
+            system_prompt = """You are a professional data extraction and mapping assistant specialized in extracting structured data from webpages.
 
 Your task: Extract data from scraped webpage content and map it to template columns.
 
@@ -488,6 +488,10 @@ CRITICAL RULES:
 3. If a field is not found in the scraped data, use: "—"
 4. Return VALID JSON ONLY - no markdown, no code blocks, no explanations
 5. Extract exact values as they appear (preserve numbers, text, formatting)
+6. Look for variations of the column name (e.g., "Market Cap" might appear as "Market Capitalization", "Mkt Cap", or "MCap")
+7. For financial data: Extract numbers with their units (Cr, L, $, %, etc.)
+8. For company names: Look in page title, headers, or main content
+9. Search the ENTIRE content thoroughly - data might appear in tables, spans, divs, or text
 
 OUTPUT FORMAT - You MUST return a JSON object exactly like this:
 {
@@ -509,9 +513,10 @@ IMPORTANT: Return ONLY the JSON object. No markdown formatting. No code blocks. 
                     example_val = f" (expected format: {template_examples[col]})"
                 template_info += f"{i}. {col}{example_val}\n"
 
-            # Truncate scraped data if too long (keep first 10000 chars for better context)
-            truncated_data = scraped_data[:10000]
-            if len(scraped_data) > 10000:
+            # Truncate scraped data if too long (keep first 20000 chars for better context)
+            # Increased from 10000 to 20000 to capture more data from complex pages
+            truncated_data = scraped_data[:20000]
+            if len(scraped_data) > 20000:
                 truncated_data += "\n\n[... content truncated ...]"
 
             extraction_prompt = f"""SCRAPED WEBPAGE CONTENT:
@@ -521,12 +526,23 @@ IMPORTANT: Return ONLY the JSON object. No markdown formatting. No code blocks. 
 
 {template_info}
 
-INSTRUCTIONS:
-1. Read the scraped content carefully
-2. For EACH column, find the matching value in the scraped data
-3. If a value exists, extract it exactly as shown
-4. If a value does NOT exist, use "—"
+EXTRACTION INSTRUCTIONS:
+1. Read the scraped content thoroughly - check ALL sections
+2. For EACH template column:
+   a. Search for exact matches or close variations of the column name
+   b. Look in common locations: headers, tables, lists, key-value pairs
+   c. Extract the value exactly as it appears (with units like Cr, %, $, etc.)
+   d. If the column has multiple possible matches, choose the most relevant one
+3. For missing fields: If you cannot find ANY relevant data for a column, use "—"
+4. Important: Financial/numeric data often appears in tables - parse them carefully
 5. Return a valid JSON object with "mapped_data" and "missing_fields"
+
+EXAMPLE PATTERNS TO LOOK FOR:
+- Company Name: Often in <title>, <h1>, or main heading
+- Market Cap: Look for "Market Cap", "MCap", "Market Capitalization"
+- Revenue/EBITDA: Often in financial tables with labels like "Sales", "Revenue", "Operating Profit"
+- Percentages: Often shown as "25.3%", "25.3 %", or "25.3 percent"
+- Founded Year: Look for "Founded", "Established", "Since"
 
 Return your response as PURE JSON (no markdown, no code blocks):"""
 
@@ -544,7 +560,7 @@ Return your response as PURE JSON (no markdown, no code blocks):"""
             llm_result = await self.llm_service.generate(
                 prompt=extraction_prompt,
                 messages=messages,
-                max_tokens=2000,
+                max_tokens=3000,  # Increased from 2000 to handle more fields
                 temperature=0.0  # Zero temperature for maximum consistency
             )
 
@@ -579,10 +595,15 @@ Return your response as PURE JSON (no markdown, no code blocks):"""
                 )
                 return None
 
+            # Standardize missing field markers to just "—"
+            for key, value in mapped_data.items():
+                if value in ["— (requires additional research)", "—(requires additional research)"]:
+                    mapped_data[key] = "—"
+
             # Count non-empty extracted values
             non_empty_values = sum(
                 1 for v in mapped_data.values()
-                if v and v not in ["—", "— (requires additional research)", "", None]
+                if v and v not in ["—", "", None]
             )
 
             if non_empty_values == 0:

@@ -347,9 +347,27 @@ class TemplateExtractionService:
                     'border': 1
                 })
 
+                # Format for missing data
+                missing_format = workbook.add_format({
+                    'bg_color': '#FFF3CD',
+                    'font_color': '#856404',
+                    'italic': True,
+                    'border': 1
+                })
+
                 # Format header row
                 for col_num, value in enumerate(df.columns.values):
                     worksheet.write(0, col_num, value, header_format)
+
+                # Format data rows and highlight missing fields
+                for row_num, row_data in enumerate(data, start=1):
+                    for col_num, col_name in enumerate(df.columns):
+                        value = row_data.get(col_name, '')
+                        # Check if value is missing (—, empty, or null)
+                        if value in ['—', '', None] or (isinstance(value, str) and value.strip() == '—'):
+                            worksheet.write(row_num, col_num, value, missing_format)
+                        else:
+                            worksheet.write(row_num, col_num, value)
 
                 # Auto-adjust column widths
                 for i, col in enumerate(df.columns):
