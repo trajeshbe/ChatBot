@@ -23,31 +23,34 @@
 
 ### Ubuntu 24.04 Python Versions
 Ubuntu 24.04.1 LTS ships with:
-- **Python 3.12.3** (default)
-- **Python 3.11.x** (available via apt)
+- **Python 3.12.3** (default, in official repositories)
+- **Python 3.11.x** (NOT in default repositories - requires deadsnakes PPA)
 
 ### Requirements
 - **Project Requirement**: Python 3.11+
-- **Tested Version**: Python 3.11 (from Dockerfile)
-- **Recommendation**: Use Python 3.11 or 3.12
+- **Recommended Version**: Python 3.12 (default in Ubuntu 24.04)
+- **Dockerfile Uses**: Python 3.12 (updated from 3.11)
 
 ### Installation Options
 
-#### Option 1: Use Python 3.12 (Default)
+#### Option 1: Use Python 3.12 (Default - RECOMMENDED)
 ```bash
 sudo apt update
-sudo apt install python3 python3-pip python3-venv
+sudo apt install python3 python3-pip python3-venv python3-dev
 python3 --version  # Should show 3.12.x
 ```
 
-#### Option 2: Use Python 3.11 (Matches Dockerfile)
+#### Option 2: Use Python 3.11 (Requires deadsnakes PPA)
 ```bash
+sudo apt update
+sudo apt install software-properties-common
+sudo add-apt-repository ppa:deadsnakes/ppa
 sudo apt update
 sudo apt install python3.11 python3.11-venv python3.11-dev
 python3.11 --version  # Should show 3.11.x
 ```
 
-**✅ Verdict**: Both Python 3.11 and 3.12 are fully supported on Ubuntu 24.04
+**✅ Verdict**: Python 3.12 is fully supported and recommended for Ubuntu 24.04. Python 3.11 requires additional PPA.
 
 ---
 
@@ -317,13 +320,14 @@ docker-compose logs backend
 
 ### Python 3.12 vs 3.11 Performance
 
-If using Python 3.12 on Ubuntu 24.04:
+Python 3.12 (default in Ubuntu 24.04) vs Python 3.11:
 - **Startup time**: ~10% faster
 - **Runtime performance**: ~5-15% faster (depending on workload)
 - **Memory usage**: Similar or slightly better
 - **Compatibility**: 100% compatible with this codebase
+- **Availability**: Python 3.12 is in default repositories, Python 3.11 requires PPA
 
-**Recommendation**: Use Python 3.12 for better performance
+**Recommendation**: Use Python 3.12 for better performance and easier setup (default in Ubuntu 24.04)
 
 ### Ubuntu 24.04 vs Older Versions
 
