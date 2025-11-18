@@ -20,27 +20,54 @@ RUN apt-get update && apt-get install -y \
     wget \
     build-essential \
     libpq-dev \
+    # Playwright system dependencies (Ubuntu 24.04 compatible)
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0t64 \
+    libatk-bridge2.0-0t64 \
+    libcups2t64 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2t64 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libatspi2.0-0t64 \
+    libxshmfence1 \
+    fonts-liberation \
+    fonts-noto-color-emoji \
+    libglib2.0-0t64 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Python 3 as default python command
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1
 
-# Upgrade pip
-RUN python -m pip install --upgrade pip
+# Create and activate virtual environment (required for Ubuntu 24.04 PEP 668)
+ENV VIRTUAL_ENV=/opt/venv
+RUN python3 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+# Upgrade pip in virtual environment
+RUN pip install --upgrade pip
 
 # Copy and install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ============================================================================
-# Install Playwright with Complete Dependencies (Ubuntu Native)
+# Install Playwright Browser (Ubuntu 24.04)
 # ============================================================================
-# Ubuntu 24.04 LTS has full support for Playwright's dependency installer
-# This will install all required system libraries natively
+# System dependencies installed manually above due to Ubuntu 24.04 package renames
+# (libasound2 -> libasound2t64, etc.)
 # ============================================================================
 
-# Install Chromium browser with all system dependencies
-RUN playwright install --with-deps chromium
+# Install Chromium browser only (dependencies already installed)
+RUN playwright install chromium
 
 # ============================================================================
 # Verify Playwright Installation
