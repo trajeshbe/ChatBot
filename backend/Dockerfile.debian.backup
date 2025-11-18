@@ -1,18 +1,9 @@
-# Ubuntu-based Dockerfile for better Playwright compatibility
-# Base: Ubuntu 24.04 LTS with Python 3.11
-FROM ubuntu:24.04
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Prevent interactive prompts during package installation
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Install Python 3.11 and system dependencies
+# Install base system dependencies
 RUN apt-get update && apt-get install -y \
-    python3.11 \
-    python3.11-venv \
-    python3.11-dev \
-    python3-pip \
     gcc \
     g++ \
     git \
@@ -22,29 +13,29 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Python 3.11 as default
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 && \
-    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+# Install Python dependencies
+# Upgrade pip first to avoid warnings
+RUN pip install --upgrade pip
 
-# Upgrade pip
-RUN python -m pip install --upgrade pip
-
-# Copy and install Python dependencies
 COPY requirements.txt .
+# Install dependencies (pip 24+ handles hashes automatically)
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ============================================================================
-# Install Playwright with Complete Dependencies (Ubuntu Native)
+# STEP 7 & 8: Install Playwright with Complete Dependencies
 # ============================================================================
-# Ubuntu 24.04 LTS has full support for Playwright's dependency installer
-# This will install all required system libraries natively
+# Use --with-deps flag to install browser and all system dependencies together
+# This approach handles OS compatibility issues better than separate install-deps
+# Compatible with: playwright==1.41.0, python:3.11-slim
 # ============================================================================
 
-# Install Chromium browser with all system dependencies
+# Install Chromium browser with all system dependencies in one command
 RUN playwright install --with-deps chromium
 
 # ============================================================================
-# Verify Playwright Installation
+# STEP 9: Verify Playwright Installation
+# ============================================================================
+# Test that Playwright can be imported and browser is accessible
 # ============================================================================
 
 RUN python -c "from playwright.sync_api import sync_playwright; print('✅ Playwright imported successfully')" && \
