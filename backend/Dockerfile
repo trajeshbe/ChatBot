@@ -24,17 +24,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # ============================================================================
 # STEP 7 & 8: Install Playwright with Complete Dependencies
 # ============================================================================
-# Use playwright install-deps for system dependencies, then install browser
-# This is the recommended approach from Playwright documentation
+# Use --with-deps flag to install browser and all system dependencies together
+# This approach handles OS compatibility issues better than separate install-deps
 # Compatible with: playwright==1.41.0, python:3.11-slim
 # ============================================================================
 
-# First, install Chromium browser binary
-RUN playwright install chromium
-
-# Then, install all required system dependencies using the official method
-# This ensures compatibility and installs all needed libraries
-RUN playwright install-deps chromium
+# Install Chromium browser with all system dependencies in one command
+RUN playwright install --with-deps chromium
 
 # ============================================================================
 # STEP 9: Verify Playwright Installation
