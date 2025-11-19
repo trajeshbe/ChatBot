@@ -191,10 +191,17 @@ class LLMClient:
     ) -> Tuple[str, int]:
         """Call Ollama API"""
         try:
+            # Strip "ollama/" prefix if present
+            ollama_model = model.replace("ollama/", "")
+
+            logger.info(f"🔧 Calling Ollama with model: {ollama_model}")
+            logger.info(f"🔧 Messages count: {len(messages)}")
+            logger.info(f"🔧 Ollama client base_url: {self.ollama_client.base_url}")
+
             response = await self.ollama_client.post(
                 "/api/chat",
                 json={
-                    "model": model,
+                    "model": ollama_model,
                     "messages": messages,
                     "stream": False,
                     "options": {
@@ -203,6 +210,8 @@ class LLMClient:
                     }
                 }
             )
+
+            logger.info(f"🔧 Response status: {response.status_code}")
             response.raise_for_status()
 
             result = response.json()

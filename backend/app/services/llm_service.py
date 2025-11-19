@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 class LLMService:
     def __init__(self):
         self.openai_client = None
-        self.vllm_client = httpx.AsyncClient(timeout=60.0)
-        self.llama_cpp_client = httpx.AsyncClient(timeout=60.0)
-        self.ollama_client = httpx.AsyncClient(timeout=120.0)  # Ollama can be slower
+        self.vllm_client = None
+        self.llama_cpp_client = None
+        self.ollama_client = None
         self._initialized = False
 
     async def initialize(self):
@@ -28,17 +28,44 @@ class LLMService:
 
         self._initialized = True
 
+    async def _ensure_ollama_client(self):
+        """Ensure Ollama client is initialized with fresh connection"""
+        if self.ollama_client is None:
+            # CRITICAL: Initialize httpx client at runtime to avoid stale connections
+            # This follows the same pattern as Playwright fix in PLAYWRIGHT_INVESTIGATION.md
+            self.ollama_client = httpx.AsyncClient(timeout=120.0)
+            logger.debug("🔄 Ollama httpx client initialized (runtime)")
+        return self.ollama_client
+
+    async def _ensure_vllm_client(self):
+        """Ensure vLLM client is initialized with fresh connection"""
+        if self.vllm_client is None:
+            self.vllm_client = httpx.AsyncClient(timeout=60.0)
+            logger.debug("🔄 vLLM httpx client initialized (runtime)")
+        return self.vllm_client
+
+    async def _ensure_llama_cpp_client(self):
+        """Ensure llama.cpp client is initialized with fresh connection"""
+        if self.llama_cpp_client is None:
+            self.llama_cpp_client = httpx.AsyncClient(timeout=60.0)
+            logger.debug("🔄 llama.cpp httpx client initialized (runtime)")
+        return self.llama_cpp_client
+
     async def close(self):
         """Close HTTP clients"""
-        await self.vllm_client.aclose()
-        await self.llama_cpp_client.aclose()
-        await self.ollama_client.aclose()
+        if self.vllm_client:
+            await self.vllm_client.aclose()
+        if self.llama_cpp_client:
+            await self.llama_cpp_client.aclose()
+        if self.ollama_client:
+            await self.ollama_client.aclose()
 
     @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
     async def _call_vllm(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> Dict:
         """Call vLLM service"""
         try:
-            response = await self.vllm_client.post(
+            client = await self._ensure_vllm_client()
+            response = await client.post(
                 f"{settings.VLLM_ENDPOINT}/v1/completions",
                 json={
                     "model": settings.VLLM_MODEL,
@@ -63,7 +90,8 @@ class LLMService:
     async def _call_llama_cpp(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> Dict:
         """Call llama.cpp service as CPU fallback (DEPRECATED - use Ollama instead)"""
         try:
-            response = await self.llama_cpp_client.post(
+            client = await self._ensure_llama_cpp_client()
+            response = await client.post(
                 f"{settings.LLAMA_CPP_ENDPOINT}/completion",
                 json={
                     "prompt": prompt,
@@ -87,6 +115,9 @@ class LLMService:
     async def _call_ollama(self, prompt: str, messages: Optional[List[Dict]] = None, max_tokens: int = 512, temperature: float = 0.7) -> Dict:
         """Call Ollama service for local LLM inference"""
         try:
+            # CRITICAL: Ensure fresh httpx client (runtime initialization)
+            client = await self._ensure_ollama_client()
+
             # Ollama endpoint (from settings or default)
             ollama_endpoint = getattr(settings, 'OLLAMA_ENDPOINT', 'http://ollama:11434')
             # Default model (can be configured in settings)
@@ -98,7 +129,7 @@ class LLMService:
             # Ollama supports chat API (preferred)
             if messages:
                 logger.info(f"💬 Using Ollama chat API with {len(messages)} messages")
-                response = await self.ollama_client.post(
+                response = await client.post(
                     f"{ollama_endpoint}/api/chat",
                     json={
                         "model": ollama_model,
@@ -113,7 +144,7 @@ class LLMService:
             else:
                 # Fallback to generate API
                 logger.info(f"📝 Using Ollama generate API")
-                response = await self.ollama_client.post(
+                response = await client.post(
                     f"{ollama_endpoint}/api/generate",
                     json={
                         "model": ollama_model,

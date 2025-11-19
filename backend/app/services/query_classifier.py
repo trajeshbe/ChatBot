@@ -1,17 +1,19 @@
 """
-Query Classification Service
+Query Classification and Preprocessing Service
 
-Classifies queries using LLM to determine if they are:
-1. AI-personal questions (about the AI itself, capabilities, identity)
-2. Document-based questions (requiring RAG retrieval)
-3. General knowledge questions (can be answered without documents)
+This service provides:
+1. Query Classification: Determine if queries need documents (ai_personal, document_specific, general, ambiguous)
+2. Query Preprocessing: Improve retrieval by rewriting and expanding queries
+3. Proper Noun Detection: Identify names/entities to adjust similarity thresholds
+4. Adaptive Thresholding: Recommend appropriate similarity thresholds per query
 
 This prevents the system from returning irrelevant documents for queries
-that don't require document context.
+that don't require document context, and improves retrieval accuracy.
 """
 
 import json
-from typing import Dict, TYPE_CHECKING
+import re
+from typing import Dict, List, TYPE_CHECKING
 import logging
 
 if TYPE_CHECKING:
@@ -21,7 +23,23 @@ logger = logging.getLogger(__name__)
 
 
 class QueryClassifier:
-    """Classify queries using LLM to improve RAG relevance"""
+    """Classify and preprocess queries to improve RAG relevance and retrieval accuracy"""
+
+    # Conversational patterns to rewrite for better retrieval
+    CONVERSATIONAL_PATTERNS = {
+        r"^do you know (about )?(.+)\??$": "tell me about \\2",
+        r"^are you familiar with (.+)\??$": "explain \\1",
+        r"^have you heard (of |about )?(.+)\??$": "describe \\2",
+        r"^can you tell me (about )?(.+)\??$": "tell me about \\2",
+        r"^what do you know about (.+)\??$": "tell me about \\1",
+        r"^(.+)\s*\?+\s*$": "tell me about \\1",  # Just "X ?" → "tell me about X"
+    }
+
+    # Informational query starters (good patterns that don't need rewriting)
+    INFORMATIONAL_STARTERS = {
+        'tell me', 'explain', 'describe', 'what is', 'who is', 'where is',
+        'when was', 'how does', 'why did', 'define', 'summarize'
+    }
 
     CLASSIFICATION_PROMPT = """You are a query classification system. Analyze the user's query and classify it into one of these categories:
 
@@ -199,6 +217,219 @@ Rules:
         """
         classification = await self.classify(query)
         return not classification['use_documents']
+
+    def preprocess_query(self, query: str) -> Dict:
+        """
+        Preprocess query to improve retrieval accuracy
+
+        Args:
+            query: Original user query
+
+        Returns:
+            Dict with:
+                - original_query: Original query text
+                - processed_query: Preprocessed query text
+                - rewritten: Whether query was rewritten
+                - expanded: Whether query was expanded
+                - has_proper_nouns: Whether query contains proper nouns
+                - proper_nouns: List of detected proper nouns
+                - recommended_threshold: Recommended similarity threshold
+        """
+        original_query = query.strip()
+        processed_query = original_query
+        rewritten = False
+        expanded = False
+
+        # Step 1: Detect proper nouns FIRST (before any rewriting)
+        proper_nouns = self._detect_proper_nouns(original_query)
+        has_proper_nouns = len(proper_nouns) > 0
+
+        # Step 2: Rewrite conversational queries
+        rewritten_query = self._rewrite_conversational(processed_query)
+        if rewritten_query != processed_query:
+            logger.info(f"🔄 Query rewritten: '{processed_query}' → '{rewritten_query}'")
+            processed_query = rewritten_query
+            rewritten = True
+
+        # Step 3: Expand short queries
+        expanded_query = self._expand_short_query(processed_query)
+        if expanded_query != processed_query:
+            logger.info(f"📝 Query expanded: '{processed_query}' → '{expanded_query}'")
+            processed_query = expanded_query
+            expanded = True
+
+        # Step 4: Determine recommended threshold based on query characteristics
+        recommended_threshold = self._calculate_recommended_threshold(
+            query=processed_query,
+            has_proper_nouns=has_proper_nouns,
+            is_short=len(original_query.split()) <= 4
+        )
+
+        result = {
+            'original_query': original_query,
+            'processed_query': processed_query,
+            'rewritten': rewritten,
+            'expanded': expanded,
+            'has_proper_nouns': has_proper_nouns,
+            'proper_nouns': proper_nouns,
+            'recommended_threshold': recommended_threshold,
+            'preprocessing_applied': rewritten or expanded
+        }
+
+        if result['preprocessing_applied']:
+            logger.info(
+                f"✅ Query preprocessing: proper_nouns={has_proper_nouns} ({proper_nouns}), "
+                f"threshold={recommended_threshold:.2f}"
+            )
+
+        return result
+
+    def _detect_proper_nouns(self, query: str) -> List[str]:
+        """
+        Detect proper nouns (names, places, brands) in query
+
+        Proper nouns are:
+        - Capitalized words (except sentence start)
+        - Words with mixed case (like "iPhone")
+        - All-caps acronyms (min 2 letters)
+        """
+        proper_nouns = []
+
+        # Pattern 1: Capitalized words (not at sentence start)
+        words = query.split()
+        for i, word in enumerate(words):
+            # Clean punctuation
+            clean_word = re.sub(r'[^\w\s]', '', word)
+
+            # Skip if empty after cleaning
+            if not clean_word:
+                continue
+
+            # Skip common question words at start
+            if i == 0 and clean_word.lower() in {'do', 'are', 'can', 'have', 'what', 'who', 'where', 'when', 'why', 'how'}:
+                continue
+
+            # Capitalized word (like "Aadhan", "John", "Microsoft")
+            if len(clean_word) > 1 and clean_word[0].isupper():
+                # Not at sentence start OR sentence doesn't start with question word
+                if i > 0 or (i == 0 and words[0][0].lower() not in {'d', 'a', 'c', 'h', 'w'}):
+                    proper_nouns.append(clean_word)
+
+        # Pattern 2: All-caps acronyms (min 2 letters)
+        acronyms = re.findall(r'\b[A-Z]{2,}\b', query)
+        proper_nouns.extend(acronyms)
+
+        # Pattern 3: Mixed case (like iPhone, macOS)
+        mixed_case = re.findall(r'\b[a-z]+[A-Z][a-zA-Z]*\b|\b[A-Z][a-z]+[A-Z][a-zA-Z]*\b', query)
+        proper_nouns.extend(mixed_case)
+
+        # Deduplicate
+        proper_nouns = list(set(proper_nouns))
+
+        if proper_nouns:
+            logger.debug(f"🏷️  Detected proper nouns: {proper_nouns}")
+
+        return proper_nouns
+
+    def _rewrite_conversational(self, query: str) -> str:
+        """
+        Rewrite conversational queries to informational format
+
+        Examples:
+            "do you know Aadhan?" → "tell me about Aadhan"
+            "are you familiar with Python?" → "explain Python"
+            "Aadhan ?" → "tell me about Aadhan"
+        """
+        query_lower = query.lower().strip()
+
+        # Check if already informational
+        for starter in self.INFORMATIONAL_STARTERS:
+            if query_lower.startswith(starter):
+                # Already informational, no need to rewrite
+                return query
+
+        # Try to match and rewrite conversational patterns
+        for pattern, replacement in self.CONVERSATIONAL_PATTERNS.items():
+            match = re.match(pattern, query_lower, re.IGNORECASE)
+            if match:
+                # Extract the important part (usually the last group)
+                rewritten = re.sub(pattern, replacement, query_lower, flags=re.IGNORECASE)
+                # Clean up extra spaces and punctuation
+                rewritten = re.sub(r'\s+', ' ', rewritten).strip()
+                rewritten = rewritten.rstrip('?!.,')
+                return rewritten
+
+        # No pattern matched, return original
+        return query
+
+    def _expand_short_query(self, query: str) -> str:
+        """
+        Expand very short queries for better embedding
+
+        Short queries (1-3 words) often don't embed well.
+        Add context words to improve semantic matching.
+
+        Examples:
+            "Aadhan" → "tell me about Aadhan"
+            "Python tutorial" → "explain Python tutorial"
+        """
+        words = query.split()
+
+        # Only expand if very short (1-3 words)
+        if len(words) > 3:
+            return query
+
+        # Don't expand if already has informational starter
+        query_lower = query.lower()
+        for starter in self.INFORMATIONAL_STARTERS:
+            if query_lower.startswith(starter):
+                return query
+
+        # Expand based on length
+        if len(words) == 1:
+            # Single word: "Aadhan" → "tell me about Aadhan"
+            return f"tell me about {query}"
+        elif len(words) == 2:
+            # Two words: "Aadhan story" → "tell me about Aadhan story"
+            return f"tell me about {query}"
+        elif len(words) == 3:
+            # Three words: might be okay, but add light expansion
+            return f"explain {query}"
+
+        return query
+
+    def _calculate_recommended_threshold(self, query: str,
+                                        has_proper_nouns: bool,
+                                        is_short: bool) -> float:
+        """
+        Calculate recommended similarity threshold based on query characteristics
+
+        Proper nouns (names, places) often have lower semantic similarity
+        because they're specific and may not appear frequently in training data.
+
+        Args:
+            query: Preprocessed query text
+            has_proper_nouns: Whether query contains proper nouns
+            is_short: Whether query is short (<= 4 words)
+
+        Returns:
+            Recommended threshold (between 0.45 and 0.75)
+        """
+        # Start with lower default than original 0.75
+        threshold = 0.60
+
+        # Adjust for proper nouns (lower threshold for better recall)
+        if has_proper_nouns:
+            threshold -= 0.10  # Lower to 0.50 for proper nouns
+
+        # Adjust for short queries (lower threshold for better recall)
+        if is_short:
+            threshold -= 0.05  # Lower by another 0.05
+
+        # Clamp to reasonable range
+        threshold = max(0.45, min(0.75, threshold))
+
+        return threshold
 
 
 # Singleton

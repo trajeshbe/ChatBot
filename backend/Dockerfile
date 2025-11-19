@@ -1,81 +1,34 @@
-# Ubuntu-based Dockerfile for better Playwright compatibility
-# Base: Ubuntu 24.04 LTS with Python 3.12 (default)
-FROM ubuntu:24.04
+# Playwright Official Docker Image
+# Base: Microsoft's official Playwright image with Python and Chromium pre-installed
+# Using Jammy (Ubuntu 22.04) which is officially supported and has no t64 transition issues
+# This solves the library compatibility problems we had with Ubuntu 24.04
+
+FROM mcr.microsoft.com/playwright/python:v1.48.0-jammy
 
 WORKDIR /app
 
-# Prevent interactive prompts during package installation
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Install Python 3.12 (default) and system dependencies
+# Install PostgreSQL client libraries (required for psycopg2)
+# Note: Playwright image is based on Ubuntu, so we can use apt-get
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-venv \
-    python3-dev \
-    python3-pip \
-    gcc \
-    g++ \
-    git \
-    curl \
-    wget \
-    build-essential \
     libpq-dev \
-    # Playwright system dependencies (Ubuntu 24.04 compatible)
-    libnss3 \
-    libnspr4 \
-    libatk1.0-0t64 \
-    libatk-bridge2.0-0t64 \
-    libcups2t64 \
-    libdrm2 \
-    libdbus-1-3 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libasound2t64 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libatspi2.0-0t64 \
-    libxshmfence1 \
-    fonts-liberation \
-    fonts-noto-color-emoji \
-    libglib2.0-0t64 \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Python 3 as default python command
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1
-
-# Create and activate virtual environment (required for Ubuntu 24.04 PEP 668)
-ENV VIRTUAL_ENV=/opt/venv
-RUN python3 -m venv $VIRTUAL_ENV
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-
-# Upgrade pip in virtual environment
+# Upgrade pip to latest version
 RUN pip install --upgrade pip
 
 # Copy and install Python dependencies
 COPY requirements.txt .
+
+# Install Python packages (including playwright==1.48.0)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ============================================================================
-# Install Playwright Browser (Ubuntu 24.04)
-# ============================================================================
-# System dependencies installed manually above due to Ubuntu 24.04 package renames
-# (libasound2 -> libasound2t64, etc.)
-# ============================================================================
-
-# Install Chromium browser only (dependencies already installed)
-RUN playwright install chromium
-
-# ============================================================================
-# Verify Playwright Installation
-# ============================================================================
-
-RUN python -c "from playwright.sync_api import sync_playwright; print('✅ Playwright imported successfully')" && \
-    playwright --version && \
-    echo "✅ Playwright installation verified"
+# NOTE: Playwright browsers are already installed in the base image at /ms-playwright/
+# The base image mcr.microsoft.com/playwright/python:v1.48.0-jammy includes:
+# - chromium-1140 (compatible with Ubuntu 22.04/Jammy)
+# - firefox-1465
+# - webkit-2083
+# We use PLAYWRIGHT_BROWSERS_PATH=/ms-playwright env var to point to these browsers
+# DO NOT run 'playwright install' as it may download incompatible versions
 
 # Copy application code
 COPY . .

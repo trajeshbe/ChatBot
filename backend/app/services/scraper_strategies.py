@@ -326,10 +326,40 @@ class PlaywrightStrategy(BaseScraperStrategy):
         """Lazy initialization of Playwright browser"""
         if self._browser is None:
             try:
+                import os
+
+                # CRITICAL: Set PLAYWRIGHT_BROWSERS_PATH BEFORE importing playwright
+                # Workaround for volume mounting issue where docker-compose env vars aren't seen by Python
+                os.environ['PLAYWRIGHT_BROWSERS_PATH'] = '/ms-playwright'
+                self.logger.info(f"Set PLAYWRIGHT_BROWSERS_PATH={os.environ.get('PLAYWRIGHT_BROWSERS_PATH')}")
+
+                # Skip Playwright's dependency check (we have the libs, just different names in Ubuntu 24.04)
+                os.environ['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
+
+                # NOW import playwright AFTER setting env vars
                 from playwright.async_api import async_playwright
+
+                self.logger.info("🚀 Starting Playwright initialization...")
                 self._playwright = await async_playwright().start()
-                self._browser = await self._playwright.chromium.launch(headless=True)
-                self.logger.info("Playwright browser initialized")
+                self.logger.info("✅ Playwright started successfully")
+
+                # Launch with explicit path and Docker-compatible arguments
+                chromium_path = "/ms-playwright/chromium-1140/chrome-linux/chrome"
+                self.logger.info(f"Using Chromium executable: {chromium_path}")
+                self._browser = await self._playwright.chromium.launch(
+                    executable_path=chromium_path,
+                    headless=True,
+                    args=[
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-accelerated-2d-canvas',
+                        '--no-first-run',
+                        '--no-zygote',
+                        '--disable-gpu'
+                    ]
+                )
+                self.logger.info(f"✅ Chromium launched successfully")
             except ImportError:
                 raise ImportError(
                     "Playwright not installed. Install with: pip install playwright && playwright install chromium"

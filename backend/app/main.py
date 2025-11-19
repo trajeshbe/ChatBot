@@ -217,6 +217,57 @@ async def health_check():
     }
 
 
+# Direct LLM test endpoint (bypasses RAG pipeline)
+@app.post("/api/v1/llm/test")
+async def test_llm_direct(
+    prompt: str = Form(...),
+    model_id: Optional[str] = Form("qwen2.5:1.5b")
+):
+    """
+    Direct LLM test endpoint - bypasses RAG pipeline for debugging.
+    Useful for testing Ollama integration without document retrieval.
+    """
+    print(f"========== ENDPOINT CALLED: prompt={prompt}, model={model_id} ==========", flush=True)
+    try:
+        print(f"About to call llm_service.generate()", flush=True)
+        logger.info(f"🧪 Direct LLM test: prompt='{prompt[:50]}...', model={model_id}")
+
+        # Ensure llm_service is initialized (lazy init)
+        if hasattr(llm_service, '_initialized') and not llm_service._initialized:
+            print("LLM service not initialized, initializing now...", flush=True)
+            logger.info("Initializing llm_service for direct test...")
+            await llm_service.initialize()
+
+        print(f"Calling llm_service.generate with model_id={model_id}", flush=True)
+        # Call LLM directly
+        response = await llm_service.generate(
+            prompt=prompt,
+            model_id=model_id,
+            max_tokens=200,
+            temperature=0.7
+        )
+
+        print(f"Got response: {response.get('content', '')[:50]}...", flush=True)
+        return {
+            "success": True,
+            "answer": response['content'],
+            "model": response['model'],
+            "model_name": response.get('model_name', response['model']),
+            "tokens": response.get('tokens', 0),
+            "provider": response.get('provider', 'unknown')
+        }
+    except Exception as e:
+        print(f"========== EXCEPTION: {type(e).__name__}: {e} ==========", flush=True)
+        import traceback
+        traceback.print_exc()
+        logger.error(f"❌ Direct LLM test failed: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+
+
 # REST API endpoints
 @app.post("/api/v1/upload")
 async def upload_file(
@@ -619,6 +670,16 @@ except ImportError as e:
     logger.warning(f"Template Extraction API not available: {e}")
 except Exception as e:
     logger.warning(f"Could not register Template Extraction router: {e}")
+
+# Playwright test routes (for debugging)
+try:
+    from app.api.routes import playwright_test_routes
+    app.include_router(playwright_test_routes.router)
+    logger.info("✓ Playwright test routes registered (debugging endpoint)")
+except ImportError as e:
+    logger.warning(f"Playwright test routes not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Playwright test router: {e}")
 
 
 # === Admin API Endpoints ===

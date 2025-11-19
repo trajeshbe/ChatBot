@@ -113,11 +113,14 @@ export default function DataExtractionHub({ sessionId }: Props) {
               <div className="text-sm text-slate-700 dark:text-slate-300">
                 <p className="font-semibold mb-2">Template-Based Extraction Features:</p>
                 <ul className="list-disc ml-4 space-y-1">
-                  <li><strong>Upload Excel templates</strong> - AI maps data to your custom Excel columns</li>
-                  <li><strong>Predefined templates</strong> - Use built-in templates for common sites</li>
+                  <li><strong>Preset templates</strong> - Use built-in templates for Screener.in, MoneyControl (works automatically)</li>
+                  <li><strong>Batch processing</strong> - Extract data from multiple URLs in background</li>
                   <li><strong>Consistent structure</strong> - Always get the same fields</li>
-                  <li><strong>LLM-powered extraction</strong> - Intelligent data mapping</li>
+                  <li><strong>Advanced users</strong> - Define CSS selectors for precise extraction</li>
                 </ul>
+                <p className="mt-3 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-3 py-2 rounded">
+                  <strong>⚠️ For custom columns without CSS selectors:</strong> Use "Template Mapper" instead - it uses AI to map data automatically
+                </p>
               </div>
             </div>
           </div>

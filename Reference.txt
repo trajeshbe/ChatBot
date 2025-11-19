@@ -1,0 +1,63 @@
+echo "=== kubectl ==="
+kubectl version --client
+
+echo -e "\n=== Helm ==="
+helm version
+
+echo -e "\n=== Istio ==="
+istioctl version
+
+echo -e "\n=== Argo CD CLI ==="
+argocd version
+
+echo -e "\n=== Cluster Info ==="
+kubectl cluster-info
+
+echo -e "\n=== Istio Pods ==="
+kubectl get pods -n istio-system
+
+echo -e "\n=== Argo CD Pods ==="
+kubectl get pods -n argocd
+=== kubectl ===
+Client Version: v1.34.1
+Kustomize Version: v5.7.1
+
+=== Helm ===
+version.BuildInfo{Version:"v3.19.0", GitCommit:"3d8990f0836691f0229297773f3524598f46bda6", GitTreeState:"clean", GoVersion:"go1.24.7"}
+
+=== Istio ===
+client version: 1.28.0
+control plane version: 1.28.0
+data plane version: 1.28.0 (1 proxies)
+
+=== Argo CD CLI ===
+argocd: v3.2.0+66b2f30
+  BuildDate: 2025-11-04T15:21:01Z
+  GitCommit: 66b2f302d91a42cc151808da0eec0846bbe1062c
+  GitTreeState: clean
+  GoVersion: go1.25.0
+  Compiler: gc
+  Platform: linux/amd64
+{"level":"fatal","msg":"Argo CD server address unspecified","time":"2025-11-13T04:44:35Z"}
+
+=== Cluster Info ===
+Kubernetes control plane is running at https://127.0.0.1:54287
+CoreDNS is running at https://127.0.0.1:54287/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+
+=== Istio Pods ===
+NAME                      READY   STATUS    RESTARTS   AGE
+istio-cni-node-qbrm8      1/1     Running   0          10m
+istiod-64f865876f-vhmfm   1/1     Running   0          10m
+ztunnel-nkdpr             1/1     Running   0          9m56s
+
+=== Argo CD Pods ===
+NAME                                                READY   STATUS    RESTARTS        AGE
+argocd-application-controller-0                     1/1     Running   0               8m17s
+argocd-applicationset-controller-7b6ff755dc-55w2k   1/1     Running   0               8m17s
+argocd-dex-server-584f7d88dc-wtlrf                  1/1     Running   1 (7m20s ago)   8m17s
+argocd-notifications-controller-67cdd486c6-569d9    1/1     Running   0               8m17s
+argocd-redis-6dbb9f6cf4-nlf62                       1/1     Running   0               8m17s
+argocd-repo-server-57bdcb5898-rbs5w                 1/1     Running   0               8m17s
+argocd-server-57d9cc9bcf-kgfwq                      1/1     Running   0               8m17s

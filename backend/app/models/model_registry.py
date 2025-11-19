@@ -211,31 +211,59 @@ class ModelRegistry:
         # ============================================================================
 
         self.register(ModelInfo(
-            id="llama-3.2-3b-cpu",
-            name="Llama 3.2 3B Q4 (CPU)",
+            id="llama3.2:3b",
+            name="Llama 3.2 3B (Ollama)",
             provider=ModelProvider.OLLAMA,
             model_type=ModelType.LOCAL_CPU,
-            model_path="llama3.2:3b-instruct-q4_K_M",
+            model_path="llama3.2:3b",
             context_length=128000,
             cost_per_1k_tokens=0.0,
             requires_gpu=False,
             min_gpu_memory_gb=0,
-            description="Best CPU model. Q4_K_M quantized for speed. ~2GB RAM, 5-10 tok/s.",
+            description="Best local model. Q4 quantized for CPU. ~2GB RAM, 5-10 tok/s.",
             recommended=True
         ))
 
         self.register(ModelInfo(
-            id="qwen-1.5b-cpu",
-            name="Qwen 1.5B Q4 (CPU)",
+            id="qwen2.5:1.5b",
+            name="Qwen 2.5 1.5B (Ollama)",
             provider=ModelProvider.OLLAMA,
             model_type=ModelType.LOCAL_CPU,
-            model_path="qwen2.5:1.5b-instruct-q4_K_M",
+            model_path="qwen2.5:1.5b",
             context_length=32768,
             cost_per_1k_tokens=0.0,
             requires_gpu=False,
             min_gpu_memory_gb=0,
-            description="Ultra-fast CPU model. Q4_K_M quantized. ~1GB RAM, 10-15 tok/s.",
+            description="Ultra-fast local model. Q4 quantized. ~1GB RAM, 10-15 tok/s.",
             recommended=True
+        ))
+
+        self.register(ModelInfo(
+            id="mistral:latest",
+            name="Mistral 7B (Ollama)",
+            provider=ModelProvider.OLLAMA,
+            model_type=ModelType.LOCAL_CPU,
+            model_path="mistral:latest",
+            context_length=32768,
+            cost_per_1k_tokens=0.0,
+            requires_gpu=False,
+            min_gpu_memory_gb=0,
+            description="Powerful 7B model. Good reasoning. ~4.4GB RAM.",
+            recommended=False
+        ))
+
+        self.register(ModelInfo(
+            id="phi3:mini",
+            name="Phi-3 Mini (Ollama)",
+            provider=ModelProvider.OLLAMA,
+            model_type=ModelType.LOCAL_CPU,
+            model_path="phi3:mini",
+            context_length=128000,
+            cost_per_1k_tokens=0.0,
+            requires_gpu=False,
+            min_gpu_memory_gb=0,
+            description="Microsoft's compact model. ~2.2GB RAM.",
+            recommended=False
         ))
 
     def register(self, model: ModelInfo):

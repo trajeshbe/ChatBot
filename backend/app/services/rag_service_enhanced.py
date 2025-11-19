@@ -77,8 +77,27 @@ class EnhancedRAGService:
             if session_id:
                 await self._ensure_session_exists(session_id, user_id, db)
 
-            # STEP 0: Classify query to determine if it needs documents
-            classification = await query_classifier.classify(query_text)
+            # STEP 0: Preprocess query for better retrieval and classification
+            preprocessing = query_classifier.preprocess_query(query_text)
+            processed_query = preprocessing['processed_query']
+            recommended_threshold = preprocessing['recommended_threshold']
+
+            # Log preprocessing
+            if preprocessing['preprocessing_applied']:
+                logger.info(f"🔄 Query preprocessing applied:")
+                logger.info(f"   Original: '{query_text}'")
+                logger.info(f"   Processed: '{processed_query}'")
+                if preprocessing['has_proper_nouns']:
+                    logger.info(f"   Proper nouns detected: {preprocessing['proper_nouns']}")
+                logger.info(f"   Recommended threshold: {recommended_threshold:.2f}")
+
+            # Use adaptive threshold if preprocessing detected special cases
+            if preprocessing['preprocessing_applied'] or preprocessing['has_proper_nouns']:
+                _similarity_threshold = recommended_threshold
+                logger.info(f"🎯 Using adaptive threshold: {_similarity_threshold:.2f}")
+
+            # STEP 1: Classify query using PREPROCESSED query for better accuracy
+            classification = await query_classifier.classify(processed_query)  # Use processed query!
             logger.info(f"📊 Query classification: {classification['query_type']} (confidence: {classification['confidence']:.2f}) - {classification['reason']}")
 
             # If this is an AI-personal question, skip RAG entirely
@@ -140,20 +159,20 @@ class EnhancedRAGService:
 
                 return result
 
-            # Check semantic cache first
+            # STEP 2: Check semantic cache first (use ORIGINAL query for cache key)
             if use_cache:
                 cached_result = await self._check_semantic_cache(query_text, db)
                 if cached_result:
-                    logger.info(f"Cache hit for query in session {session_id}")
+                    logger.info(f"✅ Cache hit for query in session {session_id}")
                     cached_result['cached'] = True
                     cached_result['latency_ms'] = (time.time() - start_time) * 1000
                     return cached_result
 
-            # Step 1: Generate embedding for the query
-            logger.info(f"Processing query: {query_text[:100]}... (session: {session_id})")
-            query_embedding = await embedding_service.get_embedding(query_text)
+            # STEP 3: Generate embedding for the PROCESSED query
+            logger.info(f"🔍 Generating embedding for query (session: {session_id})")
+            query_embedding = await embedding_service.get_embedding(processed_query)
 
-            # Step 2: Search short-term memory first (session documents)
+            # STEP 4: Search short-term memory first (session documents)
             short_term_chunks = []
             if session_id:
                 short_term_chunks = await self._search_session_documents(
@@ -213,8 +232,10 @@ class EnhancedRAGService:
                     model_id=model_id
                 )
             else:
-                # No context found - use pure LLM with helpful message
-                logger.warning("No relevant context found, falling back to pure LLM")
+                # No context found - use pure LLM with helpful warning message
+                logger.warning(f"⚠️ No relevant context found for query: '{query_text[:100]}...'")
+                if preprocessing['preprocessing_applied']:
+                    logger.warning(f"   Even after preprocessing: '{processed_query[:100]}...'")
 
                 # Check if there are ANY documents in the database
                 count_query = sql_text("SELECT COUNT(*) FROM documents WHERE processed = true")
@@ -223,29 +244,37 @@ class EnhancedRAGService:
 
                 if doc_count == 0:
                     # No documents at all - guide user to upload
+                    warning_prefix = (
+                        "⚠️ **No Documents Available**: I don't have any documents in my knowledge base yet. "
+                        "Please upload documents or scrape URLs to enable document-based answers.\n\n"
+                    )
                     system_message = (
                         "You are a helpful enterprise RAG assistant. "
                         "Currently, there are no documents in your knowledge base. "
-                        "Politely inform the user that they should upload documents "
-                        "or scrape URLs first to enable document-based answers. "
-                        "However, if they ask a general question that doesn't require "
-                        "document context, answer it helpfully."
+                        "Start your response with the warning message provided, then answer "
+                        "the question using your general knowledge if appropriate. "
+                        "Keep your answer concise and helpful."
                     )
                 else:
                     # Documents exist but none are relevant to the query
+                    warning_prefix = (
+                        f"⚠️ **No Relevant Documents Found**: I searched through {doc_count} document(s) "
+                        f"but couldn't find information relevant to your query. "
+                        "My response is based on general knowledge, not your uploaded documents.\n\n"
+                    )
                     system_message = (
                         "You are a helpful enterprise RAG assistant. "
                         "The user has uploaded documents, but none appear directly relevant "
-                        "to this specific query. Provide the best answer you can based on "
-                        "your general knowledge, and suggest that the user might want to "
-                        "upload more relevant documents if they need specific information."
+                        "to this specific query. Start your response with the warning message provided, "
+                        "then provide the best answer you can based on your general knowledge. "
+                        "Suggest that the user might want to upload more relevant documents if they need specific information."
                     )
 
                 response = await llm_service.generate(
-                    prompt=f"System: {system_message}\n\nUser: {query_text}\n\nAssistant:",
+                    prompt=f"System: {system_message}\n\nWarning prefix to use: {warning_prefix}\n\nUser: {query_text}\n\nAssistant:",
                     messages=[
                         {"role": "system", "content": system_message},
-                        {"role": "user", "content": query_text}
+                        {"role": "user", "content": f"{warning_prefix}User query: {query_text}"}
                     ],
                     model_id=model_id
                 )

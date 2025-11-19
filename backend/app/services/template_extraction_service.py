@@ -11,7 +11,7 @@ from datetime import datetime
 import re
 import pandas as pd
 from io import BytesIO
-from playwright.async_api import async_playwright, Page, Browser
+# NOTE: playwright imports moved to initialize() method to allow setting env vars first
 from bs4 import BeautifulSoup
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,15 +47,57 @@ class TemplateExtractionService:
     """Service for extracting structured data from web pages using templates"""
 
     def __init__(self):
-        self.browser: Optional[Browser] = None
+        self.browser: Optional[Any] = None  # Browser type, but imported later
         self._playwright = None
 
     async def initialize(self):
         """Initialize Playwright browser"""
         if self._playwright is None:
-            self._playwright = await async_playwright().start()
-            self.browser = await self._playwright.chromium.launch(headless=True)
-            logger.info("Template extraction service initialized with Playwright")
+            try:
+                import os
+
+                # CRITICAL: Set PLAYWRIGHT_BROWSERS_PATH BEFORE importing playwright
+                # Workaround for volume mounting issue where docker-compose env vars aren't seen by Python
+                os.environ['PLAYWRIGHT_BROWSERS_PATH'] = '/ms-playwright'
+                logger.info(f"Set PLAYWRIGHT_BROWSERS_PATH={os.environ.get('PLAYWRIGHT_BROWSERS_PATH')}")
+
+                # Skip Playwright's dependency check (we have the libs, just different names in Ubuntu 24.04)
+                os.environ['PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS'] = 'true'
+
+                # NOW import playwright AFTER setting env vars
+                from playwright.async_api import async_playwright
+
+                logger.info("🚀 Starting Playwright initialization...")
+                logger.info("📦 Starting async_playwright()...")
+                self._playwright = await async_playwright().start()
+                logger.info("✅ Playwright started successfully")
+
+                # Launch with Docker-compatible arguments
+                logger.info("🌐 Launching Chromium browser...")
+                # Explicitly use chromium-1140 from base image
+                # This fixes the mismatch between pip-installed playwright (expects 1097) and base image (has 1140)
+                chromium_path = "/ms-playwright/chromium-1140/chrome-linux/chrome"
+                logger.info(f"Using Chromium executable: {chromium_path}")
+                self.browser = await self._playwright.chromium.launch(
+                    executable_path=chromium_path,
+                    headless=True,
+                    args=[
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-accelerated-2d-canvas',
+                        '--no-first-run',
+                        '--no-zygote',
+                        '--disable-gpu'
+                    ]
+                )
+                logger.info(f"✅ Chromium launched successfully, browser object: {self.browser}")
+                logger.info("✅ Template extraction service initialized with Playwright")
+            except Exception as e:
+                logger.error(f"❌ Failed to initialize Playwright: {e}", exc_info=True)
+                self._playwright = None
+                self.browser = None
+                raise
 
     async def close(self):
         """Close browser and Playwright"""
@@ -210,7 +252,7 @@ class TemplateExtractionService:
 
     async def _extract_fields(
         self,
-        page: Page,
+        page: Any,  # Playwright Page object, but imported at runtime
         soup: BeautifulSoup,
         fields: List[ExtractionField]
     ) -> tuple[Dict[str, Any], Dict[str, str]]:
@@ -275,7 +317,7 @@ class TemplateExtractionService:
 
     async def _extract_single_field(
         self,
-        page: Page,
+        page: Any,  # Playwright Page object, but imported at runtime
         soup: BeautifulSoup,
         field: ExtractionField
     ) -> Any:

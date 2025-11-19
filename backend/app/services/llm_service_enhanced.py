@@ -35,10 +35,10 @@ class EnhancedLLMService:
         self.openai_client: Optional[AsyncOpenAI] = None
         self.anthropic_client: Optional[AsyncAnthropic] = None
 
-        # HTTP clients for local models
-        self.vllm_client = httpx.AsyncClient(timeout=120.0)
-        self.ollama_client = httpx.AsyncClient(timeout=120.0)
-        self.llama_cpp_client = httpx.AsyncClient(timeout=120.0)
+        # HTTP clients for local models (lazy initialization to avoid stale connections)
+        self.vllm_client = None
+        self.ollama_client = None
+        self.llama_cpp_client = None
 
         # Model registry and GPU detector
         self.model_registry = get_model_registry()
@@ -78,11 +78,53 @@ class EnhancedLLMService:
         # Update model availability based on hardware and API keys
         self._update_model_availability()
 
+        # Check which Ollama models are actually installed (async check)
+        installed_ollama_models = await self._check_ollama_model_availability()
+        if installed_ollama_models:
+            # Update Ollama model availability based on what's actually installed
+            for model in self.model_registry.get_models_by_provider(ModelProvider.OLLAMA):
+                # Check if the model's path is in the installed models
+                is_available = model.model_path in installed_ollama_models
+                self.model_registry.update_availability(model.id, is_available)
+                if is_available:
+                    logger.info(f"   ✅ {model.name} ({model.model_path}) - Available")
+                else:
+                    logger.warning(f"   ❌ {model.name} ({model.model_path}) - Not installed")
+
         # Set default model
         self._set_default_model()
 
         self._initialized = True
         logger.info(f"✓ LLM Service initialized. Default model: {self._default_model_id}")
+
+    async def _check_ollama_model_availability(self) -> set:
+        """
+        Check which Ollama models are actually installed
+
+        Returns:
+            Set of installed model names
+        """
+        try:
+            client = httpx.AsyncClient(timeout=10.0)
+            try:
+                response = await client.get(f"{settings.OLLAMA_ENDPOINT}/api/tags")
+                response.raise_for_status()
+                data = response.json()
+
+                # Extract model names from response
+                installed_models = set()
+                for model in data.get("models", []):
+                    model_name = model.get("name", "")
+                    installed_models.add(model_name)
+
+                logger.info(f"🔍 Ollama installed models: {installed_models}")
+                return installed_models
+            finally:
+                await client.aclose()
+        except Exception as e:
+            logger.warning(f"⚠️  Failed to check Ollama model availability: {e}")
+            logger.warning("    Assuming all registered Ollama models are available")
+            return set()  # Return empty set, will mark all as unavailable
 
     def _update_model_availability(self):
         """Update model availability based on API keys and hardware"""
@@ -104,8 +146,10 @@ class EnhancedLLMService:
                         settings.USE_VLLM)
             self.model_registry.update_availability(model.id, available)
 
-        # Ollama models always available (CPU-based)
+        # Ollama models: Dynamically check what's actually installed
+        # Note: This is synchronous init, actual check happens in initialize()
         for model in self.model_registry.get_models_by_provider(ModelProvider.OLLAMA):
+            # Set to True initially, will be updated during async initialize()
             self.model_registry.update_availability(model.id, True)
 
         # llama.cpp models (deprecated - use Ollama instead)
@@ -116,12 +160,15 @@ class EnhancedLLMService:
         """Set the default model based on availability"""
 
         # Priority order for default model
+        # 🔄 CHANGED 2025-11-18: Prioritize local Ollama models (no API key needed)
         priority_models = [
-            "gpt-4-turbo",           # Best quality (if API key exists)
-            "claude-3.5-sonnet",     # Best alternative
-            "llama-3.1-8b",          # Best local GPU
-            "llama-3.2-3b-cpu",      # Best local CPU
-            "tinyllama-cpu",         # Fallback
+            "llama3.2:3b",           # ✅ Best local model (Ollama) - FREE
+            "qwen2.5:1.5b",          # ✅ Fast local model (Ollama) - FREE
+            "llama-3.1-8b",          # Best local GPU (if GPU available)
+            "gpt-4-turbo",           # Best quality (requires OpenAI API key)
+            "claude-3.5-sonnet",     # Best alternative (requires Anthropic API key)
+            "llama-3.2-3b-cpu",      # Fallback local CPU
+            "tinyllama-cpu",         # Final fallback
         ]
 
         for model_id in priority_models:
@@ -133,11 +180,40 @@ class EnhancedLLMService:
 
         logger.warning("No models available!")
 
+    async def _ensure_ollama_client(self):
+        """Create fresh Ollama client for each request (no caching)
+
+        CRITICAL FIX: Always create a NEW client to avoid stale connections and event loop issues.
+        This ensures each request gets a fresh httpx client with proper async context binding.
+        Similar to how direct curl calls work - new connection per request.
+        """
+        # Always create NEW client - do not cache
+        client = httpx.AsyncClient(timeout=120.0)
+        logger.debug("🔄 Ollama httpx client created (fresh per request)")
+        return client
+
+    async def _ensure_vllm_client(self):
+        """Ensure vLLM client is initialized with fresh connection"""
+        if self.vllm_client is None:
+            self.vllm_client = httpx.AsyncClient(timeout=120.0)
+            logger.debug("🔄 vLLM httpx client initialized (runtime)")
+        return self.vllm_client
+
+    async def _ensure_llama_cpp_client(self):
+        """Ensure llama.cpp client is initialized with fresh connection"""
+        if self.llama_cpp_client is None:
+            self.llama_cpp_client = httpx.AsyncClient(timeout=120.0)
+            logger.debug("🔄 llama.cpp httpx client initialized (runtime)")
+        return self.llama_cpp_client
+
     async def close(self):
         """Close HTTP clients"""
-        await self.vllm_client.aclose()
-        await self.ollama_client.aclose()
-        await self.llama_cpp_client.aclose()
+        if self.vllm_client:
+            await self.vllm_client.aclose()
+        if self.ollama_client:
+            await self.ollama_client.aclose()
+        if self.llama_cpp_client:
+            await self.llama_cpp_client.aclose()
 
     # ============================================================================
     # PROVIDER-SPECIFIC IMPLEMENTATIONS
@@ -233,7 +309,8 @@ class EnhancedLLMService:
     ) -> Dict:
         """Call vLLM service (local GPU)"""
         try:
-            response = await self.vllm_client.post(
+            client = await self._ensure_vllm_client()
+            response = await client.post(
                 f"{settings.VLLM_ENDPOINT}/v1/completions",
                 json={
                     "model": model_info.model_path,
@@ -267,8 +344,14 @@ class EnhancedLLMService:
         temperature: float = 0.7
     ) -> Dict:
         """Call Ollama service (local CPU/GPU)"""
+        # CRITICAL: Get fresh httpx client for this request
+        client = await self._ensure_ollama_client()
+
         try:
-            response = await self.ollama_client.post(
+            logger.info(f"🔧 Calling Ollama: model={model_info.model_path}, endpoint={settings.OLLAMA_ENDPOINT}")
+            logger.info(f"🔧 Prompt length: {len(prompt)} chars, max_tokens: {max_tokens}")
+
+            response = await client.post(
                 f"{settings.OLLAMA_ENDPOINT}/api/generate",
                 json={
                     "model": model_info.model_path,
@@ -282,8 +365,12 @@ class EnhancedLLMService:
                     }
                 }
             )
+
+            logger.info(f"🔧 Response status: {response.status_code}")
             response.raise_for_status()
             result = response.json()
+
+            logger.info(f"✅ Ollama response received: {len(result.get('response', ''))} chars")
 
             return {
                 "content": result["response"],
@@ -294,8 +381,16 @@ class EnhancedLLMService:
                 "cost": 0.0  # Local, no cost
             }
         except Exception as e:
-            logger.warning(f"Ollama call failed: {e}")
+            logger.error(f"❌ Ollama call failed: {e}")
+            logger.error(f"❌ Exception type: {type(e).__name__}")
+            if hasattr(e, 'response'):
+                logger.error(f"❌ Response status: {e.response.status_code}")
+                logger.error(f"❌ Response body: {e.response.text[:500]}")
             raise
+        finally:
+            # Always close the fresh client after use (no caching)
+            await client.aclose()
+            logger.debug("🔒 Ollama httpx client closed")
 
     @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
     async def _call_llama_cpp(
@@ -357,6 +452,16 @@ class EnhancedLLMService:
         Returns:
             Dict with content, model, tokens, cost
         """
+        # DEBUG: Log entry to this method
+        logger.info(f"🚀 generate() called with model_id={model_id}, prompt_len={len(prompt)}")
+
+        # Lazy initialization - ensure service is initialized before first use
+        # This handles cases where uvicorn --reload prevents lifespan from running
+        if not self._initialized:
+            logger.warning("⚠️  LLM service not initialized, initializing now (lazy init)")
+            await self.initialize()
+            logger.info("✅ Lazy init completed")
+
         start_time = time.time()
 
         # Get model info

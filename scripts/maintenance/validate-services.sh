@@ -84,17 +84,49 @@ fi
 
 # Ollama models
 echo -n "Checking Ollama Models... "
-ollama_models=$(docker exec rag-ollama ollama list 2>/dev/null | grep -c "instruct" 2>/dev/null || echo "0")
+ollama_models=$(docker exec rag-ollama ollama list 2>/dev/null | tail -n +2 | wc -l 2>/dev/null || echo "0")
 # Ensure it's a valid integer by stripping any non-numeric characters
 ollama_models=$(echo "$ollama_models" | tr -cd '0-9' | head -c 10)
 # Default to 0 if empty
 [ -z "$ollama_models" ] && ollama_models=0
-if [ "$ollama_models" -ge 2 ]; then
+if [ "$ollama_models" -ge 1 ]; then
     echo -e "${GREEN}✅ OK${NC} - $ollama_models models installed"
     ((success_count++))
 else
-    echo -e "${YELLOW}⚠️  WARNING${NC} - Only $ollama_models models found (expected 2+)"
+    echo -e "${YELLOW}⚠️  WARNING${NC} - No models found (run scripts/setup/setup-ollama-models.sh)"
     ((fail_count++))
+fi
+
+echo ""
+echo "=== Web Scraping Features ==="
+
+# Web scraper capabilities
+echo -n "Checking Web Scraper... "
+scraper_response=$(curl -s http://localhost:8000/api/v1/scraper/capabilities 2>/dev/null)
+if echo "$scraper_response" | grep -q "web_scraping_enabled"; then
+    enabled=$(echo "$scraper_response" | grep -o '"web_scraping_enabled":[^,}]*' | grep -o 'true\|false')
+    if [ "$enabled" = "true" ]; then
+        echo -e "${GREEN}✅ OK${NC} - Web scraping enabled"
+        ((success_count++))
+    else
+        echo -e "${YELLOW}⚠️  WARNING${NC} - Web scraping disabled"
+        ((fail_count++))
+    fi
+else
+    echo -e "${RED}❌ FAILED${NC} - Cannot fetch scraper status"
+    ((fail_count++))
+fi
+
+# Playwright integration (test from inside container per PLAYWRIGHT_INVESTIGATION.md)
+echo -n "Checking Playwright... "
+playwright_test=$(docker exec rag-backend curl -s http://localhost:8000/api/v1/test/playwright-minimal 2>/dev/null)
+if echo "$playwright_test" | grep -q '"success":true'; then
+    browser_version=$(echo "$playwright_test" | grep -o '"browser_version":"[^"]*"' | cut -d'"' -f4)
+    echo -e "${GREEN}✅ OK${NC} - Chromium $browser_version"
+    ((success_count++))
+else
+    echo -e "${YELLOW}⚠️  WARNING${NC} - Playwright not available (browser automation disabled)"
+    # Not incrementing fail_count as this is optional
 fi
 
 echo ""

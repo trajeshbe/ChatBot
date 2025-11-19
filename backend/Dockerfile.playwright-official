@@ -1,0 +1,45 @@
+# Playwright Official Docker Image for Ubuntu 24.04 (Noble)
+# Base: Microsoft's official Playwright image with Python 3.12 and Chromium pre-installed
+# This image includes all necessary dependencies for Playwright browser automation
+# Solves the Ubuntu 24.04 t64 library transition incompatibility issue
+
+FROM mcr.microsoft.com/playwright/python:v1.48-noble
+
+WORKDIR /app
+
+# Install PostgreSQL client libraries (required for psycopg2)
+# Note: Playwright image is based on Ubuntu, so we can use apt-get
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip to latest version
+RUN pip install --upgrade pip
+
+# Copy and install Python dependencies
+COPY requirements.txt .
+
+# Install Python packages
+# Note: playwright is already installed in the base image (v1.48)
+# We need to ensure our requirements.txt doesn't conflict
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Playwright browsers are already installed in the base image
+# Chromium, Firefox, and WebKit are available at /ms-playwright
+# No need to run 'playwright install' again
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /tmp
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+# Run the application
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
