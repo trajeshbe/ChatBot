@@ -354,17 +354,62 @@ async def extract_with_preset_template(
             if not row:
                 raise HTTPException(status_code=404, detail=f"Preset template '{preset_name}' not found")
 
-            # Validate that template has at least one non-empty CSS selector
+            # Check if template has CSS selectors or is AI-powered
             fields_data = row[4]  # fields column (JSONB)
             has_valid_selector = any(
-                field.get("selector") and field.get("selector").strip()
+                field.get("selector") and field.get("selector").strip() and field.get("selector") != "auto"
                 for field in fields_data
             )
 
+            # If template has no CSS selectors, route to ultra-smart extraction (AI-powered)
             if not has_valid_selector:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"Template '{preset_name}' has no CSS selectors defined. This template was created via Smart Extraction and cannot be used with CSS Selector mode. Please use Smart Extraction or Template Mapper instead."
+                logger.info(f"Template '{preset_name}' is AI-powered, routing to ultra-smart extraction")
+
+                # Build user instructions from template fields
+                field_names = [field.get("name") for field in fields_data if field.get("name")]
+                user_instructions = f"Extract the following fields: {', '.join(field_names)}"
+
+                # Use Ultra-Smart Extractor (same as ultra-smart endpoint)
+                from app.services.webscraper.extractors.ultra_smart_extractor import UltraSmartExtractor
+                from app.services.llm_service import llm_service
+                from app.services.scraper_service import scraper_service
+                from app.services.document_service import document_service
+
+                # Initialize extractor
+                ultra_extractor = UltraSmartExtractor(
+                    llm_service=llm_service,
+                    scraper_service=scraper_service,
+                    document_service=document_service
+                )
+
+                # Extract data using extract_to_table (correct method name)
+                result = await ultra_extractor.extract_to_table(
+                    source=request.url,
+                    source_type="url",
+                    user_instructions=user_instructions,
+                    llm_provider="openai",
+                    vision_provider="openai"
+                )
+
+                # Store scrape job in database
+                if result.get('success'):
+                    job = WebScrapeJob(
+                        url=request.url,
+                        scrape_prompt=f"AI Template extraction: {preset_name} - {user_instructions}",
+                        status="completed",
+                        completed_at=datetime.utcnow()
+                    )
+                    db.add(job)
+                    await db.commit()
+
+                # Convert to ExtractionResponse format
+                return ExtractionResponse(
+                    success=result.get("success", False),
+                    table=result.get("table", []),
+                    columns=result.get("columns", []),
+                    row_count=result.get("row_count", 0),
+                    extraction_metadata=result.get("extraction_metadata", {}),
+                    error=result.get("error")
                 )
 
             # Convert database template to ExtractionTemplate format

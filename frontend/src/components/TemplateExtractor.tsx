@@ -205,7 +205,24 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
       }
 
     } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || error.message || 'Extraction failed'
+      // Handle both string errors and detailed error objects from backend
+      let errorMessage: string
+      const detail = error.response?.data?.detail
+
+      if (typeof detail === 'object' && detail !== null) {
+        // Backend returned a detailed error object
+        errorMessage = detail.message || detail.error || 'Extraction failed'
+
+        // Add suggestions if available
+        if (detail.suggestions && Array.isArray(detail.suggestions)) {
+          errorMessage += '\n\nSuggestions:\n' + detail.suggestions.map((s: string) => `• ${s}`).join('\n')
+        }
+      } else if (typeof detail === 'string') {
+        errorMessage = detail
+      } else {
+        errorMessage = error.message || 'Extraction failed'
+      }
+
       setJobs(prev =>
         prev.map(job =>
           job.id === jobId

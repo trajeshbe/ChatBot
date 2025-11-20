@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ChevronDown, Cpu, Cloud, Zap, Check } from 'lucide-react'
+import { ChevronDown, Cpu, Cloud, Zap, Check, RefreshCw } from 'lucide-react'
 import axios from 'axios'
 
 interface Model {
@@ -32,14 +32,18 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
   const [defaultModel, setDefaultModel] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [gpuAvailable, setGpuAvailable] = useState(false)
 
   useEffect(() => {
     fetchModels()
   }, [])
 
-  const fetchModels = async () => {
+  const fetchModels = async (isRefresh = false) => {
     try {
+      if (isRefresh) {
+        setRefreshing(true)
+      }
       const response = await axios.get(`${API_URL}/api/v1/models/`)
       setModels(response.data.grouped)
       setDefaultModel(response.data.default)
@@ -53,6 +57,9 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
       console.error('Error fetching models:', error)
     } finally {
       setLoading(false)
+      if (isRefresh) {
+        setRefreshing(false)
+      }
     }
   }
 
@@ -133,6 +140,18 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
             </div>
           )}
         </div>
+        {/* Refresh Icon */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            fetchModels(true)
+          }}
+          disabled={refreshing}
+          className="p-1 hover:bg-slate-200 dark:hover:bg-slate-600 rounded transition-colors disabled:opacity-50"
+          title="Refresh model list"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 text-slate-600 dark:text-slate-400 ${refreshing ? 'animate-spin' : ''}`} />
+        </button>
         <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
