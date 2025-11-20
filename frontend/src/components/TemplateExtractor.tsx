@@ -66,6 +66,13 @@ const CollapsibleError: React.FC<CollapsibleErrorProps> = ({ error, onDismiss })
   )
 }
 
+interface CustomField {
+  name: string
+  selector: string
+  data_type: 'text' | 'number' | 'date'
+  required: boolean
+}
+
 export default function TemplateExtractor({ sessionId }: { sessionId: string }) {
   const [url, setUrl] = useState('')
   const [preset, setPreset] = useState('screener_in')
@@ -73,6 +80,16 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
   const [jobs, setJobs] = useState<ExtractionJob[]>([])
   const [availablePresets, setAvailablePresets] = useState<any[]>([])
   const [error, setError] = useState<string | null>(null)
+
+  // Extraction mode: 'preset' or 'custom'
+  const [extractionMode, setExtractionMode] = useState<'preset' | 'custom'>('preset')
+
+  // Custom CSS fields state
+  const [customFields, setCustomFields] = useState<CustomField[]>([])
+  const [newFieldName, setNewFieldName] = useState('')
+  const [newFieldSelector, setNewFieldSelector] = useState('')
+  const [newFieldDataType, setNewFieldDataType] = useState<'text' | 'number' | 'date'>('text')
+  const [newFieldRequired, setNewFieldRequired] = useState(false)
 
   // Save Template modal state
   const [showSaveModal, setShowSaveModal] = useState(false)
@@ -142,14 +159,14 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
   useEffect(() => {
     const loadPresets = async () => {
       try {
-        const response = await axios.get(`${API_URL}/api/v1/extract/saved-templates`)
+        // CSS Extractor mode: Only show templates with CSS selectors
+        const response = await axios.get(`${API_URL}/api/v1/extract/saved-templates?filter_mode=css`)
         const allTemplates = response.data.templates || []
 
-        // Show ALL templates - no filtering
-        // Templates will be visually distinguished in the UI
+        // Show ONLY templates with CSS selectors (filtered by backend)
         setAvailablePresets(allTemplates)
 
-        console.log(`Loaded ${allTemplates.length} templates (CSS-based + AI-powered)`)
+        console.log(`Loaded ${allTemplates.length} CSS-based templates`)
       } catch (error) {
         console.error('Error loading presets:', error)
       }
@@ -157,8 +174,44 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
     loadPresets()
   }, [])
 
+  // ============================================================================
+  // CUSTOM FIELD MANAGEMENT
+  // ============================================================================
+
+  const handleAddField = () => {
+    if (!newFieldName.trim() || !newFieldSelector.trim()) {
+      alert('Please enter both field name and CSS selector')
+      return
+    }
+
+    const newField: CustomField = {
+      name: newFieldName.trim(),
+      selector: newFieldSelector.trim(),
+      data_type: newFieldDataType,
+      required: newFieldRequired
+    }
+
+    setCustomFields(prev => [...prev, newField])
+
+    // Clear form
+    setNewFieldName('')
+    setNewFieldSelector('')
+    setNewFieldDataType('text')
+    setNewFieldRequired(false)
+  }
+
+  const handleRemoveField = (index: number) => {
+    setCustomFields(prev => prev.filter((_, i) => i !== index))
+  }
+
   const handleExtract = async () => {
     if (!url.trim()) return
+
+    // Validation
+    if (extractionMode === 'custom' && customFields.length === 0) {
+      setError('Please add at least one field with a CSS selector before extracting')
+      return
+    }
 
     setIsProcessing(true)
     setError(null)
@@ -168,7 +221,7 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
     const newJob: ExtractionJob = {
       id: jobId,
       url,
-      preset: preset,
+      preset: extractionMode === 'preset' ? preset : 'custom',
       status: 'processing',
       timestamp: new Date()
     }
@@ -176,14 +229,49 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
     setJobs(prev => [newJob, ...prev])
 
     try {
-      // Use preset template endpoint
-      const response = await axios.post(
-        `${API_URL}/api/v1/extract/preset/${preset}`,
-        {
-          url,
-          session_id: sessionId
+      let response
+
+      if (extractionMode === 'preset') {
+        // Use preset template endpoint
+        response = await axios.post(
+          `${API_URL}/api/v1/extract/preset/${preset}`,
+          {
+            url,
+            session_id: sessionId
+          }
+        )
+      } else {
+        // Custom CSS extraction - create temporary template and use it
+        const tempTemplateName = `temp_${Date.now()}`
+        const urlObj = new URL(url)
+
+        // Create temporary template with custom fields
+        const templatePayload = {
+          template_name: tempTemplateName,
+          display_name: 'Temporary Custom Template',
+          description: 'User-defined custom CSS extraction',
+          url_pattern: `${urlObj.hostname}/*`,
+          wait_for_selector: '.main, body',
+          fields: customFields.map(field => ({
+            name: field.name,
+            selector: field.selector,
+            data_type: field.data_type,
+            required: field.required
+          }))
         }
-      )
+
+        // Save temp template
+        await axios.post(`${API_URL}/api/v1/extract/save-template`, templatePayload)
+
+        // Use the temp template
+        response = await axios.post(
+          `${API_URL}/api/v1/extract/preset/${tempTemplateName}`,
+          {
+            url,
+            session_id: sessionId
+          }
+        )
+      }
 
       if (response.data.success && response.data.data) {
         // Update job with extracted data
@@ -285,20 +373,33 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
       const urlObj = new URL(job.url)
       const urlPattern = `${urlObj.hostname}/*`
 
-      // Prepare fields from extracted data
-      const templateFields = job.data && job.data[0] ? Object.keys(job.data[0]).map(key => ({
-        name: key,
-        selector: '',  // CSS selector would need to be defined
-        data_type: 'text',
-        required: false
-      })) : []
+      // Prepare fields - use custom fields if in custom mode, otherwise infer from data
+      let templateFields
+
+      if (extractionMode === 'custom' && customFields.length > 0) {
+        // Custom mode: Use the CSS selectors defined by the user
+        templateFields = customFields.map(field => ({
+          name: field.name,
+          selector: field.selector,
+          data_type: field.data_type,
+          required: field.required
+        }))
+      } else {
+        // Preset mode: Create template from extracted data structure (AI-powered template)
+        templateFields = job.data && job.data[0] ? Object.keys(job.data[0]).map(key => ({
+          name: key,
+          selector: '',  // Empty selector = AI-powered template
+          data_type: 'text',
+          required: false
+        })) : []
+      }
 
       const response = await axios.post(`${API_URL}/api/v1/extract/save-template`, {
         template_name: internalName,
         display_name: templateName,
         description: templateDescription || `Extract data from ${urlObj.hostname}`,
         url_pattern: urlPattern,
-        wait_for_selector: '.main',  // Default selector
+        wait_for_selector: '.main, body',  // Default selector
         fields: templateFields
       })
 
@@ -307,9 +408,9 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
       setTemplateName('')
       setTemplateDescription('')
 
-      // Reload presets to show the new template
+      // Reload presets to show the new template (CSS mode filter)
       try {
-        const presetsResponse = await axios.get(`${API_URL}/api/v1/extract/saved-templates`)
+        const presetsResponse = await axios.get(`${API_URL}/api/v1/extract/saved-templates?filter_mode=css`)
         if (presetsResponse.data.templates) {
           setAvailablePresets(presetsResponse.data.templates)
         }
@@ -385,11 +486,47 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
             Extract Data
           </h3>
 
-          {/* Template Selection */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              Select Preset Template
+          {/* Extraction Mode Toggle */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+              Extraction Mode
             </label>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setExtractionMode('preset')}
+                className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all ${
+                  extractionMode === 'preset'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                    : 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500 text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                <div className="text-center">
+                  <div className="font-semibold">Use Saved Template</div>
+                  <div className="text-xs mt-1 opacity-80">Select from existing templates</div>
+                </div>
+              </button>
+              <button
+                onClick={() => setExtractionMode('custom')}
+                className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all ${
+                  extractionMode === 'custom'
+                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300'
+                    : 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500 text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                <div className="text-center">
+                  <div className="font-semibold">Define Custom Fields</div>
+                  <div className="text-xs mt-1 opacity-80">Manually specify CSS selectors</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Template Selection (only in preset mode) */}
+          {extractionMode === 'preset' && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Select Preset Template
+              </label>
             <select
               value={preset}
               onChange={(e) => setPreset(e.target.value)}
@@ -417,9 +554,143 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Extracts: {availablePresets.find(p => p.name === preset)?.fields.join(', ')}
                 </p>
+                {availablePresets.find(p => p.name === preset)?.url_pattern && (
+                  <div className="flex items-start gap-2 mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+                    <div className="text-blue-600 dark:text-blue-400 mt-0.5">ℹ️</div>
+                    <div className="flex-1">
+                      <p className="text-xs font-medium text-blue-800 dark:text-blue-200">Compatible URL Pattern:</p>
+                      <p className="text-xs font-mono text-blue-700 dark:text-blue-300 mt-1">
+                        {availablePresets.find(p => p.name === preset)?.url_pattern}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-          </div>
+            </div>
+          )}
+
+          {/* Custom Field Builder (only in custom mode) */}
+          {extractionMode === 'custom' && (
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Custom CSS Fields ({customFields.length})
+                </label>
+              </div>
+
+              {/* Add Field Form */}
+              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-4 border border-slate-200 dark:border-slate-700 mb-3">
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                      Field Name
+                    </label>
+                    <input
+                      type="text"
+                      value={newFieldName}
+                      onChange={(e) => setNewFieldName(e.target.value)}
+                      placeholder="e.g., Product Title"
+                      className="w-full px-3 py-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                      CSS Selector
+                    </label>
+                    <input
+                      type="text"
+                      value={newFieldSelector}
+                      onChange={(e) => setNewFieldSelector(e.target.value)}
+                      placeholder="e.g., .product-title h1"
+                      className="w-full px-3 py-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                      Data Type
+                    </label>
+                    <select
+                      value={newFieldDataType}
+                      onChange={(e) => setNewFieldDataType(e.target.value as 'text' | 'number' | 'date')}
+                      className="w-full px-3 py-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                    >
+                      <option value="text">Text</option>
+                      <option value="number">Number</option>
+                      <option value="date">Date</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <label className="flex items-center gap-2 px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={newFieldRequired}
+                        onChange={(e) => setNewFieldRequired(e.target.checked)}
+                        className="rounded border-slate-300 dark:border-slate-600"
+                      />
+                      <span className="text-slate-700 dark:text-slate-300">Required</span>
+                    </label>
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      onClick={handleAddField}
+                      className="px-4 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors font-medium"
+                    >
+                      Add Field
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Custom Fields List */}
+              {customFields.length > 0 ? (
+                <div className="space-y-2">
+                  {customFields.map((field, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700"
+                    >
+                      <div className="flex-1 grid grid-cols-3 gap-3 text-sm">
+                        <div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Field Name</div>
+                          <div className="font-medium text-slate-900 dark:text-white">{field.name}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">CSS Selector</div>
+                          <div className="font-mono text-xs text-slate-700 dark:text-slate-300">{field.selector}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Type</div>
+                          <div className="flex gap-2">
+                            <span className="px-2 py-0.5 text-xs bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded">
+                              {field.data_type}
+                            </span>
+                            {field.required && (
+                              <span className="px-2 py-0.5 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded">
+                                required
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveField(index)}
+                        className="px-3 py-1 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-slate-500 dark:text-slate-400 text-sm">
+                  No custom fields defined. Add fields using the form above.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* URL Input */}
           <div className="mb-4">

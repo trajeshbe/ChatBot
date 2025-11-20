@@ -95,6 +95,8 @@ export const SmartTemplateMapper = () => {
     const loadTemplates = async () => {
       try {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        // Template Mapper mode: Show ALL templates (CSS-based + AI-powered)
+        // No filter_mode parameter = default "all" mode
         const response = await axios.get(`${API_URL}/api/v1/extract/saved-templates`)
         setAvailableTemplates(response.data.templates || [])
       } catch (err) {
@@ -472,19 +474,32 @@ export const SmartTemplateMapper = () => {
             ))}
           </select>
           {selectedTemplate && availableTemplates.find(t => t.name === selectedTemplate) && (
-            <div className="mt-2 flex items-center gap-2">
-              {availableTemplates.find(t => t.name === selectedTemplate)?.has_css_selectors !== false ? (
-                <span className="px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 rounded">
-                  CSS Selector Based
+            <div className="mt-2 space-y-2">
+              <div className="flex items-center gap-2">
+                {availableTemplates.find(t => t.name === selectedTemplate)?.has_css_selectors !== false ? (
+                  <span className="px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 rounded">
+                    CSS Selector Based
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 rounded">
+                    AI-Powered
+                  </span>
+                )}
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {availableTemplates.find(t => t.name === selectedTemplate)?.fields.length} columns loaded
                 </span>
-              ) : (
-                <span className="px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 rounded">
-                  AI-Powered
-                </span>
+              </div>
+              {availableTemplates.find(t => t.name === selectedTemplate)?.url_pattern && (
+                <div className="flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+                  <div className="text-blue-600 dark:text-blue-400 mt-0.5">ℹ️</div>
+                  <div className="flex-1">
+                    <p className="text-xs font-medium text-blue-800 dark:text-blue-200">Compatible URL Pattern:</p>
+                    <p className="text-xs font-mono text-blue-700 dark:text-blue-300 mt-1">
+                      {availableTemplates.find(t => t.name === selectedTemplate)?.url_pattern}
+                    </p>
+                  </div>
+                </div>
               )}
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                {availableTemplates.find(t => t.name === selectedTemplate)?.fields.length} columns loaded
-              </span>
             </div>
           )}
         </div>
