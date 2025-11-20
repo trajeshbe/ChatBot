@@ -73,7 +73,9 @@ langgraph==0.2.16             # Agent workflow graphs - DAG orchestration
 # DOCUMENT PROCESSING (Required)
 # Used by: app/services/document_service.py
 # ----------------------------------------------------------------------------
-docling==2.0.0              # Advanced document parsing for PDF, HTML, DOCX, PPTX
+docling==2.62.0             # Advanced document parsing for PDF, HTML, DOCX, PPTX (upgraded for better compatibility)
+numpy<2.0,>=1.26.4          # Numerical computing - required by langchain, deepsearch-glm, docling
+opencv-python<4.10,>=4.9    # Computer vision - used by docling for image processing in documents
 pypdf2==3.0.1                 # PDF text extraction - processes PDF uploads
 python-docx==1.1.2            # Word document parsing - processes DOCX uploads (updated for docling 2.0.0 compatibility: requires >=1.1.2)
 python-pptx==1.0.2            # PowerPoint parsing - processes PPTX uploads (updated for docling 2.0.0 compatibility: requires >=1.0.2)

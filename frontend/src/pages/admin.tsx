@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import Head from 'next/head'
-import { Users, Activity, Database, TrendingUp, Search, Filter, ChevronDown, ChevronUp } from 'lucide-react'
+import { Users, Activity, Database, TrendingUp, Search, Filter, ChevronDown, ChevronUp, Key, Server } from 'lucide-react'
+import APIKeysManager from '../components/APIKeysManager'
+import OllamaModelsManager from '../components/OllamaModelsManager'
 
 interface User {
   id: string
@@ -109,7 +111,7 @@ interface DbStats {
 }
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'users' | 'sessions' | 'audit' | 'metrics' | 'database'>('users')
+  const [activeTab, setActiveTab] = useState<'users' | 'sessions' | 'audit' | 'metrics' | 'database' | 'apikeys' | 'ollama'>('users')
   const [users, setUsers] = useState<User[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
@@ -362,6 +364,32 @@ export default function AdminPage() {
                 <div className="flex items-center space-x-2">
                   <Database className="w-4 h-4" />
                   <span>Database</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('apikeys')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'apikeys'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <Key className="w-4 h-4" />
+                  <span>API Keys</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('ollama')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'ollama'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <Server className="w-4 h-4" />
+                  <span>Ollama Models</span>
                 </div>
               </button>
             </div>
@@ -877,6 +905,20 @@ export default function AdminPage() {
                       </table>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* API Keys Tab */}
+              {activeTab === 'apikeys' && (
+                <div>
+                  <APIKeysManager />
+                </div>
+              )}
+
+              {/* Ollama Models Tab */}
+              {activeTab === 'ollama' && (
+                <div>
+                  <OllamaModelsManager />
                 </div>
               )}
 

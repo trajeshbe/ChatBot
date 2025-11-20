@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Zap,
   Loader2,
@@ -11,7 +11,9 @@ import {
   Plus,
   Trash2,
   Info,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Database,
+  Save
 } from 'lucide-react'
 import axios from 'axios'
 
@@ -40,10 +42,80 @@ export const SmartTemplateMapper = () => {
   const [url, setUrl] = useState('')
   const [columns, setColumns] = useState<string[]>([])
   const [columnInput, setColumnInput] = useState('')
-  const [llmProvider, setLlmProvider] = useState<LLMProvider>('openai')
+  const [globalSelectedModel, setGlobalSelectedModel] = useState<string>('gpt-4-turbo')
   const [isMapping, setIsMapping] = useState(false)
   const [mappedData, setMappedData] = useState<MappingResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [availableTemplates, setAvailableTemplates] = useState<any[]>([])
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+
+  // Derive llm_provider from model_id
+  const getLLMProvider = (modelId: string): LLMProvider => {
+    if (modelId.startsWith('gpt-') || modelId.startsWith('o1-')) return 'openai'
+    if (modelId.startsWith('claude-')) return 'anthropic'
+    return 'ollama'
+  }
+
+  // ============================================================================
+  // STATE PERSISTENCE
+  // ============================================================================
+
+  // Load saved state on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedUrl = localStorage.getItem('templateMapper_url')
+      const savedColumns = localStorage.getItem('templateMapper_columns')
+      const savedModel = localStorage.getItem('globalSelectedModel')
+
+      if (savedUrl) setUrl(savedUrl)
+      if (savedColumns) {
+        try {
+          setColumns(JSON.parse(savedColumns))
+        } catch (e) {
+          console.error('Error parsing saved columns:', e)
+        }
+      }
+      if (savedModel) setGlobalSelectedModel(savedModel)
+    }
+  }, [])
+
+  // Listen for global model changes
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'globalSelectedModel' && e.newValue) {
+        setGlobalSelectedModel(e.newValue)
+      }
+    }
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [])
+
+  // Load saved templates
+  useEffect(() => {
+    const loadTemplates = async () => {
+      try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const response = await axios.get(`${API_URL}/api/v1/extract/saved-templates`)
+        setAvailableTemplates(response.data.templates || [])
+      } catch (err) {
+        console.error('Error loading templates:', err)
+      }
+    }
+    loadTemplates()
+  }, [])
+
+  // Save state to localStorage when values change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('templateMapper_url', url)
+    }
+  }, [url])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('templateMapper_columns', JSON.stringify(columns))
+    }
+  }, [columns])
 
   // ============================================================================
   // HANDLERS
@@ -83,6 +155,17 @@ export const SmartTemplateMapper = () => {
     setColumns([])
   }
 
+  const handleLoadTemplate = (templateName: string) => {
+    setSelectedTemplate(templateName)
+    if (!templateName) return
+
+    const template = availableTemplates.find(t => t.name === templateName)
+    if (template && template.fields) {
+      // Load template columns
+      setColumns(template.fields)
+    }
+  }
+
   const handleSmartMap = async () => {
     if (!url.trim()) {
       setError('Please enter a URL')
@@ -98,6 +181,8 @@ export const SmartTemplateMapper = () => {
     setError(null)
     setMappedData(null)
 
+    const llmProvider = getLLMProvider(globalSelectedModel)
+
     try {
       const response = await axios.post<MappingResponse>(
         `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/extract/smart-map-to-template`,
@@ -105,6 +190,7 @@ export const SmartTemplateMapper = () => {
           url,
           template_columns: columns,
           llm_provider: llmProvider,
+          model_id: globalSelectedModel,
           output_format: 'json'
         },
         {
@@ -189,6 +275,109 @@ export const SmartTemplateMapper = () => {
     }
   }
 
+  const handleSaveTemplate = async () => {
+    if (!mappedData || !mappedData.data || mappedData.data.length === 0) return
+
+    try {
+      // Extract domain from URL for template name
+      const urlObj = new URL(url)
+      const domain = urlObj.hostname.replace('www.', '')
+      const templateName = `${domain}_template_${Date.now()}`
+
+      // Get field names from the first row of data and convert to fields array
+      const fieldNames = Object.keys(mappedData.data[0])
+      const fields = fieldNames.map(name => ({
+        name,
+        selector: 'auto',  // Use 'auto' to let AI determine the selector
+        data_type: 'text',
+        required: false
+      }))
+
+      const displayName = `${domain.charAt(0).toUpperCase() + domain.slice(1)} Template`
+      const urlPattern = `${urlObj.hostname}/*`
+
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/extract/save-template`,
+        {
+          template_name: templateName,
+          display_name: displayName,
+          description: `Template for ${domain} with ${fieldNames.length} fields`,
+          url_pattern: urlPattern,
+          wait_for_selector: '.main',
+          fields
+        },
+        {
+          timeout: 30000
+        }
+      )
+
+      if (response.data.success) {
+        alert(`✅ Template saved successfully as "${templateName}"!\n\nYou can reuse this template for similar pages.`)
+      } else {
+        setError('Failed to save template')
+      }
+    } catch (err: any) {
+      // Handle error detail that might be an array or object
+      let errorMsg = 'Failed to save template'
+      if (err.response?.data?.detail) {
+        const detail = err.response.data.detail
+        errorMsg = typeof detail === 'string' ? detail : JSON.stringify(detail, null, 2)
+      } else if (err.message) {
+        errorMsg = err.message
+      }
+      setError(`Failed to save template: ${errorMsg}`)
+    }
+  }
+
+  const handleSaveToDatabase = async () => {
+    if (!mappedData || !mappedData.data || mappedData.data.length === 0) return
+
+    try {
+      // Get session ID from localStorage
+      const sessionId = localStorage.getItem('sessionId') || undefined
+
+      // Extract company name from data or URL
+      const urlObj = new URL(url)
+      const domain = urlObj.hostname.replace('www.', '')
+      const companyName = mappedData.data[0]?.['Company Name'] ||
+                         mappedData.data[0]?.['company_name'] ||
+                         domain
+
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+      const response = await axios.post(
+        `${API_URL}/api/v1/extract/save-to-db`,
+        {
+          company_name: companyName,
+          source_url: url,
+          extraction_type: 'smart_mapper',
+          data: mappedData.data,
+          template_name: domain + '_mapper',
+          session_id: sessionId
+        },
+        {
+          timeout: 30000
+        }
+      )
+
+      if (response.data.success) {
+        alert(`✅ Data saved to database!\n\nSaved ${mappedData.data.length} record(s) from ${url}\n\nYou can now query this data using the chatbot.`)
+      } else {
+        setError('Failed to save data to database')
+      }
+    } catch (err: any) {
+      // Handle error detail that might be an array or object
+      let errorMsg = 'Failed to save to database'
+      if (err.response?.data?.detail) {
+        const detail = err.response.data.detail
+        errorMsg = typeof detail === 'string' ? detail : JSON.stringify(detail, null, 2)
+      } else if (err.message) {
+        errorMsg = err.message
+      }
+      setError(`Failed to save to database: ${errorMsg}`)
+    }
+  }
+
   // Count successfully mapped vs missing fields
   const getFieldStats = () => {
     if (!mappedData || !mappedData.data || mappedData.data.length === 0) return null
@@ -263,6 +452,43 @@ export const SmartTemplateMapper = () => {
           className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent placeholder-slate-400"
         />
       </div>
+
+      {/* Template Selector */}
+      {availableTemplates.length > 0 && (
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            Load Saved Template (Optional)
+          </label>
+          <select
+            value={selectedTemplate}
+            onChange={(e) => handleLoadTemplate(e.target.value)}
+            className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          >
+            <option value="">-- Select a template or enter columns manually --</option>
+            {availableTemplates.map((template) => (
+              <option key={template.name} value={template.name}>
+                {template.has_css_selectors !== false ? '[CSS] ' : '[AI] '}{template.display_name} - {template.description}
+              </option>
+            ))}
+          </select>
+          {selectedTemplate && availableTemplates.find(t => t.name === selectedTemplate) && (
+            <div className="mt-2 flex items-center gap-2">
+              {availableTemplates.find(t => t.name === selectedTemplate)?.has_css_selectors !== false ? (
+                <span className="px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 rounded">
+                  CSS Selector Based
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 rounded">
+                  AI-Powered
+                </span>
+              )}
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                {availableTemplates.find(t => t.name === selectedTemplate)?.fields.length} columns loaded
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Column Input */}
       <div className="mb-4">
@@ -343,25 +569,6 @@ export const SmartTemplateMapper = () => {
         )}
       </div>
 
-      {/* Settings Row */}
-      <div className="grid grid-cols-1 gap-4 mb-4">
-        {/* LLM Provider */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            AI Provider (OpenAI recommended for best results)
-          </label>
-          <select
-            value={llmProvider}
-            onChange={(e) => setLlmProvider(e.target.value as LLMProvider)}
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          >
-            <option value="openai">OpenAI GPT-4 (Recommended)</option>
-            <option value="anthropic">Anthropic Claude</option>
-            <option value="ollama">Ollama (Local)</option>
-          </select>
-        </div>
-      </div>
-
       {/* Map Button */}
       <div className="mb-6">
         <button
@@ -419,7 +626,7 @@ export const SmartTemplateMapper = () => {
                 )}
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={handleDownloadExcel}
                 className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2 text-sm font-semibold"
@@ -441,6 +648,22 @@ export const SmartTemplateMapper = () => {
               >
                 <Download className="h-4 w-4" />
                 JSON
+              </button>
+              <button
+                onClick={handleSaveTemplate}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 text-sm font-semibold"
+                title="Save this extraction pattern as a reusable template"
+              >
+                <Save className="h-4 w-4" />
+                Save Template
+              </button>
+              <button
+                onClick={handleSaveToDatabase}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-semibold"
+                title="Save extracted data to vector database for RAG queries"
+              >
+                <Database className="h-4 w-4" />
+                Save to DB
               </button>
             </div>
           </div>

@@ -432,10 +432,11 @@ Extract data matching the above schema from the content."""
         scraped_data: str,
         template_columns: List[str],
         template_examples: Optional[Dict[str, Any]] = None,
-        llm_provider: str = "openai"
+        llm_provider: str = "openai",
+        model_id: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """
-        Map scraped data to custom template columns using LLM
+        Map scraped data to custom template columns using LLM with dynamic model selection
 
         This method takes raw scraped data and a custom template (with column headers
         and optionally example values), and uses an LLM to intelligently map the
@@ -452,6 +453,7 @@ Extract data matching the above schema from the content."""
             template_columns: List of column headers from the custom template
             template_examples: Optional dict with example values for each column
             llm_provider: LLM provider to use (openai recommended for accuracy)
+            model_id: Specific model ID to use (e.g., gpt-4-turbo, gpt-4o, claude-3-opus-20240229)
 
         Returns:
             Dictionary mapping template columns to extracted values, or None if failed
@@ -489,74 +491,76 @@ Extract data matching the above schema from the content."""
                 logger.info(f"   Examples: {template_examples}")
             logger.info("="*80)
 
-            # Build the system prompt with clear instructions
-            system_prompt = """You are a professional data extraction and mapping assistant specialized in extracting structured data from webpages.
+            # Build the system prompt with clear, improved instructions
+            system_prompt = """You are an expert at parsing and extracting structured data from scraped web content, such as HTML or raw text dumps. Your goal is to accurately identify and pull out specific key-value pairs without hallucinating or adding extra information. Always base extractions solely on the provided content. Do not infer or guess; use verbatim text where possible."""
 
-Your task: Extract data from scraped webpage content and map it to template columns.
+            # Build list of requested fields
+            fields_list = "\n".join([f"- {col}" for col in template_columns])
 
-CRITICAL RULES:
-1. Extract ONLY values that actually exist in the scraped data
-2. NEVER make up, infer, or hallucinate values
-3. If a field is not found in the scraped data, use: "—"
-4. Return VALID JSON ONLY - no markdown, no code blocks, no explanations
-5. Extract exact values as they appear (preserve numbers, text, formatting)
-6. Look for variations of the column name (e.g., "Market Cap" might appear as "Market Capitalization", "Mkt Cap", or "MCap")
-7. For financial data: Extract numbers with their units (Cr, L, $, %, etc.)
-8. For company names: Look in page title, headers, or main content
-9. Search the ENTIRE content thoroughly - data might appear in tables, spans, divs, or text
-
-OUTPUT FORMAT - You MUST return a JSON object exactly like this:
-{
-  "mapped_data": {
-    "Column1": "value found in data",
-    "Column2": "another value",
-    "Column3": "—"
-  },
-  "missing_fields": ["Column3"]
-}
-
-IMPORTANT: Return ONLY the JSON object. No markdown formatting. No code blocks. No explanations."""
-
-            # Build the extraction prompt
-            template_info = "TEMPLATE COLUMNS TO EXTRACT:\n"
-            for i, col in enumerate(template_columns, 1):
-                example_val = ""
+            # Add example values if provided
+            example_output = {}
+            for col in template_columns:
                 if template_examples and col in template_examples:
-                    example_val = f" (expected format: {template_examples[col]})"
-                template_info += f"{i}. {col}{example_val}\n"
+                    example_output[col] = template_examples[col]
+                else:
+                    example_output[col] = "value extracted from content"
+
+            # Build example JSON structure
+            import json
+            example_json = json.dumps({"mapped_data": example_output}, indent=2)
 
             # Truncate scraped data if too long (keep first 20000 chars for better context)
-            # Increased from 10000 to 20000 to capture more data from complex pages
             truncated_data = scraped_data[:20000]
             if len(scraped_data) > 20000:
                 truncated_data += "\n\n[... content truncated ...]"
 
-            extraction_prompt = f"""SCRAPED WEBPAGE CONTENT:
+            extraction_prompt = f"""Task: From the following scraped data (which is the HTML source or text content), extract the following values. For each value, search relevant sections like metadata, tags, descriptions, tables, spans, or attributes.
+
+Requested values to extract:
+{fields_list}
+
+Input Data:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {truncated_data}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-{template_info}
+Output Format: Respond only with a clean JSON object, no additional text or explanations, JUST COLUMN VALUE PAIRS.
 
-EXTRACTION INSTRUCTIONS:
-1. Read the scraped content thoroughly - check ALL sections
-2. For EACH template column:
-   a. Search for exact matches or close variations of the column name
-   b. Look in common locations: headers, tables, lists, key-value pairs
-   c. Extract the value exactly as it appears (with units like Cr, %, $, etc.)
-   d. If the column has multiple possible matches, choose the most relevant one
-3. For missing fields: If you cannot find ANY relevant data for a column, use "—"
-4. Important: Financial/numeric data often appears in tables - parse them carefully
-5. Return a valid JSON object with "mapped_data" and "missing_fields"
+If a value cannot be found in the scraped data, use "—" (em dash).
 
-EXAMPLE PATTERNS TO LOOK FOR:
-- Company Name: Often in <title>, <h1>, or main heading
-- Market Cap: Look for "Market Cap", "MCap", "Market Capitalization"
-- Revenue/EBITDA: Often in financial tables with labels like "Sales", "Revenue", "Operating Profit"
-- Percentages: Often shown as "25.3%", "25.3 %", or "25.3 percent"
-- Founded Year: Look for "Founded", "Established", "Since"
+Example structure:
+{example_json}
 
-Return your response as PURE JSON (no markdown, no code blocks):"""
+Return your response as PURE JSON (no markdown code blocks, no explanations):"""
+
+            # ========== DEBUG LOGGING - CAPTURE ACTUAL INPUT TO LLM ==========
+            logger.info("="*80)
+            logger.info("🔍 DEBUG: ACTUAL LLM INPUT")
+            logger.info("="*80)
+
+            # Log the actual scraped content
+            logger.info(f"📄 SCRAPED CONTENT ({len(scraped_data)} total chars, showing first 1000):")
+            logger.info("─"*80)
+            logger.info(scraped_data[:1000])
+            if len(scraped_data) > 1000:
+                logger.info(f"... [{len(scraped_data) - 1000} more characters not shown]")
+            logger.info("─"*80)
+
+            # Log the system prompt
+            logger.info("🎯 SYSTEM PROMPT:")
+            logger.info("─"*80)
+            logger.info(system_prompt[:500])
+            logger.info("─"*80)
+
+            # Log the extraction prompt (first 2000 chars to see template columns + start of content)
+            logger.info(f"📝 EXTRACTION PROMPT ({len(extraction_prompt)} total chars, showing first 2000):")
+            logger.info("─"*80)
+            logger.info(extraction_prompt[:2000])
+            if len(extraction_prompt) > 2000:
+                logger.info(f"... [{len(extraction_prompt) - 2000} more characters not shown]")
+            logger.info("─"*80)
+            logger.info("="*80)
+            # ========== END DEBUG LOGGING ==========
 
             # Log the mapping attempt
             logger.info("─"*80)
@@ -576,8 +580,20 @@ Return your response as PURE JSON (no markdown, no code blocks):"""
                 prompt=extraction_prompt,
                 messages=messages,
                 max_tokens=3000,  # Increased from 2000 to handle more fields
-                temperature=0.0  # Zero temperature for maximum consistency
+                temperature=0.0,  # Zero temperature for maximum consistency
+                model_id=model_id  # Dynamic model selection like chat
             )
+
+            # ========== DEBUG: CAPTURE RAW LLM RESPONSE ==========
+            logger.info("="*80)
+            logger.info("🤖 RAW LLM RESPONSE (FULL):")
+            logger.info("="*80)
+            logger.info(f"LLM Result Type: {type(llm_result)}")
+            logger.info(f"LLM Result Keys: {llm_result.keys() if llm_result else 'None'}")
+            logger.info(f"Full LLM Result:")
+            logger.info(str(llm_result))
+            logger.info("="*80)
+            # ========== END DEBUG ==========
 
             if not llm_result:
                 logger.error("❌ LLM returned empty response for template mapping")

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Sparkles,
   Loader2,
@@ -11,7 +11,8 @@ import {
   ArrowRight,
   Lightbulb,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Database
 } from 'lucide-react'
 import axios from 'axios'
 
@@ -49,12 +50,11 @@ interface AutoGenerateResponse {
 
 interface ExtractionResponse {
   success: boolean
-  url: string
-  template_name: string
-  data: Array<Record<string, any>>
+  table: Array<Record<string, any>>  // Ultra-smart endpoint returns "table", not "data"
+  columns: string[]
   row_count: number
-  extracted_at: string
-  error?: string
+  extraction_metadata: Record<string, any>
+  error?: string | null
 }
 
 // ============================================================================
@@ -65,15 +65,91 @@ export const SmartExtractor = () => {
   // State
   const [url, setUrl] = useState('')
   const [userInstructions, setUserInstructions] = useState('')
-  const [llmProvider, setLlmProvider] = useState<LLMProvider>('ollama')
-  const [outputFormat, setOutputFormat] = useState<OutputFormat>('excel')
   const [isGenerating, setIsGenerating] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   const [generatedTemplate, setGeneratedTemplate] = useState<AutoGenerateResponse | null>(null)
   const [extractedData, setExtractedData] = useState<ExtractionResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [maxFields, setMaxFields] = useState(15)
+  const [globalSelectedModel, setGlobalSelectedModel] = useState<string>('gpt-4-turbo')
+
+  // Fixed backend parameters (not configurable in UI)
+  const outputFormat: OutputFormat = 'json'
+  const maxFields = 15
+
+  // Derive llm_provider from model_id
+  const getLLMProvider = (modelId: string): LLMProvider => {
+    if (modelId.startsWith('gpt-') || modelId.startsWith('o1-')) return 'openai'
+    if (modelId.startsWith('claude-')) return 'anthropic'
+    return 'ollama'  // Ollama models typically have format like "qwen2.5:1.5b"
+  }
+
+  // Save Template modal state
+  const [showSaveModal, setShowSaveModal] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+
+  // ============================================================================
+  // STATE PERSISTENCE
+  // ============================================================================
+
+  // Load saved state on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedUrl = localStorage.getItem('smartExtractor_url')
+      const savedInstructions = localStorage.getItem('smartExtractor_instructions')
+      const savedModel = localStorage.getItem('globalSelectedModel')
+
+      if (savedUrl) setUrl(savedUrl)
+      if (savedInstructions) setUserInstructions(savedInstructions)
+      if (savedModel) setGlobalSelectedModel(savedModel)
+    }
+  }, [])
+
+  // Listen for global model changes
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'globalSelectedModel' && e.newValue) {
+        setGlobalSelectedModel(e.newValue)
+      }
+    }
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [])
+
+  // Save state to localStorage when values change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('smartExtractor_url', url)
+    }
+  }, [url])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('smartExtractor_instructions', userInstructions)
+    }
+  }, [userInstructions])
+  const [templateDescription, setTemplateDescription] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+
+  // Save to DB modal state
+  const [showSaveToDBModal, setShowSaveToDBModal] = useState(false)
+  const [companyName, setCompanyName] = useState('')
+  const [isSavingToDB, setIsSavingToDB] = useState(false)
+
+  // Session ID from localStorage
+  const [sessionId, setSessionId] = useState<string>('')
+
+  // Load session ID on mount
+  useEffect(() => {
+    const storedSessionId = localStorage.getItem('sessionId')
+    if (storedSessionId) {
+      setSessionId(storedSessionId)
+    } else {
+      const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+      localStorage.setItem('sessionId', newSessionId)
+      setSessionId(newSessionId)
+    }
+  }, [])
 
   // Example prompts
   const examplePrompts = [
@@ -102,6 +178,8 @@ export const SmartExtractor = () => {
     setIsGenerating(true)
     setError(null)
     setGeneratedTemplate(null)
+
+    const llmProvider = getLLMProvider(globalSelectedModel)
 
     try {
       const response = await axios.post<AutoGenerateResponse>(
@@ -141,13 +219,16 @@ export const SmartExtractor = () => {
     setError(null)
     setExtractedData(null)
 
+    const llmProvider = getLLMProvider(globalSelectedModel)
+
     try {
       const response = await axios.post<ExtractionResponse>(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/extract/smart-extract`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/extract/ultra-smart`,
         {
           url,
           user_instructions: userInstructions,
           llm_provider: llmProvider,
+          model_id: globalSelectedModel,  // Use model from Chat UI dropdown
           output_format: outputFormat
         }
       )
@@ -167,7 +248,7 @@ export const SmartExtractor = () => {
   const handleDownloadData = () => {
     if (!extractedData) return
 
-    const dataStr = JSON.stringify(extractedData.data, null, 2)
+    const dataStr = JSON.stringify(extractedData.table, null, 2)
     const dataBlob = new Blob([dataStr], { type: 'application/json' })
     const url = URL.createObjectURL(dataBlob)
     const link = document.createElement('a')
@@ -179,6 +260,96 @@ export const SmartExtractor = () => {
 
   const useExamplePrompt = (prompt: string) => {
     setUserInstructions(prompt)
+  }
+
+  const handleSaveAsTemplate = async () => {
+    if (!templateName.trim()) {
+      alert('Please enter a template name')
+      return
+    }
+
+    if (!extractedData || !extractedData.table || extractedData.table.length === 0) {
+      alert('No extracted data available to save')
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+      // Convert template name to internal format (lowercase with underscores)
+      const internalName = templateName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+
+      // Get URL pattern from extraction URL (use the url state variable, not extractedData.url)
+      const urlObj = new URL(url)
+      const urlPattern = `${urlObj.hostname}/*`
+
+      // Prepare fields from extracted data
+      const templateFields = Object.keys(extractedData.table[0]).map(key => ({
+        name: key,
+        selector: '',
+        data_type: 'text',
+        required: false
+      }))
+
+      const response = await axios.post(`${API_URL}/api/v1/extract/save-template`, {
+        template_name: internalName,
+        display_name: templateName,
+        description: templateDescription || `Extract data from ${urlObj.hostname} using Smart Extraction pattern`,
+        url_pattern: urlPattern,
+        wait_for_selector: '.main',  // Default selector
+        fields: templateFields
+      })
+
+      alert(`✅ Template "${templateName}" saved successfully! It's now available in CSS Selector mode.`)
+      setShowSaveModal(false)
+      setTemplateName('')
+      setTemplateDescription('')
+
+    } catch (error: any) {
+      console.error('Error saving template:', error)
+      const errorMsg = error.response?.data?.detail || error.message || 'Failed to save template'
+      alert(`Failed to save template: ${errorMsg}`)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  // Save extracted data to vector DB & MinIO for RAG
+  const handleSaveToDB = async () => {
+    if (!companyName.trim()) {
+      alert('Please enter a company name')
+      return
+    }
+
+    if (!extractedData || !extractedData.table || extractedData.table.length === 0) {
+      alert('No data available to save')
+      return
+    }
+
+    setIsSavingToDB(true)
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+      const response = await axios.post(`${API_URL}/api/v1/extract/save-to-db`, {
+        company_name: companyName,
+        source_url: extractedData.url || url,
+        extraction_type: 'smart',
+        template_name: null,
+        data: extractedData.table,
+        session_id: sessionId
+      })
+
+      alert(`✅ Saved ${extractedData.table.length} rows to vector store! Data is now available for RAG queries about ${companyName}.`)
+      setShowSaveToDBModal(false)
+      setCompanyName('')
+    } catch (error: any) {
+      console.error('Error saving to DB:', error)
+      const errorMsg = error.response?.data?.detail || error.message || 'Failed to save to database'
+      alert(`Failed to save to database: ${errorMsg}`)
+    } finally {
+      setIsSavingToDB(false)
+    }
   }
 
   // ============================================================================
@@ -259,56 +430,6 @@ export const SmartExtractor = () => {
               </button>
             ))}
           </div>
-        </div>
-      </div>
-
-      {/* Settings Row */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        {/* LLM Provider */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            AI Provider
-          </label>
-          <select
-            value={llmProvider}
-            onChange={(e) => setLlmProvider(e.target.value as LLMProvider)}
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="ollama">Ollama (Local)</option>
-            <option value="openai">OpenAI GPT-4</option>
-            <option value="anthropic">Anthropic Claude</option>
-          </select>
-        </div>
-
-        {/* Output Format */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            Output Format
-          </label>
-          <select
-            value={outputFormat}
-            onChange={(e) => setOutputFormat(e.target.value as OutputFormat)}
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="excel">Excel (.xlsx)</option>
-            <option value="csv">CSV (.csv)</option>
-            <option value="json">JSON (.json)</option>
-          </select>
-        </div>
-
-        {/* Max Fields */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            Max Fields
-          </label>
-          <input
-            type="number"
-            value={maxFields}
-            onChange={(e) => setMaxFields(parseInt(e.target.value))}
-            min={1}
-            max={30}
-            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
         </div>
       </div>
 
@@ -477,24 +598,51 @@ export const SmartExtractor = () => {
                 </p>
               </div>
             </div>
-            <button
-              onClick={handleDownloadData}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-            >
-              <Download className="h-4 w-4" />
-              Download JSON
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowSaveModal(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                title="Save this extraction pattern as a CSS template for faster future extractions"
+              >
+                <FileText className="h-4 w-4" />
+                Save Template
+              </button>
+              <button
+                onClick={handleDownloadData}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+              >
+                <Download className="h-4 w-4" />
+                Download JSON
+              </button>
+              <button
+                onClick={() => {
+                  setShowSaveToDBModal(true)
+                  // Try to extract company name from extracted data
+                  const firstRow = extractedData.table?.[0]
+                  if (firstRow && 'Company Name' in firstRow) {
+                    setCompanyName(String(firstRow['Company Name']))
+                  } else if (firstRow && 'company_name' in firstRow) {
+                    setCompanyName(String(firstRow['company_name']))
+                  }
+                }}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+                title="Save extracted data to vector database for RAG queries"
+              >
+                <Database className="h-4 w-4" />
+                Save to DB
+              </button>
+            </div>
           </div>
 
           {/* Data Preview */}
-          {extractedData.data && extractedData.data.length > 0 && (
+          {extractedData.table && extractedData.table.length > 0 && (
             <div className="bg-white dark:bg-slate-800 rounded-lg p-4 max-h-96 overflow-auto border border-slate-200 dark:border-slate-700">
               <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-3">Data Preview:</h3>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="bg-slate-100 dark:bg-slate-900">
-                      {Object.keys(extractedData.data[0]).map((key) => (
+                      {Object.keys(extractedData.table[0]).map((key) => (
                         <th key={key} className="px-4 py-2 text-left font-medium text-slate-700 dark:text-slate-300">
                           {key}
                         </th>
@@ -502,7 +650,7 @@ export const SmartExtractor = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {extractedData.data.slice(0, 10).map((row, idx) => (
+                    {extractedData.table.slice(0, 10).map((row, idx) => (
                       <tr key={idx} className="border-t border-slate-200 dark:border-slate-700">
                         {Object.values(row).map((value: any, colIdx) => (
                           <td key={colIdx} className="px-4 py-2 text-slate-600 dark:text-slate-400">
@@ -513,14 +661,151 @@ export const SmartExtractor = () => {
                     ))}
                   </tbody>
                 </table>
-                {extractedData.data.length > 10 && (
+                {extractedData.table.length > 10 && (
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 text-center">
-                    Showing 10 of {extractedData.data.length} rows
+                    Showing 10 of {extractedData.table.length} rows
                   </p>
                 )}
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Save Template Modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+              Save as CSS Template
+            </h3>
+
+            <div className="space-y-4">
+              {/* Template Name */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Template Name *
+                </label>
+                <input
+                  type="text"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  placeholder="e.g., Product Data Extraction"
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                />
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  This template will be available in CSS Selector mode
+                </p>
+              </div>
+
+              {/* Template Description */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Description (optional)
+                </label>
+                <textarea
+                  value={templateDescription}
+                  onChange={(e) => setTemplateDescription(e.target.value)}
+                  placeholder="Brief description of what this template extracts..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                />
+              </div>
+
+              {/* Info Note */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  💡 Save this Smart Extraction pattern as a CSS template for faster extractions in the future!
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex space-x-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowSaveModal(false)
+                  setTemplateName('')
+                  setTemplateDescription('')
+                }}
+                className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                disabled={isSaving}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveAsTemplate}
+                disabled={isSaving || !templateName.trim()}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white rounded-lg transition-colors"
+              >
+                {isSaving ? 'Saving...' : 'Save Template'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save to DB Modal */}
+      {showSaveToDBModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+              Save to Vector Database
+            </h3>
+
+            <div className="space-y-4">
+              {/* Company Name */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Company/Entity Name *
+                </label>
+                <input
+                  type="text"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="e.g., Reliance Industries, Tesla, etc."
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                />
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Used for folder organization in MinIO and metadata tagging
+                </p>
+              </div>
+
+              {/* Info Note */}
+              <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-3">
+                <p className="text-sm text-purple-700 dark:text-purple-300 mb-2">
+                  <strong>💡 What happens when you save:</strong>
+                </p>
+                <ul className="text-xs text-purple-600 dark:text-purple-300 space-y-1 list-disc list-inside">
+                  <li>Data is converted to text and embedded (384-dim vectors)</li>
+                  <li>Stored in PostgreSQL vector store for semantic search</li>
+                  <li>Raw JSON saved to MinIO at: extractions/{companyName}/</li>
+                  <li>Ready for RAG queries in chat interface</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex space-x-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowSaveToDBModal(false)
+                  setCompanyName('')
+                }}
+                className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                disabled={isSavingToDB}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveToDB}
+                disabled={isSavingToDB || !companyName.trim()}
+                className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-400 text-white rounded-lg transition-colors"
+              >
+                {isSavingToDB ? 'Saving...' : 'Save to DB'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

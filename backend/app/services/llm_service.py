@@ -18,13 +18,59 @@ class LLMService:
         self._initialized = False
 
     async def initialize(self):
-        """Initialize LLM clients"""
+        """Initialize LLM clients with database fallback to environment variables"""
         if self._initialized:
             return
 
-        if settings.OPENAI_API_KEY:
-            self.openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-            logger.info("OpenAI client initialized")
+        # Try to get OpenAI API key with fallback chain:
+        # 1. Try encrypted database first (SecretsService)
+        # 2. Fall back to environment variable (.env file)
+        openai_api_key = None
+        api_key_source = None
+
+        try:
+            # Import here to avoid circular dependencies
+            from app.services.secrets_service import get_secrets_service
+            from app.core.database import get_db
+
+            logger.info("🔐 Attempting to load OpenAI API key from encrypted database...")
+
+            secrets_service = get_secrets_service()
+
+            # Get database session
+            async for db in get_db():
+                try:
+                    openai_api_key = await secrets_service.get_api_key(db, "openai")
+                    if openai_api_key:
+                        api_key_source = "encrypted_database"
+                        logger.info("✅ Successfully loaded OpenAI API key from ENCRYPTED DATABASE")
+                        logger.info("🔒 Using encrypted API key storage (secure)")
+                    break
+                except Exception as db_error:
+                    logger.warning(f"⚠️  Failed to retrieve API key from database: {db_error}")
+                    break
+
+        except Exception as e:
+            logger.warning(f"⚠️  Could not access encrypted database: {e}")
+            logger.info("📝 Falling back to environment variable...")
+
+        # Fallback to environment variable if database retrieval failed
+        if not openai_api_key and settings.OPENAI_API_KEY:
+            openai_api_key = settings.OPENAI_API_KEY
+            api_key_source = "environment_variable"
+            logger.info("✅ Using OpenAI API key from ENVIRONMENT VARIABLE (.env file)")
+            logger.warning("⚠️  Consider migrating to encrypted database storage for better security")
+
+        # Initialize OpenAI client if we have a key
+        if openai_api_key:
+            self.openai_client = AsyncOpenAI(api_key=openai_api_key)
+            logger.info(f"🤖 OpenAI client initialized successfully")
+            logger.info(f"📊 API Key Source: {api_key_source.upper().replace('_', ' ')}")
+        else:
+            logger.warning("⚠️  No OpenAI API key found in database or environment")
+            logger.info("💡 To use OpenAI:")
+            logger.info("   1. Add to encrypted database via Admin UI → API Keys")
+            logger.info("   2. Or add OPENAI_API_KEY to .env file")
 
         self._initialized = True
 

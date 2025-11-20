@@ -19,8 +19,10 @@ from anthropic import AsyncAnthropic
 from typing import Dict, List, Optional
 import logging
 from app.core.config import settings
+from app.core.database import get_db
 from app.models.model_registry import get_model_registry, ModelInfo, ModelProvider
 from app.utils.gpu_detector import get_gpu_detector
+from app.services.secrets_service import get_secrets_service
 from tenacity import retry, stop_after_attempt, wait_exponential
 import time
 
@@ -49,6 +51,41 @@ class EnhancedLLMService:
         self._default_model_id: Optional[str] = None
         self._gpu_info = None
 
+    async def _get_api_key_with_fallback(self, provider: str, env_key: Optional[str] = None) -> Optional[str]:
+        """
+        Get API key from database first, fallback to environment variable
+
+        Args:
+            provider: Provider name (openai, anthropic)
+            env_key: Environment variable value as fallback
+
+        Returns:
+            API key string or None
+        """
+        try:
+            # Try to get key from database first
+            secrets_service = get_secrets_service()
+
+            # Create temporary database session
+            async for db in get_db():
+                try:
+                    db_key = await secrets_service.get_api_key(db, provider)
+                    if db_key:
+                        logger.info(f"✓ Using {provider} API key from database")
+                        return db_key
+                finally:
+                    await db.close()
+                break  # Only need one iteration
+        except Exception as e:
+            logger.warning(f"Could not load {provider} key from database: {e}")
+
+        # Fallback to environment variable
+        if env_key and env_key.strip():
+            logger.info(f"✓ Using {provider} API key from environment")
+            return env_key
+
+        return None
+
     async def initialize(self):
         """Initialize LLM clients and detect hardware"""
         if self._initialized:
@@ -60,20 +97,35 @@ class EnhancedLLMService:
         self._gpu_info = self.gpu_detector.detect()
         logger.info(f"GPU Detection: {self._gpu_info.type} ({'available' if self._gpu_info.available else 'not available'})")
 
-        # Initialize OpenAI
-        if settings.OPENAI_API_KEY and settings.OPENAI_API_KEY.strip():
-            self.openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        # Initialize OpenAI (check database first, then environment)
+        openai_key = await self._get_api_key_with_fallback('openai', settings.OPENAI_API_KEY)
+        if openai_key:
+            self.openai_client = AsyncOpenAI(api_key=openai_key)
             logger.info("✓ OpenAI client initialized")
         else:
             logger.info("OpenAI API key not configured")
 
-        # Initialize Anthropic/Claude
-        anthropic_key = getattr(settings, 'ANTHROPIC_API_KEY', None)
-        if anthropic_key and anthropic_key.strip():
+        # Initialize Anthropic/Claude (check database first, then environment)
+        anthropic_env_key = getattr(settings, 'ANTHROPIC_API_KEY', None)
+        anthropic_key = await self._get_api_key_with_fallback('anthropic', anthropic_env_key)
+        if anthropic_key:
             self.anthropic_client = AsyncAnthropic(api_key=anthropic_key)
             logger.info("✓ Anthropic/Claude client initialized")
         else:
             logger.info("Anthropic API key not configured")
+
+        # Initialize HuggingFace token (check database first, then environment)
+        # This is used by vLLM and huggingface_hub for downloading models
+        import os
+        hf_env_key = getattr(settings, 'HUGGING_FACE_HUB_TOKEN', None)
+        hf_token = await self._get_api_key_with_fallback('huggingface', hf_env_key)
+        if hf_token:
+            # Set as environment variable for huggingface_hub library
+            os.environ['HUGGING_FACE_HUB_TOKEN'] = hf_token
+            os.environ['HF_TOKEN'] = hf_token  # Alternative env var name
+            logger.info("✓ HuggingFace token configured for model downloads")
+        else:
+            logger.info("HuggingFace token not configured (optional - needed for private/gated models)")
 
         # Update model availability based on hardware and API keys
         self._update_model_availability()

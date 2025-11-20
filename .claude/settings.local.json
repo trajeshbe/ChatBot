@@ -20,7 +20,9 @@
       "Bash(docker ps:*)",
       "Bash(docker search:*)",
       "Bash(docker exec:*)",
-      "Bash(docker-compose config:*)"
+      "Bash(docker-compose config:*)",
+      "Bash(tee:*)",
+      "Bash(if [ -f /tmp/sharp_objects.json ])"
     ],
     "deny": [],
     "ask": []

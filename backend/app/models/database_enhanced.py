@@ -347,3 +347,36 @@ class EvaluationMetricsBenchmark(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     meta_info = Column(JSON, nullable=True)
+
+
+# API Credentials Management (Secrets Management)
+class APICredential(Base):
+    """Encrypted storage for LLM provider API keys"""
+    __tablename__ = "api_credentials"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    provider = Column(String(50), unique=True, nullable=False, index=True)  # 'openai', 'anthropic', 'huggingface'
+    api_key_encrypted = Column(Text, nullable=False)  # Fernet-encrypted API key
+    encryption_key_id = Column(String(100), nullable=True)  # For key rotation tracking
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    meta_info = Column(JSON, nullable=True)
+
+
+class APIKeyAccessLog(Base):
+    """Audit log for API key access and modifications"""
+    __tablename__ = "api_key_access_log"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    provider = Column(String(50), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    action = Column(String(50), nullable=False, index=True)  # 'created', 'updated', 'accessed', 'deleted', 'validated'
+    ip_address = Column(String(50), nullable=True)
+    user_agent = Column(Text, nullable=True)
+    success = Column(Boolean, default=True, nullable=False)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    meta_info = Column(JSON, nullable=True)

@@ -1,5 +1,35 @@
 # Current Status - Enterprise RAG Chatbot with Memory Hierarchy
 
+**Last Updated**: 2025-11-19
+**Current Status**: ✅ ALL SYSTEMS OPERATIONAL
+
+---
+
+## ✅ LATEST: Extraction System Fixes (2025-11-19)
+
+### Dynamic Model Selection & Brotli Compression Fix
+
+**Issues Fixed:**
+1. **Dynamic Model Selection**: Extraction now uses `EnhancedLLMService` with `model_id` parameter (like chat)
+2. **Brotli Compression Bug**: Fixed HTTP client requesting brotli compression that httpx couldn't decompress
+
+**Result**: Web extraction working perfectly with both HTTP and Playwright methods
+
+**Test Results:**
+- ✅ HTTP Method: `{"Book Title": "Sharp Objects", "Price": "£47.82"}` (was `"---"`)
+- ✅ Playwright Method: Successfully extracted Cloudflare homepage content
+- ✅ Dynamic model selection working (gpt-4-turbo, claude-3-opus, etc.)
+
+**Files Modified:**
+- `/backend/app/api/routes/template_extraction_routes.py` - Added `model_id` field, switched to EnhancedLLMService
+- `/backend/app/services/webscraper/extractors/llm_extractor.py` - Added `model_id` parameter
+- `/backend/app/services/webscraper/extractors/ultra_smart_extractor.py` - Complete `model_id` chain
+- `/backend/app/services/scraper_service.py` - Removed `br` from Accept-Encoding (line 26)
+
+**Documentation**: See `EXTRACTION_DYNAMIC_MODEL_FIX.md` for complete details
+
+---
+
 ## ✅ COMPLETED: Backend Fix Applied
 
 ### Issue Identified

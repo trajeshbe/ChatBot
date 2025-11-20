@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import { FileSpreadsheet, Globe, Download, Loader2, CheckCircle, XCircle, ChevronDown, ChevronUp, AlertCircle, Upload, FileUp } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { FileSpreadsheet, Globe, Download, Loader2, CheckCircle, XCircle, ChevronDown, ChevronUp, AlertCircle, Database } from 'lucide-react'
 import axios from 'axios'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -13,14 +13,6 @@ interface ExtractionJob {
   error?: string
   timestamp: Date
   presetData?: boolean // Flag to indicate data from preset endpoint (needs Excel conversion)
-}
-
-interface UploadedTemplate {
-  template_id: string
-  name: string
-  description?: string
-  fields_count: number
-  created_at: string
 }
 
 interface CollapsibleErrorProps {
@@ -81,11 +73,45 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
   const [jobs, setJobs] = useState<ExtractionJob[]>([])
   const [availablePresets, setAvailablePresets] = useState<any[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [isUploadingTemplate, setIsUploadingTemplate] = useState(false)
-  const [uploadedTemplates, setUploadedTemplates] = useState<UploadedTemplate[]>([])
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
-  const [templateSource, setTemplateSource] = useState<'preset' | 'uploaded'>('preset')
-  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Save Template modal state
+  const [showSaveModal, setShowSaveModal] = useState(false)
+  const [templateName, setTemplateName] = useState('')
+  const [templateDescription, setTemplateDescription] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+
+  // Save to DB modal state
+  const [showSaveToDBModal, setShowSaveToDBModal] = useState(false)
+  const [companyName, setCompanyName] = useState('')
+  const [isSavingToDB, setIsSavingToDB] = useState(false)
+
+  // ============================================================================
+  // STATE PERSISTENCE
+  // ============================================================================
+
+  // Load saved form state on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedUrl = localStorage.getItem('templateExtractor_url')
+      const savedPreset = localStorage.getItem('templateExtractor_preset')
+
+      if (savedUrl) setUrl(savedUrl)
+      if (savedPreset) setPreset(savedPreset)
+    }
+  }, [])
+
+  // Save form state to localStorage when values change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('templateExtractor_url', url)
+    }
+  }, [url])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('templateExtractor_preset', preset)
+    }
+  }, [preset])
 
   // Load jobs from sessionStorage on mount
   useEffect(() => {
@@ -112,30 +138,23 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
     }
   }, [jobs, sessionId])
 
-  // Load available presets
+  // Load available presets (including saved templates)
   useEffect(() => {
     const loadPresets = async () => {
       try {
-        const response = await axios.get(`${API_URL}/api/v1/extract/presets`)
-        setAvailablePresets(response.data.presets || [])
+        const response = await axios.get(`${API_URL}/api/v1/extract/saved-templates`)
+        const allTemplates = response.data.templates || []
+
+        // Show ALL templates - no filtering
+        // Templates will be visually distinguished in the UI
+        setAvailablePresets(allTemplates)
+
+        console.log(`Loaded ${allTemplates.length} templates (CSS-based + AI-powered)`)
       } catch (error) {
         console.error('Error loading presets:', error)
       }
     }
     loadPresets()
-  }, [])
-
-  // Load uploaded Excel templates
-  useEffect(() => {
-    const loadUploadedTemplates = async () => {
-      try {
-        const response = await axios.get(`${API_URL}/api/v1/extraction/templates`)
-        setUploadedTemplates(response.data || [])
-      } catch (error) {
-        console.error('Error loading uploaded templates:', error)
-      }
-    }
-    loadUploadedTemplates()
   }, [])
 
   const handleExtract = async () => {
@@ -149,7 +168,7 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
     const newJob: ExtractionJob = {
       id: jobId,
       url,
-      preset: templateSource === 'preset' ? preset : selectedTemplateId,
+      preset: preset,
       status: 'processing',
       timestamp: new Date()
     }
@@ -157,73 +176,32 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
     setJobs(prev => [newJob, ...prev])
 
     try {
-      if (templateSource === 'uploaded' && selectedTemplateId) {
-        // Use the new extraction jobs endpoint with uploaded template
-        const response = await axios.post(
-          `${API_URL}/api/v1/extraction/jobs`,
-          {
-            urls: [url],
-            template_id: selectedTemplateId,
-            output_format: 'excel',
-            delivery_method: 'download',
-            session_id: sessionId
-          }
-        )
+      // Use preset template endpoint
+      const response = await axios.post(
+        `${API_URL}/api/v1/extract/preset/${preset}`,
+        {
+          url,
+          session_id: sessionId
+        }
+      )
 
-        const extractionJobId = response.data.job_id
-
-        // Update job with extraction job ID
+      if (response.data.success && response.data.data) {
+        // Update job with extracted data
         setJobs(prev =>
           prev.map(job =>
             job.id === jobId
               ? {
                   ...job,
                   status: 'success',
-                  data: [{
-                    job_id: extractionJobId,
-                    message: 'Job created successfully. Processing in background...',
-                    records_extracted: 0,
-                    quality_score: 0,
-                    download_url: `/api/v1/extraction/jobs/${extractionJobId}/download`
-                  }]
+                  data: response.data.data,
+                  presetData: true
                 }
               : job
           )
         )
-
         setUrl('')
-        setError(null)
-
       } else {
-        // Use preset template endpoint (old flow, but working)
-        // This returns data directly, not a job
-        const response = await axios.post(
-          `${API_URL}/api/v1/extract/preset/${preset}`,
-          {
-            url,
-            session_id: sessionId
-          }
-        )
-
-        if (response.data.success && response.data.data) {
-          // Create a temporary download using the data
-          // We'll need to convert this to an Excel file
-          setJobs(prev =>
-            prev.map(job =>
-              job.id === jobId
-                ? {
-                    ...job,
-                    status: 'success',
-                    data: response.data.data,
-                    presetData: true // Flag to indicate this is preset data
-                  }
-                : job
-            )
-          )
-          setUrl('')
-        } else {
-          throw new Error(response.data.error || 'Extraction failed')
-        }
+        throw new Error(response.data.error || 'Extraction failed')
       }
 
     } catch (error: any) {
@@ -242,33 +220,6 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
       setError(errorMessage)
     } finally {
       setIsProcessing(false)
-    }
-  }
-
-  const handleDownload = async (downloadUrl: string, jobId: string) => {
-    try {
-      const response = await axios.get(
-        `${API_URL}${downloadUrl}`,
-        {
-          responseType: 'blob'
-        }
-      )
-
-      // Create download link
-      const blob = new Blob([response.data], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      })
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `extraction_${jobId.substring(0, 8)}.xlsx`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-    } catch (error) {
-      console.error('Error downloading file:', error)
-      alert('Failed to download file. The job may still be processing.')
     }
   }
 
@@ -302,55 +253,94 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
     }
   }
 
-  const handleTemplateUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    // Validate file type
-    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
-      setError('Please upload an Excel file (.xlsx or .xls)')
+  const handleSaveAsTemplate = async (job: ExtractionJob) => {
+    if (!templateName.trim()) {
+      alert('Please enter a template name')
       return
     }
 
-    setIsUploadingTemplate(true)
-    setError(null)
-
+    setIsSaving(true)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('template_name', file.name)
+      // Convert template name to internal format (lowercase with underscores)
+      const internalName = templateName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
 
-      const response = await axios.post(
-        `${API_URL}/api/v1/extraction/templates/upload-excel`,
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
+      // Get URL pattern from job URL
+      const urlObj = new URL(job.url)
+      const urlPattern = `${urlObj.hostname}/*`
+
+      // Prepare fields from extracted data
+      const templateFields = job.data && job.data[0] ? Object.keys(job.data[0]).map(key => ({
+        name: key,
+        selector: '',  // CSS selector would need to be defined
+        data_type: 'text',
+        required: false
+      })) : []
+
+      const response = await axios.post(`${API_URL}/api/v1/extract/save-template`, {
+        template_name: internalName,
+        display_name: templateName,
+        description: templateDescription || `Extract data from ${urlObj.hostname}`,
+        url_pattern: urlPattern,
+        wait_for_selector: '.main',  // Default selector
+        fields: templateFields
+      })
+
+      alert(`✅ Template "${templateName}" saved successfully! It's now available in the preset dropdown.`)
+      setShowSaveModal(false)
+      setTemplateName('')
+      setTemplateDescription('')
+
+      // Reload presets to show the new template
+      try {
+        const presetsResponse = await axios.get(`${API_URL}/api/v1/extract/saved-templates`)
+        if (presetsResponse.data.templates) {
+          setAvailablePresets(presetsResponse.data.templates)
         }
-      )
-
-      if (response.data) {
-        // Reload all templates to get the latest list
-        const templatesResponse = await axios.get(`${API_URL}/api/v1/extraction/templates`)
-        setUploadedTemplates(templatesResponse.data || [])
-
-        // Select the newly uploaded template
-        setSelectedTemplateId(response.data.template_id)
-        setTemplateSource('uploaded')
-
-        alert(`Template "${response.data.name}" uploaded successfully with ${response.data.fields_count} columns!`)
-        // Reset file input
-        if (fileInputRef.current) {
-          fileInputRef.current.value = ''
-        }
+      } catch (error) {
+        console.error('Error reloading presets:', error)
       }
+
     } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || error.message || 'Failed to upload template'
-      setError(errorMessage)
-      console.error('Error uploading template:', error)
+      console.error('Error saving template:', error)
+      const errorMsg = error.response?.data?.detail || error.message || 'Failed to save template'
+      alert(`Failed to save template: ${errorMsg}`)
     } finally {
-      setIsUploadingTemplate(false)
+      setIsSaving(false)
+    }
+  }
+
+  // Save extracted data to vector DB & MinIO for RAG
+  const handleSaveToDB = async (job: ExtractionJob) => {
+    if (!companyName.trim()) {
+      alert('Please enter a company name')
+      return
+    }
+
+    if (!job.data || job.data.length === 0) {
+      alert('No data available to save')
+      return
+    }
+
+    setIsSavingToDB(true)
+    try {
+      const response = await axios.post(`${API_URL}/api/v1/extract/save-to-db`, {
+        company_name: companyName,
+        source_url: job.url,
+        extraction_type: 'css_selector',
+        template_name: job.preset,
+        data: job.data,
+        session_id: sessionId
+      })
+
+      alert(`✅ Saved ${job.data.length} rows to vector store! Data is now available for RAG queries about ${companyName}.`)
+      setShowSaveToDBModal(false)
+      setCompanyName('')
+    } catch (error: any) {
+      console.error('Error saving to DB:', error)
+      const errorMsg = error.response?.data?.detail || error.message || 'Failed to save to database'
+      alert(`Failed to save to database: ${errorMsg}`)
+    } finally {
+      setIsSavingToDB(false)
     }
   }
 
@@ -358,10 +348,10 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
     <div className="h-full p-6 overflow-y-auto bg-slate-50 dark:bg-slate-900">
       <div className="max-w-4xl mx-auto">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-          Template-based Data Extraction
+          CSS Selector Based Data Extraction
         </h2>
         <p className="text-slate-600 dark:text-slate-400 mb-6">
-          Extract structured data from websites using predefined templates or your own Excel templates.
+          Extract structured data from websites using pre-configured CSS selector templates (Screener.in preset available).
         </p>
 
         {/* Global Error (Collapsible) */}
@@ -378,144 +368,41 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
             Extract Data
           </h3>
 
-          {/* Template Upload Section */}
-          <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <h4 className="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                  <FileUp className="w-5 h-5 text-blue-600" />
-                  Upload Excel Template
-                </h4>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                  Upload an Excel file with column headers. The AI will extract data and populate those columns automatically.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleTemplateUpload}
-                className="hidden"
-                id="template-upload"
-                disabled={isUploadingTemplate}
-              />
-              <label
-                htmlFor="template-upload"
-                className={`flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer flex items-center justify-center gap-2 ${isUploadingTemplate ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {isUploadingTemplate ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4" />
-                    Choose Excel File
-                  </>
-                )}
-              </label>
-            </div>
-            {uploadedTemplates.length > 0 && (
-              <div className="mt-3 p-3 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700">
-                <p className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Available Templates ({uploadedTemplates.length}):
-                </p>
-                <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1 max-h-24 overflow-y-auto">
-                  {uploadedTemplates.map((template) => (
-                    <div key={template.template_id} className="flex items-center gap-2">
-                      <CheckCircle className="w-3 h-3 text-green-600 flex-shrink-0" />
-                      <span className="flex-1">{template.name} ({template.fields_count} columns)</span>
-                    </div>
-                  ))}
+          {/* Template Selection */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              Select Preset Template
+            </label>
+            <select
+              value={preset}
+              onChange={(e) => setPreset(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {availablePresets.map((p) => (
+                <option key={p.name} value={p.name}>
+                  {p.has_css_selectors !== false ? '[CSS] ' : '[AI] '}{p.display_name} - {p.description}
+                </option>
+              ))}
+            </select>
+            {availablePresets.find(p => p.name === preset) && (
+              <div className="mt-2 space-y-1">
+                <div className="flex items-center gap-2">
+                  {availablePresets.find(p => p.name === preset)?.has_css_selectors !== false ? (
+                    <span className="px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200 rounded">
+                      CSS Selector Based
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 rounded">
+                      AI-Powered
+                    </span>
+                  )}
                 </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Extracts: {availablePresets.find(p => p.name === preset)?.fields.join(', ')}
+                </p>
               </div>
             )}
           </div>
-
-          {/* Template Source Selection */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
-              Choose Template Source
-            </label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="templateSource"
-                  value="preset"
-                  checked={templateSource === 'preset'}
-                  onChange={() => setTemplateSource('preset')}
-                  className="w-4 h-4 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-sm text-slate-700 dark:text-slate-300">Preset Templates</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="templateSource"
-                  value="uploaded"
-                  checked={templateSource === 'uploaded'}
-                  onChange={() => setTemplateSource('uploaded')}
-                  className="w-4 h-4 text-blue-600 focus:ring-blue-500"
-                  disabled={uploadedTemplates.length === 0}
-                />
-                <span className={`text-sm ${uploadedTemplates.length === 0 ? 'text-slate-400 dark:text-slate-600' : 'text-slate-700 dark:text-slate-300'}`}>
-                  Uploaded Excel Templates {uploadedTemplates.length === 0 && '(Upload one first)'}
-                </span>
-              </label>
-            </div>
-          </div>
-
-          {/* Template Selection based on source */}
-          {templateSource === 'preset' ? (
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                Select Preset Template
-              </label>
-              <select
-                value={preset}
-                onChange={(e) => setPreset(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {availablePresets.map((p) => (
-                  <option key={p.name} value={p.name}>
-                    {p.display_name} - {p.description}
-                  </option>
-                ))}
-              </select>
-              {availablePresets.find(p => p.name === preset) && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Extracts: {availablePresets.find(p => p.name === preset)?.fields.join(', ')}
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                Select Uploaded Template
-              </label>
-              <select
-                value={selectedTemplateId}
-                onChange={(e) => setSelectedTemplateId(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Select a template --</option>
-                {uploadedTemplates.map((template) => (
-                  <option key={template.template_id} value={template.template_id}>
-                    {template.name} ({template.fields_count} columns)
-                  </option>
-                ))}
-              </select>
-              {selectedTemplateId && uploadedTemplates.find(t => t.template_id === selectedTemplateId) && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  {uploadedTemplates.find(t => t.template_id === selectedTemplateId)?.description || 'AI will intelligently map data to your Excel columns'}
-                </p>
-              )}
-            </div>
-          )}
 
           {/* URL Input */}
           <div className="mb-4">
@@ -533,7 +420,7 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
 
           <button
             onClick={handleExtract}
-            disabled={isProcessing || !url.trim() || (templateSource === 'uploaded' && !selectedTemplateId)}
+            disabled={isProcessing || !url.trim()}
             className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
             {isProcessing ? (
@@ -571,7 +458,7 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
                         </p>
                       </div>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Template: {availablePresets.find(p => p.name === job.preset)?.display_name || uploadedTemplates.find(t => t.template_id === job.preset)?.name || job.preset}
+                        Template: {availablePresets.find(p => p.name === job.preset)?.display_name || job.preset}
                         {' • '}
                         {job.timestamp.toLocaleString()}
                       </p>
@@ -586,31 +473,46 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
                           <CheckCircle className="w-5 h-5 text-green-600" />
                           {job.data && job.data.length > 0 && (
                             <>
-                              {job.presetData ? (
-                                // Preset data - use export function
-                                <button
-                                  onClick={() => handleExportPresetData(
-                                    job.data!,
-                                    `extraction_${new Date().getTime()}.xlsx`
-                                  )}
-                                  className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
-                                >
-                                  <Download className="w-3 h-3" />
-                                  Export Excel
-                                </button>
-                              ) : job.data[0].download_url ? (
-                                // Job-based download
-                                <button
-                                  onClick={() => handleDownload(
-                                    job.data![0].download_url,
-                                    job.data![0].job_id
-                                  )}
-                                  className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
-                                >
-                                  <Download className="w-3 h-3" />
-                                  Download Excel
-                                </button>
-                              ) : null}
+                              <button
+                                onClick={() => {
+                                  setShowSaveModal(true)
+                                  // Pre-fill template name based on preset
+                                  const presetInfo = availablePresets.find(p => p.name === job.preset)
+                                  if (presetInfo) {
+                                    setTemplateName(`${presetInfo.display_name} - Custom`)
+                                  }
+                                }}
+                                className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors flex items-center gap-1"
+                                title="Save this extraction as a reusable CSS template"
+                              >
+                                <FileSpreadsheet className="w-3 h-3" />
+                                Save Template
+                              </button>
+                              <button
+                                onClick={() => handleExportPresetData(
+                                  job.data!,
+                                  `extraction_${new Date().getTime()}.xlsx`
+                                )}
+                                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
+                              >
+                                <Download className="w-3 h-3" />
+                                Export Excel
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setShowSaveToDBModal(true)
+                                  // Try to extract company name from URL or data
+                                  const firstRow = job.data?.[0]
+                                  if (firstRow && 'Company Name' in firstRow) {
+                                    setCompanyName(String(firstRow['Company Name']))
+                                  }
+                                }}
+                                className="px-3 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 transition-colors flex items-center gap-1"
+                                title="Save extracted data to vector database for RAG queries"
+                              >
+                                <Database className="w-3 h-3" />
+                                Save to DB
+                              </button>
                             </>
                           )}
                         </>
@@ -621,44 +523,18 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
                     </div>
                   </div>
 
-                  {/* Success: Show job info */}
+                  {/* Success: Show extraction info */}
                   {job.status === 'success' && job.data && job.data.length > 0 && (
                     <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
-                      {job.presetData ? (
-                        // Preset data display
-                        <>
-                          <p className="text-sm font-medium text-green-900 dark:text-green-100 mb-2">
-                            ✓ Extraction completed successfully!
-                          </p>
-                          <div className="text-xs text-green-800 dark:text-green-200 space-y-1">
-                            <p>Extracted {job.data.length} row(s) using preset template: {job.preset}</p>
-                            <p className="text-xs mt-2 text-green-700 dark:text-green-300">
-                              Click "Export Excel" button above to download the results.
-                            </p>
-                          </div>
-                        </>
-                      ) : (
-                        // Job-based display
-                        <>
-                          <p className="text-sm font-medium text-green-900 dark:text-green-100 mb-2">
-                            ✓ Extraction job created successfully!
-                          </p>
-                          <div className="text-xs text-green-800 dark:text-green-200 space-y-1">
-                            <p>
-                              <span className="font-semibold">Job ID:</span>{' '}
-                              <code className="bg-green-100 dark:bg-green-900 px-2 py-0.5 rounded font-mono">
-                                {job.data[0].job_id?.substring(0, 12)}...
-                              </code>
-                            </p>
-                            {job.data[0].message && (
-                              <p className="text-xs">{job.data[0].message}</p>
-                            )}
-                            <p className="text-xs mt-2 text-green-700 dark:text-green-300">
-                              The job is processing in the background. Click "Download Excel" button above when ready, or check the Job Monitor tab for detailed progress.
-                            </p>
-                          </div>
-                        </>
-                      )}
+                      <p className="text-sm font-medium text-green-900 dark:text-green-100 mb-2">
+                        ✓ Extraction completed successfully!
+                      </p>
+                      <div className="text-xs text-green-800 dark:text-green-200 space-y-1">
+                        <p>Extracted {job.data.length} row(s) using preset template: {job.preset}</p>
+                        <p className="text-xs mt-2 text-green-700 dark:text-green-300">
+                          Click "Export Excel" button above to download the results.
+                        </p>
+                      </div>
                     </div>
                   )}
 
@@ -678,7 +554,156 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
           <div className="bg-white dark:bg-slate-800 rounded-lg p-12 shadow-md border border-slate-200 dark:border-slate-700 text-center">
             <FileSpreadsheet className="w-16 h-16 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
             <p className="text-lg text-slate-600 dark:text-slate-400">No extraction jobs yet</p>
-            <p className="text-sm text-slate-500 dark:text-slate-500 mt-1">Upload an Excel template or select a preset, then enter a URL to start extracting data</p>
+            <p className="text-sm text-slate-500 dark:text-slate-500 mt-1">Select a preset template and enter a URL to start extracting data</p>
+          </div>
+        )}
+
+        {/* Save Template Modal */}
+        {showSaveModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-md">
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                Save as CSS Template
+              </h3>
+
+              <div className="space-y-4">
+                {/* Template Name */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Template Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                    placeholder="e.g., Product Data Extraction"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  />
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    This name will appear in the preset dropdown
+                  </p>
+                </div>
+
+                {/* Template Description */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Description (optional)
+                  </label>
+                  <textarea
+                    value={templateDescription}
+                    onChange={(e) => setTemplateDescription(e.target.value)}
+                    placeholder="Brief description of what this template extracts..."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                {/* Info Note */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    💡 This will save the extraction structure as a reusable template. You can use it for similar pages in the future.
+                  </p>
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex space-x-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowSaveModal(false)
+                    setTemplateName('')
+                    setTemplateDescription('')
+                  }}
+                  className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  disabled={isSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    // Find the most recent successful job to save
+                    const successJob = jobs.find(j => j.status === 'success' && j.data && j.data.length > 0)
+                    if (successJob) {
+                      handleSaveAsTemplate(successJob)
+                    }
+                  }}
+                  disabled={isSaving || !templateName.trim()}
+                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white rounded-lg transition-colors"
+                >
+                  {isSaving ? 'Saving...' : 'Save Template'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Save to DB Modal */}
+        {showSaveToDBModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-md">
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">
+                Save to Vector Database
+              </h3>
+
+              <div className="space-y-4">
+                {/* Company Name */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Company Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="e.g., Reliance Industries"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                  />
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Used for folder organization in MinIO and metadata tagging
+                  </p>
+                </div>
+
+                {/* Info Note */}
+                <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-3">
+                  <p className="text-sm text-purple-700 dark:text-purple-300 mb-2">
+                    <strong>💡 What happens when you save:</strong>
+                  </p>
+                  <ul className="text-xs text-purple-600 dark:text-purple-300 space-y-1 list-disc list-inside">
+                    <li>Data is converted to text and embedded (384-dim vectors)</li>
+                    <li>Stored in PostgreSQL vector store for semantic search</li>
+                    <li>Raw JSON saved to MinIO at: extractions/{companyName}/</li>
+                    <li>Ready for RAG queries in chat interface</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex space-x-3 mt-6">
+                <button
+                  onClick={() => {
+                    setShowSaveToDBModal(false)
+                    setCompanyName('')
+                  }}
+                  className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  disabled={isSavingToDB}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    // Find the most recent successful job to save
+                    const successJob = jobs.find(j => j.status === 'success' && j.data && j.data.length > 0)
+                    if (successJob) {
+                      handleSaveToDB(successJob)
+                    }
+                  }}
+                  disabled={isSavingToDB || !companyName.trim()}
+                  className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-400 text-white rounded-lg transition-colors"
+                >
+                  {isSavingToDB ? 'Saving...' : 'Save to DB'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

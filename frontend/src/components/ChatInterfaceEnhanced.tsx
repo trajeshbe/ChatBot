@@ -138,6 +138,23 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Load selected model from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedModel = localStorage.getItem('globalSelectedModel')
+      if (savedModel) {
+        setSelectedModel(savedModel)
+      }
+    }
+  }, [])
+
+  // Save selected model to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && selectedModel) {
+      localStorage.setItem('globalSelectedModel', selectedModel)
+    }
+  }, [selectedModel])
+
   // Helper function to get current RAG config - always fresh
   const getCurrentConfig = (): RAGConfig => {
     return ragConfigProp || getCurrentRAGConfig()

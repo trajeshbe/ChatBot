@@ -50,9 +50,6 @@ export default function DataExtractionHub({ sessionId }: Props) {
           >
             <Zap className="h-5 w-5" />
             Template Mapper
-            <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-900 dark:bg-blue-900/30 dark:text-blue-200 text-xs font-bold rounded-full">
-              NEW
-            </span>
           </button>
 
           <button
@@ -64,7 +61,7 @@ export default function DataExtractionHub({ sessionId }: Props) {
             }`}
           >
             <FileSpreadsheet className="h-5 w-5" />
-            Template-Based
+            CSS Selector Based
           </button>
         </div>
 
@@ -111,16 +108,21 @@ export default function DataExtractionHub({ sessionId }: Props) {
             <div className="flex items-start gap-3">
               <FileSpreadsheet className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
               <div className="text-sm text-slate-700 dark:text-slate-300">
-                <p className="font-semibold mb-2">Template-Based Extraction Features:</p>
+                <p className="font-semibold mb-2">CSS Selector Based Extraction:</p>
                 <ul className="list-disc ml-4 space-y-1">
-                  <li><strong>Preset templates</strong> - Use built-in templates for Screener.in, MoneyControl (works automatically)</li>
-                  <li><strong>Batch processing</strong> - Extract data from multiple URLs in background</li>
-                  <li><strong>Consistent structure</strong> - Always get the same fields</li>
-                  <li><strong>Advanced users</strong> - Define CSS selectors for precise extraction</li>
+                  <li><strong>Preset templates</strong> - Pre-configured CSS selectors for Screener.in (works out of the box)</li>
+                  <li><strong>Fast & Precise</strong> - Directly targets specific HTML elements using CSS selectors</li>
+                  <li><strong>Consistent structure</strong> - Always extracts the same fields from the same locations</li>
+                  <li><strong>Best for regular scraping</strong> - Ideal when scraping the same site repeatedly</li>
                 </ul>
-                <p className="mt-3 text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-3 py-2 rounded">
-                  <strong>⚠️ For custom columns without CSS selectors:</strong> Use "Template Mapper" instead - it uses AI to map data automatically
-                </p>
+                <div className="mt-3 grid gap-2">
+                  <p className="text-xs bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 px-3 py-2 rounded">
+                    <strong>✅ Use this when:</strong> You're scraping Screener.in regularly and want fast, reliable extraction
+                  </p>
+                  <p className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-3 py-2 rounded">
+                    <strong>💡 For custom columns:</strong> Use "Template Mapper" instead - it uses AI to map any column names automatically
+                  </p>
+                </div>
               </div>
             </div>
           </div>

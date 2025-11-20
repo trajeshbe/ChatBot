@@ -244,6 +244,7 @@ services:
       OLLAMA_ENDPOINT: http://ollama:11434
       LLAMA_CPP_ENDPOINT: http://llama-cpp:8080  # Deprecated
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY:-}
       PREFECT_API_URL: http://prefect-server:4200/api
       OTEL_EXPORTER_OTLP_ENDPOINT: tempo:4317  # gRPC endpoint (no http://)
       ENABLE_TRACING: ${ENABLE_TRACING:-true}

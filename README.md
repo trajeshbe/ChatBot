@@ -72,12 +72,17 @@ A state-of-the-art, production-ready RAG (Retrieval-Augmented Generation) chatbo
 
 Comprehensive documentation is available in the [`docs/`](./docs/) directory:
 
+### Core Documentation
 - **[Quick Start Guide](./docs/guides/QUICKSTART.md)** - Get started quickly
 - **[Admin Guide](./docs/guides/ADMIN_GUIDE.md)** - System administration
 - **[Architecture Guide](./docs/architecture/MEMORY_HIERARCHY_GUIDE.md)** - System architecture
 - **[Deployment Guide](./docs/architecture/DEPLOYMENT.md)** - Production deployment
 - **[Setup Guides](./docs/setup/)** - Component setup (LLM, local dev)
 - **[Debugging Guides](./docs/debugging/)** - Troubleshooting and debugging
+
+### Recent Updates
+- **[Extraction System Fix (2025-11-19)](./EXTRACTION_DYNAMIC_MODEL_FIX.md)** - Dynamic model selection & brotli compression fix
+- **[Current Status](./STATUS.md)** - Latest system status and changes
 - **[Evaluation Guides](./docs/evaluation/)** - RAG system evaluation
 - **[CLAUDE.md](./CLAUDE.md)** - AI assistant development guide
 

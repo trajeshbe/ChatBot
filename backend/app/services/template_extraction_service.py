@@ -553,62 +553,92 @@ def get_screener_in_template() -> ExtractionTemplate:
     """Template for extracting company data from Screener.in"""
     return ExtractionTemplate(
         name="Screener.in Company Data",
-        description="Extract financial metrics from Screener.in company pages",
-        wait_for_selector="#company-ratios",
+        description="Extract financial metrics from Screener.in company pages using CSS selectors",
+        wait_for_selector="#top-ratios",  # FIXED: Changed from #company-ratios to #top-ratios
         fields=[
             ExtractionField(
                 name="Company Name",
-                selector="h1.h2",
+                selector="h1.h2",  # Verified: h1 with class "h2"
                 required=True
             ),
             ExtractionField(
                 name="Market Cap",
-                selector="#top-ratios > li:nth-child(1) > span.number",
-                data_type="number"
+                selector="#top-ratios > li:nth-child(1) span.number",  # Verified: Works
+                data_type="text"  # Keep as text to preserve formatting (₹ 20,56,123 Cr.)
             ),
             ExtractionField(
                 name="Current Price",
-                selector="#top-ratios > li:nth-child(2) > span.number",
-                data_type="number"
+                selector="#top-ratios > li:nth-child(2) span.number",
+                data_type="text"
+            ),
+            ExtractionField(
+                name="High / Low",
+                selector="#top-ratios > li:nth-child(3)",
+                data_type="text"
             ),
             ExtractionField(
                 name="Stock P/E",
-                selector="#top-ratios > li:nth-child(3) > span.number",
-                data_type="number"
+                selector="#top-ratios > li:nth-child(4) span.number",
+                data_type="text"
             ),
             ExtractionField(
                 name="Book Value",
-                selector="#top-ratios > li:nth-child(4) > span.number",
-                data_type="number"
+                selector="#top-ratios > li:nth-child(5) span.number",
+                data_type="text"
             ),
             ExtractionField(
                 name="Dividend Yield",
-                selector="#top-ratios > li:nth-child(5) > span.number",
-                data_type="percentage"
+                selector="#top-ratios > li:nth-child(6) span.number",
+                data_type="text"
             ),
             ExtractionField(
                 name="ROCE",
-                selector="#top-ratios > li:nth-child(6) > span.number",
-                data_type="percentage"
+                selector="#top-ratios > li:nth-child(7) span.number",
+                data_type="text"
             ),
             ExtractionField(
                 name="ROE",
-                selector="#top-ratios > li:nth-child(7) > span.number",
-                data_type="percentage"
+                selector="#top-ratios > li:nth-child(8) span.number",
+                data_type="text"
             ),
             ExtractionField(
                 name="Face Value",
-                selector="#top-ratios > li:nth-child(8) > span.number",
-                data_type="number"
-            ),
-            ExtractionField(
-                name="Market Position",
-                selector="section:contains('About') p",
-                default_value="N/A"
+                selector="#top-ratios > li:nth-child(9) span.number",
+                data_type="text"
             ),
             ExtractionField(
                 name="Source / Notes",
-                default_value="Scraped from Screener.in"
+                default_value="Scraped from Screener.in using CSS selectors"
+            ),
+        ]
+    )
+
+
+def get_drenting_template() -> ExtractionTemplate:
+    """Template for extracting car listings from Drenting.com"""
+    return ExtractionTemplate(
+        name="Drenting.com Car Listings",
+        description="Extract car rental/leasing offers from Drenting.com",
+        wait_for_selector=".card",  # Wait for car cards to load
+        fields=[
+            ExtractionField(
+                name="Car Model",
+                selector=".card h3",
+                required=True
+            ),
+            ExtractionField(
+                name="Monthly Price",
+                selector=".card span:has-text('€')",
+                data_type="text"
+            ),
+            ExtractionField(
+                name="Year",
+                selector=".card p",
+                data_type="text"
+            ),
+            ExtractionField(
+                name="Source / Notes",
+                default_value="Scraped from Drenting.com using CSS selectors"
             ),
         ]
     )

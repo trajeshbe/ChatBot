@@ -934,8 +934,8 @@ function TemplateExtractionTab() {
 
   const fetchTemplates = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/v1/extraction/templates`)
-      setTemplates(response.data || [])
+      const response = await axios.get(`${API_URL}/api/v1/extract/saved-templates`)
+      setTemplates(response.data.templates || [])
     } catch (error) {
       console.error('Failed to fetch templates:', error)
     }

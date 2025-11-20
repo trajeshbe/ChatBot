@@ -681,6 +681,26 @@ except ImportError as e:
 except Exception as e:
     logger.warning(f"Could not register Playwright test router: {e}")
 
+# Secrets Management API (encrypted API keys storage)
+try:
+    from app.api.routes import secrets
+    app.include_router(secrets.router)
+    logger.info("✓ Secrets Management API router registered (encrypted API keys storage)")
+except ImportError as e:
+    logger.warning(f"Secrets Management API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Secrets Management router: {e}")
+
+# Ollama Model Management API (Phase 1 - Read-Only)
+try:
+    from app.api.routes import ollama_models
+    app.include_router(ollama_models.router, prefix="/api/v1")
+    logger.info("✓ Ollama Model Management API router registered (Phase 1: read-only operations)")
+except ImportError as e:
+    logger.warning(f"Ollama Model Management API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Ollama Model Management router: {e}")
+
 
 # === Admin API Endpoints ===
 

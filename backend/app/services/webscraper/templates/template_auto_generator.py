@@ -94,7 +94,7 @@ class TemplateAutoGenerator:
         url: str,
         user_instructions: Optional[str] = None,
         template_name: Optional[str] = None,
-        llm_provider: str = "ollama",
+        llm_provider: str = "openai",
         max_fields: int = 20
     ) -> Optional[ExtractionTemplate]:
         """
@@ -190,7 +190,7 @@ class TemplateAutoGenerator:
         self,
         url: str,
         user_instructions: str,
-        llm_provider: str = "ollama",
+        llm_provider: str = "openai",
         include_smart_mapping: bool = True
     ) -> Optional[ExtractionTemplate]:
         """
@@ -223,6 +223,8 @@ class TemplateAutoGenerator:
         Returns:
             Dict with 'html', 'text', 'structure' keys
         """
+        self.logger.info(f"🌐 _fetch_webpage_content called for URL: {url}")
+        self.logger.info(f"🔍 scraper_service available: {self.scraper_service is not None}")
         try:
             if self.scraper_service:
                 # Use existing scraper service
@@ -230,15 +232,25 @@ class TemplateAutoGenerator:
                 result = await self.scraper_service.scrape_url(url)
 
                 if not result:
-                    self.logger.error(f"Scraper service returned None for {url}")
-                    return None
+                    self.logger.warning(f"Scraper service returned None for {url}, trying Playwright fallback...")
+                    # Auto-fallback to Playwright
+                    result = await self._fetch_with_playwright(url)
+                    if not result:
+                        self.logger.error(f"Playwright fallback also failed for {url}")
+                        return None
 
                 html_content = result.get('html', '')
                 text_content = result.get('text', '')
 
                 if not html_content and not text_content:
-                    self.logger.error(f"Scraper service returned empty content for {url}")
-                    return None
+                    self.logger.warning(f"Scraper service returned empty content for {url}, trying Playwright fallback...")
+                    # Auto-fallback to Playwright
+                    result = await self._fetch_with_playwright(url)
+                    if not result:
+                        self.logger.error(f"Playwright fallback also failed for {url}")
+                        return None
+                    html_content = result.get('html', '')
+                    text_content = result.get('text', '')
 
                 self.logger.info(f"Successfully fetched {len(html_content)} bytes of HTML, {len(text_content)} bytes of text")
 
@@ -272,6 +284,86 @@ class TemplateAutoGenerator:
 
         except Exception as e:
             self.logger.error(f"Failed to fetch webpage from {url}: {str(e)}", exc_info=True)
+            # Try Playwright as last resort
+            self.logger.warning(f"Attempting Playwright fallback after exception for {url}")
+            try:
+                result = await self._fetch_with_playwright(url)
+                if result:
+                    return result
+            except Exception as playwright_error:
+                self.logger.error(f"Playwright fallback also failed: {str(playwright_error)}")
+            return None
+
+    async def _fetch_with_playwright(self, url: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch webpage content using Playwright (browser automation)
+
+        Args:
+            url: URL to fetch
+
+        Returns:
+            Dict with 'html', 'text', 'structure' keys or None if failed
+        """
+        try:
+            from playwright.async_api import async_playwright
+            from bs4 import BeautifulSoup
+            import traceback
+
+            self.logger.info(f"🎭 Fetching with Playwright: {url}")
+
+            async with async_playwright() as p:
+                self.logger.info("🚀 Launching Chromium browser...")
+                browser = await p.chromium.launch(headless=True)
+
+                self.logger.info("📱 Creating browser context with user agent...")
+                context = await browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                )
+                page = await context.new_page()
+
+                try:
+                    self.logger.info(f"🌐 Navigating to {url}...")
+                    # Navigate to the page
+                    await page.goto(url, wait_until='networkidle', timeout=60000)
+                    self.logger.info("✅ Page loaded successfully")
+
+                    # Wait a bit for dynamic content
+                    self.logger.info("⏳ Waiting 2 seconds for dynamic content...")
+                    await page.wait_for_timeout(2000)
+
+                    # Get the HTML content
+                    self.logger.info("📄 Extracting page content...")
+                    html_content = await page.content()
+
+                    # Parse with BeautifulSoup
+                    soup = BeautifulSoup(html_content, 'html.parser')
+
+                    # Limit content for LLM processing
+                    html_limited = html_content[:10000]
+                    text_limited = soup.get_text()[:5000]
+
+                    self.logger.info(f"✅ Playwright successfully fetched {len(html_content)} bytes (limited to {len(html_limited)} for analysis)")
+                    self.logger.info(f"📊 Text content preview (first 200 chars): {text_limited[:200]}")
+
+                    return {
+                        'html': html_limited,
+                        'text': text_limited,
+                        'structure': self._analyze_html_structure(soup)
+                    }
+
+                except Exception as page_error:
+                    self.logger.error(f"❌ Page navigation/content extraction error: {str(page_error)}")
+                    self.logger.error(f"📋 Traceback: {traceback.format_exc()}")
+                    raise
+                finally:
+                    self.logger.info("🔒 Closing browser...")
+                    await browser.close()
+
+        except Exception as e:
+            self.logger.error(f"❌ Playwright fetch failed for {url}")
+            self.logger.error(f"❌ Error type: {type(e).__name__}")
+            self.logger.error(f"❌ Error message: {str(e)}")
+            self.logger.error(f"📋 Full traceback: {traceback.format_exc()}")
             return None
 
     def _analyze_html_structure(self, soup) -> Dict[str, Any]:
