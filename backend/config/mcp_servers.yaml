@@ -1,0 +1,117 @@
+# MCP External Server Configuration
+#
+# This file defines external MCP servers that our platform can connect to
+# and import tools from.
+#
+# To enable a server:
+# 1. Set 'enabled: true'
+# 2. Provide required environment variables
+# 3. Restart the backend
+
+servers:
+  # GitHub MCP Server
+  # Provides: Repository operations, issue management, PR handling
+  - id: github
+    name: GitHub MCP Server
+    enabled: false  # Set to true to enable
+    transport: stdio
+    command: npx @modelcontextprotocol/server-github
+    env:
+      GITHUB_TOKEN: ${GITHUB_TOKEN}  # Required: Your GitHub personal access token
+    description: |
+      GitHub integration for repository operations, issue management,
+      pull requests, and GitHub API interactions.
+
+  # Slack MCP Server
+  # Provides: Channel management, message sending, user lookup
+  - id: slack
+    name: Slack MCP Server
+    enabled: false  # Set to true to enable
+    transport: stdio
+    command: npx @modelcontextprotocol/server-slack
+    env:
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}  # Required: Slack bot token
+      SLACK_TEAM_ID: ${SLACK_TEAM_ID}      # Required: Slack team ID
+    description: |
+      Slack integration for sending messages, managing channels,
+      and interacting with Slack workspace.
+
+  # Filesystem MCP Server
+  # Provides: File reading, writing, directory operations
+  - id: filesystem
+    name: Filesystem MCP Server
+    enabled: false  # Set to true to enable
+    transport: stdio
+    command: npx @modelcontextprotocol/server-filesystem /allowed/path
+    description: |
+      Filesystem access for reading and writing files.
+      Configure allowed paths in the command argument.
+      SECURITY: Only enable if you need filesystem access.
+
+  # PostgreSQL MCP Server
+  # Provides: Database queries, schema inspection
+  - id: postgres
+    name: PostgreSQL MCP Server
+    enabled: false  # Set to true to enable
+    transport: stdio
+    command: npx @modelcontextprotocol/server-postgres
+    env:
+      POSTGRES_CONNECTION_STRING: ${DATABASE_URL}  # Required: PostgreSQL connection string
+    description: |
+      PostgreSQL database integration for executing queries,
+      inspecting schemas, and database operations.
+
+  # Google Drive MCP Server (Example)
+  # Provides: File management in Google Drive
+  - id: google_drive
+    name: Google Drive MCP Server
+    enabled: false  # Set to true to enable
+    transport: stdio
+    command: npx @modelcontextprotocol/server-google-drive
+    env:
+      GOOGLE_DRIVE_CREDENTIALS: ${GOOGLE_DRIVE_CREDENTIALS}  # Required: Google API credentials
+    description: |
+      Google Drive integration for file management,
+      sharing, and collaboration.
+
+  # Custom MCP Server (Template)
+  # Add your custom MCP servers here
+  - id: custom_server
+    name: Custom MCP Server
+    enabled: false  # Set to true to enable
+    transport: stdio  # or http/sse
+    command: node /path/to/your/custom-server.js
+    # For HTTP/SSE transport, use url instead:
+    # url: http://localhost:3000/mcp
+    env:
+      CUSTOM_API_KEY: ${CUSTOM_API_KEY}
+    description: |
+      Custom MCP server template.
+      Replace with your own server configuration.
+
+# Configuration Notes:
+#
+# 1. Environment Variables:
+#    - Use ${VAR_NAME} syntax to reference environment variables
+#    - Set environment variables in .env file or system environment
+#
+# 2. Security:
+#    - Only enable servers you trust
+#    - Use minimal permissions for API tokens
+#    - Filesystem server should have restricted paths
+#
+# 3. Transport Types:
+#    - stdio: Communicate via standard input/output (most common)
+#    - http: RESTful HTTP communication
+#    - sse: Server-Sent Events for streaming
+#
+# 4. Testing:
+#    - Enable one server at a time for testing
+#    - Check logs for connection status
+#    - Use admin API to view server health
+#
+# 5. Adding New Servers:
+#    - Copy the template above
+#    - Update id, name, command
+#    - Add required environment variables
+#    - Set enabled: true when ready

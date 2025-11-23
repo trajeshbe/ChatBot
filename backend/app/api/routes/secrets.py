@@ -95,10 +95,11 @@ async def require_admin(
     """
     Verify that the current user is an admin
 
-    For now, this is a placeholder. In production, you would:
+    TEMPORARY IMPLEMENTATION: Returns the default admin user from database.
+    In production, this should:
     1. Extract JWT token from Authorization header
     2. Validate token
-    3. Fetch user from database
+    3. Fetch user from database based on token
     4. Verify user.role == UserRole.ADMIN
 
     Returns:
@@ -107,20 +108,37 @@ async def require_admin(
     Raises:
         HTTPException: If not authenticated or not admin
     """
-    # PLACEHOLDER: In production, implement proper JWT authentication
-    # For now, we'll assume the user is admin for testing
+    # TEMPORARY FIX: Fetch the admin user from database
+    # In production, replace this with proper JWT authentication
+    try:
+        from sqlalchemy import select
+        from app.models.database_enhanced import User, UserRole
 
-    # TODO: Implement proper authentication
-    # - Extract Authorization header
-    # - Validate JWT token
-    # - Fetch user from database
-    # - Check user.role == UserRole.ADMIN
+        # Fetch the admin user from database
+        result = await db.execute(
+            select(User).where(User.username == "admin")
+        )
+        admin_user = result.scalar_one_or_none()
 
-    # For testing purposes, return a mock admin user
-    # In production, replace this with actual authentication
-    logger.warning("Using placeholder admin authentication - implement JWT auth in production")
+        if not admin_user:
+            # If no admin user found, log warning and create error
+            logger.error("Admin user not found in database")
+            raise HTTPException(status_code=500, detail="Admin user not configured")
 
-    return None  # Replace with actual user object
+        if not admin_user.is_active:
+            logger.warning("Admin user is not active")
+            raise HTTPException(status_code=403, detail="Admin user is inactive")
+
+        # Log warning about temporary authentication
+        logger.warning(f"Using temporary admin authentication for user: {admin_user.username} - implement JWT auth in production")
+
+        return admin_user
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching admin user: {e}")
+        raise HTTPException(status_code=500, detail="Authentication error")
 
 
 # ==============================================================================

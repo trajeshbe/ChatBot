@@ -78,6 +78,42 @@ async def scrape_url(
                 detail="Web scraping is disabled. Contact administrator to enable."
             )
 
+        # ============================================================
+        # SCRAPING COMPLIANCE CHECK - Check configured policies
+        # ============================================================
+        from app.services.scraping_config_service import scraping_config_service
+
+        compliance_check = await scraping_config_service.check_scraping_allowed(db, str(request.url))
+
+        # If scraping is not allowed, block the request
+        if not compliance_check.get('allowed', False):
+            error_msg = compliance_check.get('reason', 'Scraping not allowed for this domain')
+            alternative = compliance_check.get('alternative') or compliance_check.get('recommendation')
+
+            if alternative:
+                error_msg += f"\n\nAlternative: {alternative}"
+
+            # Log the blocked attempt
+            await scraping_config_service.log_scraping_attempt(
+                db=db,
+                url=str(request.url),
+                method=request.strategy.value if request.strategy else 'auto',
+                success=False,
+                error_message=error_msg,
+                robots_txt_allowed=compliance_check.get('status') != 'robots_blocked',
+                session_id=request.session_id
+            )
+
+            logger.warning(f"🚫 Web scraping blocked by compliance: {error_msg}")
+
+            return ScrapeResponse(
+                success=False,
+                url=str(request.url),
+                error=error_msg
+            )
+
+        logger.info(f"✅ Compliance check passed for {request.url}")
+
         # Convert Pydantic config to ScraperConfig if provided
         scraper_config = None
         if request.config:
@@ -157,6 +193,67 @@ async def scrape_multiple_urls(
                 detail="Web scraping is disabled. Contact administrator to enable."
             )
 
+        # ============================================================
+        # SCRAPING COMPLIANCE CHECK - Check each URL for compliance
+        # ============================================================
+        from app.services.scraping_config_service import scraping_config_service
+
+        # Check compliance for all URLs before processing
+        blocked_urls = []
+        for url in request.urls:
+            compliance_check = await scraping_config_service.check_scraping_allowed(db, str(url))
+
+            if not compliance_check.get('allowed', False):
+                error_msg = compliance_check.get('reason', 'Scraping not allowed for this domain')
+
+                # Log the blocked attempt
+                await scraping_config_service.log_scraping_attempt(
+                    db=db,
+                    url=str(url),
+                    method=request.strategy.value if request.strategy else 'auto',
+                    success=False,
+                    error_message=error_msg,
+                    robots_txt_allowed=compliance_check.get('status') != 'robots_blocked',
+                    session_id=request.session_id
+                )
+
+                blocked_urls.append({
+                    "url": str(url),
+                    "reason": error_msg
+                })
+
+                logger.warning(f"🚫 Bulk scraping blocked URL: {url} - {error_msg}")
+
+        # If any URLs are blocked, return error response with details
+        if blocked_urls:
+            # Create failed responses for blocked URLs
+            failed_responses = [
+                ScrapeResponse(
+                    success=False,
+                    url=item["url"],
+                    error=item["reason"]
+                )
+                for item in blocked_urls
+            ]
+
+            # Filter out blocked URLs from processing
+            allowed_urls = [str(url) for url in request.urls if not any(str(url) == item["url"] for item in blocked_urls)]
+
+            # If ALL URLs are blocked, return all failed
+            if not allowed_urls:
+                return BulkScrapeResponse(
+                    results=failed_responses,
+                    total=len(blocked_urls),
+                    successful=0,
+                    failed=len(blocked_urls)
+                )
+
+            # Otherwise, update request URLs to only include allowed ones
+            logger.info(f"✅ {len(allowed_urls)} URLs passed compliance check, {len(blocked_urls)} blocked")
+        else:
+            allowed_urls = [str(url) for url in request.urls]
+            failed_responses = []
+
         # Convert Pydantic config to ScraperConfig if provided
         scraper_config = None
         if request.config:
@@ -181,27 +278,33 @@ async def scrape_multiple_urls(
                 max_content_length=request.config.max_content_length,
             )
 
-        # Scrape all URLs
-        urls = [str(url) for url in request.urls]
-        results = await enhanced_scraper_service.scrape_multiple_urls(
-            urls=urls,
-            scrape_prompt=request.scrape_prompt,
-            strategy=request.strategy.value if request.strategy else None,
-            config=scraper_config,
-            session_id=request.session_id,
-            db=db
-        )
+        # Scrape only allowed URLs
+        if allowed_urls:
+            results = await enhanced_scraper_service.scrape_multiple_urls(
+                urls=allowed_urls,
+                scrape_prompt=request.scrape_prompt,
+                strategy=request.strategy.value if request.strategy else None,
+                config=scraper_config,
+                session_id=request.session_id,
+                db=db
+            )
 
-        # Convert to response models
-        scrape_responses = [ScrapeResponse(**r) for r in results]
+            # Convert to response models
+            scrape_responses = [ScrapeResponse(**r) for r in results]
+
+            # Combine with failed responses from blocked URLs
+            all_responses = failed_responses + scrape_responses
+        else:
+            # All URLs were blocked
+            all_responses = failed_responses
 
         # Calculate stats
-        total = len(scrape_responses)
-        successful = sum(1 for r in scrape_responses if r.success)
+        total = len(all_responses)
+        successful = sum(1 for r in all_responses if r.success)
         failed = total - successful
 
         return BulkScrapeResponse(
-            results=scrape_responses,
+            results=all_responses,
             total=total,
             successful=successful,
             failed=failed

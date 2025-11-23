@@ -57,6 +57,62 @@ export const SmartTemplateMapper = () => {
   }
 
   // ============================================================================
+  // URL VALIDATION HELPERS
+  // ============================================================================
+
+  // Check if URL matches the template's url_pattern
+  const checkUrlMatch = (url: string, pattern: string): boolean => {
+    if (!url || !pattern) return true // No validation if empty
+
+    try {
+      const urlObj = new URL(url)
+      const urlHost = urlObj.hostname
+      const urlPath = urlObj.pathname
+
+      // Pattern like "books.toscrape.com/*" or "screener.in/company/*"
+      const patternParts = pattern.split('/')
+      const patternHost = patternParts[0]
+      const patternPath = patternParts.slice(1).join('/')
+
+      // Check hostname match (exact or wildcard)
+      const hostMatches = patternHost === '*' ||
+                          urlHost === patternHost ||
+                          urlHost.endsWith('.' + patternHost) ||
+                          patternHost.endsWith('*') && urlHost.includes(patternHost.replace('*', ''))
+
+      // Check path match (if pattern has path)
+      if (patternPath) {
+        const pathPattern = new RegExp('^' + patternPath.replace(/\*/g, '.*') + '$')
+        return hostMatches && pathPattern.test(urlPath)
+      }
+
+      return hostMatches
+    } catch {
+      return false // If URL is invalid, show validation error
+    }
+  }
+
+  // Generate example URL from pattern
+  const getExampleUrl = (pattern: string): string => {
+    if (!pattern) return ''
+
+    // Replace wildcards with examples
+    const exampleUrl = pattern
+      .replace(/\*/g, 'example')
+      .replace(/\/$/, '')
+
+    return exampleUrl.startsWith('http') ? exampleUrl : `https://${exampleUrl}`
+  }
+
+  // Get current template's URL pattern
+  const currentUrlPattern = selectedTemplate
+    ? availableTemplates.find(t => t.name === selectedTemplate)?.url_pattern
+    : null
+
+  // Check if current URL matches the template pattern
+  const urlMatches = currentUrlPattern ? checkUrlMatch(url, currentUrlPattern) : true
+
+  // ============================================================================
   // STATE PERSISTENCE
   // ============================================================================
 
@@ -443,16 +499,56 @@ export const SmartTemplateMapper = () => {
 
       {/* URL Input */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          Website URL
-        </label>
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Website URL
+          </label>
+          {selectedTemplate && currentUrlPattern && (
+            <button
+              type="button"
+              onClick={() => setUrl(getExampleUrl(currentUrlPattern))}
+              className="text-xs text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
+              title="Use an example URL that matches this template"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Use Example URL
+            </button>
+          )}
+        </div>
         <input
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://example.com/page-to-scrape"
-          className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent placeholder-slate-400"
+          className={`w-full px-4 py-2 border-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:border-transparent placeholder-slate-400 transition-colors ${
+            url && selectedTemplate && currentUrlPattern
+              ? urlMatches
+                ? 'border-green-500 dark:border-green-400 focus:ring-green-500'
+                : 'border-red-500 dark:border-red-400 focus:ring-red-500'
+              : 'border-slate-300 dark:border-slate-600 focus:ring-purple-500'
+          }`}
         />
+        {selectedTemplate && currentUrlPattern && url && !urlMatches && (
+          <div className="mt-2 flex items-start gap-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-200 dark:border-amber-800">
+            <div className="text-amber-600 dark:text-amber-400 mt-0.5">⚠️</div>
+            <div className="flex-1">
+              <p className="text-xs font-medium text-amber-800 dark:text-amber-200">URL Pattern Mismatch</p>
+              <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                This URL might not work with the selected template. Expected pattern: <span className="font-mono">{currentUrlPattern}</span>
+              </p>
+            </div>
+          </div>
+        )}
+        {selectedTemplate && currentUrlPattern && url && urlMatches && (
+          <div className="mt-2 flex items-center gap-2 text-xs text-green-700 dark:text-green-300">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <span>URL matches template pattern</span>
+          </div>
+        )}
       </div>
 
       {/* Template Selector */}

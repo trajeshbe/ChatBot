@@ -20,7 +20,8 @@ import {
   Clock,
   Target,
   ThumbsUp,
-  ThumbsDown
+  ThumbsDown,
+  Star
 } from 'lucide-react';
 
 interface EvaluationScore {
@@ -47,6 +48,21 @@ interface EvaluationAnalytics {
   }>;
 }
 
+interface HumanFeedback {
+  id: string;
+  session_id: string;
+  message_id: string | null;
+  thumbs_up: boolean | null;
+  thumbs_down: boolean | null;
+  rating: number | null;
+  accuracy_rating: number | null;
+  helpfulness_rating: number | null;
+  clarity_rating: number | null;
+  feedback_text: string | null;
+  feedback_type: string;
+  created_at: string;
+}
+
 interface EvaluationDashboardProps {
   sessionId?: string;
   autoRefresh?: boolean;
@@ -60,7 +76,9 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
 }) => {
   const [analytics, setAnalytics] = useState<EvaluationAnalytics | null>(null);
   const [recentScores, setRecentScores] = useState<EvaluationScore[]>([]);
+  const [feedback, setFeedback] = useState<HumanFeedback[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedMetric, setSelectedMetric] = useState<string | null>(null);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -68,11 +86,13 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
   useEffect(() => {
     fetchAnalytics();
     fetchRecentScores();
+    fetchFeedback();
 
     if (autoRefresh) {
       const interval = setInterval(() => {
         fetchAnalytics();
         fetchRecentScores();
+        fetchFeedback();
       }, refreshInterval);
 
       return () => clearInterval(interval);
@@ -81,6 +101,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
 
   const fetchAnalytics = async () => {
     try {
+      setError(null);
       const params: any = { days: 30 };
       if (sessionId) {
         params.session_id = sessionId;
@@ -89,9 +110,19 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
       const response = await axios.get(`${API_URL}/api/v1/evaluation/analytics`, { params });
       setAnalytics(response.data);
       setLoading(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch analytics:', error);
+      setError(error?.response?.data?.detail || error?.message || 'Failed to load evaluation analytics');
       setLoading(false);
+      // Set empty analytics on error so UI doesn't stay in loading state
+      setAnalytics({
+        total_evaluations: 0,
+        avg_overall_score: 0,
+        avg_scores_by_method: {},
+        score_distribution: {},
+        common_issues: {},
+        time_series: []
+      });
     }
   };
 
@@ -106,6 +137,22 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
       setRecentScores(response.data);
     } catch (error) {
       console.error('Failed to fetch recent scores:', error);
+      setRecentScores([]);
+    }
+  };
+
+  const fetchFeedback = async () => {
+    try {
+      const params: any = { limit: 20 };
+      if (sessionId) {
+        params.session_id = sessionId;
+      }
+
+      const response = await axios.get(`${API_URL}/api/v1/evaluation/feedback`, { params });
+      setFeedback(response.data);
+    } catch (error) {
+      console.error('Failed to fetch feedback:', error);
+      setFeedback([]);
     }
   };
 
@@ -121,7 +168,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
     return <XCircle className="w-5 h-5 text-red-600" />;
   };
 
-  if (loading || !analytics) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center p-8 bg-white rounded-lg shadow-lg">
         <Activity className="w-6 h-6 animate-pulse text-blue-600" />
@@ -130,8 +177,55 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
     );
   }
 
+  if (!analytics) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 bg-white rounded-lg shadow-lg">
+        <XCircle className="w-16 h-16 text-red-400 mb-4" />
+        <h3 className="text-xl font-semibold text-gray-800 mb-2">Unable to Load Dashboard</h3>
+        <p className="text-gray-600 text-center max-w-md">
+          Failed to fetch evaluation data. Please check the backend connection and try again.
+        </p>
+        <button
+          onClick={() => { setLoading(true); fetchAnalytics(); fetchRecentScores(); }}
+          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Error Banner */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start">
+          <AlertCircle className="w-5 h-5 text-red-600 mr-3 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <h4 className="text-red-800 font-semibold">Error Loading Data</h4>
+            <p className="text-red-700 text-sm mt-1">{error}</p>
+          </div>
+          <button
+            onClick={() => setError(null)}
+            className="text-red-600 hover:text-red-800 ml-2"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {analytics.total_evaluations === 0 && !error && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
+          <BarChart className="w-12 h-12 text-blue-400 mx-auto mb-3" />
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">No Evaluations Yet</h3>
+          <p className="text-gray-600 max-w-lg mx-auto">
+            Start using the RAG system with evaluation enabled to see metrics and insights here.
+            Per-response evaluation metrics appear automatically after each chat response.
+          </p>
+        </div>
+      )}
+
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Total Evaluations */}
@@ -314,6 +408,150 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
                 <span className="text-sm text-gray-500 w-16">
                   ({dataPoint.count})
                 </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Human Feedback */}
+      {feedback.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+            <ThumbsUp className="w-5 h-5 mr-2 text-blue-600" />
+            Human Feedback
+          </h3>
+
+          {/* Feedback Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {/* Thumbs Up/Down Summary */}
+            <div className="border rounded-lg p-4">
+              <div className="text-sm text-gray-600 mb-3">Helpful Ratings</div>
+              <div className="flex items-center justify-around">
+                <div className="text-center">
+                  <div className="flex items-center justify-center mb-1">
+                    <ThumbsUp className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div className="text-2xl font-bold text-green-600">
+                    {feedback.filter(f => f.thumbs_up === true).length}
+                  </div>
+                  <div className="text-xs text-gray-500">Helpful</div>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center justify-center mb-1">
+                    <ThumbsDown className="w-6 h-6 text-red-600" />
+                  </div>
+                  <div className="text-2xl font-bold text-red-600">
+                    {feedback.filter(f => f.thumbs_up === false).length}
+                  </div>
+                  <div className="text-xs text-gray-500">Not Helpful</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Star Ratings Summary */}
+            <div className="border rounded-lg p-4">
+              <div className="text-sm text-gray-600 mb-3">Star Ratings</div>
+              <div className="space-y-1">
+                {[5, 4, 3, 2, 1].map(stars => {
+                  const count = feedback.filter(f => f.rating === stars).length;
+                  const percentage = feedback.length > 0 ? (count / feedback.length) * 100 : 0;
+                  return (
+                    <div key={stars} className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-1 w-16">
+                        <span className="text-xs text-gray-600">{stars}</span>
+                        <Star className="w-3 h-3 text-yellow-500 fill-current" />
+                      </div>
+                      <div className="flex-1 bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-yellow-500 h-2 rounded-full transition-all"
+                          style={{ width: `${percentage}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-xs text-gray-600 w-8">{count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Average Rating */}
+            <div className="border rounded-lg p-4">
+              <div className="text-sm text-gray-600 mb-3">Average Rating</div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-yellow-600">
+                  {feedback.filter(f => f.rating !== null).length > 0
+                    ? (
+                        feedback
+                          .filter(f => f.rating !== null)
+                          .reduce((sum, f) => sum + (f.rating || 0), 0) /
+                        feedback.filter(f => f.rating !== null).length
+                      ).toFixed(1)
+                    : 'N/A'}
+                </div>
+                <div className="flex justify-center mt-2">
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <Star
+                      key={star}
+                      className={`w-5 h-5 ${
+                        feedback.filter(f => f.rating !== null).length > 0 &&
+                        star <=
+                          feedback
+                            .filter(f => f.rating !== null)
+                            .reduce((sum, f) => sum + (f.rating || 0), 0) /
+                            feedback.filter(f => f.rating !== null).length
+                          ? 'text-yellow-500 fill-current'
+                          : 'text-gray-300'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Based on {feedback.filter(f => f.rating !== null).length} ratings
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Feedback Entries */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-semibold text-gray-700 mb-3">Recent Feedback</h4>
+            {feedback.slice(0, 10).map((fb) => (
+              <div key={fb.id} className="border-l-4 border-blue-500 bg-gray-50 rounded-r-lg p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3 mb-2">
+                      {fb.thumbs_up !== null && (
+                        <div className="flex items-center space-x-1">
+                          {fb.thumbs_up ? (
+                            <ThumbsUp className="w-4 h-4 text-green-600" />
+                          ) : (
+                            <ThumbsDown className="w-4 h-4 text-red-600" />
+                          )}
+                          <span className={`text-sm font-medium ${fb.thumbs_up ? 'text-green-600' : 'text-red-600'}`}>
+                            {fb.thumbs_up ? 'Helpful' : 'Not Helpful'}
+                          </span>
+                        </div>
+                      )}
+                      {fb.rating !== null && (
+                        <div className="flex items-center space-x-1">
+                          {[...Array(fb.rating)].map((_, i) => (
+                            <Star key={i} className="w-4 h-4 text-yellow-500 fill-current" />
+                          ))}
+                          <span className="text-sm text-gray-600 ml-1">
+                            ({fb.rating}/5)
+                          </span>
+                        </div>
+                      )}
+                      <span className="text-xs text-gray-500">
+                        {new Date(fb.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                    {fb.feedback_text && (
+                      <p className="text-sm text-gray-700 italic">"{fb.feedback_text}"</p>
+                    )}
+                  </div>
+                </div>
               </div>
             ))}
           </div>

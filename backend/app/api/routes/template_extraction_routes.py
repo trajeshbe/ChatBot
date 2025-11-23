@@ -2035,6 +2035,42 @@ async def ultra_smart_extract(
                 error="URL is required for Ultra-Smart extraction"
             )
 
+        # ============================================================
+        # SCRAPING COMPLIANCE CHECK - Check configured policies
+        # ============================================================
+        if request.source_type == "url" and db:
+            from app.services.scraping_config_service import scraping_config_service
+
+            compliance_check = await scraping_config_service.check_scraping_allowed(db, request.url)
+
+            # If scraping is not allowed, block the request
+            if not compliance_check.get('allowed', False):
+                error_msg = compliance_check.get('reason', 'Scraping not allowed for this domain')
+                alternative = compliance_check.get('alternative') or compliance_check.get('recommendation')
+
+                if alternative:
+                    error_msg += f"\n\nAlternative: {alternative}"
+
+                # Log the blocked attempt
+                await scraping_config_service.log_scraping_attempt(
+                    db=db,
+                    url=request.url,
+                    method='ultra-smart',
+                    success=False,
+                    error_message=error_msg,
+                    robots_txt_allowed=compliance_check.get('status') != 'robots_blocked',
+                    session_id=request.session_id
+                )
+
+                logger.warning(f"🚫 Ultra-Smart extraction blocked by compliance: {error_msg}")
+
+                return UltraSmartExtractResponse(
+                    success=False,
+                    error=error_msg
+                )
+
+            logger.info(f"✅ Compliance check passed for {request.url}")
+
         # Extract to table (guarantees tabular output)
         result = await ultra_extractor.extract_to_table(
             source=request.url,

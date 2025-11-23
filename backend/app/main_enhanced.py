@@ -259,6 +259,11 @@ async def query_endpoint(
     session_id: Optional[str] = Form(None),
     use_cache: bool = Form(True),
     model_id: Optional[str] = Form(None),
+    # NEW: Optional threshold parameters from UI
+    top_k: Optional[int] = Form(None),
+    similarity_threshold: Optional[float] = Form(None),
+    min_similarity_threshold: Optional[float] = Form(None),
+    no_relevant_docs_threshold: Optional[float] = Form(None),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -269,13 +274,14 @@ async def query_endpoint(
     - Falls back to long-term memory (all documents)
     - Tracks conversation history
     - Logs to audit trail
+    - Accepts threshold parameters from UI for dynamic tuning
     """
     start_time = time.time()
     ip_address, user_agent = get_client_info(request)
     user_id = await get_anonymous_user_id(db)
 
     try:
-        # NEW: Use enhanced RAG service with memory hierarchy
+        # NEW: Use enhanced RAG service with memory hierarchy and UI threshold parameters
         result = await rag_service.query(
             query_text=query,
             session_id=session_id,
@@ -283,7 +289,12 @@ async def query_endpoint(
             conversation_history=None,
             use_cache=use_cache,
             model_id=model_id,
-            db=db
+            db=db,
+            # Pass through threshold parameters from UI (or None to use defaults)
+            top_k=top_k,
+            similarity_threshold=similarity_threshold,
+            min_similarity_threshold=min_similarity_threshold,
+            no_relevant_docs_threshold=no_relevant_docs_threshold
         )
 
         latency_ms = (time.time() - start_time) * 1000

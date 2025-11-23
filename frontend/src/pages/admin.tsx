@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import Head from 'next/head'
-import { Users, Activity, Database, TrendingUp, Search, Filter, ChevronDown, ChevronUp, Key, Server } from 'lucide-react'
+import { Users, Activity, Database, TrendingUp, Search, Filter, ChevronDown, ChevronUp, Key, Server, Wrench, Globe } from 'lucide-react'
 import APIKeysManager from '../components/APIKeysManager'
 import OllamaModelsManager from '../components/OllamaModelsManager'
+import { MCPToolsManager } from '../components/MCPToolsManager'
+import { ScrapingConfigManager } from '../components/ScrapingConfigManager'
 
 interface User {
   id: string
@@ -111,7 +113,7 @@ interface DbStats {
 }
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'users' | 'sessions' | 'audit' | 'metrics' | 'database' | 'apikeys' | 'ollama'>('users')
+  const [activeTab, setActiveTab] = useState<'users' | 'sessions' | 'audit' | 'metrics' | 'database' | 'apikeys' | 'ollama' | 'mcptools' | 'scraping'>('users')
   const [users, setUsers] = useState<User[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
@@ -390,6 +392,32 @@ export default function AdminPage() {
                 <div className="flex items-center space-x-2">
                   <Server className="w-4 h-4" />
                   <span>Ollama Models</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('mcptools')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'mcptools'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <Wrench className="w-4 h-4" />
+                  <span>MCP & Tools</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('scraping')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'scraping'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <Globe className="w-4 h-4" />
+                  <span>Scraping Config</span>
                 </div>
               </button>
             </div>
@@ -919,6 +947,20 @@ export default function AdminPage() {
               {activeTab === 'ollama' && (
                 <div>
                   <OllamaModelsManager />
+                </div>
+              )}
+
+              {/* MCP & Tools Tab */}
+              {activeTab === 'mcptools' && (
+                <div>
+                  <MCPToolsManager />
+                </div>
+              )}
+
+              {/* Scraping Configuration Tab */}
+              {activeTab === 'scraping' && (
+                <div>
+                  <ScrapingConfigManager />
                 </div>
               )}
 

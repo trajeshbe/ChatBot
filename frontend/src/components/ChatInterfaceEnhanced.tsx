@@ -8,6 +8,7 @@ import UploadedFilesList from './UploadedFilesList'
 import { getCurrentRAGConfig, type RAGConfig } from './RAGSettings'
 import PerformanceMetrics from './PerformanceMetrics'
 import EvaluationMetrics from './EvaluationMetrics'
+import SettingsPanel, { MetricsSettings } from './SettingsPanel'
 import axios from 'axios'
 
 interface Message {
@@ -45,6 +46,9 @@ interface Message {
     search_type?: string
     memory_type?: string
   }
+  // User feedback
+  userFeedback?: 'thumbs_up' | 'thumbs_down' | 'rated'
+  userRating?: number
 }
 
 interface Source {
@@ -135,6 +139,10 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   const [uploadingFiles, setUploadingFiles] = useState(false)
   const [filesJustUploaded, setFilesJustUploaded] = useState(false)
   const [expandedMetrics, setExpandedMetrics] = useState<Record<number, boolean>>({})
+  const [metricsSettings, setMetricsSettings] = useState<MetricsSettings>({
+    enableEvaluation: false,
+    showPerformanceMetrics: true,
+  })
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -215,6 +223,61 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
 
   const removeAttachedFile = (index: number) => {
     setAttachedFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  // Handle feedback (thumbs up/down)
+  const handleFeedback = async (messageIndex: number, type: 'thumbs_up' | 'thumbs_down') => {
+    try {
+      const message = messages[messageIndex]
+
+      await axios.post(`${API_URL}/api/v1/evaluation/feedback`, {
+        session_id: sessionId,
+        thumbs_up: type === 'thumbs_up',
+        feedback_type: 'inline',
+        feedback_text: type === 'thumbs_up' ? 'User found this helpful' : 'User found this unhelpful'
+      })
+
+      // Update message to show feedback was recorded
+      const updatedMessages = [...messages]
+      updatedMessages[messageIndex] = {
+        ...message,
+        userFeedback: type
+      }
+      setMessages(updatedMessages)
+
+      console.log(`✅ Feedback recorded: ${type}`)
+    } catch (error) {
+      console.error('Failed to submit feedback:', error)
+    }
+  }
+
+  // Handle star rating
+  const handleRating = async (messageIndex: number, rating: number) => {
+    try {
+      const message = messages[messageIndex]
+
+      await axios.post(`${API_URL}/api/v1/evaluation/feedback`, {
+        session_id: sessionId,
+        rating: rating,
+        accuracy_rating: rating,
+        helpfulness_rating: rating,
+        clarity_rating: rating,
+        feedback_type: 'inline'
+      })
+
+      // Update message to show rating was recorded
+      const updatedMessages = [...messages]
+      updatedMessages[messageIndex] = {
+        ...message,
+        userFeedback: 'rated',
+        userRating: rating
+      }
+      setMessages(updatedMessages)
+
+      console.log(`✅ Rating recorded: ${rating} stars`)
+    } catch (error) {
+      console.error('Failed to submit rating:', error)
+    }
   }
 
   // Upload files to backend with session ID
@@ -322,6 +385,9 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       formData.append('similarity_threshold', currentRagConfig.similarity_threshold.toString())
       formData.append('min_similarity_threshold', currentRagConfig.min_similarity_threshold.toString())
       formData.append('no_relevant_docs_threshold', currentRagConfig.no_relevant_docs_threshold.toString())
+
+      // 🆕 Add metrics settings - enable evaluation flag
+      formData.append('enable_evaluation', metricsSettings.enableEvaluation.toString())
 
       // 🆕 Pass conversation history for context continuity
       // Include last 10 messages (5 exchanges) for context window
@@ -469,6 +535,9 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="max-w-3xl mx-auto space-y-6">
+          {/* Settings Panel for Metrics Control */}
+          <SettingsPanel onSettingsChange={setMetricsSettings} />
+
         {messages.map((message, index) => (
           <div
             key={index}
@@ -530,21 +599,23 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
 
                   {expandedMetrics[index] && (
                     <div className="mt-3 space-y-3">
-                      {/* Performance Metrics with RAG Settings */}
-                      <PerformanceMetrics
-                        metrics={{
-                          latency_ms: message.latency_ms,
-                          tokens_used: message.tokens_used,
-                          num_sources: message.num_sources,
-                          cached: message.cached,
-                          model_used: message.model,
-                          model_name: message.model_name
-                        }}
-                        ragSettings={message.rag_settings}
-                      />
+                      {/* Performance Metrics with RAG Settings - conditionally shown */}
+                      {metricsSettings.showPerformanceMetrics && (
+                        <PerformanceMetrics
+                          metrics={{
+                            latency_ms: message.latency_ms,
+                            tokens_used: message.tokens_used,
+                            num_sources: message.num_sources,
+                            cached: message.cached,
+                            model_used: message.model,
+                            model_name: message.model_name
+                          }}
+                          ragSettings={message.rag_settings}
+                        />
+                      )}
 
-                      {/* Evaluation Metrics */}
-                      {message.quality_metrics && (
+                      {/* Evaluation Metrics - shown only if enabled and present */}
+                      {metricsSettings.enableEvaluation && message.quality_metrics && (
                         <EvaluationMetrics metrics={message.quality_metrics} />
                       )}
 
@@ -577,7 +648,9 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                                     )}
                                   </div>
                                   <span className="text-[10px] text-slate-500">
-                                    {(source.relevance * 100).toFixed(0)}%
+                                    {source.relevance !== undefined && source.relevance !== null && !isNaN(source.relevance)
+                                      ? `${(source.relevance * 100).toFixed(0)}%`
+                                      : 'N/A'}
                                   </span>
                                 </div>
                                 {source.source_url && (
@@ -598,6 +671,89 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* User Feedback Section (Thumbs Up/Down & Star Ratings) */}
+              {message.role === 'assistant' && (
+                <div className="mt-4 flex items-center gap-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                  {/* Thumbs Up/Down */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 mr-1">Helpful?</span>
+                    <button
+                      onClick={() => handleFeedback(index, 'thumbs_up')}
+                      disabled={(message as any).userFeedback === 'thumbs_up'}
+                      className={`p-1.5 rounded-md transition-all group cursor-pointer ${
+                        (message as any).userFeedback === 'thumbs_up'
+                          ? 'bg-emerald-100 dark:bg-emerald-900/40 cursor-default'
+                          : 'hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+                      }`}
+                      title="Mark as helpful"
+                    >
+                      <span className={`text-lg transition-transform inline-block ${
+                        (message as any).userFeedback !== 'thumbs_up' && 'group-hover:scale-110'
+                      }`}>
+                        👍
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => handleFeedback(index, 'thumbs_down')}
+                      disabled={(message as any).userFeedback === 'thumbs_down'}
+                      className={`p-1.5 rounded-md transition-all group cursor-pointer ${
+                        (message as any).userFeedback === 'thumbs_down'
+                          ? 'bg-red-100 dark:bg-red-900/40 cursor-default'
+                          : 'hover:bg-red-50 dark:hover:bg-red-900/20'
+                      }`}
+                      title="Mark as not helpful"
+                    >
+                      <span className={`text-lg transition-transform inline-block ${
+                        (message as any).userFeedback !== 'thumbs_down' && 'group-hover:scale-110'
+                      }`}>
+                        👎
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Star Ratings */}
+                  <div className="flex items-center gap-2 ml-4">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">Rate:</span>
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map(star => (
+                        <button
+                          key={star}
+                          onClick={() => handleRating(index, star)}
+                          disabled={(message as any).userFeedback === 'rated'}
+                          className={`p-0.5 transition-transform cursor-pointer ${
+                            (message as any).userFeedback !== 'rated' ? 'hover:scale-125' : 'cursor-default'
+                          }`}
+                          title={`Rate ${star} star${star > 1 ? 's' : ''}`}
+                        >
+                          <span className={`text-base ${
+                            (message as any).userRating && star <= (message as any).userRating
+                              ? 'text-yellow-400'
+                              : (message as any).userFeedback === 'rated'
+                                ? 'text-slate-300 dark:text-slate-600'
+                                : 'text-slate-300 dark:text-slate-600 hover:text-yellow-500'
+                          }`}>
+                            ★
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Show if feedback submitted */}
+                  {(message as any).userFeedback && (
+                    <div className="ml-auto text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <span>✓</span>
+                      <span>
+                        {(message as any).userFeedback === 'rated'
+                          ? `Rated ${(message as any).userRating} star${(message as any).userRating > 1 ? 's' : ''}`
+                          : 'Feedback submitted'
+                        }
+                      </span>
                     </div>
                   )}
                 </div>

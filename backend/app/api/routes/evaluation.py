@@ -19,7 +19,7 @@ import uuid
 
 from app.core.database import get_db
 from app.services.evaluation_service import evaluation_service, EvaluationMethod, EvaluationConfig as ServiceEvaluationConfig
-from app.models.database_enhanced import EvaluationConfig, EvaluationResult, HumanFeedback, EvaluationMetricsBenchmark
+from app.models.database_enhanced import EvaluationConfig, EvaluationResult, HumanFeedback, EvaluationMetricsBenchmark, ChatSession, User
 
 router = APIRouter(prefix="/api/v1/evaluation", tags=["evaluation"])
 
@@ -208,8 +208,17 @@ async def get_evaluation_config(
 ):
     """Get evaluation configuration for a session"""
     try:
+        # Look up the ChatSession by session_id string to get its UUID
+        from app.models.database_enhanced import ChatSession
+        chat_session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+        chat_session_result = await db.execute(chat_session_query)
+        chat_session = chat_session_result.scalar_one_or_none()
+
+        if not chat_session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
         query = select(EvaluationConfig).where(
-            EvaluationConfig.session_id == session_id
+            EvaluationConfig.session_id == chat_session.id
         )
         result = await db.execute(query)
         config = result.scalar_one_or_none()
@@ -322,7 +331,17 @@ async def get_evaluation_results(
         query = select(EvaluationResult)
 
         if session_id:
-            query = query.where(EvaluationResult.session_id == session_id)
+            # Look up the ChatSession by session_id string to get its UUID
+            from app.models.database_enhanced import ChatSession
+            chat_session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+            chat_session_result = await db.execute(chat_session_query)
+            chat_session = chat_session_result.scalar_one_or_none()
+
+            if chat_session:
+                query = query.where(EvaluationResult.session_id == chat_session.id)
+            else:
+                # Session not found, return empty results
+                return []
 
         if min_score is not None:
             query = query.where(EvaluationResult.overall_score >= min_score)
@@ -370,7 +389,24 @@ async def get_evaluation_analytics(
         )
 
         if session_id:
-            base_query = base_query.where(EvaluationResult.session_id == session_id)
+            # Look up the ChatSession by session_id string to get its UUID
+            from app.models.database_enhanced import ChatSession
+            chat_session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+            chat_session_result = await db.execute(chat_session_query)
+            chat_session = chat_session_result.scalar_one_or_none()
+
+            if chat_session:
+                base_query = base_query.where(EvaluationResult.session_id == chat_session.id)
+            else:
+                # Session not found, return empty results
+                return EvaluationAnalytics(
+                    total_evaluations=0,
+                    avg_overall_score=0.0,
+                    avg_scores_by_method={},
+                    score_distribution={},
+                    common_issues={},
+                    time_series=[]
+                )
 
         # Get all results
         result = await db.execute(base_query)
@@ -496,7 +532,56 @@ async def submit_human_feedback(
     Allows users to provide ratings, thumbs up/down, and detailed feedback.
     """
     try:
-        feedback_obj = HumanFeedback(**feedback.model_dump())
+        # Convert feedback to dict and handle session_id lookup
+        feedback_data = feedback.model_dump()
+
+        # If session_id is provided as a string, look up or create the ChatSession UUID
+        if feedback_data.get('session_id'):
+            chat_session_query = select(ChatSession).where(
+                ChatSession.session_id == feedback_data['session_id']
+            )
+            chat_session_result = await db.execute(chat_session_query)
+            chat_session = chat_session_result.scalar_one_or_none()
+
+            if chat_session:
+                # Replace session_id string with UUID
+                feedback_data['session_id'] = chat_session.id
+            else:
+                # Auto-create the session if it doesn't exist
+                # This allows feedback before any queries are sent
+
+                # Get or create a default user
+                default_user_query = select(User).where(User.username == "anonymous")
+                user_result = await db.execute(default_user_query)
+                default_user = user_result.scalar_one_or_none()
+
+                if not default_user:
+                    # Create anonymous user if it doesn't exist
+                    default_user = User(
+                        username="anonymous",
+                        email="anonymous@example.com",
+                        hashed_password="",  # No password for anonymous
+                        full_name="Anonymous User",
+                        role="user",
+                        is_active=True
+                    )
+                    db.add(default_user)
+                    await db.flush()  # Flush to get the user ID
+
+                # Create new chat session
+                new_session = ChatSession(
+                    session_id=feedback_data['session_id'],
+                    user_id=default_user.id,
+                    title="Feedback Session",
+                    is_active=True
+                )
+                db.add(new_session)
+                await db.flush()  # Flush to get the session ID
+
+                # Replace session_id string with UUID
+                feedback_data['session_id'] = new_session.id
+
+        feedback_obj = HumanFeedback(**feedback_data)
         db.add(feedback_obj)
         await db.commit()
         await db.refresh(feedback_obj)
@@ -509,6 +594,9 @@ async def submit_human_feedback(
             created_at=feedback_obj.created_at
         )
 
+    except HTTPException:
+        await db.rollback()
+        raise
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to submit feedback: {str(e)}")
@@ -527,7 +615,17 @@ async def get_human_feedback(
         query = select(HumanFeedback)
 
         if session_id:
-            query = query.where(HumanFeedback.session_id == session_id)
+            # Look up the ChatSession by session_id string to get its UUID
+            from app.models.database_enhanced import ChatSession
+            chat_session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+            chat_session_result = await db.execute(chat_session_query)
+            chat_session = chat_session_result.scalar_one_or_none()
+
+            if chat_session:
+                query = query.where(HumanFeedback.session_id == chat_session.id)
+            else:
+                # Session not found, return empty results
+                return []
 
         if evaluation_id:
             query = query.where(HumanFeedback.evaluation_id == evaluation_id)

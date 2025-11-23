@@ -4,10 +4,11 @@ import ChatInterface from '@/components/ChatInterfaceEnhanced'
 import Sidebar from '@/components/Sidebar'
 import EvaluationDashboard from '@/components/EvaluationDashboard'
 import DataExtractionHub from '@/components/DataExtractionHub'
+import ProjectEstimator from '@/components/ProjectEstimator'
 import type { RAGConfig } from '@/components/RAGSettings'
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation'>('chat')
+  const [activeTab, setActiveTab] = useState<'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator'>('chat')
   const [sessionId, setSessionId] = useState<string>('')
   const [currentUser, setCurrentUser] = useState<string>('Anonymous')
   const [ragConfig, setRagConfig] = useState<RAGConfig | null>(null)
@@ -44,6 +45,7 @@ export default function Home() {
         <Sidebar
           activeTab={activeTab}
           setActiveTab={setActiveTab}
+          currentUser={currentUser}
           onRAGSettingsChange={handleRAGSettingsChange}
         />
 
@@ -60,8 +62,12 @@ export default function Home() {
                     Real-time analytics and performance insights for your RAG system
                   </p>
                 </div>
-                <EvaluationDashboard sessionId={sessionId} />
+                <EvaluationDashboard />
               </div>
+            </div>
+          ) : activeTab === 'estimator' ? (
+            <div className="flex-1 overflow-y-auto">
+              <ProjectEstimator sessionId={sessionId} />
             </div>
           ) : activeTab === 'extract' ? (
             <div className="flex-1 overflow-y-auto">

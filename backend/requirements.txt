@@ -108,6 +108,21 @@ fastexcel>=0.2.0                 # Fast Excel reading - template parsing
 pyarrow>=14.0.0                  # Parquet support - analytics output format
 
 # ----------------------------------------------------------------------------
+# OCR & IMAGE PROCESSING (Advanced document processing)
+# Used by: app/services/ocr_service.py
+# ----------------------------------------------------------------------------
+pytesseract==0.3.13           # OCR for scanned documents - fallback for Docling
+Pillow==10.2.0                # Image processing - required by pytesseract and OpenCV
+
+# ----------------------------------------------------------------------------
+# TRANSLATION (Multilingual content support)
+# Used by: app/services/translation_service.py
+# ----------------------------------------------------------------------------
+# transformers package already available via sentence-transformers
+sacremoses==0.1.1             # Tokenization for Helsinki-NLP translation models
+sentencepiece==0.1.99         # Subword tokenization for translation models
+
+# ----------------------------------------------------------------------------
 # WORKFLOW ORCHESTRATION (Required for document ingestion pipelines)
 # Used by: app/agents/rag_agent.py
 # ----------------------------------------------------------------------------
@@ -238,3 +253,15 @@ fairlearn==0.9.0                  # Bias and fairness metrics for ML models
 #   Key versions: pydantic 2.8.2, fastapi 0.111.0, langchain 0.2.16
 #
 # ============================================================================
+
+# ----------------------------------------------------------------------------
+# MCP (MODEL CONTEXT PROTOCOL) INTEGRATION (Optional)
+# Used by: app/mcp/server.py, app/mcp/client.py
+# ----------------------------------------------------------------------------
+# NOTE: MCP SDK is optional and only needed if:
+#   1. You want to expose our tools as an MCP service (Provider)
+#   2. You want to connect to external MCP servers (Consumer)
+# Install with: pip install mcp
+# mcp>=1.0.0                      # Model Context Protocol SDK - bidirectional tool integration (optional)
+# If mcp is not available yet, the platform will work without it
+# External MCP servers will be disabled with graceful fallback

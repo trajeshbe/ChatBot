@@ -1,0 +1,110 @@
+{
+  "scenarios": {
+    "baseline": {
+      "name": "Baseline",
+      "description": "Standard rates from reference guide - Balanced approach",
+      "billing_rates": {
+        "planning_rate": 25,
+        "development_rate": 30,
+        "testing_rate": 25,
+        "ui_development_rate": 22,
+        "solution_architect_rate": 40,
+        "scraping_development_rate": 22
+      },
+      "overhead_percentages": {
+        "solution_architect_percentage": 10,
+        "project_manager_percentage": 5,
+        "business_analyst_percentage": 5,
+        "contingency_percentage": 10
+      },
+      "testing_percentages": {
+        "unit_testing_percentage": 20,
+        "qa_testing_percentage": 25,
+        "integration_testing_percentage": 20
+      },
+      "infrastructure_costs": {
+        "one_time_infrastructure": 280,
+        "monthly_bau": 1030
+      }
+    },
+    "conservative": {
+      "name": "Conservative",
+      "description": "Higher rates with increased buffer - Risk-averse estimation",
+      "billing_rates": {
+        "planning_rate": 35,
+        "development_rate": 45,
+        "testing_rate": 35,
+        "ui_development_rate": 30,
+        "solution_architect_rate": 60,
+        "scraping_development_rate": 30
+      },
+      "overhead_percentages": {
+        "solution_architect_percentage": 15,
+        "project_manager_percentage": 8,
+        "business_analyst_percentage": 7,
+        "contingency_percentage": 20
+      },
+      "testing_percentages": {
+        "unit_testing_percentage": 25,
+        "qa_testing_percentage": 30,
+        "integration_testing_percentage": 25
+      },
+      "infrastructure_costs": {
+        "one_time_infrastructure": 500,
+        "monthly_bau": 1500
+      }
+    },
+    "aggressive": {
+      "name": "Aggressive",
+      "description": "Competitive rates with minimal buffer - Optimistic estimation",
+      "billing_rates": {
+        "planning_rate": 20,
+        "development_rate": 25,
+        "testing_rate": 20,
+        "ui_development_rate": 18,
+        "solution_architect_rate": 30,
+        "scraping_development_rate": 18
+      },
+      "overhead_percentages": {
+        "solution_architect_percentage": 7,
+        "project_manager_percentage": 3,
+        "business_analyst_percentage": 3,
+        "contingency_percentage": 5
+      },
+      "testing_percentages": {
+        "unit_testing_percentage": 15,
+        "qa_testing_percentage": 20,
+        "integration_testing_percentage": 15
+      },
+      "infrastructure_costs": {
+        "one_time_infrastructure": 150,
+        "monthly_bau": 700
+      }
+    }
+  },
+  "slider_ranges": {
+    "billing_rates": {
+      "planning_rate": {"min": 15, "max": 50, "step": 1},
+      "development_rate": {"min": 20, "max": 60, "step": 1},
+      "testing_rate": {"min": 15, "max": 50, "step": 1},
+      "ui_development_rate": {"min": 15, "max": 40, "step": 1},
+      "solution_architect_rate": {"min": 30, "max": 80, "step": 1},
+      "scraping_development_rate": {"min": 15, "max": 40, "step": 1}
+    },
+    "overhead_percentages": {
+      "solution_architect_percentage": {"min": 5, "max": 20, "step": 1},
+      "project_manager_percentage": {"min": 3, "max": 10, "step": 1},
+      "business_analyst_percentage": {"min": 3, "max": 10, "step": 1},
+      "contingency_percentage": {"min": 5, "max": 25, "step": 1}
+    },
+    "testing_percentages": {
+      "unit_testing_percentage": {"min": 10, "max": 30, "step": 1},
+      "qa_testing_percentage": {"min": 15, "max": 35, "step": 1},
+      "integration_testing_percentage": {"min": 10, "max": 30, "step": 1}
+    },
+    "infrastructure_costs": {
+      "one_time_infrastructure": {"min": 0, "max": 1000, "step": 10},
+      "monthly_bau": {"min": 0, "max": 3000, "step": 50}
+    }
+  }
+}

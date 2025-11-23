@@ -26,7 +26,12 @@ class RAGService:
         conversation_history: Optional[List[Dict]] = None,
         use_cache: bool = True,
         model_id: Optional[str] = None,
-        db: AsyncSession = None
+        db: AsyncSession = None,
+        # NEW: Optional threshold parameters from UI
+        top_k: Optional[int] = None,
+        similarity_threshold: Optional[float] = None,
+        min_similarity_threshold: Optional[float] = None,
+        no_relevant_docs_threshold: Optional[float] = None
     ) -> Dict:
         """
         Process a query using intelligent RAG pipeline:
@@ -36,8 +41,26 @@ class RAGService:
            - Document-specific → Full RAG pipeline
            - Personal/AI → Direct LLM
         3. Return response with appropriate sources
+
+        Args:
+            query_text: The user's query
+            conversation_history: Optional conversation history
+            use_cache: Whether to use semantic cache
+            model_id: Optional LLM model ID
+            db: Database session
+            top_k: Number of chunks to retrieve (from UI or defaults to settings.TOP_K_RESULTS)
+            similarity_threshold: Minimum similarity score (from UI or defaults to settings.SIMILARITY_THRESHOLD)
+            min_similarity_threshold: Fallback minimum threshold (from UI or defaults to settings.MIN_SIMILARITY_THRESHOLD)
+            no_relevant_docs_threshold: Threshold to determine relevance (from UI or defaults to settings.NO_RELEVANT_DOCS_THRESHOLD)
         """
         start_time = time.time()
+
+        # Use provided values or fall back to settings defaults
+        top_k_to_use = top_k if top_k is not None else settings.TOP_K_RESULTS
+        similarity_threshold_to_use = similarity_threshold if similarity_threshold is not None else settings.SIMILARITY_THRESHOLD
+        no_relevant_threshold_to_use = no_relevant_docs_threshold if no_relevant_docs_threshold is not None else settings.NO_RELEVANT_DOCS_THRESHOLD
+
+        logger.info(f"RAG query with thresholds: top_k={top_k_to_use}, similarity={similarity_threshold_to_use:.2f}, no_relevant={no_relevant_threshold_to_use:.2f}")
 
         try:
             # Step 0: Classify the query BEFORE doing any retrieval
@@ -103,28 +126,28 @@ class RAGService:
             logger.info(f"Processing document-specific query: {query_text[:100]}...")
             query_embedding = await embedding_service.get_embedding(query_text)
 
-            # Step 2: Search for similar chunks using hybrid search
+            # Step 2: Search for similar chunks using hybrid search (with UI or default thresholds)
             similar_chunks = await document_service.search_similar_chunks(
                 query_embedding=query_embedding,
                 query_text=query_text,  # For keyword matching
-                top_k=settings.TOP_K_RESULTS,
-                threshold=settings.SIMILARITY_THRESHOLD,
+                top_k=top_k_to_use,  # Use UI value or default
+                threshold=similarity_threshold_to_use,  # Use UI value or default
                 use_hybrid=True,  # Enable hybrid search
                 db=db
             )
 
             logger.info(f"Found {len(similar_chunks)} chunks (hybrid search)")
 
-            # Filter chunks based on quality threshold
+            # Filter chunks based on quality threshold (using UI or default value)
             # If best match is below NO_RELEVANT_DOCS_THRESHOLD, treat as no results
             filtered_chunks = []
             if similar_chunks:
                 best_score = max(chunk.get('similarity', 0) for chunk in similar_chunks)
-                if best_score >= settings.NO_RELEVANT_DOCS_THRESHOLD:
+                if best_score >= no_relevant_threshold_to_use:  # Use UI value or default
                     filtered_chunks = similar_chunks
-                    logger.info(f"✅ {len(filtered_chunks)} high-quality chunks (best score: {best_score:.3f})")
+                    logger.info(f"✅ {len(filtered_chunks)} high-quality chunks (best score: {best_score:.3f}, threshold: {no_relevant_threshold_to_use:.2f})")
                 else:
-                    logger.warning(f"⚠️ Best match score {best_score:.3f} below threshold {settings.NO_RELEVANT_DOCS_THRESHOLD}, treating as no relevant docs")
+                    logger.warning(f"⚠️ Best match score {best_score:.3f} below threshold {no_relevant_threshold_to_use:.2f}, treating as no relevant docs")
 
             # Step 3: Generate response with context
             if filtered_chunks:

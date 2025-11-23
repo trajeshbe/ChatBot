@@ -22,7 +22,11 @@
       "Bash(docker exec:*)",
       "Bash(docker-compose config:*)",
       "Bash(tee:*)",
-      "Bash(if [ -f /tmp/sharp_objects.json ])"
+      "Bash(if [ -f /tmp/sharp_objects.json ])",
+      "Bash(./scripts/testing/comprehensive_books_test.sh:*)",
+      "Bash(if jq:*)",
+      "Bash(then echo '✅ RAG Query successful!' echo echo '   Answer:' jq -r .answer /tmp/test7_rag_query_fixed.json)",
+      "Bash(fold:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,18 +1,20 @@
-import { MessageSquare, Upload, Globe, FileText, BarChart3, Settings, FileSpreadsheet } from 'lucide-react'
+import { MessageSquare, Upload, Globe, FileText, BarChart3, Settings, FileSpreadsheet, Calculator } from 'lucide-react'
 import RAGSettings, { type RAGConfig } from './RAGSettings'
 
 interface Props {
-  activeTab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation'
-  setActiveTab: (tab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation') => void
+  activeTab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator'
+  setActiveTab: (tab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator') => void
+  currentUser?: string
   onRAGSettingsChange?: (settings: RAGConfig) => void
 }
 
-export default function Sidebar({ activeTab, setActiveTab, onRAGSettingsChange }: Props) {
+export default function Sidebar({ activeTab, setActiveTab, currentUser, onRAGSettingsChange }: Props) {
   const tabs = [
     { id: 'chat' as const, icon: MessageSquare, label: 'Chat' },
     { id: 'upload' as const, icon: Upload, label: 'Upload Files' },
     { id: 'scrape' as const, icon: Globe, label: 'Web Scraping' },
     { id: 'extract' as const, icon: FileSpreadsheet, label: 'Data Extraction' },
+    { id: 'estimator' as const, icon: Calculator, label: 'Project Estimator' },
     { id: 'evaluation' as const, icon: BarChart3, label: 'Evaluation' },
   ]
 
@@ -28,6 +30,18 @@ export default function Sidebar({ activeTab, setActiveTab, onRAGSettingsChange }
             <p className="text-[10px] text-slate-500 dark:text-slate-400">Enterprise AI</p>
           </div>
         </div>
+
+        {/* Username Display */}
+        {currentUser && currentUser !== 'Anonymous' && (
+          <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+              <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 font-semibold">
+                {currentUser.charAt(0).toUpperCase()}
+              </div>
+              <span className="font-medium">{currentUser}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       <nav className="flex-1 p-3 overflow-y-auto">

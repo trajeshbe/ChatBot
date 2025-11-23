@@ -129,6 +129,31 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Document service initialization failed: {e}")
 
+    # Initialize MCP integration (optional - graceful fallback if not available)
+    try:
+        logger.info("Initializing MCP integration...")
+        from app.agents.tool_registry import get_tool_registry
+        from app.mcp.server import get_mcp_server
+        from app.mcp.client import initialize_mcp_client
+        from app.mcp.server_registry import get_mcp_server_registry
+        from app.api.routes.mcp_routes import initialize_mcp_instances
+
+        # Initialize components
+        tool_registry = get_tool_registry()
+        mcp_server = await get_mcp_server(tool_registry)
+        mcp_client = await initialize_mcp_client(tool_registry)
+        mcp_registry = get_mcp_server_registry(mcp_client)
+
+        # Initialize route dependencies
+        initialize_mcp_instances(mcp_server, mcp_client, mcp_registry)
+
+        logger.info("✓ MCP integration initialized successfully")
+    except ImportError as e:
+        logger.warning(f"⚠ MCP integration not available: {e}")
+        logger.warning("⚠ Install MCP SDK: pip install mcp")
+    except Exception as e:
+        logger.warning(f"⚠ MCP initialization failed (non-critical): {e}")
+
     # Create default admin user if it doesn't exist
     try:
         logger.info("Checking for default admin user...")
@@ -443,6 +468,8 @@ async def query_endpoint(
     similarity_threshold: Optional[float] = Form(None),
     min_similarity_threshold: Optional[float] = Form(None),
     no_relevant_docs_threshold: Optional[float] = Form(None),
+    # Metrics and evaluation control
+    enable_evaluation: bool = Form(False),  # Control whether to run RAG evaluation metrics
     db: AsyncSession = Depends(get_db)
 ):
     """Query the RAG system with memory hierarchy and conversation context"""
@@ -463,33 +490,77 @@ async def query_endpoint(
             logger.warning("Failed to parse conversation history JSON")
 
     try:
-        # Use enhanced RAG service with memory hierarchy if available
-        if ENHANCED_RAG_AVAILABLE:
-            result = await rag_service.query(
-                query_text=query,
-                session_id=session_id,
-                user_id=user_id,
-                conversation_history=parsed_history,  # FIXED: Pass parsed history
-                use_cache=use_cache,
-                model_id=model_id,
-                db=db,
-                # Pass RAG configuration parameters
-                top_k=top_k,
-                similarity_threshold=similarity_threshold,
-                min_similarity_threshold=min_similarity_threshold,
-                no_relevant_docs_threshold=no_relevant_docs_threshold
-            )
-        else:
-            # Fall back to basic RAG service
-            result = await rag_service.query(
-                query_text=query,
-                conversation_history=parsed_history,  # FIXED: Pass parsed history
-                use_cache=use_cache,
-                model_id=model_id,
-                db=db
-            )
+        # Phase 7: Use EnhancedRAGAgent for multi-tool orchestration
+        # The agent will:
+        # 1. Classify the query (detect URLs, intents)
+        # 2. Select appropriate tools (document_rag, smart_extraction, web_scraper, etc.)
+        # 3. Execute tools (in parallel if needed)
+        # 4. Return results with comprehensive metadata
+
+        from app.agents.enhanced_rag_agent import enhanced_rag_agent
+
+        logger.info(f"🤖 Using EnhancedRAGAgent for query: {query[:100]}...")
+
+        # Build user preferences from RAG configuration
+        user_preferences = {
+            "top_k": top_k,
+            "similarity_threshold": similarity_threshold,
+            "min_similarity_threshold": min_similarity_threshold,
+            "no_relevant_docs_threshold": no_relevant_docs_threshold,
+            "use_cache": use_cache,
+            "model_id": model_id,
+            "conversation_history": parsed_history,
+            "enable_evaluation": enable_evaluation,  # Pass evaluation flag to agent
+            "user_id": user_id,
+            "db": db
+        }
+
+        # Call enhanced agent
+        result = await enhanced_rag_agent.run(
+            query=query,
+            session_id=session_id,
+            user_preferences=user_preferences
+        )
 
         latency_ms = (time.time() - start_time) * 1000
+
+        # Auto-evaluation: Check if enabled and trigger async evaluation
+        if session_id and result.get('quality_metrics'):
+            try:
+                from app.models.database_enhanced import EvaluationConfig as DBEvaluationConfig, ChatSession
+                import asyncio
+
+                # Check if session has auto-evaluation enabled
+                chat_session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+                chat_session_result = await db.execute(chat_session_query)
+                chat_session = chat_session_result.scalar_one_or_none()
+
+                if chat_session:
+                    eval_config_query = select(DBEvaluationConfig).where(
+                        DBEvaluationConfig.session_id == chat_session.id
+                    )
+                    eval_config_result = await db.execute(eval_config_query)
+                    eval_config = eval_config_result.scalar_one_or_none()
+
+                    if eval_config and eval_config.auto_evaluate:
+                        logger.info(f"🔄 Auto-evaluation enabled for session {session_id}, triggering evaluation...")
+
+                        # Trigger evaluation asynchronously (don't block response)
+                        asyncio.create_task(
+                            _save_evaluation_async(
+                                db=db,
+                                session_id=chat_session.id,
+                                query=query,
+                                response=result.get('answer', ''),
+                                quality_metrics=result.get('quality_metrics', {}),
+                                sources=result.get('sources', []),
+                                model_used=result.get('model', 'unknown'),
+                                latency_ms=latency_ms
+                            )
+                        )
+            except Exception as eval_error:
+                # Don't fail the request if evaluation fails
+                logger.warning(f"Auto-evaluation failed (non-critical): {eval_error}")
 
         # Audit logging
         if audit_service:
@@ -504,6 +575,16 @@ async def query_endpoint(
                 ip_address=ip_address,
                 user_agent=user_agent
             )
+
+        # 🆕 ADD PERFORMANCE METRICS TO RESPONSE (for frontend display)
+        result['latency_ms'] = latency_ms
+        result['tokens_used'] = result.get('metadata', {}).get('tokens', 0)  # Extract tokens from metadata if available
+        result['num_sources'] = len(result.get('sources', []))
+        result['cached'] = result.get('metadata', {}).get('cache_hit', False)
+
+        # 🆕 EXPOSE QUALITY METRICS AT TOP LEVEL (if present in metadata)
+        if 'metadata' in result and 'quality_metrics' in result['metadata']:
+            result['quality_metrics'] = result['metadata']['quality_metrics']
 
         return result
 
@@ -671,6 +752,16 @@ except ImportError as e:
 except Exception as e:
     logger.warning(f"Could not register Template Extraction router: {e}")
 
+# Project Estimator API (BRD and Cost Estimation)
+try:
+    from app.api.routes import project_estimator_routes
+    app.include_router(project_estimator_routes.router)
+    logger.info("✓ Project Estimator API router registered (BRD and cost estimation generation)")
+except ImportError as e:
+    logger.warning(f"Project Estimator API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Project Estimator router: {e}")
+
 # Playwright test routes (for debugging)
 try:
     from app.api.routes import playwright_test_routes
@@ -700,6 +791,49 @@ except ImportError as e:
     logger.warning(f"Ollama Model Management API not available: {e}")
 except Exception as e:
     logger.warning(f"Could not register Ollama Model Management router: {e}")
+
+# Evaluation Metrics API (RAG system analytics and performance monitoring)
+try:
+    from app.api.routes import evaluation
+    app.include_router(evaluation.router)
+    logger.info("✓ Evaluation Metrics API router registered (real-time analytics and performance insights)")
+except ImportError as e:
+    logger.warning(f"Evaluation Metrics API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Evaluation Metrics router: {e}")
+
+# MCP Management API (Model Context Protocol - bidirectional tool integration)
+try:
+    from app.api.routes import mcp_routes
+    app.include_router(mcp_routes.router)
+    logger.info("✓ MCP Management API router registered (provider + consumer management)")
+except ImportError as e:
+    logger.warning(f"⚠ MCP Management API not available: {e}")
+    logger.warning("⚠ Install MCP SDK: pip install mcp")
+except Exception as e:
+    logger.warning(f"Could not register MCP Management router: {e}")
+
+# Tool Discovery API (Multi-Tool Agent - tool listing and management)
+try:
+    from app.api.routes import tool_routes
+    app.include_router(tool_routes.router)
+    logger.info("✓ Tool Discovery API router registered (list, search, and manage tools)")
+except Exception as e:
+    logger.warning(f"Could not register Tool Discovery router: {e}")
+
+# Scraping Configuration & Compliance API (Admin-level scraping policy management)
+try:
+    from app.api.routes import scraping_config_routes
+    app.include_router(
+        scraping_config_routes.router,
+        prefix="/api/v1/admin",
+        tags=["admin", "scraping-configs"]
+    )
+    logger.info("✓ Scraping Configuration API router registered (domain policies, compliance, audit)")
+except ImportError as e:
+    logger.warning(f"⚠ Scraping Configuration API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Scraping Configuration router: {e}")
 
 
 # === Admin API Endpoints ===
@@ -1959,6 +2093,67 @@ async def debug_embeddings(db: AsyncSession = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error in embeddings diagnostic: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _save_evaluation_async(
+    db: AsyncSession,
+    session_id: uuid.UUID,
+    query: str,
+    response: str,
+    quality_metrics: dict,
+    sources: list,
+    model_used: str,
+    latency_ms: float
+):
+    """
+    Save evaluation results to database asynchronously
+
+    This runs in the background and doesn't block the API response.
+    """
+    try:
+        from app.models.database_enhanced import EvaluationResult
+        import json
+
+        # Get a new database session for async task
+        from app.core.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as eval_db:
+            # Calculate overall score from available metrics
+            scores = []
+            if 'rag_score' in quality_metrics:
+                scores.append(quality_metrics['rag_score'])
+            if 'faithfulness' in quality_metrics:
+                scores.append(quality_metrics['faithfulness'])
+            if 'answer_relevancy' in quality_metrics:
+                scores.append(quality_metrics['answer_relevancy'])
+            if 'context_relevancy' in quality_metrics:
+                scores.append(quality_metrics['context_relevancy'])
+
+            overall_score = sum(scores) / len(scores) if scores else 0.5
+
+            # Create evaluation result
+            eval_result = EvaluationResult(
+                session_id=session_id,
+                query=query,
+                response=response,
+                overall_score=overall_score,
+                scores=quality_metrics,  # Store all metrics as JSON
+                evaluation_time_ms=quality_metrics.get('evaluation_time_ms', 0),
+                enabled_methods=quality_metrics.get('enabled_methods', []),
+                metadata={
+                    'model_used': model_used,
+                    'query_latency_ms': latency_ms,
+                    'num_sources': len(sources),
+                    'auto_evaluated': True
+                }
+            )
+
+            eval_db.add(eval_result)
+            await eval_db.commit()
+
+            logger.info(f"✅ Auto-evaluation saved for session {session_id} (score: {overall_score:.2f})")
+
+    except Exception as e:
+        logger.error(f"Failed to save auto-evaluation: {e}", exc_info=True)
 
 
 # OpenTelemetry instrumentation (if enabled)

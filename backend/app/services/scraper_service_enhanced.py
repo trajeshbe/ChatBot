@@ -90,9 +90,50 @@ class EnhancedScraperService:
         Returns:
             Dict with scraped content and metadata
         """
+        import time
+        start_time = time.time()
+
         # Check if web scraping is enabled
         if not settings.ENABLE_WEB_SCRAPING:
             raise ValueError("Web scraping is disabled. Enable ENABLE_WEB_SCRAPING in settings.")
+
+        # ============================================================
+        # SCRAPING COMPLIANCE CHECK - Check configured policies
+        # ============================================================
+        compliance_check = None
+        if db:
+            from app.services.scraping_config_service import scraping_config_service
+
+            compliance_check = await scraping_config_service.check_scraping_allowed(db, url)
+
+            # If scraping is not allowed, raise error
+            if not compliance_check.get('allowed', False):
+                error_msg = compliance_check.get('reason', 'Scraping not allowed for this domain')
+                alternative = compliance_check.get('alternative') or compliance_check.get('recommendation')
+
+                if alternative:
+                    error_msg += f"\n\nAlternative: {alternative}"
+
+                # Log the blocked attempt
+                await scraping_config_service.log_scraping_attempt(
+                    db=db,
+                    url=url,
+                    method=strategy or 'auto',
+                    success=False,
+                    error_message=error_msg,
+                    robots_txt_allowed=compliance_check.get('status') != 'robots_blocked',
+                    session_id=session_id
+                )
+
+                raise ValueError(error_msg)
+
+            # If API should be used instead, provide API info
+            if compliance_check.get('use_api'):
+                api_endpoint = compliance_check.get('api_endpoint')
+                logger.info(f"API preferred for this domain: {api_endpoint}")
+                # Note: Actual API integration would be implemented based on specific API
+                # For now, we'll log this but continue with scraping
+                # In production, you'd implement API-specific handlers here
 
         # Create scrape job
         job = None
@@ -108,6 +149,15 @@ class EnhancedScraperService:
 
         try:
             logger.info(f"Starting enhanced scrape job for URL: {url}")
+
+            # Apply rate limiting from compliance check
+            if compliance_check and compliance_check.get('rate_limit'):
+                rate_limit = compliance_check['rate_limit']
+                delay = rate_limit.get('delay_seconds', 0)
+                if delay > 0:
+                    logger.info(f"Applying rate limit delay: {delay}s")
+                    import asyncio
+                    await asyncio.sleep(delay)
 
             # Use custom config or default
             scraper_config = config or self._default_config
@@ -160,6 +210,28 @@ class EnhancedScraperService:
                 job.completed_at = func.now()
                 await db.commit()
 
+            # Calculate metrics
+            response_time_ms = (time.time() - start_time) * 1000
+            bytes_downloaded = len(content_bytes)
+
+            # ============================================================
+            # LOG SUCCESSFUL SCRAPING ATTEMPT
+            # ============================================================
+            if db:
+                from app.services.scraping_config_service import scraping_config_service
+                await scraping_config_service.log_scraping_attempt(
+                    db=db,
+                    url=url,
+                    method=scraped_content.strategy_used,
+                    success=True,
+                    status_code=200,  # Successful scraping
+                    response_time_ms=response_time_ms,
+                    bytes_downloaded=bytes_downloaded,
+                    robots_txt_allowed=compliance_check.get('status') != 'robots_blocked' if compliance_check else True,
+                    rate_limit_respected=True,
+                    session_id=session_id
+                )
+
             logger.info(f"Successfully scraped and processed {url} using {scraped_content.strategy_used}")
 
             return {
@@ -170,11 +242,35 @@ class EnhancedScraperService:
                 'content_length': scraped_content.content_length,
                 'url': url,
                 'strategy_used': scraped_content.strategy_used,
-                'metadata': scraped_content.metadata
+                'metadata': scraped_content.metadata,
+                'compliance': {
+                    'checked': compliance_check is not None,
+                    'status': compliance_check.get('status') if compliance_check else 'no_config',
+                    'rate_limited': compliance_check.get('rate_limit') is not None if compliance_check else False
+                }
             }
 
         except Exception as e:
             logger.error(f"Error scraping URL {url}: {e}")
+
+            # Calculate metrics
+            response_time_ms = (time.time() - start_time) * 1000
+
+            # ============================================================
+            # LOG FAILED SCRAPING ATTEMPT
+            # ============================================================
+            if db:
+                from app.services.scraping_config_service import scraping_config_service
+                await scraping_config_service.log_scraping_attempt(
+                    db=db,
+                    url=url,
+                    method=strategy or 'auto',
+                    success=False,
+                    error_message=str(e),
+                    response_time_ms=response_time_ms,
+                    robots_txt_allowed=compliance_check.get('status') != 'robots_blocked' if compliance_check else None,
+                    session_id=session_id
+                )
 
             # Update job status
             if db and job:
