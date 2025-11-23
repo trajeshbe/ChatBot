@@ -838,29 +838,100 @@ class ToolRegistry:
 
         Navigates through multiple pages using AI guidance.
         """
-        # Call the ultra-smart extraction with navigation
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(
-                "http://localhost:8000/api/v1/extract/ultra-smart",
-                json={
-                    "url": start_url,
-                    "user_instructions": navigation_instructions,
-                    "source_type": "url",
-                    "llm_provider": "openai",
-                    "model_id": "gpt-4-turbo"
-                }
-            )
+        import time
+        from app.services.tool_usage_tracker import tool_tracker, ToolCategory
+        from app.core.database import AsyncSessionLocal
+        from app.core.config import settings
 
-            response.raise_for_status()
-            data = response.json()
+        start_time = time.time()
 
-        return {
-            "success": data.get("success", False),
-            "table": data.get("table", []),
-            "row_count": data.get("row_count", 0),
-            "extraction_metadata": data.get("extraction_metadata", {}),
-            "pages_visited": data.get("extraction_metadata", {}).get("metadata", {}).get("steps_taken", 1)
-        }
+        try:
+            # Call the ultra-smart extraction with navigation
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.post(
+                    "http://localhost:8000/api/v1/extract/ultra-smart",
+                    json={
+                        "url": start_url,
+                        "user_instructions": navigation_instructions,
+                        "source_type": "url",
+                        "llm_provider": "openai",
+                        "model_id": "gpt-4-turbo"
+                    }
+                )
+
+                response.raise_for_status()
+                data = response.json()
+
+            processing_time = (time.time() - start_time) * 1000
+
+            # Track navigation_agent tool usage
+            try:
+                async with AsyncSessionLocal() as track_db:
+                    await tool_tracker.record_tool_usage(
+                        category=ToolCategory.WEB_SCRAPING,
+                        tool_name="navigation_agent",
+                        operation="navigate_and_extract",
+                        db=track_db,
+                        session_id=None,
+                        success=data.get("success", False),
+                        latency_ms=processing_time,
+                        input_size=len(start_url),
+                        output_size=data.get("row_count", 0),
+                        metadata={
+                            'start_url': start_url,
+                            'navigation_instructions': navigation_instructions[:200],  # Truncate
+                            'max_pages': max_pages,
+                            'pages_visited': data.get("extraction_metadata", {}).get("metadata", {}).get("steps_taken", 1),
+                            'row_count': data.get("row_count", 0)
+                        }
+                    )
+                    await track_db.commit()
+                    logger.info(f"📊 Tool usage tracked: navigation_agent ({processing_time:.2f}ms)")
+            except Exception as track_error:
+                logger.warning(f"Failed to track navigation_agent usage: {track_error}")
+
+            return {
+                "success": data.get("success", False),
+                "table": data.get("table", []),
+                "row_count": data.get("row_count", 0),
+                "extraction_metadata": data.get("extraction_metadata", {}),
+                "pages_visited": data.get("extraction_metadata", {}).get("metadata", {}).get("steps_taken", 1)
+            }
+
+        except Exception as e:
+            processing_time = (time.time() - start_time) * 1000
+            logger.error(f"Navigation agent failed: {e}")
+
+            # Track failed attempt
+            try:
+                async with AsyncSessionLocal() as track_db:
+                    await tool_tracker.record_tool_usage(
+                        category=ToolCategory.WEB_SCRAPING,
+                        tool_name="navigation_agent",
+                        operation="navigate_and_extract",
+                        db=track_db,
+                        session_id=None,
+                        success=False,
+                        latency_ms=processing_time,
+                        input_size=len(start_url),
+                        output_size=0,
+                        metadata={
+                            'start_url': start_url,
+                            'error': str(e)[:500]
+                        }
+                    )
+                    await track_db.commit()
+            except Exception as track_error:
+                logger.warning(f"Failed to track failed navigation_agent: {track_error}")
+
+            return {
+                "success": False,
+                "table": [],
+                "row_count": 0,
+                "extraction_metadata": {},
+                "pages_visited": 0,
+                "error": str(e)
+            }
 
 
 # Global registry instance

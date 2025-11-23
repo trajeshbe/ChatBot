@@ -2007,6 +2007,10 @@ async def ultra_smart_extract(
     - Research and data gathering
     """
     try:
+        import time
+        from app.services.tool_usage_tracker import tool_tracker, ToolCategory
+        from app.core.config import settings
+
         logger.info("="*80)
         logger.info("🚀 ULTRA-SMART EXTRACTION REQUEST")
         logger.info(f"📍 URL: {request.url}")
@@ -2014,6 +2018,9 @@ async def ultra_smart_extract(
         logger.info(f"🎯 Source Type: {request.source_type}")
         logger.info(f"🤖 LLM: {request.llm_provider}, Vision: {request.vision_provider}")
         logger.info("="*80)
+
+        # Start timing for tool tracking
+        start_time = time.time()
 
         # Import Ultra-Smart Extractor
         from app.services.webscraper.extractors.ultra_smart_extractor import UltraSmartExtractor
@@ -2080,7 +2087,37 @@ async def ultra_smart_extract(
             vision_provider=request.vision_provider
         )
 
-        logger.info(f"✅ Ultra-Smart extraction complete: {result.get('row_count', 0)} rows extracted")
+        # Calculate processing time
+        processing_time = (time.time() - start_time) * 1000
+
+        logger.info(f"✅ Ultra-Smart extraction complete: {result.get('row_count', 0)} rows extracted in {processing_time:.2f}ms")
+
+        # ============================================================
+        # TOOL TRACKING - Track smart_extraction tool usage
+        # ============================================================
+        if db:
+            try:
+                await tool_tracker.record_tool_usage(
+                    category=ToolCategory.WEB_SCRAPING,
+                    tool_name="smart_extraction",
+                    operation="extract_to_table",
+                    db=db,
+                    session_id=request.session_id,
+                    success=result.get("success", False),
+                    latency_ms=processing_time,
+                    input_size=len(request.url),
+                    output_size=result.get("row_count", 0),
+                    metadata={
+                        'url': request.url,
+                        'extraction_method': result.get('extraction_metadata', {}).get('extraction_method'),
+                        'row_count': result.get('row_count', 0),
+                        'source_type': request.source_type,
+                        'llm_provider': request.llm_provider
+                    }
+                )
+                logger.info(f"📊 Tool usage tracked: smart_extraction ({processing_time:.2f}ms)")
+            except Exception as e:
+                logger.warning(f"Failed to track tool usage: {e}")
 
         return UltraSmartExtractResponse(
             success=result.get("success", False),

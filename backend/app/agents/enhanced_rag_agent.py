@@ -238,7 +238,31 @@ class EnhancedRAGAgent(RAGAgent):
         """
         query_lower = query.lower()
 
-        # Check for web scraping keywords
+        # ============================================================
+        # PRIORITY 1: Check for NAVIGATION keywords FIRST
+        # (before generic scraping/URL detection)
+        # ============================================================
+        if any(word in query_lower for word in [
+            "navigate", "navigation", "pagination", "paginate",
+            "next page", "all pages", "multiple pages", "go through"
+        ]):
+            # Check if URL exists
+            import re
+            url_match = re.search(r'https?://[^\s]+', query)
+
+            if url_match:
+                url = url_match.group(0)
+
+                # Use navigation_agent for multi-page extraction
+                return "navigation_agent", {
+                    "start_url": url,
+                    "navigation_instructions": query.replace(url, "").strip() or "Navigate and extract all data",
+                    "max_pages": 10  # Default max pages
+                }
+
+        # ============================================================
+        # PRIORITY 2: Check for web scraping keywords
+        # ============================================================
         if any(word in query_lower for word in [
             "scrape", "extract from", "get data from", "fetch from",
             "http://", "https://", ".com", ".org", ".net"
