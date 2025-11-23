@@ -52,7 +52,8 @@ hiredis==2.3.2                # Redis protocol parser - improves Redis performan
 # ----------------------------------------------------------------------------
 openai==1.40.0                # OpenAI API client - LLM fallback for responses (updated for langchain compatibility)
 anthropic==0.39.0             # Anthropic Claude API client - Claude models support
-sentence-transformers==2.3.1  # Embedding generation - creates vector embeddings for documents
+sentence-transformers==2.3.1  # Embedding generation + CrossEncoder reranker - creates vectors & reranks results
+torch>=2.0.0                  # 🆕 PyTorch - Required for CrossEncoder reranker (GPU-accelerated if CUDA available)
 
 # ----------------------------------------------------------------------------
 # AI & LLM - AGENTIC WORKFLOWS (Required for complex query orchestration)

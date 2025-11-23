@@ -629,11 +629,11 @@ Respond by calling the appropriate tool function(s)."""
         # Special handling for document_rag - it already has answer from RAG service
         if tool_id == "document_rag":
             # Document RAG already used the user's chosen model via RAG service
-            # Just return the result as-is
+            # Just return the result as-is, including quality_metrics
             sources = result_data.get("sources", [])
             answer = result_data.get("answer", "I don't have any information about that in my documents.")
 
-            return {
+            response = {
                 "answer": answer,
                 "sources": sources,
                 "metadata": {
@@ -641,6 +641,12 @@ Respond by calling the appropriate tool function(s)."""
                     "synthesis_method": "rag_service"
                 }
             }
+
+            # ✅ Pass through quality_metrics if present
+            if "quality_metrics" in result_data:
+                response["quality_metrics"] = result_data["quality_metrics"]
+
+            return response
 
         # For other tools (smart_extraction, web_scraper, etc.):
         # Format tool results as context and let RAG service generate natural answer

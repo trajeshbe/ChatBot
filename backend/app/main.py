@@ -586,6 +586,23 @@ async def query_endpoint(
         if 'metadata' in result and 'quality_metrics' in result['metadata']:
             result['quality_metrics'] = result['metadata']['quality_metrics']
 
+        # 🆕 EXPOSE TOOLS_USED AT TOP LEVEL (for frontend tool display)
+        if 'metadata' in result and 'tool_usage' in result['metadata']:
+            tool_usage = result['metadata']['tool_usage']
+            # Convert tool_usage format to tools_used format expected by frontend
+            if 'tools_used' in tool_usage and 'tool_timing' in tool_usage:
+                tools_used_list = []
+                for tool_name in tool_usage['tools_used']:
+                    timing_ms = tool_usage['tool_timing'].get(tool_name, 0)
+                    tool_entry = {
+                        'tool': tool_name,
+                        'timestamp_ms': timing_ms,
+                        'details': tool_usage.get('tool_execution_summary', {}).get(tool_name, {}).get('error') or f"execution time: {timing_ms:.2f}ms"
+                    }
+                    tools_used_list.append(tool_entry)
+                result['tools_used'] = tools_used_list
+                logger.debug(f"✅ Exposed {len(tools_used_list)} tools to frontend")
+
         return result
 
     except Exception as e:
@@ -801,6 +818,16 @@ except ImportError as e:
     logger.warning(f"Evaluation Metrics API not available: {e}")
 except Exception as e:
     logger.warning(f"Could not register Evaluation Metrics router: {e}")
+
+# 🆕 Tool Usage Statistics API (comprehensive tool tracking and analytics)
+try:
+    from app.api.routes import tool_stats_routes
+    app.include_router(tool_stats_routes.router)
+    logger.info("✓ Tool Usage Statistics API router registered (tracks all tools: Docling, Playwright, LLM, RAG, MCP)")
+except ImportError as e:
+    logger.warning(f"Tool Usage Statistics API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Tool Usage Statistics router: {e}")
 
 # MCP Management API (Model Context Protocol - bidirectional tool integration)
 try:

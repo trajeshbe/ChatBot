@@ -19,6 +19,7 @@ class RagPipelineSettings(BaseSettings):
 
     # Embedding models
     EMBEDDING_MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"
+    EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"  # 🆕 Short name for cache versioning
     EMBEDDING_DIMENSION: int = 384
 
     # Generation models (with fallback chain)
@@ -39,12 +40,24 @@ class RagPipelineSettings(BaseSettings):
     RETRIEVAL_CANDIDATES: int = 20      # Initial retrieval pool
     RETRIEVAL_ALPHA: float = 0.7        # Semantic vs lexical weight (0.7 = 70% semantic)
 
+    # 🆕 Hybrid search weights (for cache versioning)
+    SEMANTIC_WEIGHT: float = 0.8        # 80% semantic (vector similarity)
+    KEYWORD_WEIGHT: float = 0.2         # 20% keyword (lexical matching)
+
+    # 🆕 Chunking parameters (for cache versioning)
+    CHUNK_SIZE: int = 800               # Text chunk size in characters
+    CHUNK_OVERLAP: int = 150            # Overlap between chunks
+
+    # 🆕 Top-K results (for cache versioning)
+    TOP_K_RESULTS: int = 5              # Number of top results to retrieve
+
     # Context window management
     CONTEXT_CHUNKS: int = 5             # Chunks to use for generation (post-reranking)
     MAX_CONTEXT_LENGTH: int = 8000      # Max tokens for context (model-dependent)
 
     # Similarity thresholds
     MIN_SIMILARITY_THRESHOLD: float = 0.1  # Minimum for any result
+    SIMILARITY_THRESHOLD: float = 0.5      # 🆕 Standard similarity threshold for retrieval
     GOOD_SIMILARITY_THRESHOLD: float = 0.6 # Good match threshold
 
     # ====================================================================

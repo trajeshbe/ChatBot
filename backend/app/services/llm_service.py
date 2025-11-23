@@ -8,6 +8,16 @@ import time
 
 logger = logging.getLogger(__name__)
 
+# 🆕 Tool usage tracking
+try:
+    from app.services.tool_usage_tracker import tool_tracker, ToolCategory
+    from app.core.database import AsyncSessionLocal
+    TOOL_TRACKING_ENABLED = True
+    logger.info("✅ Tool usage tracking enabled for LLM service")
+except ImportError:
+    TOOL_TRACKING_ENABLED = False
+    logger.warning("⚠️  Tool usage tracking not available")
+
 
 class LLMService:
     def __init__(self):
@@ -106,6 +116,68 @@ class LLMService:
         if self.ollama_client:
             await self.ollama_client.aclose()
 
+    def _calculate_cost(self, model_name: str, tokens: int) -> float:
+        """Calculate approximate cost in USD based on model and tokens"""
+        # Pricing per 1M tokens (as of 2025)
+        pricing = {
+            "gpt-4": 0.03,  # $30 per 1M tokens (average input/output)
+            "gpt-4-turbo-preview": 0.02,
+            "gpt-3.5-turbo": 0.002,  # $2 per 1M tokens
+            "claude-3-opus": 0.04,  # $40 per 1M tokens
+            "claude-3-sonnet": 0.01,
+            "claude-3-haiku": 0.001,
+            # Local models have no API cost
+            "ollama": 0.0,
+            "vllm": 0.0,
+            "llama-cpp": 0.0
+        }
+
+        # Find matching price (check if model_name contains key)
+        cost_per_1m = 0.0
+        for model_key, price in pricing.items():
+            if model_key in model_name.lower():
+                cost_per_1m = price
+                break
+
+        return (tokens / 1_000_000) * cost_per_1m
+
+    async def _track_llm_usage(
+        self,
+        tool_name: str,
+        operation: str,
+        latency_ms: float,
+        success: bool,
+        input_size: int = 0,
+        output_size: int = 0,
+        tokens_used: int = 0,
+        cost_usd: float = 0.0,
+        error_message: str = None,
+        session_id: Optional[str] = None
+    ):
+        """Helper to track LLM usage without requiring external db session"""
+        if not TOOL_TRACKING_ENABLED:
+            return
+
+        try:
+            async with AsyncSessionLocal() as db:
+                await tool_tracker.record_tool_usage(
+                    category=ToolCategory.LLM_SERVICE,
+                    tool_name=tool_name,
+                    operation=operation,
+                    latency_ms=latency_ms,
+                    success=success,
+                    db=db,
+                    session_id=session_id,
+                    input_size=input_size,
+                    output_size=output_size,
+                    tokens_used=tokens_used,
+                    cost_usd=cost_usd,
+                    error_message=error_message
+                )
+        except Exception as e:
+            # Don't fail the main operation if tracking fails
+            logger.debug(f"Failed to track LLM usage: {e}")
+
     @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
     async def _call_vllm(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> Dict:
         """Call vLLM service"""
@@ -158,16 +230,21 @@ class LLMService:
             raise
 
     @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
-    async def _call_ollama(self, prompt: str, messages: Optional[List[Dict]] = None, max_tokens: int = 512, temperature: float = 0.7) -> Dict:
+    async def _call_ollama(self, prompt: str, messages: Optional[List[Dict]] = None, max_tokens: int = 512, temperature: float = 0.7, session_id: Optional[str] = None) -> Dict:
         """Call Ollama service for local LLM inference"""
+        start_time = time.time()
+        success = False
+        error_msg = None
+        tokens = 0
+        content = ""
+        ollama_model = getattr(settings, 'OLLAMA_MODEL', 'llama3.2:3b')
+
         try:
             # CRITICAL: Ensure fresh httpx client (runtime initialization)
             client = await self._ensure_ollama_client()
 
             # Ollama endpoint (from settings or default)
             ollama_endpoint = getattr(settings, 'OLLAMA_ENDPOINT', 'http://ollama:11434')
-            # Default model (can be configured in settings)
-            ollama_model = getattr(settings, 'OLLAMA_MODEL', 'llama3.2:3b')
 
             logger.info(f"🦙 Calling Ollama at {ollama_endpoint}")
             logger.info(f"📦 Using model: {ollama_model}")
@@ -212,33 +289,66 @@ class LLMService:
             else:
                 content = result_json.get("response", "")
 
+            tokens = result_json.get("eval_count", 0) + result_json.get("prompt_eval_count", 0)
+            success = True
+
             logger.info(f"✅ Ollama response received ({len(content)} chars)")
 
             return {
                 "content": content,
                 "model": "ollama",
                 "model_name": f"Ollama ({ollama_model})",
-                "tokens": result_json.get("eval_count", 0) + result_json.get("prompt_eval_count", 0)
+                "tokens": tokens
             }
 
         except httpx.ConnectError as e:
+            error_msg = str(e)
             logger.error(f"❌ Ollama connection failed: {e}")
             logger.error("💡 Is Ollama service running? Check: docker ps | grep ollama")
             raise
         except httpx.HTTPStatusError as e:
+            error_msg = str(e)
             logger.error(f"❌ Ollama HTTP error: {e}")
             logger.error(f"💡 Status: {e.response.status_code}")
             if e.response.status_code == 404:
                 logger.error(f"💡 Model '{ollama_model}' not found. Pull it with: ollama pull {ollama_model}")
             raise
         except Exception as e:
+            error_msg = str(e)
             logger.error(f"❌ Ollama call failed: {e}")
             raise
 
-    async def _call_openai(self, messages: List[Dict], max_tokens: int = 512, temperature: float = 0.7) -> Dict:
+        finally:
+            # 🆕 Track LLM usage (success or failure)
+            latency_ms = (time.time() - start_time) * 1000
+            if messages:
+                prompt_text = " ".join([m.get("content", "") for m in messages])
+            else:
+                prompt_text = prompt
+
+            await self._track_llm_usage(
+                tool_name=f"ollama/{ollama_model}",
+                operation="chat_completion" if messages else "generate",
+                latency_ms=latency_ms,
+                success=success,
+                input_size=len(prompt_text),
+                output_size=len(content),
+                tokens_used=tokens,
+                cost_usd=0.0,  # Ollama is free/local
+                error_message=error_msg,
+                session_id=session_id
+            )
+
+    async def _call_openai(self, messages: List[Dict], max_tokens: int = 512, temperature: float = 0.7, session_id: Optional[str] = None) -> Dict:
         """Call OpenAI API as final fallback"""
         if not self.openai_client:
             raise ValueError("OpenAI client not initialized")
+
+        start_time = time.time()
+        success = False
+        error_msg = None
+        tokens = 0
+        content = ""
 
         try:
             response = await self.openai_client.chat.completions.create(
@@ -247,14 +357,21 @@ class LLMService:
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
-            return {
-                "content": response.choices[0].message.content,
+            content = response.choices[0].message.content
+            tokens = response.usage.total_tokens
+            success = True
+
+            result = {
+                "content": content,
                 "model": "openai",
                 "model_name": f"OpenAI ({settings.OPENAI_MODEL})",
-                "tokens": response.usage.total_tokens
+                "tokens": tokens
             }
+            return result
+
         except Exception as e:
-            error_str = str(e).lower()
+            error_msg = str(e)
+            error_str = error_msg.lower()
             if "api_key" in error_str or "authentication" in error_str or "401" in error_str:
                 logger.error(f"OpenAI authentication failed: {e}. Please check OPENAI_API_KEY in .env")
             elif "rate_limit" in error_str or "429" in error_str:
@@ -262,6 +379,24 @@ class LLMService:
             else:
                 logger.error(f"OpenAI call failed: {e}")
             raise
+
+        finally:
+            # 🆕 Track LLM usage (success or failure)
+            latency_ms = (time.time() - start_time) * 1000
+            prompt_text = " ".join([m.get("content", "") for m in messages])
+
+            await self._track_llm_usage(
+                tool_name=f"openai/{settings.OPENAI_MODEL}",
+                operation="chat_completion",
+                latency_ms=latency_ms,
+                success=success,
+                input_size=len(prompt_text),
+                output_size=len(content),
+                tokens_used=tokens,
+                cost_usd=self._calculate_cost(settings.OPENAI_MODEL, tokens),
+                error_message=error_msg,
+                session_id=session_id
+            )
 
     async def generate(
         self,

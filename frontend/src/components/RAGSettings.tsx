@@ -13,16 +13,20 @@ export interface RAGConfig {
   no_relevant_docs_threshold: number
   chunk_size: number
   chunk_overlap: number
+  semantic_weight: number  // 🆕 Hybrid search semantic weight
+  keyword_weight: number   // 🆕 Hybrid search keyword weight (auto-calculated)
 }
 
 // Default values from backend config
 const DEFAULT_CONFIG: RAGConfig = {
   top_k: 5,
-  similarity_threshold: 0.70,
-  min_similarity_threshold: 0.55,
-  no_relevant_docs_threshold: 0.65,
+  similarity_threshold: 0.50,  // Updated to match backend
+  min_similarity_threshold: 0.40,  // Updated to match backend
+  no_relevant_docs_threshold: 0.35,  // Updated to match backend
   chunk_size: 800,
-  chunk_overlap: 150
+  chunk_overlap: 150,
+  semantic_weight: 0.8,  // 🆕 80% semantic (vector similarity)
+  keyword_weight: 0.2    // 🆕 20% keyword (lexical matching)
 }
 
 export default function RAGSettings({ onSettingsChange, compact = false }: RAGSettingsProps) {
@@ -44,7 +48,13 @@ export default function RAGSettings({ onSettingsChange, compact = false }: RAGSe
 
   // Save config to localStorage and notify parent
   const updateConfig = (key: keyof RAGConfig, value: number) => {
-    const newConfig = { ...config, [key]: value }
+    let newConfig = { ...config, [key]: value }
+
+    // 🆕 Auto-update keyword_weight when semantic_weight changes (must sum to 1.0)
+    if (key === 'semantic_weight') {
+      newConfig.keyword_weight = 1.0 - value
+    }
+
     setConfig(newConfig)
     localStorage.setItem('rag_config', JSON.stringify(newConfig))
     if (onSettingsChange) {
@@ -70,6 +80,16 @@ export default function RAGSettings({ onSettingsChange, compact = false }: RAGSe
       step: 1,
       value: config.top_k,
       format: (v: number) => v.toString()
+    },
+    {
+      key: 'semantic_weight' as keyof RAGConfig,
+      label: '🆕 Semantic Weight (Vector)',
+      description: 'Balance between semantic (vector) and keyword (lexical) search. Higher = more semantic.',
+      min: 0.0,
+      max: 1.0,
+      step: 0.05,
+      value: config.semantic_weight,
+      format: (v: number) => `${(v * 100).toFixed(0)}% semantic / ${((1-v) * 100).toFixed(0)}% keyword`
     },
     {
       key: 'similarity_threshold' as keyof RAGConfig,
@@ -126,7 +146,7 @@ export default function RAGSettings({ onSettingsChange, compact = false }: RAGSe
   // Compact mode for sidebar (always show key settings)
   if (compact) {
     const keySettings = settingsItems.filter(item =>
-      ['top_k', 'similarity_threshold'].includes(item.key)
+      ['top_k', 'semantic_weight', 'similarity_threshold'].includes(item.key)
     )
 
     return (
@@ -162,7 +182,7 @@ export default function RAGSettings({ onSettingsChange, compact = false }: RAGSe
 
         {isExpanded && (
           <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-700">
-            {settingsItems.filter(item => !['top_k', 'similarity_threshold'].includes(item.key)).map((item) => (
+            {settingsItems.filter(item => !['top_k', 'semantic_weight', 'similarity_threshold'].includes(item.key)).map((item) => (
               <div key={item.key} className="space-y-1">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-medium text-slate-600 dark:text-slate-400">

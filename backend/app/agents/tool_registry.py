@@ -520,25 +520,35 @@ class ToolRegistry:
         Wrapper for Document RAG service
 
         Calls the RAG service to query uploaded documents.
+
+        FIXED: Now properly passes session_id and top_k parameters.
         """
-        from app.services.rag_service import rag_service
+        from app.services.rag_service_enhanced import enhanced_rag_service
         from app.core.database import AsyncSessionLocal
 
         async with AsyncSessionLocal() as db:
-            result = await rag_service.query(
+            result = await enhanced_rag_service.query(
                 query_text=query,
+                session_id=session_id,  # ✅ FIX: Now passing session_id
                 conversation_history=[],
                 use_cache=True,
+                top_k=top_k,  # ✅ FIX: Now passing top_k
                 db=db
             )
+
+        # 🆕 Preserve ALL metadata from RAG service (including quality_metrics)
+        original_metadata = result.get("metadata", {})
 
         return {
             "answer": result.get("answer", ""),
             "sources": result.get("sources", []),
             "model_used": result.get("model_used", ""),
+            "quality_metrics": result.get("quality_metrics"),  # ✅ Pass through quality_metrics
             "metadata": {
+                **original_metadata,  # ✅ Spread original metadata (includes query_classification, etc.)
                 "chunks_retrieved": len(result.get("sources", [])),
-                "cache_hit": result.get("cache_hit", False)
+                "cache_hit": result.get("cache_hit", False),
+                "num_sources": result.get("num_sources", 0)
             }
         }
 

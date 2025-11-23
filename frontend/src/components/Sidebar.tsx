@@ -1,9 +1,9 @@
-import { MessageSquare, Upload, Globe, FileText, BarChart3, Settings, FileSpreadsheet, Calculator } from 'lucide-react'
+import { MessageSquare, Upload, Globe, FileText, BarChart3, Settings, FileSpreadsheet, Calculator, Wrench } from 'lucide-react'
 import RAGSettings, { type RAGConfig } from './RAGSettings'
 
 interface Props {
-  activeTab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator'
-  setActiveTab: (tab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator') => void
+  activeTab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator' | 'tools'
+  setActiveTab: (tab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator' | 'tools') => void
   currentUser?: string
   onRAGSettingsChange?: (settings: RAGConfig) => void
 }
@@ -16,6 +16,7 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser, onRAGSet
     { id: 'extract' as const, icon: FileSpreadsheet, label: 'Data Extraction' },
     { id: 'estimator' as const, icon: Calculator, label: 'Project Estimator' },
     { id: 'evaluation' as const, icon: BarChart3, label: 'Evaluation' },
+    { id: 'tools' as const, icon: Wrench, label: 'Tool Usage' },
   ]
 
   return (

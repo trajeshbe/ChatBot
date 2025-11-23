@@ -94,16 +94,24 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 800  # Increased from 500 for better context (optimal for embeddings)
     CHUNK_OVERLAP: int = 150  # Increased from 50 for better continuity (20% overlap)
     TOP_K_RESULTS: int = 5
-    SIMILARITY_THRESHOLD: float = 0.75  # INCREASED to 75% for higher quality matches
-    MIN_SIMILARITY_THRESHOLD: float = 0.60  # Minimum threshold for fallback (60% minimum quality)
+    SIMILARITY_THRESHOLD: float = 0.50  # LOWERED to 50% - make vectors accessible to all (per user requirement)
+    MIN_SIMILARITY_THRESHOLD: float = 0.40  # Minimum threshold for fallback (40% - more permissive)
 
     # Source quality thresholds
-    HIGH_QUALITY_SOURCE_THRESHOLD: float = 0.75  # Only show sources above 75% confidence
-    SOURCE_DISPLAY_THRESHOLD: float = 0.70  # Minimum threshold to display a source (70%)
+    HIGH_QUALITY_SOURCE_THRESHOLD: float = 0.70  # Show sources above 70% confidence
+    SOURCE_DISPLAY_THRESHOLD: float = 0.50  # Minimum threshold to display a source (50% - more permissive)
 
     # Query classification thresholds
     # If best match is below this, likely not document-related query
-    NO_RELEVANT_DOCS_THRESHOLD: float = 0.70  # INCREASED to 70% - stricter threshold to prevent irrelevant document retrieval
+    NO_RELEVANT_DOCS_THRESHOLD: float = 0.35  # LOWERED to 35% - ensure all documents are searchable (per user: "vector should be accessible by all")
+
+    # Hybrid Search Weights (CONFIGURABLE - can be overridden per query)
+    # Controls the balance between semantic (vector) and keyword (lexical) search
+    # Default: 80% semantic, 20% keyword for better semantic matching
+    # Higher semantic weight favors meaning/context, higher keyword weight favors exact matches
+    SEMANTIC_WEIGHT: float = 0.8  # 80% weight for vector similarity
+    KEYWORD_WEIGHT: float = 0.2   # 20% weight for keyword matching
+    # Note: SEMANTIC_WEIGHT + KEYWORD_WEIGHT should equal 1.0
 
     # Web Scraping Configuration
     SCRAPER_DEFAULT_STRATEGY: str = "auto"  # auto, trafilatura, beautifulsoup, playwright, hybrid

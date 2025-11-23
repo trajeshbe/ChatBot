@@ -19,6 +19,48 @@ from .config import get_rag_settings
 logger = logging.getLogger(__name__)
 
 
+def generate_config_hash(
+    semantic_weight: float = 0.8,
+    keyword_weight: float = 0.2,
+    top_k: int = 5,
+    similarity_threshold: float = 0.5,
+    chunk_size: int = 800,
+    chunk_overlap: int = 150
+) -> str:
+    """
+    Generate deterministic hash from RAG configuration parameters.
+
+    This hash is used to version cache keys - when any of these parameters
+    change, the cache will be invalidated.
+
+    Args:
+        semantic_weight: Hybrid search semantic weight
+        keyword_weight: Hybrid search keyword weight
+        top_k: Number of results to retrieve
+        similarity_threshold: Minimum similarity threshold
+        chunk_size: Text chunk size
+        chunk_overlap: Chunk overlap size
+
+    Returns:
+        MD5 hash of the configuration (8 characters)
+    """
+    config_dict = {
+        "semantic_weight": round(semantic_weight, 2),
+        "keyword_weight": round(keyword_weight, 2),
+        "top_k": top_k,
+        "similarity_threshold": round(similarity_threshold, 2),
+        "chunk_size": chunk_size,
+        "chunk_overlap": chunk_overlap
+    }
+
+    # Create deterministic JSON string (sorted keys)
+    config_str = json.dumps(config_dict, sort_keys=True)
+    config_hash = hashlib.md5(config_str.encode()).hexdigest()[:8]
+
+    logger.debug(f"Generated config hash: {config_hash} for config: {config_dict}")
+    return config_hash
+
+
 @dataclass
 class CachedAnswer:
     """Cached answer representation"""
@@ -69,25 +111,49 @@ class SemanticCache:
         if self.redis_client:
             await self.redis_client.close()
 
-    def _get_cache_key(self, embedding: List[float], tenant_id: Optional[str] = None) -> str:
+    def _get_cache_key(
+        self,
+        embedding: List[float],
+        tenant_id: Optional[str] = None,
+        model_name: Optional[str] = None,
+        config_hash: Optional[str] = None
+    ) -> str:
         """
-        Generate cache key from embedding.
+        Generate versioned cache key from embedding and configuration.
 
-        Uses hash of embedding for deterministic key generation.
+        Uses hash of embedding + model version + config for deterministic key generation.
+
+        Args:
+            embedding: Query embedding vector
+            tenant_id: Optional tenant ID
+            model_name: Embedding model name (e.g., 'all-MiniLM-L6-v2')
+            config_hash: Hash of RAG configuration affecting results
+
+        Returns:
+            Versioned cache key string
         """
         # Create a deterministic hash from embedding
         embedding_bytes = json.dumps(embedding).encode()
         embedding_hash = hashlib.sha256(embedding_bytes).hexdigest()[:16]
 
+        # 🆕 Add model version to cache key (default if not provided)
+        model_version = model_name or "all-MiniLM-L6-v2"
+        model_hash = hashlib.md5(model_version.encode()).hexdigest()[:8]
+
+        # 🆕 Add config hash to cache key (default if not provided)
+        config_version = config_hash or "default"
+
         if tenant_id:
-            return f"rag_cache:tenant:{tenant_id}:{embedding_hash}"
-        return f"rag_cache:global:{embedding_hash}"
+            return f"rag_cache:v2:tenant:{tenant_id}:{model_hash}:{config_version}:{embedding_hash}"
+        return f"rag_cache:v2:global:{model_hash}:{config_version}:{embedding_hash}"
 
     async def get_cached_answer(
         self,
         embedding: List[float],
         tenant_id: Optional[str] = None,
-        similarity_threshold: Optional[float] = None
+        similarity_threshold: Optional[float] = None,
+        model_name: Optional[str] = None,
+        config_hash: Optional[str] = None
     ) -> Optional[CachedAnswer]:
         """
         Get cached answer if a similar query exists.
@@ -96,6 +162,8 @@ class SemanticCache:
             embedding: Query embedding vector
             tenant_id: Optional tenant ID for isolation
             similarity_threshold: Minimum similarity for cache hit
+            model_name: Embedding model name for versioning
+            config_hash: RAG configuration hash for versioning
 
         Returns:
             CachedAnswer if found, None otherwise
@@ -109,11 +177,16 @@ class SemanticCache:
         similarity_threshold = similarity_threshold or self.settings.CACHE_SIMILARITY_THRESHOLD
 
         try:
-            # Get all cache keys for the tenant
+            # 🆕 Get cache keys for the specific model + config version
+            model_version = model_name or "all-MiniLM-L6-v2"
+            model_hash = hashlib.md5(model_version.encode()).hexdigest()[:8]
+            config_version = config_hash or "default"
+
+            # Get all cache keys for the tenant with matching model + config
             if tenant_id:
-                pattern = f"rag_cache:tenant:{tenant_id}:*"
+                pattern = f"rag_cache:v2:tenant:{tenant_id}:{model_hash}:{config_version}:*"
             else:
-                pattern = "rag_cache:global:*"
+                pattern = f"rag_cache:v2:global:{model_hash}:{config_version}:*"
 
             keys = await self.redis_client.keys(pattern)
 
@@ -179,10 +252,12 @@ class SemanticCache:
         answer: str,
         citations: List[Dict[str, Any]],
         ttl_seconds: Optional[int] = None,
-        original_query: Optional[str] = None
+        original_query: Optional[str] = None,
+        model_name: Optional[str] = None,
+        config_hash: Optional[str] = None
     ):
         """
-        Store answer in semantic cache.
+        Store answer in semantic cache with versioning.
 
         Args:
             embedding: Query embedding vector
@@ -192,6 +267,8 @@ class SemanticCache:
             citations: Source citations
             ttl_seconds: Time to live in seconds
             original_query: Original query before normalization
+            model_name: Embedding model name for versioning
+            config_hash: RAG configuration hash for versioning
         """
         if not self.settings.ENABLE_SEMANTIC_CACHE:
             return
@@ -202,7 +279,7 @@ class SemanticCache:
         ttl_seconds = ttl_seconds or self.settings.CACHE_TTL_SECONDS
 
         try:
-            cache_key = self._get_cache_key(embedding, tenant_id)
+            cache_key = self._get_cache_key(embedding, tenant_id, model_name, config_hash)
 
             cache_data = {
                 "query": original_query or normalized_query,
@@ -293,15 +370,19 @@ async def get_semantic_cache() -> SemanticCache:
 async def get_cached_answer(
     embedding: List[float],
     tenant_id: Optional[str] = None,
-    similarity_threshold: Optional[float] = None
+    similarity_threshold: Optional[float] = None,
+    model_name: Optional[str] = None,
+    config_hash: Optional[str] = None
 ) -> Optional[CachedAnswer]:
     """
-    Get cached answer for a query embedding.
+    Get cached answer for a query embedding with versioning.
 
     Args:
         embedding: Query embedding vector
         tenant_id: Optional tenant ID
         similarity_threshold: Minimum similarity for cache hit
+        model_name: Embedding model name for versioning
+        config_hash: RAG configuration hash for versioning
 
     Returns:
         CachedAnswer if found, None otherwise
@@ -310,7 +391,9 @@ async def get_cached_answer(
     return await cache.get_cached_answer(
         embedding=embedding,
         tenant_id=tenant_id,
-        similarity_threshold=similarity_threshold
+        similarity_threshold=similarity_threshold,
+        model_name=model_name,
+        config_hash=config_hash
     )
 
 
@@ -320,10 +403,12 @@ async def store_answer(
     normalized_query: str,
     answer: str,
     citations: List[Dict[str, Any]],
-    ttl_seconds: Optional[int] = None
+    ttl_seconds: Optional[int] = None,
+    model_name: Optional[str] = None,
+    config_hash: Optional[str] = None
 ):
     """
-    Store answer in semantic cache.
+    Store answer in semantic cache with versioning.
 
     Args:
         embedding: Query embedding vector
@@ -332,6 +417,8 @@ async def store_answer(
         answer: Generated answer
         citations: Source citations
         ttl_seconds: Time to live in seconds
+        model_name: Embedding model name for versioning
+        config_hash: RAG configuration hash for versioning
     """
     cache = await get_semantic_cache()
     await cache.store_answer(
@@ -340,5 +427,7 @@ async def store_answer(
         normalized_query=normalized_query,
         answer=answer,
         citations=citations,
-        ttl_seconds=ttl_seconds
+        ttl_seconds=ttl_seconds,
+        model_name=model_name,
+        config_hash=config_hash
     )

@@ -34,7 +34,15 @@ interface Message {
     context_precision?: number
     evaluation_time_ms?: number
     enabled_methods?: string[]
+    classification_type?: string
+    classification_confidence?: number
   }
+  // 🆕 Tool usage tracking
+  tools_used?: Array<{
+    tool: string
+    timestamp_ms: number
+    details?: string
+  }>
   // RAG settings used for this query
   rag_settings?: {
     top_k?: number
@@ -140,8 +148,9 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   const [filesJustUploaded, setFilesJustUploaded] = useState(false)
   const [expandedMetrics, setExpandedMetrics] = useState<Record<number, boolean>>({})
   const [metricsSettings, setMetricsSettings] = useState<MetricsSettings>({
-    enableEvaluation: false,
+    enableEvaluation: true,  // ✅ Enable by default so RAG metrics show automatically
     showPerformanceMetrics: true,
+    showToolsUsed: true,  // ✅ Enable by default to show tool invocations
   })
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -386,6 +395,10 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       formData.append('min_similarity_threshold', currentRagConfig.min_similarity_threshold.toString())
       formData.append('no_relevant_docs_threshold', currentRagConfig.no_relevant_docs_threshold.toString())
 
+      // 🆕 Add hybrid search weights (semantic vs keyword)
+      formData.append('semantic_weight', currentRagConfig.semantic_weight.toString())
+      formData.append('keyword_weight', currentRagConfig.keyword_weight.toString())
+
       // 🆕 Add metrics settings - enable evaluation flag
       formData.append('enable_evaluation', metricsSettings.enableEvaluation.toString())
 
@@ -421,7 +434,9 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
         // 🆕 Capture evaluation metrics
         quality_metrics: response.data.quality_metrics,
         // 🆕 Capture RAG settings used for this query
-        rag_settings: response.data.rag_settings
+        rag_settings: response.data.rag_settings,
+        // 🆕 Capture tool usage tracking
+        tools_used: response.data.tools_used
       }
 
       // Log context usage
@@ -437,6 +452,11 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       // Log RAG settings if available
       if (response.data.rag_settings) {
         console.log(`⚙️ RAG Settings:`, response.data.rag_settings)
+      }
+
+      // 🆕 Log tool usage if available
+      if (response.data.tools_used && response.data.tools_used.length > 0) {
+        console.log(`🔧 Tools Used (${response.data.tools_used.length}):`, response.data.tools_used)
       }
 
       setMessages(prev => [...prev, assistantMessage])
@@ -575,6 +595,53 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                 </div>
               )}
 
+              {/* 🆕 Inline Eval Metrics - Quick at-a-glance view (respects user settings) */}
+              {message.role === 'assistant' && (metricsSettings.showPerformanceMetrics || metricsSettings.enableEvaluation) && (message.quality_metrics || message.num_sources !== undefined || message.latency_ms) && (
+                <div className="mt-2 flex items-center gap-2 flex-wrap text-[10px]">
+                  {/* Quality Score - only if evaluation metrics enabled */}
+                  {metricsSettings.enableEvaluation && message.quality_metrics?.rag_score !== null && message.quality_metrics?.rag_score !== undefined && (
+                    <span className={`px-2 py-0.5 rounded-full font-medium ${
+                      message.quality_metrics.rag_score >= 0.7 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' :
+                      message.quality_metrics.rag_score >= 0.4 ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' :
+                      'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                    }`}>
+                      ✨ Quality: {(message.quality_metrics.rag_score * 100).toFixed(0)}%
+                    </span>
+                  )}
+
+                  {/* Number of Sources - only if performance metrics enabled */}
+                  {metricsSettings.showPerformanceMetrics && message.num_sources !== undefined && (
+                    <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                      📄 {message.num_sources} source{message.num_sources !== 1 ? 's' : ''}
+                    </span>
+                  )}
+
+                  {/* Latency - only if performance metrics enabled */}
+                  {metricsSettings.showPerformanceMetrics && message.latency_ms && (
+                    <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                      ⚡ {message.latency_ms.toFixed(0)}ms
+                    </span>
+                  )}
+
+                  {/* Classification - only if evaluation metrics enabled */}
+                  {metricsSettings.enableEvaluation && message.quality_metrics?.classification_type && message.quality_metrics.classification_type !== 'None' && (
+                    <span className="px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                      🏷️ {message.quality_metrics.classification_type}
+                    </span>
+                  )}
+
+                  {/* 🆕 Tools Used - shows which tools/steps were used and in what order */}
+                  {metricsSettings.showToolsUsed && message.tools_used && message.tools_used.length > 0 && (
+                    <span
+                      className="px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 cursor-help"
+                      title={`Tool execution order:\n${message.tools_used.map((t, i) => `${i + 1}. ${t.tool}${t.details ? ` - ${t.details}` : ''}`).join('\n')}`}
+                    >
+                      🔧 {message.tools_used.length} tool{message.tools_used.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+              )}
+
               {/* Collapsible Metrics & Sources Section */}
               {message.role === 'assistant' && (message.latency_ms || message.sources?.length || message.quality_metrics) && (
                 <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
@@ -617,6 +684,43 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                       {/* Evaluation Metrics - shown only if enabled and present */}
                       {metricsSettings.enableEvaluation && message.quality_metrics && (
                         <EvaluationMetrics metrics={message.quality_metrics} />
+                      )}
+
+                      {/* 🆕 Detailed Tool Usage - shows execution order and timing */}
+                      {metricsSettings.showToolsUsed && message.tools_used && message.tools_used.length > 0 && (
+                        <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                          <p className="text-xs font-semibold mb-2 text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                            <span className="text-indigo-500">🔧</span>
+                            Tool Execution Order:
+                          </p>
+                          <div className="space-y-1">
+                            {message.tools_used.map((tool, idx) => (
+                              <div
+                                key={idx}
+                                className="text-xs bg-indigo-50 dark:bg-indigo-950/20 p-2 rounded-lg border border-indigo-200 dark:border-indigo-800/30 flex items-start gap-2"
+                              >
+                                <span className="text-[10px] font-mono font-semibold text-indigo-600 dark:text-indigo-400 min-w-[20px]">
+                                  {idx + 1}.
+                                </span>
+                                <div className="flex-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-medium text-indigo-900 dark:text-indigo-100">
+                                      {tool.tool.replace(/_/g, ' ')}
+                                    </span>
+                                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                      {tool.timestamp_ms.toFixed(0)}ms
+                                    </span>
+                                  </div>
+                                  {tool.details && (
+                                    <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-0.5 italic">
+                                      {tool.details}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
 
                       {/* Sources */}

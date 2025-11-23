@@ -33,7 +33,7 @@ from .config import get_rag_settings
 from .embeddings import embed_query
 from .retrieval import retrieve_hybrid
 from .reranker import rerank_with_ollama, Chunk
-from .semantic_cache import get_cached_answer, store_answer
+from .semantic_cache import get_cached_answer, store_answer, generate_config_hash
 from .llm import generate_grounded_answer, critique_answer, refine_answer_with_critique
 from .observability import (
     timed,
@@ -146,15 +146,28 @@ async def embed_query_stage(state: RagState, settings) -> RagState:
 
 @timed("semantic_cache_check")
 async def semantic_cache_check(state: RagState, settings) -> RagState:
-    """Check Redis-based semantic cache for a near-identical question"""
+    """Check Redis-based semantic cache for a near-identical question with versioning"""
     if not settings.ENABLE_SEMANTIC_CACHE or state.query_embedding is None:
         return state
 
     try:
+        # 🆕 Generate config hash for versioned cache keys
+        config_hash = generate_config_hash(
+            semantic_weight=settings.SEMANTIC_WEIGHT,
+            keyword_weight=settings.KEYWORD_WEIGHT,
+            top_k=settings.TOP_K_RESULTS,
+            similarity_threshold=settings.SIMILARITY_THRESHOLD,
+            chunk_size=settings.CHUNK_SIZE,
+            chunk_overlap=settings.CHUNK_OVERLAP
+        )
+
+        # 🆕 Include model_name and config_hash for cache versioning
         cached = await get_cached_answer(
             embedding=state.query_embedding,
             tenant_id=state.tenant_id,
-            similarity_threshold=settings.CACHE_SIMILARITY_THRESHOLD
+            similarity_threshold=settings.CACHE_SIMILARITY_THRESHOLD,
+            model_name=settings.EMBEDDING_MODEL,  # Model name for versioning
+            config_hash=config_hash  # Config hash for invalidation
         )
 
         if cached is None:
@@ -168,7 +181,7 @@ async def semantic_cache_check(state: RagState, settings) -> RagState:
         state.debug_info["cache_match_score"] = cached.similarity
 
         log_cache_event("hit", cached.similarity)
-        logger.info(f"Cache hit with similarity {cached.similarity:.4f}")
+        logger.info(f"Cache hit with similarity {cached.similarity:.4f} (versioned)")
 
     except Exception as e:
         logger.warning(f"Error in cache check: {e}")
@@ -463,18 +476,30 @@ async def rag_answer(
                 "I'm sorry, I couldn't generate an answer for this question."
             )
 
-        # Write to semantic cache on miss
+        # Write to semantic cache on miss (with versioning)
         if (not state.cache_hit and
             settings.ENABLE_SEMANTIC_CACHE and
             state.query_embedding):
             try:
+                # 🆕 Generate config hash for versioned cache storage
+                config_hash = generate_config_hash(
+                    semantic_weight=settings.SEMANTIC_WEIGHT,
+                    keyword_weight=settings.KEYWORD_WEIGHT,
+                    top_k=settings.TOP_K_RESULTS,
+                    similarity_threshold=settings.SIMILARITY_THRESHOLD,
+                    chunk_size=settings.CHUNK_SIZE,
+                    chunk_overlap=settings.CHUNK_OVERLAP
+                )
+
                 await store_answer(
                     embedding=state.query_embedding,
                     tenant_id=state.tenant_id,
                     normalized_query=state.normalized_query,
                     answer=state.final_answer,
                     citations=state.citations,
-                    ttl_seconds=settings.CACHE_TTL_SECONDS
+                    ttl_seconds=settings.CACHE_TTL_SECONDS,
+                    model_name=settings.EMBEDDING_MODEL,  # 🆕 Model name for versioning
+                    config_hash=config_hash  # 🆕 Config hash for invalidation
                 )
                 log_cache_event("store")
             except Exception as exc:

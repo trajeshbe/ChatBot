@@ -13,6 +13,16 @@ from app.services.embedding_service import embedding_service
 import io
 import os
 import re
+import time
+
+# Tool usage tracking
+try:
+    from app.services.tool_usage_tracker import tool_tracker, ToolCategory
+    from app.core.database import AsyncSessionLocal
+    TOOL_TRACKING_ENABLED = True
+except ImportError:
+    TOOL_TRACKING_ENABLED = False
+    logging.warning("Tool usage tracking not available")
 
 # Document processing imports
 try:
@@ -139,6 +149,21 @@ class DocumentService:
             logger.error(f"Error uploading file: {e}")
             raise
 
+    def _get_processor_name(self, file_type: str, filename: str) -> str:
+        """Get the name of the processor tool used for a file type"""
+        if file_type == "application/pdf" or filename.endswith('.pdf'):
+            return "pypdf2"
+        elif filename.endswith('.docx'):
+            return "python_docx"
+        elif filename.endswith('.pptx'):
+            return "python_pptx"
+        elif filename.endswith('.json'):
+            return "json_parser"
+        elif filename.endswith('.md'):
+            return "markdown_parser"
+        else:
+            return "text_parser"
+
     def _extract_text_fallback(self, file_data: bytes, file_type: str, filename: str) -> str:
         """Fallback text extraction for common file types"""
         try:
@@ -208,16 +233,87 @@ class DocumentService:
                         await f.write(file_data)
 
                     # Convert with Docling
+                    start_time = time.time()
                     result = self.doc_converter.convert(temp_path)
                     text = result.document.export_to_markdown()
+                    processing_time = (time.time() - start_time) * 1000
+
+                    # Track Docling usage
+                    if TOOL_TRACKING_ENABLED:
+                        try:
+                            async with AsyncSessionLocal() as track_db:
+                                await tool_tracker.record_tool_usage(
+                                    category=ToolCategory.DOCUMENT_PROCESSING,
+                                    tool_name="docling",
+                                    operation="parse_document",
+                                    db=track_db,
+                                    session_id=None,
+                                    success=True,
+                                    latency_ms=processing_time,
+                                    input_size=len(file_data),
+                                    output_size=len(text),
+                                    metadata={
+                                        'file_type': document.file_type,
+                                        'filename': document.filename
+                                    }
+                                )
+                                await track_db.commit()
+                        except Exception as track_err:
+                            logger.warning(f"Failed to track Docling usage: {track_err}")
 
                     # Clean up
                     os.remove(temp_path)
                 except Exception as e:
                     logger.warning(f"Docling processing failed, using fallback: {e}")
+                    start_time = time.time()
                     text = self._extract_text_fallback(file_data, document.file_type, document.filename)
+                    processing_time = (time.time() - start_time) * 1000
+
+                    # Track fallback processor usage
+                    if TOOL_TRACKING_ENABLED:
+                        tool_name = self._get_processor_name(document.file_type, document.filename)
+                        try:
+                            async with AsyncSessionLocal() as track_db:
+                                await tool_tracker.record_tool_usage(
+                                    category=ToolCategory.DOCUMENT_PROCESSING,
+                                    tool_name=tool_name,
+                                    operation="parse_document",
+                                    db=track_db,
+                                    session_id=None,
+                                    success=True,
+                                    latency_ms=processing_time,
+                                    input_size=len(file_data),
+                                    output_size=len(text),
+                                    metadata={'file_type': document.file_type, 'filename': document.filename}
+                                )
+                                await track_db.commit()
+                        except Exception as track_err:
+                            logger.warning(f"Failed to track fallback processor usage: {track_err}")
             else:
+                start_time = time.time()
                 text = self._extract_text_fallback(file_data, document.file_type, document.filename)
+                processing_time = (time.time() - start_time) * 1000
+
+                # Track fallback processor usage
+                if TOOL_TRACKING_ENABLED:
+                    tool_name = self._get_processor_name(document.file_type, document.filename)
+                    try:
+                        async with AsyncSessionLocal() as track_db:
+                            await tool_tracker.record_tool_usage(
+                                category=ToolCategory.DOCUMENT_PROCESSING,
+                                tool_name=tool_name,
+                                operation="parse_document",
+                                db=track_db,
+                                session_id=None,
+                                success=True,
+                                latency_ms=processing_time,
+                                input_size=len(file_data),
+                                output_size=len(text),
+                                metadata={'file_type': document.file_type, 'filename': document.filename}
+                            )
+                            await track_db.commit()
+                    except Exception as track_err:
+                        logger.warning(f"Failed to track fallback processor usage: {track_err}")
 
             logger.info(f"Extracted {len(text)} characters from {document.filename}")
 
@@ -356,7 +452,9 @@ class DocumentService:
         db: AsyncSession = None,
         query_text: str = None,
         use_hybrid: bool = True,
-        use_cascading_fallback: bool = True
+        use_cascading_fallback: bool = True,
+        semantic_weight: Optional[float] = None,
+        keyword_weight: Optional[float] = None
     ) -> List[Dict]:
         """
         Search for similar document chunks using robust hybrid search with cascading fallback:
@@ -373,11 +471,27 @@ class DocumentService:
             query_text: Original query text for keyword matching
             use_hybrid: Enable hybrid search (semantic + keyword)
             use_cascading_fallback: Enable cascading fallback with lower thresholds
+            semantic_weight: Weight for semantic similarity (0-1), defaults to config setting
+            keyword_weight: Weight for keyword matching (0-1), defaults to config setting
         """
         from sqlalchemy import text as sql_text, select, func
         from app.models.database import DocumentChunk
 
         try:
+            # Use config defaults if weights not provided
+            _semantic_weight = semantic_weight if semantic_weight is not None else settings.SEMANTIC_WEIGHT
+            _keyword_weight = keyword_weight if keyword_weight is not None else settings.KEYWORD_WEIGHT
+
+            # Validate weights sum to 1.0 (with small tolerance for floating point)
+            weight_sum = _semantic_weight + _keyword_weight
+            if not (0.99 <= weight_sum <= 1.01):
+                logger.warning(f"Semantic ({_semantic_weight}) + Keyword ({_keyword_weight}) weights don't sum to 1.0 (sum={weight_sum:.3f}). Normalizing...")
+                # Normalize to ensure they sum to 1.0
+                total = _semantic_weight + _keyword_weight
+                _semantic_weight = _semantic_weight / total
+                _keyword_weight = _keyword_weight / total
+
+            logger.debug(f"Using hybrid weights: semantic={_semantic_weight:.2f}, keyword={_keyword_weight:.2f}")
             # First check if there are any document chunks at all
             count_query = select(func.count()).select_from(DocumentChunk)
             count_result = await db.execute(count_query)
@@ -427,6 +541,8 @@ class DocumentService:
                     threshold=current_threshold,
                     top_k=top_k,
                     use_hybrid=use_hybrid,
+                    semantic_weight=_semantic_weight,
+                    keyword_weight=_keyword_weight,
                     db=db
                 )
 
@@ -472,9 +588,21 @@ class DocumentService:
         threshold: float,
         top_k: int,
         use_hybrid: bool,
+        semantic_weight: float,
+        keyword_weight: float,
         db: AsyncSession
     ) -> List[Dict]:
-        """Execute a single search with given parameters"""
+        """
+        Execute a single search with given parameters.
+
+        SECURITY: Uses parameterized queries to prevent SQL injection.
+        WEIGHTS: Configurable semantic/keyword weights for robust retrieval.
+        Default: 80% semantic, 20% keyword for better semantic matching.
+
+        Args:
+            semantic_weight: Weight for vector similarity (0-1)
+            keyword_weight: Weight for keyword matching (0-1)
+        """
         from sqlalchemy import text as sql_text
 
         try:
@@ -488,15 +616,32 @@ class DocumentService:
                 if not keywords:
                     # If no keywords extracted, fall back to semantic only
                     return await self._execute_search(
-                        query_embedding, None, threshold, top_k, False, db
+                        query_embedding, None, threshold, top_k, False,
+                        semantic_weight, keyword_weight, db
                     )
 
-                keyword_condition = " OR ".join([f"dc.content ILIKE '%{kw}%'" for kw in keywords])
+                # SECURITY FIX: Sanitize keywords to prevent SQL injection
+                sanitized_keywords = [self._sanitize_keyword(kw) for kw in keywords]
+                sanitized_keywords = [kw for kw in sanitized_keywords if kw]  # Remove empty
 
-                logger.debug(f"Keywords extracted: {keywords}")
+                if not sanitized_keywords:
+                    # If all keywords were filtered out, fall back to semantic only
+                    logger.warning("All keywords filtered out during sanitization, using semantic search only")
+                    return await self._execute_search(
+                        query_embedding, None, threshold, top_k, False,
+                        semantic_weight, keyword_weight, db
+                    )
+
+                # Build parameterized keyword conditions (SAFE from SQL injection)
+                keyword_conditions = " OR ".join([f"dc.content ILIKE :keyword_{i}" for i in range(len(sanitized_keywords))])
+
+                logger.debug(f"Keywords extracted: {sanitized_keywords}")
+                logger.debug(f"Using weights: semantic={semantic_weight:.2f}, keyword={keyword_weight:.2f}")
 
                 # Hybrid query with both semantic and keyword matching
-                # Adjust weights: 60% semantic, 40% keyword for better keyword matching
+                # CONFIGURABLE WEIGHTS: Default 80% semantic, 20% keyword (can be overridden)
+                # This fixes the issue where good semantic matches (0.56) were filtered out
+                # due to low combined scores with old weights (0.56 * 0.6 = 0.336 < threshold 0.35)
                 query = sql_text(f"""
                     WITH semantic_search AS (
                         SELECT
@@ -516,7 +661,7 @@ class DocumentService:
                         SELECT
                             id,
                             CASE
-                                WHEN ({keyword_condition}) THEN 1.0
+                                WHEN ({keyword_conditions}) THEN 1.0
                                 ELSE 0.0
                             END as keyword_score
                         FROM document_chunks dc
@@ -531,10 +676,10 @@ class DocumentService:
                         ss.source_url,
                         ss.semantic_score,
                         COALESCE(ks.keyword_score, 0) as keyword_score,
-                        (ss.semantic_score * 0.6 + COALESCE(ks.keyword_score, 0) * 0.4) as combined_score
+                        (ss.semantic_score * {semantic_weight} + COALESCE(ks.keyword_score, 0) * {keyword_weight}) as combined_score
                     FROM semantic_search ss
                     LEFT JOIN keyword_search ks ON ss.id = ks.id
-                    WHERE (ss.semantic_score * 0.6 + COALESCE(ks.keyword_score, 0) * 0.4) > :threshold
+                    WHERE (ss.semantic_score * {semantic_weight} + COALESCE(ks.keyword_score, 0) * {keyword_weight}) > :threshold
                     ORDER BY combined_score DESC
                     LIMIT :limit
                 """)
@@ -560,13 +705,18 @@ class DocumentService:
                     LIMIT :limit
                 """)
 
-            result = await db.execute(
-                query,
-                {
-                    "threshold": threshold,
-                    "limit": top_k * 2  # Get more results for better diversity
-                }
-            )
+            # Build parameters dictionary
+            params = {
+                "threshold": threshold,
+                "limit": top_k * 2  # Get more results for better diversity
+            }
+
+            # Add keyword parameters if using hybrid search (SECURITY: Parameterized queries)
+            if use_hybrid and query_text and 'sanitized_keywords' in locals():
+                for i, keyword in enumerate(sanitized_keywords):
+                    params[f"keyword_{i}"] = f"%{keyword}%"
+
+            result = await db.execute(query, params)
 
             chunks = []
             for row in result:
@@ -727,6 +877,39 @@ class DocumentService:
         result = unique_keywords[:max_keywords]
         logger.debug(f"Extracted keywords from '{text}': {result}")
         return result
+
+    def _sanitize_keyword(self, keyword: str) -> str:
+        """
+        Sanitize keyword to prevent SQL injection.
+
+        SECURITY: Only allows alphanumeric characters, spaces, hyphens, and underscores.
+        Removes all other special characters that could be used for SQL injection.
+
+        Args:
+            keyword: Raw keyword string
+
+        Returns:
+            Sanitized keyword safe for SQL queries
+        """
+        if not keyword:
+            return ""
+
+        # Remove leading/trailing whitespace
+        keyword = keyword.strip()
+
+        # Only allow alphanumeric, spaces, hyphens, underscores
+        # This prevents SQL injection characters: ', ", ;, --, /*, */, etc.
+        sanitized = re.sub(r'[^a-zA-Z0-9\s\-_]', '', keyword)
+
+        # Remove multiple spaces
+        sanitized = ' '.join(sanitized.split())
+
+        # Limit length to prevent abuse
+        max_length = 50
+        if len(sanitized) > max_length:
+            sanitized = sanitized[:max_length]
+
+        return sanitized
 
     def _diversify_chunks(self, chunks: List[Dict], top_k: int) -> List[Dict]:
         """

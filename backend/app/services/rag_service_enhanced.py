@@ -17,6 +17,9 @@ from app.services.embedding_service import embedding_service
 from app.services.document_service import document_service
 from app.services.query_classifier import query_classifier
 from app.services.quality_metrics import quality_metrics_service
+from app.services.security_guardrails import check_query_safety  # 🆕 Security filters
+from app.services.reranker_service import rerank_chunks  # 🆕 Cross-encoder reranker
+from app.services.query_reformulation_service import reformulate_query  # 🆕 Query reformulation
 from app.core.config import settings
 import time
 import uuid
@@ -64,7 +67,58 @@ class EnhancedRAGService:
         """
         start_time = time.time()
 
+        # 🆕 Tool Usage Tracking - Record which tools/steps were used and in what order
+        tools_used = []
+
+        def track_tool(tool_name: str, details: Optional[str] = None):
+            """Helper to track tool usage"""
+            timestamp_ms = (time.time() - start_time) * 1000
+            tool_entry = {
+                'tool': tool_name,
+                'timestamp_ms': round(timestamp_ms, 2)
+            }
+            if details:
+                tool_entry['details'] = details
+            tools_used.append(tool_entry)
+            logger.debug(f"🔧 Tool used: {tool_name} at {timestamp_ms:.2f}ms" + (f" - {details}" if details else ""))
+
         try:
+            # 🆕 STEP 0: Security check - detect prompt injection and malicious queries
+            track_tool("security_check", "Query safety validation")
+            security_check = check_query_safety(query_text, strict_mode=False)
+
+            if not security_check['is_safe']:
+                logger.warning(
+                    f"🚨 SECURITY ALERT: Unsafe query detected! "
+                    f"Threat level: {security_check['threat_level']}, "
+                    f"Risk score: {security_check['risk_score']}, "
+                    f"Threats: {security_check['threats_detected']}"
+                )
+                return {
+                    'answer': (
+                        "⚠️ Your query was flagged as potentially unsafe and cannot be processed. "
+                        "Please rephrase your question without attempting to override system instructions "
+                        "or inject commands."
+                    ),
+                    'sources': [],
+                    'num_sources': 0,
+                    'cached': False,
+                    'model_used': 'security_filter',
+                    'latency_ms': (time.time() - start_time) * 1000,
+                    'security_alert': True,
+                    'threat_level': security_check['threat_level'],
+                    'risk_score': security_check['risk_score'],
+                    'recommendation': security_check['recommendation']
+                }
+
+            # Log if any threats detected but still safe to proceed
+            if security_check['risk_score'] > 0:
+                logger.info(
+                    f"⚠️ Low-risk query detected: "
+                    f"Risk score: {security_check['risk_score']}, "
+                    f"Threat level: {security_check['threat_level']}"
+                )
+
             # Use provided RAG config parameters or fall back to settings
             _top_k = top_k if top_k is not None else settings.TOP_K_RESULTS
             _similarity_threshold = similarity_threshold if similarity_threshold is not None else settings.SIMILARITY_THRESHOLD
@@ -78,6 +132,7 @@ class EnhancedRAGService:
                 await self._ensure_session_exists(session_id, user_id, db)
 
             # STEP 0: Preprocess query for better retrieval and classification
+            track_tool("query_preprocessing", "Normalize and extract proper nouns")
             preprocessing = query_classifier.preprocess_query(query_text)
             processed_query = preprocessing['processed_query']
             recommended_threshold = preprocessing['recommended_threshold']
@@ -96,110 +151,57 @@ class EnhancedRAGService:
                 _similarity_threshold = recommended_threshold
                 logger.info(f"🎯 Using adaptive threshold: {_similarity_threshold:.2f}")
 
-            # STEP 1: Classify query using PREPROCESSED query for better accuracy
-            classification = await query_classifier.classify(processed_query)  # Use processed query!
-            logger.info(f"📊 Query classification: {classification['query_type']} (confidence: {classification['confidence']:.2f}) - {classification['reason']}")
-
-            # Improved decision logic: Use confidence scores for smarter routing
-            # Only skip RAG if we're VERY confident it's an AI-personal question
-            should_skip_rag = (
-                classification['query_type'] == 'ai_personal' and
-                classification['confidence'] >= 0.85
-            )
-
-            # For medium confidence ai_personal queries, try RAG first as a safety net
-            if classification['query_type'] == 'ai_personal' and 0.6 <= classification['confidence'] < 0.85:
-                logger.info(f"⚠️ Medium confidence ({classification['confidence']:.2f}) ai_personal query - attempting RAG first as fallback")
-                # Continue to RAG pipeline below
-
-            # If high confidence AI-personal question, skip RAG but include basic metrics
-            elif should_skip_rag:
-                logger.info("⚡ High confidence AI-personal question - using direct LLM response")
-
-                # Use a system message appropriate for AI-personal questions
-                system_message = (
-                    "You are a helpful AI assistant. Answer questions about yourself naturally and accurately. "
-                    "You are an enterprise RAG (Retrieval-Augmented Generation) chatbot that can answer questions "
-                    "using uploaded documents. You support multiple AI models including OpenAI, Claude, and local models. "
-                    "Be friendly and informative when answering questions about your capabilities."
-                )
-
-                response = await llm_service.generate(
-                    prompt=query_text,
-                    messages=[
-                        {"role": "system", "content": system_message},
-                        {"role": "user", "content": query_text}
-                    ],
-                    model_id=model_id
-                )
-
-                result = {
-                    'answer': response['content'],
-                    'sources': [],
-                    'model': response['model'],
-                    'model_name': response.get('model_name', response['model']),
-                    'tokens_used': response['tokens'],
-                    'latency_ms': (time.time() - start_time) * 1000,
-                    'num_sources': 0,
-                    'num_short_term_sources': 0,
-                    'num_long_term_sources': 0,
-                    'session_id': session_id,
-                    'cached': False,
-                    'context_info': 'Direct answer (AI-personal question)',
-                    'query_classification': classification['query_type'],
-                    'classification_confidence': classification['confidence'],
-                    # Add basic quality metrics even for non-RAG responses
-                    'quality_metrics': {
-                        'quality_level': 'N/A',
-                        'rag_score': None,
-                        'note': 'No RAG evaluation (AI-personal query)',
-                        'classification_type': classification['query_type'],
-                        'classification_confidence': classification['confidence']
-                    }
-                }
-
-                # Still save to conversation history
-                if session_id:
-                    await self._save_conversation_message(
-                        session_id=session_id,
-                        role='user',
-                        content=query_text,
-                        db=db
-                    )
-                    await self._save_conversation_message(
-                        session_id=session_id,
-                        role='assistant',
-                        content=response['content'],
-                        model_id=response['model'],
-                        model_name=response.get('model_name'),
-                        tokens=response.get('tokens', 0),
-                        latency_ms=(time.time() - start_time) * 1000,
-                        sources=[],
-                        db=db
-                    )
-
-                return result
-
-            # Otherwise, proceed with RAG pipeline for all other cases
-            # (document_specific, general, ambiguous, or low-confidence ai_personal)
-            logger.info(f"🔍 Proceeding with RAG pipeline for {classification['query_type']} query (confidence: {classification['confidence']:.2f})")
+            # 🆕 NEW ARCHITECTURE: Always attempt RAG first, classification is fallback
+            # Classification will only be used if RAG quality is low (see below)
+            logger.info(f"🔍 NEW FLOW: Always attempting RAG retrieval first (classification deferred)")
 
             # STEP 2: Check semantic cache first (use ORIGINAL query for cache key)
             if use_cache:
+                track_tool("semantic_cache_check", "Check Redis for cached results")
                 cached_result = await self._check_semantic_cache(query_text, db)
                 if cached_result:
+                    track_tool("cache_hit", "Returned cached result")
                     logger.info(f"✅ Cache hit for query in session {session_id}")
                     cached_result['cached'] = True
                     cached_result['latency_ms'] = (time.time() - start_time) * 1000
+                    cached_result['tools_used'] = tools_used  # 🆕 Include tool usage even for cached results
                     return cached_result
 
-            # STEP 3: Generate embedding for the PROCESSED query
-            logger.info(f"🔍 Generating embedding for query (session: {session_id})")
-            query_embedding = await embedding_service.get_embedding(processed_query)
+            # 🆕 STEP 2.5: Query Reformulation for Improved Recall
+            # Generate multiple query variations to catch documents with different terminology
+            track_tool("query_reformulation", "Generate query variations (acronyms + synonyms)")
+            query_variations = reformulate_query(
+                query=processed_query,
+                include_acronyms=True,
+                include_synonyms=True,
+                use_llm=False  # Disabled for speed (can enable for complex queries)
+            )
+
+            if len(query_variations) > 1:
+                track_tool("multi_query", f"Generated {len(query_variations)} query variations")
+                logger.info(
+                    f"🔀 Query reformulation: '{processed_query}' → {len(query_variations)} variations: "
+                    f"{[q[:50] + '...' if len(q) > 50 else q for q in query_variations]}"
+                )
+
+            # STEP 3: Generate embeddings for ALL query variations
+            track_tool("embedding_generation", f"Generate embeddings for {len(query_variations)} variation(s)")
+            logger.info(f"🔍 Generating embeddings for {len(query_variations)} query variation(s)")
+            query_embeddings = []
+            for variation in query_variations:
+                embedding = await embedding_service.get_embedding(variation)
+                query_embeddings.append({
+                    'query': variation,
+                    'embedding': embedding
+                })
+
+            # Use first (original processed query) as primary
+            query_embedding = query_embeddings[0]['embedding']
 
             # STEP 4: Search short-term memory first (session documents)
             short_term_chunks = []
             if session_id:
+                track_tool("short_term_memory_search", "Search session-specific documents (hybrid)")
                 short_term_chunks = await self._search_session_documents(
                     session_id=session_id,
                     query_embedding=query_embedding,
@@ -217,6 +219,7 @@ class EnhancedRAGService:
                     logger.info(f"⚠️ No session-specific documents found for session {session_id}")
 
             # Step 3: Search long-term memory (all documents) using hybrid search with cascading fallback
+            track_tool("long_term_memory_search", "Search all documents (hybrid + cascading fallback)")
             long_term_chunks = await document_service.search_similar_chunks(
                 query_embedding=query_embedding,
                 query_text=query_text,  # For keyword matching
@@ -232,9 +235,40 @@ class EnhancedRAGService:
             combined_chunks = self._combine_memory_results(
                 short_term_chunks,
                 long_term_chunks,
-                max_chunks=_top_k
+                max_chunks=_top_k * 3  # 🆕 Get 3x candidates for reranking
             )
-            logger.info(f"Combined to {len(combined_chunks)} total chunks")
+            logger.info(f"Combined to {len(combined_chunks)} total chunks (before reranking)")
+
+            # 🆕 Step 4.5: Cross-Encoder Reranking for State-of-the-Art Accuracy
+            # Two-stage retrieval: Fast vector search → Precise cross-encoder reranking
+            if combined_chunks and len(combined_chunks) > _top_k:
+                try:
+                    track_tool("cross_encoder_reranking", f"Rerank {len(combined_chunks)} candidates → top {_top_k}")
+                    logger.info(f"🔄 Applying cross-encoder reranking to {len(combined_chunks)} candidates...")
+
+                    # Rerank using cross-encoder (balances speed and accuracy)
+                    reranked_chunks = rerank_chunks(
+                        query=query_text,
+                        chunks=combined_chunks,
+                        top_k=_top_k,
+                        model_name="balanced",  # "fast", "balanced", or "accurate"
+                        use_fusion=False  # Pure reranking for maximum accuracy
+                    )
+
+                    if reranked_chunks:
+                        combined_chunks = reranked_chunks
+                        logger.info(
+                            f"✅ Reranking complete → {len(combined_chunks)} top chunks selected "
+                            f"(avg rerank_score: {sum(c.get('rerank_score', 0) for c in combined_chunks) / len(combined_chunks):.3f})"
+                        )
+
+                except Exception as e:
+                    logger.warning(f"⚠️ Reranking failed: {e} - using vector similarity ranking")
+                    # Fallback to vector similarity ranking
+                    combined_chunks = combined_chunks[:_top_k]
+            else:
+                # Not enough candidates for reranking, or already at target size
+                combined_chunks = combined_chunks[:_top_k]
 
             # Step 5: Get conversation context if session_id provided
             conversation_context = []
@@ -246,8 +280,98 @@ class EnhancedRAGService:
                 )
                 logger.info(f"Retrieved {len(conversation_context)} messages from conversation history")
 
+            # 🆕 Step 5.5: Evaluate RAG quality BEFORE deciding on response strategy
+            # Calculate quick quality estimate from retrieved chunks
+            if combined_chunks:
+                avg_similarity = sum(c.get('similarity', 0) for c in combined_chunks) / len(combined_chunks)
+                logger.info(f"📊 Quick quality estimate: avg_similarity={avg_similarity:.3f}, num_chunks={len(combined_chunks)}")
+
+                # Good quality if we have chunks with decent similarity
+                has_good_quality = (len(combined_chunks) >= 2 and avg_similarity >= 0.4) or \
+                                 (len(combined_chunks) >= 1 and avg_similarity >= 0.6)
+            else:
+                avg_similarity = 0.0
+                has_good_quality = False
+                logger.info(f"📊 No chunks found - quality is low")
+
+            # Decision: Use RAG if quality is good, otherwise classify and decide
+            classification = None
+            if not has_good_quality:
+                # Quality is low - classify query to see if it's a personal question
+                logger.info(f"⚠️ RAG quality is low (similarity={avg_similarity:.3f}, chunks={len(combined_chunks)}) - running classification")
+                classification = await query_classifier.classify(processed_query)
+                logger.info(f"📊 Classification: {classification['query_type']} (confidence: {classification['confidence']:.2f})")
+
+                # If high confidence personal query, use direct LLM
+                if classification['query_type'] == 'ai_personal' and classification['confidence'] >= 0.85:
+                    track_tool("query_classification", f"Classified as {classification['query_type']}")
+                    track_tool("direct_llm", "High confidence AI-personal query")
+                    logger.info("✨ High confidence AI-personal query with low RAG quality → using direct LLM")
+
+                    system_message = (
+                        "You are a helpful AI assistant. Answer questions about yourself naturally and accurately. "
+                        "You are an enterprise RAG (Retrieval-Augmented Generation) chatbot that can answer questions "
+                        "using uploaded documents. You support multiple AI models including OpenAI, Claude, and local models. "
+                        "Be friendly and informative when answering questions about your capabilities."
+                    )
+
+                    response = await llm_service.generate(
+                        prompt=query_text,
+                        messages=[
+                            {"role": "system", "content": system_message},
+                            {"role": "user", "content": query_text}
+                        ],
+                        model_id=model_id
+                    )
+
+                    result = {
+                        'answer': response['content'],
+                        'sources': [],
+                        'model': response['model'],
+                        'model_name': response.get('model_name', response['model']),
+                        'tokens_used': response['tokens'],
+                        'latency_ms': (time.time() - start_time) * 1000,
+                        'num_sources': 0,
+                        'num_short_term_sources': 0,
+                        'num_long_term_sources': 0,
+                        'session_id': session_id,
+                        'cached': False,
+                        'context_info': 'Direct LLM (AI-personal query, low RAG quality)',
+                        'query_classification': classification['query_type'],
+                        'classification_confidence': classification['confidence'],
+                        'tools_used': tools_used,  # 🆕 Include tool usage tracking
+                        'quality_metrics': {
+                            'quality_level': 'N/A',
+                            'rag_score': None,
+                            'note': 'Direct LLM response (AI-personal query)',
+                            'classification_type': classification['query_type'],
+                            'classification_confidence': classification['confidence']
+                        }
+                    }
+
+                    # Save to conversation history
+                    if session_id:
+                        await self._save_conversation_message(session_id=session_id, role='user', content=query_text, db=db)
+                        await self._save_conversation_message(
+                            session_id=session_id, role='assistant', content=response['content'],
+                            model_id=response['model'], model_name=response.get('model_name'),
+                            tokens=response.get('tokens', 0), latency_ms=(time.time() - start_time) * 1000,
+                            sources=[], db=db
+                        )
+
+                    return result
+                else:
+                    # Not a personal query or low confidence - proceed with RAG despite low quality
+                    logger.info(f"⚠️ Low RAG quality but not a personal query - proceeding with RAG + warning")
+            else:
+                # Good quality - proceed with RAG, skip classification for now
+                logger.info(f"✅ Good RAG quality (similarity={avg_similarity:.3f}, chunks={len(combined_chunks)}) - proceeding with RAG")
+                # Classification will be added later for metrics reporting
+                classification = await query_classifier.classify(processed_query)
+
             # Step 6: Generate response with context
             if combined_chunks or conversation_context:
+                track_tool("llm_generation_with_context", f"{len(combined_chunks)} chunks + {len(conversation_context)} messages")
                 logger.info(f"🎯 Generating response with {len(combined_chunks)} chunks and {len(conversation_context)} conversation messages")
                 logger.debug(f"Context chunks summary: {[{'filename': c.get('filename'), 'memory_type': c.get('memory_type'), 'similarity': c.get('similarity')} for c in combined_chunks]}")
                 response = await llm_service.generate_with_context(
@@ -295,6 +419,7 @@ class EnhancedRAGService:
                         "Suggest that the user might want to upload more relevant documents if they need specific information."
                     )
 
+                track_tool("llm_generation_no_context", "Generate response without context")
                 response = await llm_service.generate(
                     prompt=f"System: {system_message}\n\nWarning prefix to use: {warning_prefix}\n\nUser: {query_text}\n\nAssistant:",
                     messages=[
@@ -325,6 +450,8 @@ class EnhancedRAGService:
                 'context_info': f"Used {num_short_term} session document(s) and {num_long_term} global document(s)" if sources else "No documents found",
                 'query_classification': classification['query_type'],
                 'classification_confidence': classification['confidence'],  # Include confidence score
+                # 🆕 Tool Usage Tracking - shows which tools were used and in what order
+                'tools_used': tools_used,
                 # 🆕 Include RAG settings used for this query
                 'rag_settings': {
                     'top_k': _top_k,
@@ -342,6 +469,7 @@ class EnhancedRAGService:
             # Always attempt to add quality metrics (even if no chunks found)
             if combined_chunks:  # Full evaluation if we have context chunks
                 try:
+                    track_tool("quality_evaluation", "Calculate RAGAS metrics")
                     quality_metrics = await quality_metrics_service.evaluate_response(
                         query=query_text,
                         answer=response['content'],
