@@ -100,9 +100,21 @@ class EnhancedRAGService:
             classification = await query_classifier.classify(processed_query)  # Use processed query!
             logger.info(f"📊 Query classification: {classification['query_type']} (confidence: {classification['confidence']:.2f}) - {classification['reason']}")
 
-            # If this is an AI-personal question, skip RAG entirely
-            if classification['query_type'] == 'ai_personal':
-                logger.info("⚡ Skipping RAG for AI-personal question - using direct LLM response")
+            # Improved decision logic: Use confidence scores for smarter routing
+            # Only skip RAG if we're VERY confident it's an AI-personal question
+            should_skip_rag = (
+                classification['query_type'] == 'ai_personal' and
+                classification['confidence'] >= 0.85
+            )
+
+            # For medium confidence ai_personal queries, try RAG first as a safety net
+            if classification['query_type'] == 'ai_personal' and 0.6 <= classification['confidence'] < 0.85:
+                logger.info(f"⚠️ Medium confidence ({classification['confidence']:.2f}) ai_personal query - attempting RAG first as fallback")
+                # Continue to RAG pipeline below
+
+            # If high confidence AI-personal question, skip RAG but include basic metrics
+            elif should_skip_rag:
+                logger.info("⚡ High confidence AI-personal question - using direct LLM response")
 
                 # Use a system message appropriate for AI-personal questions
                 system_message = (
@@ -134,7 +146,16 @@ class EnhancedRAGService:
                     'session_id': session_id,
                     'cached': False,
                     'context_info': 'Direct answer (AI-personal question)',
-                    'query_classification': classification['query_type']
+                    'query_classification': classification['query_type'],
+                    'classification_confidence': classification['confidence'],
+                    # Add basic quality metrics even for non-RAG responses
+                    'quality_metrics': {
+                        'quality_level': 'N/A',
+                        'rag_score': None,
+                        'note': 'No RAG evaluation (AI-personal query)',
+                        'classification_type': classification['query_type'],
+                        'classification_confidence': classification['confidence']
+                    }
                 }
 
                 # Still save to conversation history
@@ -158,6 +179,10 @@ class EnhancedRAGService:
                     )
 
                 return result
+
+            # Otherwise, proceed with RAG pipeline for all other cases
+            # (document_specific, general, ambiguous, or low-confidence ai_personal)
+            logger.info(f"🔍 Proceeding with RAG pipeline for {classification['query_type']} query (confidence: {classification['confidence']:.2f})")
 
             # STEP 2: Check semantic cache first (use ORIGINAL query for cache key)
             if use_cache:
@@ -299,6 +324,7 @@ class EnhancedRAGService:
                 'cached': False,
                 'context_info': f"Used {num_short_term} session document(s) and {num_long_term} global document(s)" if sources else "No documents found",
                 'query_classification': classification['query_type'],
+                'classification_confidence': classification['confidence'],  # Include confidence score
                 # 🆕 Include RAG settings used for this query
                 'rag_settings': {
                     'top_k': _top_k,
@@ -313,13 +339,17 @@ class EnhancedRAGService:
             }
 
             # Step 7.5: Calculate quality metrics for the response
-            if combined_chunks:  # Only evaluate if we used RAG
+            # Always attempt to add quality metrics (even if no chunks found)
+            if combined_chunks:  # Full evaluation if we have context chunks
                 try:
                     quality_metrics = await quality_metrics_service.evaluate_response(
                         query=query_text,
                         answer=response['content'],
                         context_chunks=combined_chunks
                     )
+                    # Add classification info to quality metrics
+                    quality_metrics['classification_type'] = classification['query_type']
+                    quality_metrics['classification_confidence'] = classification['confidence']
                     result['quality_metrics'] = quality_metrics
                     logger.info(f"📊 Quality: {quality_metrics.get('quality_level', 'unknown')} (score: {quality_metrics.get('rag_score', 0):.2f})")
 
@@ -329,7 +359,25 @@ class EnhancedRAGService:
                         logger.warning(quality_metrics_service.generate_quality_report(quality_metrics))
                 except Exception as e:
                     logger.error(f"Error calculating quality metrics: {e}")
-                    result['quality_metrics'] = None
+                    # Provide basic metrics on error
+                    result['quality_metrics'] = {
+                        'quality_level': 'Error',
+                        'rag_score': None,
+                        'note': f'Error calculating metrics: {str(e)[:100]}',
+                        'classification_type': classification['query_type'],
+                        'classification_confidence': classification['confidence']
+                    }
+            else:
+                # No chunks found - provide basic quality metrics
+                logger.info("📊 No chunks found - providing basic quality metrics")
+                result['quality_metrics'] = {
+                    'quality_level': 'No Context',
+                    'rag_score': 0.0,
+                    'note': 'No relevant documents found for this query',
+                    'classification_type': classification['query_type'],
+                    'classification_confidence': classification['confidence'],
+                    'num_documents_searched': 0
+                }
 
             # Step 8: Save conversation message
             if session_id:

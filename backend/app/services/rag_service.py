@@ -108,7 +108,16 @@ class RAGService:
                     'num_sources': 0,
                     'cached': False,
                     'query_type': classification['query_type'],
-                    'skipped_rag': True
+                    'classification_confidence': classification['confidence'],
+                    'skipped_rag': True,
+                    # Add basic quality metrics even for non-RAG responses
+                    'quality_metrics': {
+                        'quality_level': 'N/A',
+                        'rag_score': None,
+                        'note': 'No RAG evaluation (non-document query)',
+                        'classification_type': classification['query_type'],
+                        'classification_confidence': classification['confidence']
+                    }
                 }
                 return result
 
@@ -244,7 +253,17 @@ class RAGService:
                 'num_sources': len(sources),
                 'cached': False,
                 'query_type': classification['query_type'],
-                'skipped_rag': False
+                'classification_confidence': classification['confidence'],
+                'skipped_rag': False,
+                # Add basic quality metrics (basic RAG service doesn't have full evaluation)
+                'quality_metrics': {
+                    'quality_level': 'Basic' if filtered_chunks else 'No Context',
+                    'rag_score': (sum(c.get('similarity', 0) for c in filtered_chunks) / len(filtered_chunks)) if filtered_chunks else 0.0,
+                    'note': f'Basic RAG service - {len(filtered_chunks)} chunks used' if filtered_chunks else 'No relevant documents found',
+                    'classification_type': classification['query_type'],
+                    'classification_confidence': classification['confidence'],
+                    'num_chunks_used': len(filtered_chunks)
+                }
             }
 
             # Cache the result

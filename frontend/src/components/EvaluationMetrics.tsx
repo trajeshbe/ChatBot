@@ -73,6 +73,12 @@ interface EvaluationMetricsProps {
     // Additional evaluation metadata
     evaluation_time_ms?: number
     enabled_methods?: string[]
+    // New fields for classification info
+    note?: string
+    classification_type?: string
+    classification_confidence?: number
+    num_chunks_used?: number
+    num_documents_searched?: number
   }
 }
 
@@ -376,6 +382,33 @@ export default function EvaluationMetrics({ metrics }: EvaluationMetricsProps) {
             <div className="text-[10px] text-slate-500 dark:text-slate-400 pt-1">
               <span>Methods: </span>
               <span className="font-mono">{metrics.enabled_methods.join(', ')}</span>
+            </div>
+          )}
+
+          {/* Classification Info */}
+          {metrics.classification_type && (
+            <div className="text-[10px] bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 px-2 py-1.5 rounded border border-purple-200 dark:border-purple-700">
+              <div className="flex items-center justify-between">
+                <span>Query Type: <span className="font-semibold capitalize">{metrics.classification_type.replace('_', ' ')}</span></span>
+                {metrics.classification_confidence !== undefined && (
+                  <span className="font-mono">{(metrics.classification_confidence * 100).toFixed(0)}% confidence</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Note/Context */}
+          {metrics.note && (
+            <div className="text-[10px] text-slate-600 dark:text-slate-400 italic bg-slate-50 dark:bg-slate-900 px-2 py-1.5 rounded">
+              {metrics.note}
+            </div>
+          )}
+
+          {/* Chunks Used */}
+          {metrics.num_chunks_used !== undefined && (
+            <div className="text-[10px] text-slate-500 dark:text-slate-400">
+              <span>Chunks Used: </span>
+              <span className="font-mono font-semibold">{metrics.num_chunks_used}</span>
             </div>
           )}
         </div>
