@@ -255,6 +255,9 @@ class HybridRetriever:
                 }
                 chunks.append(chunk)
 
+            # Apply metadata-based boosting for image files
+            chunks = self._apply_metadata_boost(query, chunks)
+
             logger.info(
                 f"Hybrid search returned {len(chunks)} chunks "
                 f"(alpha={alpha:.2f}, session={session_id is not None})"
@@ -271,6 +274,72 @@ class HybridRetriever:
             logger.error(f"Error in hybrid retrieval: {e}", exc_info=True)
             await db.rollback()
             raise
+
+    def _apply_metadata_boost(
+        self,
+        query: str,
+        chunks: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Apply metadata-based score boosting for better retrieval of specific content types.
+
+        This helps retrieve documents when semantic similarity is low but metadata matches,
+        such as searching for "handwritten image" when OCR text is garbled.
+
+        Args:
+            query: Original search query
+            chunks: List of retrieved chunks
+
+        Returns:
+            Chunks with potentially boosted scores, re-sorted by final_score
+        """
+        query_lower = query.lower()
+
+        # Define image-related keywords
+        image_keywords = ['image', 'picture', 'photo', 'screenshot', 'handwritten', 'handwriting']
+
+        # Check if query is asking about images
+        is_image_query = any(keyword in query_lower for keyword in image_keywords)
+
+        if not is_image_query:
+            return chunks
+
+        # Image file extensions
+        image_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp')
+
+        # Apply boost to image files
+        boost_applied = False
+        for chunk in chunks:
+            filename = chunk.get('filename', '').lower()
+
+            # Check if this is an image file
+            if filename.endswith(image_extensions):
+                # Calculate metadata boost
+                metadata_boost = 0.35  # Significant boost for metadata match
+
+                # Additional boost if filename contains query terms
+                for word in query_lower.split():
+                    if len(word) > 3 and word in filename:  # Avoid short words like "the"
+                        metadata_boost += 0.10
+
+                # Apply boost
+                original_score = chunk['final_score']
+                chunk['final_score'] = min(original_score + metadata_boost, 1.0)  # Cap at 1.0
+                chunk['similarity'] = chunk['final_score']  # Keep alias in sync
+                chunk['metadata_boost'] = metadata_boost
+                boost_applied = True
+
+                logger.debug(
+                    f"Metadata boost applied: {filename} "
+                    f"(original: {original_score:.3f} → boosted: {chunk['final_score']:.3f})"
+                )
+
+        if boost_applied:
+            # Re-sort chunks by final_score after boosting
+            chunks.sort(key=lambda x: x['final_score'], reverse=True)
+            logger.info(f"Applied metadata boost to {sum(1 for c in chunks if 'metadata_boost' in c)} chunks")
+
+        return chunks
 
 
 # Global singleton

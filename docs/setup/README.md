@@ -27,6 +27,17 @@ Guide for configuring multiple LLM providers.
 - Multi-provider configuration
 - Fallback chains
 
+### [GPU_MODELS_SETUP.md](./GPU_MODELS_SETUP.md) ⭐ NEW
+**Comprehensive GPU-accelerated models guide (November 2025)**.
+- GPU configuration for Ollama
+- Top 5 quantized models (latest leaderboards)
+- Model comparison and benchmarks
+- Performance optimization
+- VRAM requirements and planning
+- Quick start commands
+
+**Quick Reference**: See [GPU_QUICKSTART.md](../../GPU_QUICKSTART.md) in root directory
+
 ---
 
 ## 🚀 Quick Setup (First Time)
@@ -91,4 +102,4 @@ See [../../scripts/setup/README.md](../../scripts/setup/README.md) for detailed 
 
 ---
 
-**Last Updated**: 2025-11-16
+**Last Updated**: 2025-11-24 (Added GPU Models Setup Guide)

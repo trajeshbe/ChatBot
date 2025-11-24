@@ -201,7 +201,25 @@ export default function OllamaModelsManager() {
                 const data = JSON.parse(line.slice(6))
 
                 if (data.status === 'error') {
-                  setError(data.error)
+                  // Provide helpful error messages for common issues
+                  let errorMessage = data.error
+                  if (data.error.includes('file does not exist') || data.error.includes('manifest')) {
+                    errorMessage = `Model "${pullModelName}" not found in Ollama registry.
+
+Common issues:
+• Model name may be incorrect or doesn't exist
+• Try without quantization suffix (Ollama handles this automatically)
+• For 8B models, use: llama3.1:8b, mistral:7b, qwen2.5:7b
+• For 3B models, use: llama3.2:3b, llama3.2
+• Check https://ollama.com/library for available models
+
+Examples:
+  ✓ llama3.1:8b (correct)
+  ✗ llama3.2:8b-instruct-q4_K_M (incorrect - too specific)
+  ✓ mistral (correct - uses latest)
+  ✓ qwen2.5:7b (correct)`
+                  }
+                  setError(errorMessage)
                   setPullProgress(`Error: ${data.error}`)
                   break
                 } else if (data.status === 'success') {
@@ -373,7 +391,7 @@ export default function OllamaModelsManager() {
               type="text"
               value={pullModelName}
               onChange={(e) => setPullModelName(e.target.value)}
-              placeholder="e.g., llama2:latest, mistral:7b, qwen2.5:1.5b"
+              placeholder="e.g., llama3.1:8b, mistral:7b, qwen2.5:7b"
               disabled={pulling}
               onKeyPress={(e) => e.key === 'Enter' && handlePullModel()}
               className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"

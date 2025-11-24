@@ -135,9 +135,14 @@ class ToolRegistry:
                     },
                     "llm_provider": {
                         "type": "string",
-                        "description": "LLM provider to use (default: openai)",
-                        "enum": ["openai", "anthropic"],
-                        "default": "openai"
+                        "description": "LLM provider to use (default: ollama)",
+                        "enum": ["openai", "anthropic", "ollama"],
+                        "default": "ollama"
+                    },
+                    "model_id": {
+                        "type": "string",
+                        "description": "Model ID to use for extraction (default: qwen2.5:1.5b)",
+                        "default": "qwen2.5:1.5b"
                     }
                 },
                 "required": ["url", "user_instructions"]
@@ -290,6 +295,17 @@ class ToolRegistry:
                         "type": "integer",
                         "description": "Maximum number of pages to visit (default: 10)",
                         "default": 10
+                    },
+                    "llm_provider": {
+                        "type": "string",
+                        "description": "LLM provider to use (default: ollama)",
+                        "enum": ["openai", "anthropic", "ollama"],
+                        "default": "ollama"
+                    },
+                    "model_id": {
+                        "type": "string",
+                        "description": "Model ID to use for navigation (default: qwen2.5:1.5b)",
+                        "default": "qwen2.5:1.5b"
                     }
                 },
                 "required": ["start_url", "navigation_instructions"]
@@ -514,14 +530,19 @@ class ToolRegistry:
         self,
         query: str,
         session_id: Optional[str] = None,
-        top_k: int = 5
+        top_k: Optional[int] = None,
+        similarity_threshold: Optional[float] = None,
+        min_similarity_threshold: Optional[float] = None,
+        no_relevant_docs_threshold: Optional[float] = None,
+        semantic_weight: Optional[float] = None,
+        keyword_weight: Optional[float] = None
     ) -> Dict[str, Any]:
         """
         Wrapper for Document RAG service
 
         Calls the RAG service to query uploaded documents.
 
-        FIXED: Now properly passes session_id and top_k parameters.
+        FIXED: Now properly passes all threshold and weight parameters from UI.
         """
         from app.services.rag_service_enhanced import enhanced_rag_service
         from app.core.database import AsyncSessionLocal
@@ -529,10 +550,15 @@ class ToolRegistry:
         async with AsyncSessionLocal() as db:
             result = await enhanced_rag_service.query(
                 query_text=query,
-                session_id=session_id,  # ✅ FIX: Now passing session_id
+                session_id=session_id,
                 conversation_history=[],
                 use_cache=True,
-                top_k=top_k,  # ✅ FIX: Now passing top_k
+                top_k=top_k,
+                similarity_threshold=similarity_threshold,
+                min_similarity_threshold=min_similarity_threshold,
+                no_relevant_docs_threshold=no_relevant_docs_threshold,
+                semantic_weight=semantic_weight,
+                keyword_weight=keyword_weight,
                 db=db
             )
 
@@ -542,6 +568,8 @@ class ToolRegistry:
         return {
             "answer": result.get("answer", ""),
             "sources": result.get("sources", []),
+            "model": result.get("model", "unknown"),  # ✅ Pass through model identifier
+            "model_name": result.get("model_name", result.get("model", "unknown")),  # ✅ Pass through model name
             "model_used": result.get("model_used", ""),
             "quality_metrics": result.get("quality_metrics"),  # ✅ Pass through quality_metrics
             "metadata": {
@@ -556,7 +584,8 @@ class ToolRegistry:
         self,
         url: str,
         user_instructions: str,
-        llm_provider: str = "openai"
+        llm_provider: str = "ollama",
+        model_id: str = "qwen2.5:1.5b"
     ) -> Dict[str, Any]:
         """
         Wrapper for Smart Web Extraction
@@ -572,7 +601,8 @@ class ToolRegistry:
                         "url": url,
                         "user_instructions": user_instructions,
                         "source_type": "url",
-                        "llm_provider": llm_provider
+                        "llm_provider": llm_provider,
+                        "model_id": model_id
                     }
                 )
 
@@ -831,7 +861,9 @@ class ToolRegistry:
         self,
         start_url: str,
         navigation_instructions: str,
-        max_pages: int = 10
+        max_pages: int = 10,
+        llm_provider: str = "ollama",
+        model_id: str = "qwen2.5:1.5b"
     ) -> Dict[str, Any]:
         """
         Wrapper for Navigation Agent
@@ -854,8 +886,8 @@ class ToolRegistry:
                         "url": start_url,
                         "user_instructions": navigation_instructions,
                         "source_type": "url",
-                        "llm_provider": "openai",
-                        "model_id": "gpt-4-turbo"
+                        "llm_provider": llm_provider,
+                        "model_id": model_id
                     }
                 )
 

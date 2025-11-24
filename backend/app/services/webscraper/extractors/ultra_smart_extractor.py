@@ -109,13 +109,15 @@ class UltraSmartExtractor:
                 source_type = await self._detect_source_type(source)
                 logger.info(f"🔍 Auto-detected source type: {source_type}")
 
-            # Extract model_id from kwargs for dynamic model selection
+            # Extract model_id and max_steps from kwargs for dynamic model selection
             model_id = kwargs.get('model_id', None)
+            max_steps = kwargs.get('max_steps', 10)
             logger.info(f"🎯 Model ID: {model_id or 'default'}")
+            logger.info(f"🔢 Max Steps: {max_steps}")
 
             # Route to appropriate extraction method
             if source_type == "url" or (isinstance(source, str) and source.startswith("http")):
-                return await self._extract_from_url(source, user_instructions, llm_provider, vision_provider, model_id)
+                return await self._extract_from_url(source, user_instructions, llm_provider, vision_provider, model_id, max_steps)
 
             elif source_type in ["pdf", "docx", "pptx", "doc"] or (isinstance(source, bytes)):
                 return await self._extract_from_document(
@@ -152,7 +154,8 @@ class UltraSmartExtractor:
         user_instructions: str,
         llm_provider: str,
         vision_provider: str = "openai",
-        model_id: Optional[str] = None
+        model_id: Optional[str] = None,
+        max_steps: int = 10
     ) -> Dict[str, Any]:
         """Extract from web URL using Playwright + LLM (or Docling for PDFs)"""
         logger.info(f"🌐 Extracting from URL: {url}")
@@ -168,11 +171,16 @@ class UltraSmartExtractor:
 
                 nav_agent = NavigationAgent(llm_service=self.llm_service)
 
+                # Ensure model_id is provided for navigation
+                if not model_id:
+                    raise ValueError("model_id is required for navigation. No default model fallback configured.")
+
                 result = await nav_agent.navigate_and_extract(
                     url=url,
                     user_instructions=user_instructions,
                     llm_provider=llm_provider,
-                    model_id=model_id or 'gpt-4-turbo'
+                    model_id=model_id,
+                    max_steps=max_steps
                 )
 
                 if result["success"]:
@@ -830,7 +838,9 @@ Return the data as pure JSON (no markdown, no explanations)."""
         source_type: str = "auto",
         user_instructions: Optional[str] = None,
         llm_provider: str = "openai",
-        vision_provider: str = "openai"
+        vision_provider: str = "openai",
+        model_id: Optional[str] = None,
+        max_steps: int = 10
     ) -> Dict[str, Any]:
         """
         🎯 ULTIMATE GOAL: Extract ANY random content → ALWAYS return tabular/structured output
@@ -883,7 +893,9 @@ Return the data as pure JSON (no markdown, no explanations)."""
                 source_type=source_type,
                 user_instructions=user_instructions,
                 llm_provider=llm_provider,
-                vision_provider=vision_provider
+                vision_provider=vision_provider,
+                model_id=model_id,
+                max_steps=max_steps
             )
 
             if not raw_result.get("success"):

@@ -1918,9 +1918,13 @@ class UltraSmartExtractRequest(BaseModel):
         default="auto",
         description="Source type: 'auto', 'url', 'pdf', 'image', 'docx', 'pptx', 'text'"
     )
-    llm_provider: str = Field(default="openai", description="LLM provider: openai, anthropic, ollama")
-    model_id: Optional[str] = Field(default="gpt-4-turbo", description="Specific model ID (e.g., gpt-4-turbo, gpt-4o, claude-3-opus-20240229)")
+    llm_provider: Optional[str] = Field(default=None, description="LLM provider: openai, anthropic, ollama (auto-selects if None)")
+    model_id: Optional[str] = Field(default=None, description="Specific model ID (auto-selects best available model if None)")
     vision_provider: str = Field(default="openai", description="Vision model: openai, anthropic")
+    max_steps: int = Field(
+        default=10,
+        description="Maximum navigation steps for pagination (default: 10). Increase for sites with many pages."
+    )
     session_id: Optional[str] = None
 
 
@@ -2028,6 +2032,44 @@ async def ultra_smart_extract(
         from app.services.scraper_service import scraper_service
         from app.services.document_service import document_service
 
+        # Auto-select best available model if not specified
+        # Only auto-select if BOTH are missing (use AND not OR)
+        if not request.model_id and not request.llm_provider:
+            # Get default model from model registry (uses dynamic ranking)
+            try:
+                from app.models.model_registry import model_registry
+                recommended_model = model_registry.get_recommended_model()
+
+                if recommended_model:
+                    default_model_id = recommended_model.model_path
+
+                    # Parse provider from model_id (e.g., "ollama/llama3.1:8b" -> "ollama")
+                    if not request.llm_provider:
+                        if "/" in default_model_id:
+                            request.llm_provider = default_model_id.split("/")[0]  # Extract provider
+                        elif default_model_id.startswith("claude-"):
+                            request.llm_provider = "anthropic"
+                        elif default_model_id.startswith("gpt-"):
+                            request.llm_provider = "openai"
+                        else:
+                            request.llm_provider = "ollama"  # Default to ollama
+
+                    if not request.model_id:
+                        request.model_id = default_model_id
+
+                    logger.info(f"🎯 Auto-selected model: {request.model_id} (provider: {request.llm_provider})")
+                else:
+                    raise ValueError("No recommended model available")
+
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to get recommended model: {e}")
+                # If no provider/model specified and auto-selection failed, return error
+                if not request.llm_provider and not request.model_id:
+                    return UltraSmartExtractResponse(
+                        success=False,
+                        error="No LLM model available. Please specify llm_provider and model_id, or ensure models are registered in the system."
+                    )
+
         # Initialize extractor
         ultra_extractor = UltraSmartExtractor(
             llm_service=llm_service,
@@ -2084,7 +2126,9 @@ async def ultra_smart_extract(
             source_type=request.source_type,
             user_instructions=request.user_instructions,
             llm_provider=request.llm_provider,
-            vision_provider=request.vision_provider
+            vision_provider=request.vision_provider,
+            model_id=request.model_id,
+            max_steps=request.max_steps
         )
 
         # Calculate processing time

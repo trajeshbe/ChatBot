@@ -9,7 +9,76 @@ import { getCurrentRAGConfig, type RAGConfig } from './RAGSettings'
 import PerformanceMetrics from './PerformanceMetrics'
 import EvaluationMetrics from './EvaluationMetrics'
 import SettingsPanel, { MetricsSettings } from './SettingsPanel'
+import ToolUsageDisplay from './ToolUsageDisplay'
 import axios from 'axios'
+
+// Unified WeightsConfig interface - all 48 parameters for dynamic per-query control
+interface WeightsConfig {
+  strategy_weights: {
+    rag_short_term: number;
+    rag_hybrid: number;
+    tool_navigation: number;
+    tool_ocr: number;
+    tool_docling: number;
+    tool_web_scraping: number;
+    rag_long_term: number;
+    direct_llm: number;
+  };
+  scoring_formula_weights: {
+    strategy_weight: number;
+    confidence: number;
+    source_quality_score: number;
+    relevance_score: number;
+    completeness_score: number;
+    diversity_bonus: number;
+  };
+  source_quality_weights: {
+    short_term: number;
+    long_term: number;
+    general: number;
+    scraped: number;
+    ocr: number;
+  };
+  classification_thresholds: {
+    general_knowledge_skip: number;
+    ai_personal_skip: number;
+    ambiguous_use_rag: number;
+    min_llm_classification_confidence: number;
+  };
+  similarity_thresholds: {
+    default: number;
+    proper_nouns: number;
+    short_query: number;
+    minimum: number;
+    maximum: number;
+  };
+  reranking_weights: {
+    semantic: number;
+    keyword: number;
+    recency: number;
+  };
+  query_preprocessing: {
+    max_length_for_expansion: number;
+    min_query_length: number;
+    max_query_length: number;
+  };
+  cache: {
+    similarity_threshold: number;
+    ttl_seconds: number;
+  };
+  multi_tool_weights: {
+    document_rag: number;
+    navigation_agent: number;
+    ocr_tool: number;
+    web_scraping: number;
+    docling: number;
+  };
+  answer_fusion: {
+    best_answer_weight: number;
+    second_best_weight: number;
+    third_best_weight: number;
+  };
+}
 
 interface Message {
   role: 'user' | 'assistant'
@@ -37,11 +106,13 @@ interface Message {
     classification_type?: string
     classification_confidence?: number
   }
-  // 🆕 Tool usage tracking
+  // 🆕 Tool usage tracking (enhanced structure from backend)
   tools_used?: Array<{
-    tool: string
-    timestamp_ms: number
-    details?: string
+    tool_id: string
+    tool_name: string
+    status: 'success' | 'failure'
+    latency_ms: number
+    order: number
   }>
   // RAG settings used for this query
   rag_settings?: {
@@ -152,8 +223,26 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
     showPerformanceMetrics: true,
     showToolsUsed: true,  // ✅ Enable by default to show tool invocations
   })
+  // 🆕 Unified configuration state - ALL 48 parameters for dynamic per-query control
+  const [unifiedConfig, setUnifiedConfig] = useState<WeightsConfig | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // 🆕 Fetch unified configuration on mount
+  useEffect(() => {
+    const fetchUnifiedConfig = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/api/v1/config/weights`)
+        if (response.data.success && response.data.data) {
+          setUnifiedConfig(response.data.data)
+          console.log('✅ Loaded unified config with', Object.keys(response.data.data).length, 'parameter groups')
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not load unified config, using defaults:', error)
+      }
+    }
+    fetchUnifiedConfig()
+  }, [])
 
   // Load selected model from localStorage on mount
   useEffect(() => {
@@ -389,15 +478,20 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
         formData.append('model_id', selectedModel)
       }
 
-      // 🆕 Add RAG configuration parameters (using fresh config)
-      formData.append('top_k', currentRagConfig.top_k.toString())
-      formData.append('similarity_threshold', currentRagConfig.similarity_threshold.toString())
-      formData.append('min_similarity_threshold', currentRagConfig.min_similarity_threshold.toString())
-      formData.append('no_relevant_docs_threshold', currentRagConfig.no_relevant_docs_threshold.toString())
-
-      // 🆕 Add hybrid search weights (semantic vs keyword)
-      formData.append('semantic_weight', currentRagConfig.semantic_weight.toString())
-      formData.append('keyword_weight', currentRagConfig.keyword_weight.toString())
+      // 🆕 UNIFIED CONFIG: Pass ALL 48 parameters as single JSON for dynamic per-query control
+      if (unifiedConfig) {
+        formData.append('unified_config', JSON.stringify(unifiedConfig))
+        console.log('📦 Passing unified config with strategy weights:', unifiedConfig.strategy_weights)
+      } else {
+        // Fallback: Pass individual RAG config parameters if unified config not loaded yet
+        console.warn('⚠️ Unified config not loaded, falling back to individual parameters')
+        formData.append('top_k', currentRagConfig.top_k.toString())
+        formData.append('similarity_threshold', currentRagConfig.similarity_threshold.toString())
+        formData.append('min_similarity_threshold', currentRagConfig.min_similarity_threshold.toString())
+        formData.append('no_relevant_docs_threshold', currentRagConfig.no_relevant_docs_threshold.toString())
+        formData.append('semantic_weight', currentRagConfig.semantic_weight.toString())
+        formData.append('keyword_weight', currentRagConfig.keyword_weight.toString())
+      }
 
       // 🆕 Add metrics settings - enable evaluation flag
       formData.append('enable_evaluation', metricsSettings.enableEvaluation.toString())
@@ -696,20 +790,31 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                           <div className="space-y-1">
                             {message.tools_used.map((tool, idx) => (
                               <div
-                                key={idx}
+                                key={tool.tool_id || idx}
                                 className="text-xs bg-indigo-50 dark:bg-indigo-950/20 p-2 rounded-lg border border-indigo-200 dark:border-indigo-800/30 flex items-start gap-2"
                               >
                                 <span className="text-[10px] font-mono font-semibold text-indigo-600 dark:text-indigo-400 min-w-[20px]">
-                                  {idx + 1}.
+                                  {tool.order || (idx + 1)}.
                                 </span>
                                 <div className="flex-1">
                                   <div className="flex items-center justify-between">
                                     <span className="font-medium text-indigo-900 dark:text-indigo-100">
-                                      {tool.tool.replace(/_/g, ' ')}
+                                      {tool.tool_name || tool.tool?.replace(/_/g, ' ') || 'Unknown Tool'}
                                     </span>
-                                    <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                                      {tool.timestamp_ms.toFixed(0)}ms
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                        {(tool.latency_ms || tool.timestamp_ms || 0).toFixed(0)}ms
+                                      </span>
+                                      {tool.status && (
+                                        <span className={`text-[10px] font-semibold ${
+                                          tool.status === 'success'
+                                            ? 'text-green-600 dark:text-green-400'
+                                            : 'text-red-600 dark:text-red-400'
+                                        }`}>
+                                          {tool.status === 'success' ? '✅' : '❌'}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                   {tool.details && (
                                     <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-0.5 italic">
@@ -774,6 +879,11 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                             ))}
                           </div>
                         </div>
+                      )}
+
+                      {/* Tool Usage Display */}
+                      {message.tools_used && message.tools_used.length > 0 && (
+                        <ToolUsageDisplay tools={message.tools_used} />
                       )}
                     </div>
                   )}

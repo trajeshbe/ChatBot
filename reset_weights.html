@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reset RAG Weights</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .success {
+            background: #10b981;
+            padding: 15px;
+            border-radius: 4px;
+            color: white;
+            margin: 20px 0;
+            display: none;
+        }
+        .info {
+            background: #f0f9ff;
+            border: 1px solid #3b82f6;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        pre {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Reset RAG Strategy Weights</h1>
+
+        <div class="info">
+            <h3>Current Problem:</h3>
+            <p>Your RAG strategy weights are set too high (rag_short_term=1.00, rag_long_term=0.85), which forces RAG mode and bypasses GPT-4 tool selection for web scraping.</p>
+
+            <h3>Solution:</h3>
+            <p>This page will reset your weights to defaults that enable <strong>BALANCED</strong> routing mode, which allows GPT-4 to intelligently select tools (including web scraping).</p>
+        </div>
+
+        <div id="currentWeights">
+            <h3>Current Weights in Browser:</h3>
+            <pre id="current"></pre>
+        </div>
+
+        <button onclick="resetWeights()">✨ Reset to Defaults (Enable Tool Selection)</button>
+        <button onclick="clearAll()">🗑️ Clear All Configs</button>
+        <button onclick="showCurrent()">🔍 Show Current Values</button>
+
+        <div id="success" class="success"></div>
+
+        <div class="info" style="margin-top: 30px;">
+            <h3>📋 Recommended Default Values (BALANCED Mode):</h3>
+            <pre>{
+  "strategy_weights": {
+    "rag_short_term": 0.30,       ← Balanced for session docs
+    "rag_long_term": 0.30,        ← Balanced for all docs
+    "rag_hybrid": 0.25,           ← Hybrid search
+    "tool_web_scraping": 0.20,    ← Good for URL queries
+    "tool_navigation": 0.15,      ← Multi-page navigation
+    "tool_docling": 0.15,         ← Advanced PDF
+    "tool_ocr": 0.10,             ← OCR extraction
+    "direct_llm": 0.05            ← Prefer tools/RAG over direct LLM
+  }
+}</pre>
+            <p><strong>Why these values?</strong></p>
+            <ul style="font-size: 13px; margin-top: 10px;">
+                <li><strong>All weights ≤ 0.8</strong> → Triggers BALANCED routing mode</li>
+                <li><strong>Web scraping = 0.20</strong> → Higher priority for URL-based queries</li>
+                <li><strong>RAG weights = 0.30 each</strong> → Balanced preference for document search</li>
+                <li><strong>Direct LLM = 0.05</strong> → System prefers tools or documents over direct LLM answers</li>
+                <li><strong>GPT-4 tool selection enabled</strong> → Intelligently chooses the right tool for each query</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const defaultWeights = {
+            "strategy_weights": {
+                "rag_short_term": 0.30,     // Session documents (balanced)
+                "rag_hybrid": 0.25,          // Hybrid search (balanced)
+                "tool_navigation": 0.15,     // Multi-page navigation
+                "tool_ocr": 0.10,            // OCR extraction
+                "tool_docling": 0.15,        // Advanced PDF processing
+                "tool_web_scraping": 0.20,   // Web scraping (important for URL queries)
+                "rag_long_term": 0.30,       // All documents (balanced)
+                "direct_llm": 0.05           // Direct LLM (low, prefer tools/RAG)
+            },
+            "scoring_formula_weights": {
+                "strategy_weight": 0.3,
+                "confidence": 0.25,
+                "source_quality_score": 0.25,
+                "relevance_score": 0.15,
+                "completeness_score": 0.05,
+                "diversity_bonus": 0.1
+            },
+            "source_quality_weights": {
+                "short_term": 1.2,
+                "long_term": 0.9,
+                "general": 0.8,
+                "scraped": 0.85,
+                "ocr": 0.75
+            },
+            "classification_thresholds": {
+                "general_knowledge_skip": 0.85,
+                "ai_personal_skip": 0.9,
+                "ambiguous_use_rag": 0.6,
+                "min_llm_classification_confidence": 0.7
+            },
+            "similarity_thresholds": {
+                "default": 0.6,
+                "proper_nouns": 0.5,
+                "short_query": 0.65,
+                "minimum": 0.4,
+                "maximum": 0.95
+            },
+            "reranking_weights": {
+                "semantic": 0.7,
+                "keyword": 0.2,
+                "recency": 0.1
+            },
+            "query_preprocessing": {
+                "max_length_for_expansion": 5,
+                "min_query_length": 3,
+                "max_query_length": 500
+            },
+            "cache": {
+                "similarity_threshold": 0.95,
+                "ttl_seconds": 3600
+            },
+            "multi_tool_weights": {
+                "document_rag": 0.3,
+                "navigation_agent": 0.2,
+                "ocr_tool": 0.15,
+                "web_scraping": 0.25,
+                "docling": 0.1
+            },
+            "answer_fusion": {
+                "best_answer_weight": 0.6,
+                "second_best_weight": 0.3,
+                "third_best_weight": 0.1
+            },
+            "rag_settings": {
+                "top_k": 5,
+                "no_relevant_docs_threshold": 0.35,
+                "chunk_size": 800,
+                "chunk_overlap": 150
+            }
+        };
+
+        function resetWeights() {
+            localStorage.setItem('userWeightsConfig', JSON.stringify(defaultWeights));
+            showSuccess('✅ Weights reset successfully! BALANCED mode enabled. Tool selection will now work correctly. Refresh your chat page.');
+            showCurrent();
+        }
+
+        function clearAll() {
+            localStorage.removeItem('userWeightsConfig');
+            showSuccess('✅ All custom weights cleared! Using global defaults. Refresh your chat page.');
+            showCurrent();
+        }
+
+        function showCurrent() {
+            const current = localStorage.getItem('userWeightsConfig');
+            if (current) {
+                const parsed = JSON.parse(current);
+                document.getElementById('current').textContent = JSON.stringify(parsed, null, 2);
+
+                // Highlight the problematic values
+                const shortTerm = parsed.strategy_weights?.rag_short_term || 0;
+                const longTerm = parsed.strategy_weights?.rag_long_term || 0;
+
+                let analysis = '\n\n🔍 Analysis:\n';
+                if (shortTerm > 0.8 || longTerm > 0.8) {
+                    analysis += `⚠️ FORCE_RAG mode: rag_short_term=${shortTerm.toFixed(2)}, rag_long_term=${longTerm.toFixed(2)}\n`;
+                    analysis += '   Tool selection is DISABLED. Click "Reset to Defaults" to enable BALANCED mode.\n';
+                } else {
+                    analysis += `✅ BALANCED mode: rag_short_term=${shortTerm.toFixed(2)}, rag_long_term=${longTerm.toFixed(2)}\n`;
+                    analysis += '   Tool selection is ENABLED. GPT-4 function calling will work.\n';
+                }
+
+                document.getElementById('current').textContent += analysis;
+            } else {
+                document.getElementById('current').textContent = 'No custom weights found in localStorage. Using global defaults.';
+            }
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.getElementById('success');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            setTimeout(() => {
+                successDiv.style.display = 'none';
+            }, 10000);
+        }
+
+        // Show current weights on page load
+        showCurrent();
+    </script>
+</body>
+</html>

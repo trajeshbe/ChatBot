@@ -6,10 +6,11 @@ import EvaluationDashboard from '@/components/EvaluationDashboard'
 import DataExtractionHub from '@/components/DataExtractionHub'
 import ProjectEstimator from '@/components/ProjectEstimator'
 import ToolUsageDashboard from '@/components/ToolUsageDashboard'
+import WeightsConfigManager from '@/components/WeightsConfigManager'
 import type { RAGConfig } from '@/components/RAGSettings'
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator' | 'tools'>('chat')
+  const [activeTab, setActiveTab] = useState<'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator' | 'tools' | 'weights'>('chat')
   const [sessionId, setSessionId] = useState<string>('')
   const [currentUser, setCurrentUser] = useState<string>('Anonymous')
   const [ragConfig, setRagConfig] = useState<RAGConfig | null>(null)
@@ -47,7 +48,6 @@ export default function Home() {
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           currentUser={currentUser}
-          onRAGSettingsChange={handleRAGSettingsChange}
         />
 
         {/* Main Content */}
@@ -87,6 +87,20 @@ export default function Home() {
           ) : activeTab === 'extract' ? (
             <div className="flex-1 overflow-y-auto">
               <DataExtractionHub sessionId={sessionId} />
+            </div>
+          ) : activeTab === 'weights' ? (
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900">
+              <div className="max-w-7xl mx-auto">
+                <div className="mb-6">
+                  <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    Weights Configuration
+                  </h1>
+                  <p className="text-slate-600 dark:text-slate-400">
+                    Configure RAG system weights for multi-strategy evaluation, scoring, and classification
+                  </p>
+                </div>
+                <WeightsConfigManager />
+              </div>
             </div>
           ) : (
             <div className="flex-1 overflow-hidden">

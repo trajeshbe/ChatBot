@@ -53,8 +53,11 @@ except ImportError:
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    force=True  # Override any existing configuration (e.g., from Uvicorn)
 )
+# Ensure root logger is set to INFO
+logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -463,11 +466,15 @@ async def query_endpoint(
     use_cache: bool = Form(True),
     model_id: Optional[str] = Form(None),
     conversation_history: Optional[str] = Form(None),  # NEW: Accept conversation history as JSON string
-    # RAG configuration parameters
+    # 🆕 Unified configuration - ALL 48 parameters for dynamic per-query control
+    unified_config: Optional[str] = Form(None),  # JSON string with complete configuration
+    # RAG configuration parameters (fallback if unified_config not provided)
     top_k: Optional[int] = Form(None),
     similarity_threshold: Optional[float] = Form(None),
     min_similarity_threshold: Optional[float] = Form(None),
     no_relevant_docs_threshold: Optional[float] = Form(None),
+    semantic_weight: Optional[float] = Form(None),  # Hybrid search semantic weight
+    keyword_weight: Optional[float] = Form(None),   # Hybrid search keyword weight
     # Metrics and evaluation control
     enable_evaluation: bool = Form(False),  # Control whether to run RAG evaluation metrics
     db: AsyncSession = Depends(get_db)
@@ -501,12 +508,29 @@ async def query_endpoint(
 
         logger.info(f"🤖 Using EnhancedRAGAgent for query: {query[:100]}...")
 
-        # Build user preferences from RAG configuration
+        # 🆕 Parse unified configuration (ALL 48 parameters for dynamic control)
+        unified_config_dict = {}
+        if unified_config:
+            try:
+                unified_config_dict = json.loads(unified_config)
+                logger.info(f"✅ Received unified config with strategy_weights: {unified_config_dict.get('strategy_weights', {})}")
+                logger.info(f"   📊 Total config groups: {len(unified_config_dict)}")
+            except json.JSONDecodeError as e:
+                logger.warning(f"⚠️ Failed to parse unified_config JSON: {e}")
+
+        # Build user preferences - merge unified_config with individual parameters
+        # Unified config takes precedence, individual parameters are fallback
         user_preferences = {
-            "top_k": top_k,
-            "similarity_threshold": similarity_threshold,
+            # Start with unified config if provided (contains all 48 parameters)
+            **unified_config_dict,
+            # Backward compatibility: Individual parameters override if explicitly provided
+            "top_k": top_k if top_k is not None else unified_config_dict.get("retrieval_and_search", {}).get("top_k"),
+            "similarity_threshold": similarity_threshold if similarity_threshold is not None else unified_config_dict.get("similarity_thresholds", {}).get("default"),
             "min_similarity_threshold": min_similarity_threshold,
             "no_relevant_docs_threshold": no_relevant_docs_threshold,
+            "semantic_weight": semantic_weight if semantic_weight is not None else unified_config_dict.get("reranking_weights", {}).get("semantic"),
+            "keyword_weight": keyword_weight if keyword_weight is not None else unified_config_dict.get("reranking_weights", {}).get("keyword"),
+            # Always include these
             "use_cache": use_cache,
             "model_id": model_id,
             "conversation_history": parsed_history,
@@ -562,7 +586,18 @@ async def query_endpoint(
                 # Don't fail the request if evaluation fails
                 logger.warning(f"Auto-evaluation failed (non-critical): {eval_error}")
 
-        # Audit logging
+        # 🆕 ADD PERFORMANCE METRICS TO RESPONSE (for frontend display)
+        result['latency_ms'] = latency_ms
+        result['tokens_used'] = result.get('metadata', {}).get('tokens', 0)  # Extract tokens from metadata if available
+        result['num_sources'] = len(result.get('sources', []))
+        result['cached'] = result.get('metadata', {}).get('cache_hit', False)
+
+        # 🆕 EXPOSE MODEL INFORMATION AT TOP LEVEL (fix for missing model name display)
+        # IMPORTANT: This must happen BEFORE audit logging so the audit has the correct model info
+        result['model'] = result.get('model', result.get('metadata', {}).get('model', 'unknown'))
+        result['model_used'] = result.get('model_name', result.get('model', 'unknown'))
+
+        # Audit logging (must happen AFTER model info extraction)
         if audit_service:
             await audit_service.log_query(
                 db=db,
@@ -575,12 +610,6 @@ async def query_endpoint(
                 ip_address=ip_address,
                 user_agent=user_agent
             )
-
-        # 🆕 ADD PERFORMANCE METRICS TO RESPONSE (for frontend display)
-        result['latency_ms'] = latency_ms
-        result['tokens_used'] = result.get('metadata', {}).get('tokens', 0)  # Extract tokens from metadata if available
-        result['num_sources'] = len(result.get('sources', []))
-        result['cached'] = result.get('metadata', {}).get('cache_hit', False)
 
         # 🆕 EXPOSE QUALITY METRICS AT TOP LEVEL (if present in metadata)
         if 'metadata' in result and 'quality_metrics' in result['metadata']:
@@ -688,6 +717,16 @@ except ImportError as e:
     logger.warning(f"Robust RAG Pipeline API not available: {e}")
 except Exception as e:
     logger.warning(f"Could not register RAG Pipeline router: {e}")
+
+# Multi-Strategy RAG with Answer Fusion API (evaluates multiple strategies in parallel)
+try:
+    from app.api.routes import multi_strategy_routes
+    app.include_router(multi_strategy_routes.router)
+    logger.info("✓ Multi-Strategy RAG API router registered (answer fusion with short/long-term memory prioritization)")
+except ImportError as e:
+    logger.warning(f"Multi-Strategy RAG API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Multi-Strategy RAG router: {e}")
 
 
 # Models API router (safe fallback version)
@@ -818,6 +857,16 @@ except ImportError as e:
     logger.warning(f"Evaluation Metrics API not available: {e}")
 except Exception as e:
     logger.warning(f"Could not register Evaluation Metrics router: {e}")
+
+# Weights Configuration API (configurable weights for RAG system)
+try:
+    from app.api.routes import weights_config_routes
+    app.include_router(weights_config_routes.router)
+    logger.info("✓ Weights Configuration API router registered (configurable scoring and strategy weights)")
+except ImportError as e:
+    logger.warning(f"Weights Configuration API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Weights Configuration router: {e}")
 
 # 🆕 Tool Usage Statistics API (comprehensive tool tracking and analytics)
 try:

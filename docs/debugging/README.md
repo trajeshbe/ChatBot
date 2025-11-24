@@ -88,3 +88,15 @@ docker-compose logs postgres
 ---
 
 **Last Updated**: 2025-11-16
+
+## Tool Tracking Issues (2025-11-23)
+
+### TOOL_TRACKING_ISSUES_ANALYSIS.md
+Root cause analysis for tool tracking visibility issues:
+- Only "smart_extraction" showing up (missing navigation_agent, playwright, etc.)
+- Tool selection logic problems
+- Tool tracking implementation gaps
+- Metadata serialization issues
+
+**Use Case**: Debugging why tools aren't showing up in UI or dashboard.
+

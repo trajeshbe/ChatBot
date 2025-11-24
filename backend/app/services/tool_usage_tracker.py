@@ -20,6 +20,7 @@ from typing import Dict, List, Optional, Any
 import logging
 import time
 import uuid
+import json
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text as sql_text
@@ -135,7 +136,7 @@ class ToolUsageTracker:
                 'tokens_used': tokens_used,
                 'cost_usd': cost_usd,
                 'quality_score': quality_score,
-                'metadata': metadata
+                'metadata': json.dumps(metadata) if metadata else None
             })
 
             await db.commit()

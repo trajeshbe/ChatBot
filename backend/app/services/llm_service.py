@@ -237,7 +237,11 @@ class LLMService:
         error_msg = None
         tokens = 0
         content = ""
-        ollama_model = getattr(settings, 'OLLAMA_MODEL', 'llama3.2:3b')
+        # Get default model from registry (no hardcoded fallback)
+        from app.models.model_registry import get_model_registry
+        registry = get_model_registry()
+        default_model = registry.get_recommended_model()
+        ollama_model = getattr(settings, 'OLLAMA_MODEL', default_model.model_path if default_model else 'qwen2.5:1.5b-instruct-q4_K_M')
 
         try:
             # CRITICAL: Ensure fresh httpx client (runtime initialization)
@@ -296,8 +300,8 @@ class LLMService:
 
             return {
                 "content": content,
-                "model": "ollama",
-                "model_name": f"Ollama ({ollama_model})",
+                "model": f"ollama/{ollama_model}",
+                "model_name": f"ollama/{ollama_model}",
                 "tokens": tokens
             }
 

@@ -55,7 +55,9 @@ class EnhancedRAGService:
         top_k: Optional[int] = None,
         similarity_threshold: Optional[float] = None,
         min_similarity_threshold: Optional[float] = None,
-        no_relevant_docs_threshold: Optional[float] = None
+        no_relevant_docs_threshold: Optional[float] = None,
+        semantic_weight: Optional[float] = None,
+        keyword_weight: Optional[float] = None
     ) -> Dict:
         """
         Process query with memory hierarchy:
@@ -69,18 +71,41 @@ class EnhancedRAGService:
 
         # 🆕 Tool Usage Tracking - Record which tools/steps were used and in what order
         tools_used = []
+        last_tool_time = start_time  # Track time of last tool for calculating deltas
 
-        def track_tool(tool_name: str, details: Optional[str] = None):
-            """Helper to track tool usage"""
-            timestamp_ms = (time.time() - start_time) * 1000
+        def track_tool(tool_name: str, details: Optional[str] = None, success: bool = True):
+            """
+            Helper to track tool usage in frontend-compatible format
+
+            Frontend expects:
+            - tool_id: unique identifier (e.g., "security_check_001")
+            - tool_name: display name (e.g., "Security Check")
+            - status: 'success' | 'failure'
+            - latency_ms: execution time since last tool
+            - order: execution order (1-indexed)
+            """
+            nonlocal last_tool_time
+            current_time = time.time()
+
+            # Calculate latency since last tool (delta timing)
+            latency_ms = (current_time - last_tool_time) * 1000
+            last_tool_time = current_time
+
+            # Create tool entry in frontend-compatible format
             tool_entry = {
-                'tool': tool_name,
-                'timestamp_ms': round(timestamp_ms, 2)
+                'tool_id': f"{tool_name}_{len(tools_used) + 1:03d}",  # Unique ID
+                'tool_name': tool_name.replace('_', ' ').title(),  # Human-readable name
+                'status': 'success' if success else 'failure',
+                'latency_ms': round(latency_ms, 1),
+                'order': len(tools_used) + 1  # 1-indexed order
             }
-            if details:
-                tool_entry['details'] = details
+
             tools_used.append(tool_entry)
-            logger.debug(f"🔧 Tool used: {tool_name} at {timestamp_ms:.2f}ms" + (f" - {details}" if details else ""))
+            logger.debug(
+                f"🔧 Tool {'✅' if success else '❌'}: {tool_name} "
+                f"(order={tool_entry['order']}, latency={latency_ms:.1f}ms)" +
+                (f" - {details}" if details else "")
+            )
 
         try:
             # 🆕 STEP 0: Security check - detect prompt injection and malicious queries
@@ -124,8 +149,10 @@ class EnhancedRAGService:
             _similarity_threshold = similarity_threshold if similarity_threshold is not None else settings.SIMILARITY_THRESHOLD
             _min_similarity_threshold = min_similarity_threshold if min_similarity_threshold is not None else settings.MIN_SIMILARITY_THRESHOLD
             _no_relevant_docs_threshold = no_relevant_docs_threshold if no_relevant_docs_threshold is not None else settings.NO_RELEVANT_DOCS_THRESHOLD
+            _semantic_weight = semantic_weight if semantic_weight is not None else settings.SEMANTIC_WEIGHT
+            _keyword_weight = keyword_weight if keyword_weight is not None else settings.KEYWORD_WEIGHT
 
-            logger.info(f"🔧 RAG Config: top_k={_top_k}, sim_threshold={_similarity_threshold:.2f}, min_sim={_min_similarity_threshold:.2f}, no_relevant={_no_relevant_docs_threshold:.2f}")
+            logger.info(f"🔧 RAG Config: top_k={_top_k}, sim_threshold={_similarity_threshold:.2f}, min_sim={_min_similarity_threshold:.2f}, no_relevant={_no_relevant_docs_threshold:.2f}, semantic_weight={_semantic_weight:.2f}, keyword_weight={_keyword_weight:.2f}")
 
             # Ensure session exists
             if session_id:
@@ -151,9 +178,71 @@ class EnhancedRAGService:
                 _similarity_threshold = recommended_threshold
                 logger.info(f"🎯 Using adaptive threshold: {_similarity_threshold:.2f}")
 
-            # 🆕 NEW ARCHITECTURE: Always attempt RAG first, classification is fallback
-            # Classification will only be used if RAG quality is low (see below)
-            logger.info(f"🔍 NEW FLOW: Always attempting RAG retrieval first (classification deferred)")
+            # 🆕 FIXED ARCHITECTURE: ALWAYS classify first to detect general knowledge/AI-personal queries
+            # This prevents wrong answers for questions like "What is the capital of France?"
+            track_tool("query_classification", "Classify query type")
+            classification = await query_classifier.classify(processed_query)
+            logger.info(f"📊 Classification: {classification['query_type']} (confidence: {classification['confidence']:.2f}) - {classification['reason']}")
+
+            # If it's general knowledge or AI-personal, skip RAG entirely
+            if classification['query_type'] in ['general', 'ai_personal'] and classification['confidence'] >= 0.75:
+                track_tool("direct_llm", f"Classified as {classification['query_type']} - skipping RAG")
+                logger.info(f"✨ {classification['query_type']} query detected → using direct LLM (no documents needed)")
+
+                system_message = (
+                    "You are a helpful AI assistant. " +
+                    ("Answer this general knowledge question accurately and concisely." if classification['query_type'] == 'general'
+                     else "Answer questions about yourself naturally and accurately. You are an enterprise RAG chatbot that can answer questions using uploaded documents.")
+                )
+
+                response = await llm_service.generate(
+                    prompt=query_text,
+                    messages=[
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": query_text}
+                    ],
+                    model_id=model_id
+                )
+
+                result = {
+                    'answer': response['content'],
+                    'sources': [],
+                    'model': response['model'],
+                    'model_name': response.get('model_name', response['model']),
+                    'tokens_used': response['tokens'],
+                    'latency_ms': (time.time() - start_time) * 1000,
+                    'num_sources': 0,
+                    'num_short_term_sources': 0,
+                    'num_long_term_sources': 0,
+                    'session_id': session_id,
+                    'cached': False,
+                    'context_info': f'Direct LLM ({classification["query_type"]} query)',
+                    'query_classification': classification['query_type'],
+                    'classification_confidence': classification['confidence'],
+                    'tools_used': tools_used,
+                    'quality_metrics': {
+                        'quality_level': 'N/A',
+                        'rag_score': None,
+                        'note': f'Direct LLM response ({classification["query_type"]} query)',
+                        'classification_type': classification['query_type'],
+                        'classification_confidence': classification['confidence']
+                    }
+                }
+
+                # Save to conversation history
+                if session_id:
+                    await self._save_conversation_message(session_id=session_id, role='user', content=query_text, db=db)
+                    await self._save_conversation_message(
+                        session_id=session_id, role='assistant', content=response['content'],
+                        model_id=response['model'], model_name=response.get('model_name'),
+                        tokens=response.get('tokens', 0), latency_ms=(time.time() - start_time) * 1000,
+                        sources=[], db=db
+                    )
+
+                return result
+
+            # Otherwise, proceed with RAG retrieval
+            logger.info(f"🔍 Proceeding with RAG retrieval for {classification['query_type']} query")
 
             # STEP 2: Check semantic cache first (use ORIGINAL query for cache key)
             if use_cache:
@@ -210,6 +299,8 @@ class EnhancedRAGService:
                     threshold=_similarity_threshold - 0.05,  # Slightly lower threshold for session docs
                     use_hybrid=True,  # Enable hybrid search
                     use_cascading_fallback=True,  # Enable cascading fallback
+                    semantic_weight=_semantic_weight,  # UI-provided or config default
+                    keyword_weight=_keyword_weight,    # UI-provided or config default
                     db=db
                 )
                 if short_term_chunks:
@@ -227,6 +318,8 @@ class EnhancedRAGService:
                 threshold=_similarity_threshold,
                 use_hybrid=True,  # Enable hybrid search
                 use_cascading_fallback=True,  # Enable cascading fallback
+                semantic_weight=_semantic_weight,  # UI-provided or config default
+                keyword_weight=_keyword_weight,    # UI-provided or config default
                 db=db
             )
             logger.info(f"Found {len(long_term_chunks)} chunks in long-term memory - hybrid search with fallback")
@@ -595,6 +688,8 @@ class EnhancedRAGService:
         threshold: float = 0.6,
         use_hybrid: bool = True,
         use_cascading_fallback: bool = True,
+        semantic_weight: Optional[float] = None,
+        keyword_weight: Optional[float] = None,
         db: AsyncSession = None
     ) -> List[Dict]:
         """
@@ -643,6 +738,10 @@ class EnhancedRAGService:
                 logger.warning(f"No embeddings found for session {session_id} documents")
                 return []
 
+            # Set weight defaults if not provided
+            _semantic_weight = semantic_weight if semantic_weight is not None else settings.SEMANTIC_WEIGHT
+            _keyword_weight = keyword_weight if keyword_weight is not None else settings.KEYWORD_WEIGHT
+
             # Cascading fallback strategy - reduced aggressiveness to prevent irrelevant results
             thresholds_to_try = [threshold]
             if use_cascading_fallback:
@@ -666,6 +765,8 @@ class EnhancedRAGService:
                     threshold=current_threshold,
                     top_k=top_k,
                     use_hybrid=use_hybrid,
+                    semantic_weight=_semantic_weight,
+                    keyword_weight=_keyword_weight,
                     db=db
                 )
 
@@ -702,6 +803,8 @@ class EnhancedRAGService:
         threshold: float,
         top_k: int,
         use_hybrid: bool,
+        semantic_weight: float,
+        keyword_weight: float,
         db: AsyncSession
     ) -> List[Dict]:
         """Execute session document search with given parameters"""
@@ -713,7 +816,7 @@ class EnhancedRAGService:
                 keywords = document_service._extract_keywords(query_text)
                 if not keywords:
                     return await self._execute_session_search(
-                        session_id, query_embedding, None, threshold, top_k, False, db
+                        session_id, query_embedding, None, threshold, top_k, False, semantic_weight, keyword_weight, db
                     )
 
                 keyword_condition = " OR ".join([f"dc.content ILIKE '%{kw}%'" for kw in keywords])
@@ -756,10 +859,10 @@ class EnhancedRAGService:
                         ss.priority,
                         ss.semantic_score,
                         COALESCE(ks.keyword_score, 0) as keyword_score,
-                        (ss.semantic_score * 0.6 + COALESCE(ks.keyword_score, 0) * 0.4) as combined_score
+                        (ss.semantic_score * :semantic_weight + COALESCE(ks.keyword_score, 0) * :keyword_weight) as combined_score
                     FROM semantic_search ss
                     LEFT JOIN keyword_search ks ON ss.id = ks.id
-                    WHERE (ss.semantic_score * 0.6 + COALESCE(ks.keyword_score, 0) * 0.4) > :threshold
+                    WHERE (ss.semantic_score * :semantic_weight + COALESCE(ks.keyword_score, 0) * :keyword_weight) > :threshold
                     ORDER BY ss.priority DESC, combined_score DESC
                     LIMIT :limit
                 """)
@@ -793,7 +896,9 @@ class EnhancedRAGService:
                 {
                     "session_id": session_id,
                     "threshold": threshold,
-                    "limit": top_k
+                    "limit": top_k,
+                    "semantic_weight": semantic_weight,
+                    "keyword_weight": keyword_weight
                 }
             )
 

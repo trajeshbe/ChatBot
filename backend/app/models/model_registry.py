@@ -210,9 +210,83 @@ class ModelRegistry:
         # Optimized for CPU inference with 4-bit quantization
         # ============================================================================
 
+        # QWEN MODELS (Ollama - Recommended for GPU)
+        # Superior multilingual and coding capabilities
+        self.register(ModelInfo(
+            id="qwen2.5:1.5b-instruct-q4_K_M",
+            name="Qwen 2.5 1.5B (Ollama GPU)",
+            provider=ModelProvider.OLLAMA,
+            model_type=ModelType.LOCAL_CPU,  # Ollama handles GPU internally
+            model_path="qwen2.5:1.5b-instruct-q4_K_M",
+            context_length=32768,
+            cost_per_1k_tokens=0.0,
+            requires_gpu=False,  # Ollama handles GPU internally
+            min_gpu_memory_gb=0,
+            description="🥇 #1 FAST GPU model. Balanced speed/quality. 25-35 tok/s on RTX 5060. Best for 8GB VRAM.",
+            recommended=True
+        ))
+
+        self.register(ModelInfo(
+            id="qwen2.5:0.5b",
+            name="Qwen 2.5 0.5B (Ollama GPU - Ultra Fast)",
+            provider=ModelProvider.OLLAMA,
+            model_type=ModelType.LOCAL_CPU,
+            model_path="qwen2.5:0.5b",
+            context_length=32768,
+            cost_per_1k_tokens=0.0,
+            requires_gpu=False,
+            min_gpu_memory_gb=0,
+            description="⚡ Ultra-fast. 40-60 tok/s. Great for simple queries and testing.",
+            recommended=False
+        ))
+
+        self.register(ModelInfo(
+            id="qwen2.5:3b-instruct-q4_K_M",
+            name="Qwen 2.5 3B (Ollama GPU - High Quality)",
+            provider=ModelProvider.OLLAMA,
+            model_type=ModelType.LOCAL_CPU,
+            model_path="qwen2.5:3b-instruct-q4_K_M",
+            context_length=32768,
+            cost_per_1k_tokens=0.0,
+            requires_gpu=False,
+            min_gpu_memory_gb=0,
+            description="💎 High quality. 15-25 tok/s. Better reasoning for complex queries.",
+            recommended=False
+        ))
+
+        self.register(ModelInfo(
+            id="qwen2.5:7b-instruct-q4_K_M",
+            name="Qwen 2.5 7B (Ollama GPU - Max Quality)",
+            provider=ModelProvider.OLLAMA,
+            model_type=ModelType.LOCAL_CPU,
+            model_path="qwen2.5:7b-instruct-q4_K_M",
+            context_length=32768,
+            cost_per_1k_tokens=0.0,
+            requires_gpu=False,
+            min_gpu_memory_gb=0,
+            description="🏆 Maximum quality. 10-15 tok/s. Best for production (requires ~5.5GB VRAM).",
+            recommended=False
+        ))
+
+        # LLAMA MODELS (Removed from Ollama but kept for reference)
+        self.register(ModelInfo(
+            id="llama3.1:8b",
+            name="Llama 3.1 8B (Ollama GPU) - REMOVED",
+            provider=ModelProvider.OLLAMA,
+            model_type=ModelType.LOCAL_CPU,
+            model_path="llama3.1:8b",
+            context_length=128000,
+            cost_per_1k_tokens=0.0,
+            requires_gpu=False,
+            min_gpu_memory_gb=0,
+            description="⚠️ Model removed - use Qwen 2.5 instead",
+            available=False,
+            recommended=False
+        ))
+
         self.register(ModelInfo(
             id="llama3.2:3b",
-            name="Llama 3.2 3B (Ollama)",
+            name="Llama 3.2 3B (Ollama) - REMOVED",
             provider=ModelProvider.OLLAMA,
             model_type=ModelType.LOCAL_CPU,
             model_path="llama3.2:3b",
@@ -220,8 +294,9 @@ class ModelRegistry:
             cost_per_1k_tokens=0.0,
             requires_gpu=False,
             min_gpu_memory_gb=0,
-            description="Best local model. Q4 quantized for CPU. ~2GB RAM, 5-10 tok/s.",
-            recommended=True
+            description="⚠️ Model removed - use Qwen 2.5 instead",
+            available=False,
+            recommended=False
         ))
 
         self.register(ModelInfo(
@@ -234,8 +309,8 @@ class ModelRegistry:
             cost_per_1k_tokens=0.0,
             requires_gpu=False,
             min_gpu_memory_gb=0,
-            description="Ultra-fast local model. Q4 quantized. ~1GB RAM, 10-15 tok/s.",
-            recommended=True
+            description="Base model (non-instruct). Use qwen2.5:1.5b-instruct-q4_K_M instead.",
+            recommended=False
         ))
 
         self.register(ModelInfo(
@@ -321,6 +396,29 @@ class ModelRegistry:
     def get_recommended_models(self) -> List[ModelInfo]:
         """Get recommended models"""
         return [m for m in self._models.values() if m.recommended]
+
+    def get_recommended_model(self) -> Optional[ModelInfo]:
+        """Get the first recommended and available model (for single model selection)
+
+        Returns:
+            First recommended and available model, or None if no recommended models available
+        """
+        recommended = [m for m in self._models.values() if m.recommended and m.available]
+        if recommended:
+            # Sort by provider preference: Ollama > vLLM > proprietary
+            recommended.sort(key=lambda m: (
+                0 if m.provider == ModelProvider.OLLAMA else
+                1 if m.provider == ModelProvider.VLLM else 2
+            ))
+            return recommended[0]
+
+        # Fallback to any available Ollama model
+        ollama_models = [m for m in self._models.values()
+                        if m.provider == ModelProvider.OLLAMA and m.available]
+        if ollama_models:
+            return ollama_models[0]
+
+        return None
 
     def update_availability(self, model_id: str, available: bool):
         """Update model availability status"""

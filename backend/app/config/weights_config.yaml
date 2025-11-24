@@ -1,0 +1,233 @@
+# Multi-Strategy RAG Weights Configuration
+# This file contains all configurable weights used in dynamic computation across the system
+# Last Updated: 2025-11-24
+
+# ==========================================
+# MULTI-STRATEGY RAG WEIGHTS
+# ==========================================
+# These weights determine the base score for each strategy type
+# Higher weight = strategy is preferred when confidence is equal
+
+strategy_weights:
+  # Short-term memory (session documents only) - highest priority
+  rag_short_term: 1.0
+
+  # Hybrid strategy (combines short + long term)
+  rag_hybrid: 0.95
+
+  # Tool-based strategies (navigation, OCR, scraping, etc.)
+  tool_navigation: 0.90
+  tool_ocr: 0.90
+  tool_docling: 0.90
+
+  # Web scraping
+  tool_web_scraping: 0.85
+
+  # Long-term memory (all documents)
+  rag_long_term: 0.85
+
+  # Direct LLM (no RAG, uses general knowledge)
+  direct_llm: 0.75
+
+
+# ==========================================
+# SCORING FORMULA WEIGHTS
+# ==========================================
+# These weights determine how different factors contribute to final score
+# Formula: final_score = (strategy_weight * W1) + (confidence * W2) + (source_quality * W3) + (relevance * W4) + (completeness * W5) + diversity_bonus
+# Sum should = 1.0 (excluding diversity_bonus which is additive)
+
+scoring_formula_weights:
+  # Base strategy weight contribution (30%)
+  strategy_weight: 0.30
+
+  # LLM confidence in answer (25%)
+  confidence: 0.25
+
+  # Quality of sources used (25%)
+  source_quality_score: 0.25
+
+  # Relevance of answer to query (15%)
+  relevance_score: 0.15
+
+  # Completeness of answer (5%)
+  completeness_score: 0.05
+
+  # Diversity bonus (additive, not part of sum)
+  diversity_bonus: 0.10
+
+
+# ==========================================
+# SOURCE QUALITY WEIGHTS
+# ==========================================
+# Weights for different source types when calculating source quality score
+
+source_quality_weights:
+  # Short-term memory sources (session documents)
+  short_term: 1.0
+
+  # Long-term memory sources (all documents)
+  long_term: 0.7
+
+  # General knowledge (no specific source)
+  general: 0.5
+
+  # Scraped content
+  scraped: 0.65
+
+  # OCR-extracted content
+  ocr: 0.80
+
+
+# ==========================================
+# CLASSIFICATION THRESHOLDS
+# ==========================================
+# Confidence thresholds for query classification decisions
+
+classification_thresholds:
+  # Skip RAG for general knowledge if confidence >= this threshold
+  general_knowledge_skip: 0.75
+
+  # Skip RAG for AI-personal questions if confidence >= this threshold
+  ai_personal_skip: 0.75
+
+  # Use RAG for ambiguous queries if confidence < this threshold
+  ambiguous_use_rag: 0.50
+
+  # Minimum confidence to trust LLM classification
+  min_llm_classification_confidence: 0.60
+
+
+# ==========================================
+# SIMILARITY THRESHOLDS
+# ==========================================
+# Vector similarity thresholds for retrieval
+
+similarity_thresholds:
+  # Default similarity threshold for vector search
+  default: 0.60
+
+  # Lower threshold for proper nouns (names, places)
+  proper_nouns: 0.50
+
+  # Lower threshold for short queries
+  short_query: 0.55
+
+  # Minimum similarity to include chunk
+  minimum: 0.45
+
+  # Maximum similarity threshold
+  maximum: 0.75
+
+
+# ==========================================
+# RERANKING WEIGHTS
+# ==========================================
+# Weights for reranking retrieved chunks
+
+reranking_weights:
+  # Semantic similarity score
+  semantic: 0.70
+
+  # Keyword overlap score
+  keyword: 0.20
+
+  # Recency score
+  recency: 0.10
+
+
+# ==========================================
+# QUERY PREPROCESSING
+# ==========================================
+# Parameters for query preprocessing
+
+query_preprocessing:
+  # Maximum query length for expansion
+  max_length_for_expansion: 4
+
+  # Minimum query length
+  min_query_length: 1
+
+  # Maximum query length
+  max_query_length: 500
+
+
+# ==========================================
+# CACHE CONFIGURATION
+# ==========================================
+# Semantic cache configuration
+
+cache:
+  # Similarity threshold for cache hit
+  similarity_threshold: 0.95
+
+  # TTL in seconds (1 hour)
+  ttl_seconds: 3600
+
+
+# ==========================================
+# MULTI-TOOL AGENT WEIGHTS
+# ==========================================
+# Weights for multi-tool agent strategy selection
+
+multi_tool_weights:
+  # Document RAG tool
+  document_rag: 1.0
+
+  # Navigation agent tool
+  navigation_agent: 0.90
+
+  # OCR tool
+  ocr_tool: 0.90
+
+  # Web scraping tool
+  web_scraping: 0.85
+
+  # Docling tool
+  docling: 0.90
+
+
+# ==========================================
+# ANSWER FUSION WEIGHTS
+# ==========================================
+# Weights for combining multiple answers
+
+answer_fusion:
+  # Weight highest scoring answer
+  best_answer_weight: 0.60
+
+  # Weight second best answer
+  second_best_weight: 0.30
+
+  # Weight third best answer
+  third_best_weight: 0.10
+
+
+# ==========================================
+# RAG SETTINGS
+# ==========================================
+# Core RAG retrieval and document processing parameters
+
+rag_settings:
+  # Number of top documents to retrieve
+  top_k: 5
+
+  # Threshold below which no relevant docs message is shown
+  no_relevant_docs_threshold: 0.35
+
+  # Size of text chunks in characters
+  chunk_size: 800
+
+  # Overlap between consecutive chunks
+  chunk_overlap: 150
+
+
+# ==========================================
+# METADATA
+# ==========================================
+
+metadata:
+  version: "1.0.0"
+  last_updated: "2025-11-24"
+  schema_version: "1"
+  description: "Configurable weights for RAG system dynamic computation"

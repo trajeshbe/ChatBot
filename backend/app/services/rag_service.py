@@ -31,7 +31,10 @@ class RAGService:
         top_k: Optional[int] = None,
         similarity_threshold: Optional[float] = None,
         min_similarity_threshold: Optional[float] = None,
-        no_relevant_docs_threshold: Optional[float] = None
+        no_relevant_docs_threshold: Optional[float] = None,
+        # NEW: Optional weight parameters from UI
+        semantic_weight: Optional[float] = None,
+        keyword_weight: Optional[float] = None
     ) -> Dict:
         """
         Process a query using intelligent RAG pipeline:
@@ -59,8 +62,10 @@ class RAGService:
         top_k_to_use = top_k if top_k is not None else settings.TOP_K_RESULTS
         similarity_threshold_to_use = similarity_threshold if similarity_threshold is not None else settings.SIMILARITY_THRESHOLD
         no_relevant_threshold_to_use = no_relevant_docs_threshold if no_relevant_docs_threshold is not None else settings.NO_RELEVANT_DOCS_THRESHOLD
+        semantic_weight_to_use = semantic_weight if semantic_weight is not None else settings.SEMANTIC_WEIGHT
+        keyword_weight_to_use = keyword_weight if keyword_weight is not None else settings.KEYWORD_WEIGHT
 
-        logger.info(f"RAG query with thresholds: top_k={top_k_to_use}, similarity={similarity_threshold_to_use:.2f}, no_relevant={no_relevant_threshold_to_use:.2f}")
+        logger.info(f"RAG query with thresholds: top_k={top_k_to_use}, similarity={similarity_threshold_to_use:.2f}, no_relevant={no_relevant_threshold_to_use:.2f}, semantic_weight={semantic_weight_to_use:.2f}, keyword_weight={keyword_weight_to_use:.2f}")
 
         try:
             # Step 0: Classify the query BEFORE doing any retrieval
@@ -142,6 +147,8 @@ class RAGService:
                 top_k=top_k_to_use,  # Use UI value or default
                 threshold=similarity_threshold_to_use,  # Use UI value or default
                 use_hybrid=True,  # Enable hybrid search
+                semantic_weight=semantic_weight_to_use,  # UI-provided or config default
+                keyword_weight=keyword_weight_to_use,    # UI-provided or config default
                 db=db
             )
 

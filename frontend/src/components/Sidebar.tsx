@@ -1,14 +1,12 @@
-import { MessageSquare, Upload, Globe, FileText, BarChart3, Settings, FileSpreadsheet, Calculator, Wrench } from 'lucide-react'
-import RAGSettings, { type RAGConfig } from './RAGSettings'
+import { MessageSquare, Upload, Globe, FileText, BarChart3, FileSpreadsheet, Calculator, Wrench, Sliders } from 'lucide-react'
 
 interface Props {
-  activeTab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator' | 'tools'
-  setActiveTab: (tab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator' | 'tools') => void
+  activeTab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator' | 'tools' | 'weights'
+  setActiveTab: (tab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator' | 'tools' | 'weights') => void
   currentUser?: string
-  onRAGSettingsChange?: (settings: RAGConfig) => void
 }
 
-export default function Sidebar({ activeTab, setActiveTab, currentUser, onRAGSettingsChange }: Props) {
+export default function Sidebar({ activeTab, setActiveTab, currentUser }: Props) {
   const tabs = [
     { id: 'chat' as const, icon: MessageSquare, label: 'Chat' },
     { id: 'upload' as const, icon: Upload, label: 'Upload Files' },
@@ -17,6 +15,7 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser, onRAGSet
     { id: 'estimator' as const, icon: Calculator, label: 'Project Estimator' },
     { id: 'evaluation' as const, icon: BarChart3, label: 'Evaluation' },
     { id: 'tools' as const, icon: Wrench, label: 'Tool Usage' },
+    { id: 'weights' as const, icon: Sliders, label: 'Weights Config' },
   ]
 
   return (
@@ -66,17 +65,6 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser, onRAGSet
               </button>
             )
           })}
-        </div>
-
-        {/* Compact RAG Settings in Sidebar */}
-        <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800">
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 px-3">
-            <Settings className="w-3.5 h-3.5" />
-            <span>RAG Settings</span>
-          </div>
-          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3">
-            <RAGSettings onSettingsChange={onRAGSettingsChange} compact={true} />
-          </div>
         </div>
       </nav>
 

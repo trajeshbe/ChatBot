@@ -68,4 +68,62 @@ See [Testing Documentation](../testing/APPLICATION_TEST_REPORT.md) for complete 
 
 ---
 
-**Last Updated**: 2025-11-20
+**Last Updated**: 2025-11-24
+
+---
+
+## Tool Calling Model ID Fix (2025-11-24)
+
+### TOOL_CALLING_MODEL_ID_FIX_2025-11-24.md
+**Status**: ✅ ALL ISSUES RESOLVED
+**Priority**: HIGH
+**Impact**: Multi-Tool Agent, Web Scraping, Tool Registry
+
+Complete fix for GPT-4 function calling parameter passing issues:
+
+#### Issues Fixed:
+1. **Smart Extraction Tool Missing model_id** - Added parameter to wrapper and JSON payload
+2. **Navigation Agent Tool Missing model_id** - Added llm_provider and model_id parameters
+3. **Auto-Selection Logic Override** - Changed OR to AND logic to preserve explicit parameters
+4. **UltraSmartExtractor Missing model_id** - Added to extract_to_table() method signature
+5. **Parameter Flow Chain** - Ensured model_id flows through all 6 layers correctly
+
+#### Results:
+- ✅ All tool calling working without errors
+- ✅ Navigation agent executing successfully
+- ✅ Web extraction returning actual data (20 books extracted)
+- ✅ Model ID correctly flowing: `qwen2.5:1.5b-instruct-q4_K_M`
+- ✅ GPT-4 tool selection working
+- ✅ Cost-optimized architecture maintained (GPT-4 for selection, Ollama for execution)
+
+**Quick Reference**: Use this for understanding the complete parameter flow fix.
+
+---
+
+## Tool Tracking Fixes (2025-11-23)
+
+### TOOL_TRACKING_COMPLETE_FIX.md
+Complete fix summary for tool tracking issues. Includes all 3 critical bugs found and fixed:
+1. Tool selection logic (navigation vs extraction)
+2. TOOL_TRACKING_ENABLED setting missing
+3. Metadata JSON serialization bug (critical!)
+
+**Quick Reference**: Use this for understanding the complete fix history.
+
+### TOOL_TRACKING_FIXES.md
+Detailed implementation guide for tool tracking fixes. Includes:
+- Root cause analysis
+- Code changes with line numbers
+- Testing procedures
+- Expected behavior after fixes
+
+**Quick Reference**: Use this for detailed technical implementation.
+
+### TOOL_TRACKING_SETTINGS_FIX.md
+Specific fix for TOOL_TRACKING_ENABLED configuration error.
+- Settings error details
+- Removed feature flag requirement
+- Always-on tracking with graceful failures
+
+**Quick Reference**: Use this for understanding the settings bug.
+

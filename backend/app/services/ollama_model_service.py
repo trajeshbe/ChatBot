@@ -130,7 +130,7 @@ class OllamaModelService:
                 elif method.upper() == "POST":
                     response = await client.post(url, json=json_data)
                 elif method.upper() == "DELETE":
-                    response = await client.delete(url, json=json_data)
+                    response = await client.request(method="DELETE", url=url, json=json_data)
                 else:
                     raise ValueError(f"Unsupported HTTP method: {method}")
 
@@ -409,7 +409,11 @@ class OllamaModelService:
             json_data = {"name": model_name}
 
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.delete(url, json=json_data)
+                response = await client.request(
+                    method="DELETE",
+                    url=url,
+                    json=json_data
+                )
                 response.raise_for_status()
 
                 logger.info(f"Successfully deleted model: {model_name}")

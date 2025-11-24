@@ -152,6 +152,7 @@ class EnhancedLLMService:
     async def _check_ollama_model_availability(self) -> set:
         """
         Check which Ollama models are actually installed
+        AUTO-REGISTERS any unknown models discovered in Ollama
 
         Returns:
             Set of installed model names
@@ -163,11 +164,17 @@ class EnhancedLLMService:
                 response.raise_for_status()
                 data = response.json()
 
-                # Extract model names from response
+                # Extract model names and auto-register unknown ones
                 installed_models = set()
                 for model in data.get("models", []):
                     model_name = model.get("name", "")
+                    model_size = model.get("size", 0)
                     installed_models.add(model_name)
+
+                    # AUTO-REGISTER if not already in registry
+                    if not self.model_registry.get_model(model_name):
+                        logger.info(f"🆕 Auto-registering new Ollama model: {model_name}")
+                        self._auto_register_ollama_model(model_name, model_size)
 
                 logger.info(f"🔍 Ollama installed models: {installed_models}")
                 return installed_models
@@ -177,6 +184,91 @@ class EnhancedLLMService:
             logger.warning(f"⚠️  Failed to check Ollama model availability: {e}")
             logger.warning("    Assuming all registered Ollama models are available")
             return set()  # Return empty set, will mark all as unavailable
+
+    def _auto_register_ollama_model(self, model_name: str, model_size: int):
+        """
+        Auto-register a discovered Ollama model with intelligent defaults
+
+        Args:
+            model_name: Model name from Ollama (e.g., "llama3.1:8b", "mistral:7b")
+            model_size: Model size in bytes
+        """
+        import re
+        from app.models.model_registry import ModelInfo, ModelProvider, ModelType
+
+        # Extract parameter size from name (e.g., "8b", "7b", "3b", "1.5b")
+        size_match = re.search(r'(\d+\.?\d*)b', model_name.lower())
+        param_size = float(size_match.group(1)) if size_match else 0
+
+        # Determine if GPU model based on size
+        # Models > 3GB are likely GPU models (Q4 quantized 7B+ models)
+        size_gb = model_size / (1024 ** 3)
+        is_gpu_model = size_gb > 3.0 or param_size >= 7.0
+
+        # Extract model family (e.g., "llama3.1" from "llama3.1:8b")
+        family = model_name.split(':')[0] if ':' in model_name else model_name
+        family_title = family.replace('.', ' ').replace('-', ' ').title()
+
+        # Create friendly display name
+        display_name = f"{family_title}"
+        if param_size > 0:
+            display_name += f" {param_size:.1f}B".replace('.0B', 'B')
+        display_name += " (Ollama"
+        if is_gpu_model:
+            display_name += " GPU"
+        display_name += ")"
+
+        # Determine context length based on model family
+        context_length = 128000  # Default for newer models
+        if 'llama3' in model_name:
+            context_length = 128000
+        elif 'qwen' in model_name:
+            context_length = 32768
+        elif 'mistral' in model_name or 'mixtral' in model_name:
+            context_length = 32768
+        elif 'phi' in model_name:
+            context_length = 128000
+
+        # Create intelligent description
+        description = f"Auto-registered Ollama model. "
+        if is_gpu_model:
+            description += f"GPU-accelerated. ~{size_gb:.1f}GB VRAM. "
+        else:
+            description += f"CPU model. ~{size_gb:.1f}GB RAM. "
+
+        if param_size > 0:
+            description += f"{param_size:.1f}B parameters. "
+
+        # Add family-specific notes
+        if 'llama' in model_name:
+            description += "Good for general tasks and RAG."
+        elif 'qwen' in model_name:
+            description += "Multilingual support, good reasoning."
+        elif 'mistral' in model_name:
+            description += "Fast inference, balanced quality."
+        elif 'deepseek' in model_name:
+            description += "Specialized for coding tasks."
+        elif 'phi' in model_name:
+            description += "Compact model with good reasoning."
+
+        # Register the model
+        # Note: Ollama models don't require backend GPU since Ollama handles GPU inference
+        model_info = ModelInfo(
+            id=model_name,
+            name=display_name,
+            provider=ModelProvider.OLLAMA,
+            model_type=ModelType.LOCAL_GPU if is_gpu_model else ModelType.LOCAL_CPU,
+            model_path=model_name,
+            context_length=context_length,
+            cost_per_1k_tokens=0.0,  # Free local model
+            requires_gpu=False,  # Ollama handles GPU internally, backend doesn't need GPU
+            min_gpu_memory_gb=0,  # Ollama manages its own GPU memory
+            description=description,
+            recommended=param_size >= 7.0  # Recommend 7B+ models
+        )
+
+        self.model_registry.register(model_info)
+        logger.info(f"   ✅ Auto-registered: {display_name} ({size_gb:.1f}GB, GPU={is_gpu_model})")
 
     def _update_model_availability(self):
         """Update model availability based on API keys and hardware"""
@@ -209,28 +301,70 @@ class EnhancedLLMService:
             self.model_registry.update_availability(model.id, True)
 
     def _set_default_model(self):
-        """Set the default model based on availability"""
+        """Set the default model based on availability - dynamically selects best GPU model"""
 
-        # Priority order for default model
-        # 🔄 CHANGED 2025-11-18: Prioritize local Ollama models (no API key needed)
-        priority_models = [
-            "llama3.2:3b",           # ✅ Best local model (Ollama) - FREE
-            "qwen2.5:1.5b",          # ✅ Fast local model (Ollama) - FREE
-            "llama-3.1-8b",          # Best local GPU (if GPU available)
-            "gpt-4-turbo",           # Best quality (requires OpenAI API key)
-            "claude-3.5-sonnet",     # Best alternative (requires Anthropic API key)
-            "llama-3.2-3b-cpu",      # Fallback local CPU
-            "tinyllama-cpu",         # Final fallback
-        ]
+        # Get all available models
+        available_models = self.model_registry.get_available_models(
+            gpu_available=self._gpu_info.available if self._gpu_info else False,
+            gpu_memory_gb=self._gpu_info.memory_gb if self._gpu_info else 0
+        )
 
-        for model_id in priority_models:
-            model = self.model_registry.get_model(model_id)
-            if model and model.available:
-                self._default_model_id = model_id
-                logger.info(f"Default model set to: {model.name}")
-                return
+        if not available_models:
+            logger.warning("No models available!")
+            return
 
-        logger.warning("No models available!")
+        # Priority: GPU models > CPU models, larger parameter count > smaller
+        # Rank models by desirability
+        def rank_model(model):
+            score = 0
+            model_id = model.id.lower()
+
+            # GPU models get priority
+            if model.requires_gpu or 'gpu' in model_id:
+                score += 1000
+
+            # Extract parameter size (8b > 7b > 3b > 1.5b)
+            import re
+            size_match = re.search(r'(\d+\.?\d*)b', model_id)
+            if size_match:
+                size = float(size_match.group(1))
+                score += size * 10  # 8b gets 80 points, 3b gets 30 points
+
+            # Prefer qwen models (optimized for GPU, multilingual)
+            if 'qwen' in model_id:
+                score += 10
+
+            # Prefer recommended models from registry
+            if model.recommended:
+                score += 100
+
+            # Prefer instruct/chat variants
+            if any(x in model_id for x in ['instruct', 'chat', 'turbo']):
+                score += 2
+
+            # Ollama models are local and free
+            if 'ollama/' in model_id or model.model_type.value == 'local':
+                score += 3
+
+            return score
+
+        # Sort by rank and pick the best
+        available_models.sort(key=rank_model, reverse=True)
+        best_model = available_models[0]
+        self._default_model_id = best_model.id
+        logger.info(f"🚀 Default model auto-selected: {best_model.name} (score: {rank_model(best_model)})")
+
+        # Fallback to proprietary if no local models
+        if not self._default_model_id:
+            fallback_priority = ["gpt-4-turbo", "claude-3.5-sonnet", "gpt-3.5-turbo"]
+            for model_id in fallback_priority:
+                model = self.model_registry.get_model(model_id)
+                if model and model.available:
+                    self._default_model_id = model_id
+                    logger.info(f"Default model set to fallback: {model.name}")
+                    return
+
+            logger.warning("No models available!")
 
     async def _ensure_ollama_client(self):
         """Create fresh Ollama client for each request (no caching)

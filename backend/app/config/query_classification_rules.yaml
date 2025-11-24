@@ -1,0 +1,394 @@
+# Query Classification Rules Configuration
+# =========================================
+# This file defines rules for classifying user queries into categories:
+# - ai_personal: Questions about the AI itself
+# - document_specific: Questions that should search documents
+# - general: General knowledge questions
+# - ambiguous: Unclear, default to document search
+#
+# Rules are evaluated in priority order (higher priority = evaluated first)
+# Each rule can be enabled/disabled and has customizable confidence
+
+version: "1.0"
+last_updated: "2025-11-24"
+
+# Global settings
+settings:
+  # Default classification when no rules match
+  default_classification: "ambiguous"
+  default_confidence: 0.5
+  default_use_documents: true  # When in doubt, check documents
+
+  # Enable/disable LLM-based classification fallback
+  enable_llm_fallback: true
+  llm_fallback_model: null  # Uses recommended model from registry (qwen2.5:1.5b-instruct-q4_K_M)
+
+  # Enable context-aware classification (proper nouns, user preferences)
+  enable_context_aware: true
+
+  # Rule hit tracking (for adaptive ordering)
+  track_rule_hits: true
+  adaptive_ordering: true  # Automatically reorder rules based on hit rate
+
+# Classification Rules
+# ====================
+# Each rule has:
+# - id: Unique identifier
+# - name: Human-readable name
+# - priority: Evaluation order (100=highest, 0=lowest)
+# - enabled: Whether rule is active
+# - type: Rule type (pattern_match, context_aware, llm_based)
+# - patterns: List of patterns to match (regex or keywords)
+# - classification: Target classification
+# - confidence: Classification confidence (0.0-1.0)
+# - use_documents: Whether to use RAG retrieval
+# - description: What this rule does
+
+rules:
+  # =========================================================================
+  # PRIORITY 100: Context-Aware Rules (Proper Nouns)
+  # =========================================================================
+  # These rules check if the query is about a specific person/entity
+  # If detected, force document search (don't use LLM's general knowledge)
+
+  - id: "proper_noun_who_is"
+    name: "Proper Noun 'Who is' Questions"
+    priority: 100
+    enabled: true
+    type: "context_aware"
+    patterns:
+      - "^who is ([A-Z][a-z]+)"  # "Who is Aadhan?"
+      - "^who was ([A-Z][a-z]+)"  # "Who was Einstein?"
+      - "^tell me about ([A-Z][a-z]+)"  # "Tell me about Aadhan"
+    classification: "document_specific"
+    confidence: 0.95
+    use_documents: true
+    description: "Questions asking 'who is [ProperNoun]' should check documents for specific information about that person/entity"
+
+  - id: "proper_noun_what_is"
+    name: "Proper Noun 'What is' Questions"
+    priority: 95
+    enabled: true
+    type: "context_aware"
+    patterns:
+      - "^what is ([A-Z][a-z]+)"  # "What is Tesla?" (company)
+      - "^what are ([A-Z][a-z]+)"  # "What are Microsoft's products?"
+    classification: "document_specific"
+    confidence: 0.90
+    use_documents: true
+    description: "Questions asking 'what is [ProperNoun]' could be about uploaded documents"
+
+  - id: "multiple_proper_nouns"
+    name: "Multiple Proper Nouns"
+    priority: 90
+    enabled: true
+    type: "context_aware"
+    detect: "proper_nouns_count >= 2"
+    classification: "document_specific"
+    confidence: 0.85
+    use_documents: true
+    description: "Queries with 2+ proper nouns likely refer to specific documents"
+
+  # =========================================================================
+  # PRIORITY 80-89: AI-Personal Questions
+  # =========================================================================
+  # Questions about the AI assistant itself
+
+  - id: "ai_identity"
+    name: "AI Identity Questions"
+    priority: 85
+    enabled: true
+    type: "pattern_match"
+    patterns:
+      - "who are you"
+      - "what are you"
+      - "tell me about yourself"
+      - "introduce yourself"
+      - "your name"
+      - "what's your name"
+      - "what is your name"
+      - "are you an ai"
+      - "are you a bot"
+    classification: "ai_personal"
+    confidence: 0.95
+    use_documents: false
+    description: "Questions about AI's identity and nature"
+
+  - id: "ai_capabilities"
+    name: "AI Capabilities Questions"
+    priority: 83
+    enabled: true
+    type: "pattern_match"
+    patterns:
+      - "what can you do"
+      - "what are your capabilities"
+      - "what are your functions"
+      - "how do you work"
+      - "how can you help"
+      - "what can you help me with"
+    classification: "ai_personal"
+    confidence: 0.90
+    use_documents: false
+    description: "Questions about AI's capabilities and functions"
+
+  - id: "ai_model_info"
+    name: "AI Model Information"
+    priority: 88
+    enabled: true
+    type: "pattern_match"
+    patterns:
+      - "what model are you"
+      - "which model are you using"
+      - "what's your model"
+      - "what model is this"
+      - "are you gpt"
+      - "are you claude"
+      - "are you llama"
+    classification: "ai_personal"
+    confidence: 0.98
+    use_documents: false
+    description: "Questions about the LLM model being used"
+
+  - id: "greetings"
+    name: "Greetings and Small Talk"
+    priority: 80
+    enabled: true
+    type: "pattern_match"
+    patterns:
+      - "^hello$"
+      - "^hi$"
+      - "^hey$"
+      - "^good morning$"
+      - "^good afternoon$"
+      - "^good evening$"
+      - "^how are you"
+      - "^what's up"
+    classification: "ai_personal"
+    confidence: 0.95
+    use_documents: false
+    description: "Greetings and casual conversation"
+
+  # =========================================================================
+  # PRIORITY 70-79: Document-Specific Questions
+  # =========================================================================
+  # Explicit references to documents/files
+
+  - id: "document_explicit"
+    name: "Explicit Document References"
+    priority: 75
+    enabled: true
+    type: "pattern_match"
+    patterns:
+      - "according to the document"
+      - "in the document"
+      - "the document says"
+      - "the document mentions"
+      - "what does the document say"
+      - "summarize the document"
+      - "in the file"
+      - "the pdf says"
+      - "from the uploaded"
+      - "in my files"
+      - "what's in my documents"
+    classification: "document_specific"
+    confidence: 0.98
+    use_documents: true
+    description: "Explicit references to documents or files"
+
+  - id: "document_questions"
+    name: "Document-Oriented Questions"
+    priority: 72
+    enabled: true
+    type: "pattern_match"
+    patterns:
+      - "what are the key findings"
+      - "what are the main points"
+      - "what's the summary"
+      - "what does it say about"
+      - "explain the methodology"
+      - "what are the results"
+      - "what are the conclusions"
+    classification: "document_specific"
+    confidence: 0.80
+    use_documents: true
+    description: "Questions that typically refer to document content"
+
+  # =========================================================================
+  # PRIORITY 50-69: General Knowledge Questions
+  # =========================================================================
+  # World knowledge that doesn't need documents (BUT be careful with proper nouns!)
+
+  - id: "world_capitals"
+    name: "World Capitals and Geography"
+    priority: 60
+    enabled: true
+    type: "pattern_match"
+    patterns:
+      - "capital of (france|germany|japan|china|usa|united states|india|brazil)"
+      - "where is (paris|london|tokyo|beijing|new york)"
+      - "largest city in"
+      - "population of (china|india|usa)"
+    classification: "general"
+    confidence: 0.85
+    use_documents: false
+    description: "Geography and world capitals (well-known facts)"
+
+  - id: "mathematics"
+    name: "Mathematical Calculations"
+    priority: 65
+    enabled: true
+    type: "pattern_match"
+    patterns:
+      - "what is \\d+ \\+ \\d+"  # 5 + 3
+      - "what is \\d+ \\- \\d+"  # 10 - 2
+      - "what is \\d+ \\* \\d+"  # 4 * 7
+      - "what is \\d+ / \\d+"    # 20 / 4
+      - "calculate"
+      - "solve this equation"
+    classification: "general"
+    confidence: 0.95
+    use_documents: false
+    description: "Mathematical calculations and equations"
+
+  - id: "historical_dates"
+    name: "Well-Known Historical Dates"
+    priority: 58
+    enabled: true
+    type: "pattern_match"
+    patterns:
+      - "when did world war"
+      - "when was (the first|second) world war"
+      - "when did (hitler|stalin|churchill)"
+      - "when was (the moon landing|apollo 11)"
+      - "when did america declare independence"
+    classification: "general"
+    confidence: 0.85
+    use_documents: false
+    description: "Well-known historical dates and events"
+
+  - id: "scientific_facts"
+    name: "Basic Scientific Facts"
+    priority: 55
+    enabled: true
+    type: "pattern_match"
+    patterns:
+      - "how does photosynthesis work"
+      - "what is gravity"
+      - "explain quantum"
+      - "what is dna"
+      - "what is evolution"
+      - "speed of light"
+    classification: "general"
+    confidence: 0.75
+    use_documents: false
+    description: "Basic scientific concepts (but could also be in documents, so lower confidence)"
+
+  # =========================================================================
+  # PRIORITY 40-49: Code and Technical Questions
+  # =========================================================================
+
+  - id: "code_generation"
+    name: "Code Generation Requests"
+    priority: 45
+    enabled: true
+    type: "pattern_match"
+    patterns:
+      - "write a (python|javascript|java|c\\+\\+|rust|go) (function|code|script)"
+      - "create a function"
+      - "how to write code for"
+      - "show me code for"
+      - "give me example code"
+    classification: "general"
+    confidence: 0.80
+    use_documents: false
+    description: "Code generation requests (usually don't need documents)"
+
+  - id: "technical_howto"
+    name: "Technical How-To Questions"
+    priority: 42
+    enabled: true
+    type: "pattern_match"
+    patterns:
+      - "how to install"
+      - "how to configure"
+      - "how to set up"
+      - "how do i use"
+      - "tutorial for"
+    classification: "ambiguous"
+    confidence: 0.60
+    use_documents: true
+    description: "Technical questions that might be in documentation"
+
+  # =========================================================================
+  # PRIORITY 0-39: Ambiguous / Fallback
+  # =========================================================================
+
+  - id: "short_question"
+    name: "Very Short Questions"
+    priority: 30
+    enabled: true
+    type: "context_aware"
+    detect: "word_count <= 3"
+    classification: "ambiguous"
+    confidence: 0.50
+    use_documents: true
+    description: "Very short questions are ambiguous, default to checking documents"
+
+  - id: "contains_question_mark"
+    name: "Generic Questions"
+    priority: 10
+    enabled: true
+    type: "pattern_match"
+    patterns:
+      - "\\?$"  # Ends with question mark
+    classification: "ambiguous"
+    confidence: 0.40
+    use_documents: true
+    description: "Generic questions without specific classification"
+
+# User-Specific Rule Overrides
+# =============================
+# Allow users to customize rules for their use case
+
+user_rules:
+  # Example: User wants all "Who is" questions to check documents
+  # even for well-known people
+  - user_id: "default"  # Applies to all users
+    overrides:
+      - rule_id: "proper_noun_who_is"
+        enabled: true
+        priority: 100  # Ensure it runs first
+
+      # Force "Who is Aadhan?" to check documents
+      - rule_id: "custom_entity_search"
+        name: "Custom Entity Search"
+        priority: 99
+        enabled: true
+        type: "pattern_match"
+        patterns:
+          - "who is aadhan"
+          - "tell me about aadhan"
+          - "what is aadhan"
+          - "aadhan"
+        classification: "document_specific"
+        confidence: 0.99
+        use_documents: true
+        description: "Custom rule for specific entity 'Aadhan' - always check documents"
+
+# Rule Hit Tracking (for adaptive ordering)
+# ==========================================
+# System tracks which rules are hit most often
+# and can automatically reorder them for performance
+
+hit_tracking:
+  enabled: true
+  track_window_days: 30  # Track last 30 days
+  min_hits_for_reorder: 100  # Need 100 hits before reordering
+  reorder_frequency_hours: 24  # Reorder every 24 hours
+
+# Export Configuration
+# ====================
+export:
+  allow_rule_export: true
+  allow_rule_import: true
+  version_control: true  # Keep history of rule changes

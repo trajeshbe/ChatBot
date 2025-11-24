@@ -33,3 +33,25 @@ Feature-specific documentation, enhancements, and feature summaries.
 ---
 
 **Last Updated**: 2025-11-20
+
+## Tool Tracking Feature (2025-11-23)
+
+### TOOL_TRACKING_IMPLEMENTATION.md
+Complete implementation guide for tool tracking feature:
+- Backend changes (document_service, embedding_service, rag_service)
+- Frontend changes (SettingsPanel, ChatInterfaceEnhanced)
+- Per-response tool display with toggle control
+- Tool Usage Dashboard integration
+- Testing procedures
+
+**Use Case**: Understanding the complete tool tracking implementation.
+
+### TOOL_TRACKING_SUMMARY.md
+Quick summary of tool tracking capabilities:
+- What tools are tracked
+- Where tools are displayed
+- How to enable/disable tool display
+- API response format
+
+**Use Case**: Quick reference for tool tracking features.
+

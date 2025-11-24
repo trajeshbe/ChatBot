@@ -1,0 +1,12 @@
+Machine Learning and Artificial Intelligence
+
+Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed. It focuses on developing computer programs that can access data and use it to learn for themselves.
+
+Key Concepts:
+- Supervised Learning: Training with labeled data
+- Unsupervised Learning: Finding patterns in unlabeled data  
+- Deep Learning: Neural networks with multiple layers
+- Reinforcement Learning: Learning through rewards and penalties
+
+Applications:
+Machine learning is used in recommendation systems, image recognition, natural language processing, and autonomous vehicles. The technology improves over time with more data, making it increasingly powerful and accurate.

@@ -128,6 +128,55 @@ Rules:
                     'reason': f'Matched document-specific pattern: "{pattern}"'
                 }
 
+        # General knowledge patterns (NEW - Fix for Bug #1)
+        # These are common factual questions that should use direct LLM, not documents
+        general_knowledge_starters = [
+            'what is the capital of',
+            'what is the population of',
+            'when was',
+            'when did',
+            'who invented',
+            'who discovered',
+            'how many',
+            'how much',
+            'where is',
+            'what year',
+            'what language',
+            'what currency',
+            'what continent',
+            'what ocean',
+            'what mountain',
+            'what river',
+            'define ',
+            'what does ',
+            'how does photosynthesis',
+            'how does gravity',
+            'what causes',
+            'what is dna',
+            'what is rna',
+            'what is the speed of light',
+            'what is the distance',
+            'what is the formula',
+            'how to calculate',
+            'what is pi',
+            'who is the president',
+            'who is the prime minister',
+            'what is the largest',
+            'what is the smallest',
+            'what is the tallest',
+            'what is the longest',
+            'what is the fastest'
+        ]
+
+        for pattern in general_knowledge_starters:
+            if query_lower.startswith(pattern):
+                return {
+                    'query_type': 'general',
+                    'confidence': 0.85,
+                    'use_documents': False,
+                    'reason': f'Matched general knowledge pattern: "{pattern}"'
+                }
+
         return None  # No rule matched, use LLM
 
     async def classify(self, query: str) -> Dict[str, any]:

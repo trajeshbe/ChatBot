@@ -42,11 +42,48 @@ class EnhancedRAGAgent(RAGAgent):
         self.use_llm_selection = True  # Flag to enable/disable LLM-based selection
         logger.info("EnhancedRAGAgent initialized with tool registry")
 
-    async def _ensure_openai_client(self):
-        """Ensure OpenAI client is initialized for function calling"""
-        if self.openai_client is None and settings.OPENAI_API_KEY:
-            self.openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-            logger.info("OpenAI client initialized for tool selection")
+    async def _ensure_openai_client(self, db=None):
+        """
+        Ensure OpenAI client is initialized for function calling.
+
+        Priority order for API key:
+        1. Database-stored encrypted key (via SecretsService)
+        2. Environment variable (settings.OPENAI_API_KEY)
+
+        Args:
+            db: Database session (optional, for fetching key from DB)
+
+        Returns:
+            OpenAI client instance or None if initialization fails
+        """
+        if self.openai_client is not None:
+            return self.openai_client
+
+        api_key = None
+
+        # Priority 1: Try to get API key from database
+        if db is not None:
+            try:
+                from app.services.secrets_service import SecretsService
+                secrets_service = SecretsService()
+                api_key = await secrets_service.get_api_key(db, provider="openai")
+                if api_key:
+                    logger.info("✅ GPT-4 function calling enabled: Retrieved OpenAI API key from database")
+            except Exception as e:
+                logger.warning(f"Failed to retrieve OpenAI key from database: {e}")
+
+        # Priority 2: Fall back to environment variable
+        if not api_key and settings.OPENAI_API_KEY:
+            api_key = settings.OPENAI_API_KEY
+            logger.info("✅ GPT-4 function calling enabled: Using OpenAI API key from environment")
+
+        # Initialize client if we have a key
+        if api_key:
+            self.openai_client = AsyncOpenAI(api_key=api_key)
+            logger.info("🎯 OpenAI client initialized for GPT-4 tool selection (function calling)")
+        else:
+            logger.warning("⚠️ No OpenAI API key available - GPT-4 function calling disabled. Falling back to simple tool selection.")
+
         return self.openai_client
 
     async def run(
@@ -84,12 +121,83 @@ class EnhancedRAGAgent(RAGAgent):
         similarity_threshold = user_preferences.get('similarity_threshold')
         min_similarity_threshold = user_preferences.get('min_similarity_threshold')
         no_relevant_docs_threshold = user_preferences.get('no_relevant_docs_threshold')
+        semantic_weight = user_preferences.get('semantic_weight')
+        keyword_weight = user_preferences.get('keyword_weight')
 
         logger.info(
             f"Agent run with thresholds from UI: "
             f"top_k={top_k}, similarity={similarity_threshold}, "
-            f"min_similarity={min_similarity_threshold}, no_relevant={no_relevant_docs_threshold}"
+            f"min_similarity={min_similarity_threshold}, no_relevant={no_relevant_docs_threshold}, "
+            f"semantic_weight={semantic_weight}, keyword_weight={keyword_weight}"
         )
+
+        # 🎯 ADAPTIVE RAG: Extract strategy weights for dynamic routing
+        strategy_weights = user_preferences.get('strategy_weights', {})
+        direct_llm_weight = strategy_weights.get('direct_llm', 0.02)
+        rag_short_term_weight = strategy_weights.get('rag_short_term', 0.3)
+        rag_long_term_weight = strategy_weights.get('rag_long_term', 0.03)
+        rag_hybrid_weight = strategy_weights.get('rag_hybrid', 0.25)
+
+        logger.info(
+            f"🎯 Strategy routing weights: "
+            f"direct_llm={direct_llm_weight:.2f}, "
+            f"rag_short_term={rag_short_term_weight:.2f}, "
+            f"rag_long_term={rag_long_term_weight:.2f}, "
+            f"rag_hybrid={rag_hybrid_weight:.2f}"
+        )
+
+        # 🚀 Scenario 1: User wants DIRECT LLM (skip RAG for general knowledge)
+        if direct_llm_weight > 0.8:
+            logger.info("📌 ROUTING: DIRECT_LLM (skipping RAG per user's strategy_weights)")
+            logger.info(f"   Reason: direct_llm weight ({direct_llm_weight:.2f}) > 0.8 threshold")
+
+            # Use LLM directly without document retrieval
+            result = await self._direct_llm_query(
+                query=query,
+                session_id=session_id,
+                user_preferences=user_preferences
+            )
+
+            # Add routing metadata
+            result['metadata'] = result.get('metadata', {})
+            result['metadata']['routing_strategy'] = 'direct_llm'
+            result['metadata']['routing_reason'] = f'User set direct_llm={direct_llm_weight:.2f}'
+            result['metadata']['strategy_weights'] = strategy_weights
+
+            return result
+
+        # 🚀 Scenario 2: User forces RAG (must use document search)
+        if rag_short_term_weight > 0.8 or rag_long_term_weight > 0.8:
+            logger.info("📌 ROUTING: FORCE_RAG (document search required per user's strategy_weights)")
+            logger.info(f"   Reason: rag_short_term={rag_short_term_weight:.2f} or rag_long_term={rag_long_term_weight:.2f} > 0.8")
+
+            # Force RAG tool selection - include db from user_preferences
+            tool_params_rag = {
+                "top_k": top_k,
+                "similarity_threshold": similarity_threshold,
+                "semantic_weight": semantic_weight,
+                "keyword_weight": keyword_weight,
+                "db": user_preferences.get('db') if user_preferences else None
+            }
+
+            # Execute RAG tool
+            result = await self._execute_tool_document_rag(
+                query=query,
+                session_id=session_id,
+                tool_params=tool_params_rag
+            )
+
+            # Add routing metadata
+            result['metadata'] = result.get('metadata', {})
+            result['metadata']['routing_strategy'] = 'force_rag'
+            result['metadata']['routing_reason'] = f'User set rag_short_term={rag_short_term_weight:.2f}, rag_long_term={rag_long_term_weight:.2f}'
+            result['metadata']['strategy_weights'] = strategy_weights
+
+            return result
+
+        # 🎯 Default: Use normal tool selection (balanced approach)
+        logger.info("📌 ROUTING: BALANCED (using tool selection based on query analysis)")
+        logger.info(f"   Reason: Balanced weights - no single strategy dominates")
 
         # Initialize state
         state: EnhancedAgentState = {
@@ -120,7 +228,9 @@ class EnhancedRAGAgent(RAGAgent):
             logger.info(f"Processing query: {query}")
 
             # Try LLM-based selection if OpenAI is available
-            if self.use_llm_selection and await self._ensure_openai_client():
+            # Pass database session to enable key retrieval from database
+            db = user_preferences.get('db')
+            if self.use_llm_selection and await self._ensure_openai_client(db=db):
                 try:
                     # LLM-based intent analysis and tool selection
                     selection_result = await self._select_tools_llm(
@@ -186,13 +296,34 @@ class EnhancedRAGAgent(RAGAgent):
             tool_timing = {}
             tool_execution_summary = {}
 
-            for tool_id, tool_result in state["tool_results"].items():
+            # 🆕 Build user-friendly tools_used array for UI display
+            tools_used_ui = []
+
+            for idx, tool_id in enumerate(state["selected_tools"]):
+                tool_result = state["tool_results"].get(tool_id, {})
+
+                # Get tool metadata from registry
+                tool_obj = self.tool_registry.get_tool(tool_id)
+                tool_name = tool_obj.name if tool_obj else tool_id.replace("_", " ").title()
+
                 tool_timing[tool_id] = tool_result.get("execution_time_ms", 0)
                 tool_execution_summary[tool_id] = {
                     "success": tool_result.get("success", False),
                     "execution_time_ms": tool_result.get("execution_time_ms", 0),
                     "error": tool_result.get("error") if not tool_result.get("success", False) else None
                 }
+
+                # Add to UI-friendly array
+                tools_used_ui.append({
+                    "tool_id": tool_id,
+                    "tool_name": tool_name,
+                    "status": "success" if tool_result.get("success", False) else "failure",
+                    "latency_ms": round(tool_result.get("execution_time_ms", 0), 2),
+                    "order": idx + 1
+                })
+
+            # Add tools_used array at top level for easy UI access
+            response["tools_used"] = tools_used_ui
 
             response["metadata"]["tool_usage"] = {
                 "tools_used": state["selected_tools"],
@@ -384,13 +515,25 @@ Respond by calling the appropriate tool function(s)."""
                 # No tool selected, default to document RAG
                 logger.warning("LLM did not select any tool, defaulting to document_rag")
 
-                # Build default params (only include top_k if provided)
+                # Build default params (include all threshold and weight parameters from user_preferences)
                 default_params = {
                     "query": query,
                     "session_id": session_id
                 }
+                # Add all threshold parameters from user_preferences
                 if top_k is not None:
                     default_params["top_k"] = top_k
+                if similarity_threshold is not None:
+                    default_params["similarity_threshold"] = similarity_threshold
+                if min_similarity_threshold is not None:
+                    default_params["min_similarity_threshold"] = min_similarity_threshold
+                if no_relevant_docs_threshold is not None:
+                    default_params["no_relevant_docs_threshold"] = no_relevant_docs_threshold
+                # Add weight parameters from user_preferences
+                if semantic_weight is not None:
+                    default_params["semantic_weight"] = semantic_weight
+                if keyword_weight is not None:
+                    default_params["keyword_weight"] = keyword_weight
 
                 return {
                     "intent": "general_query",
@@ -639,7 +782,8 @@ Respond by calling the appropriate tool function(s)."""
         tool_result = state["tool_results"][tool_id]
 
         if not tool_result["success"]:
-            return {
+            # ✅ Include model info even in error responses
+            error_response = {
                 "answer": f"I encountered an error: {tool_result['error']}",
                 "sources": [],
                 "metadata": {
@@ -647,6 +791,12 @@ Respond by calling the appropriate tool function(s)."""
                     "tool_used": tool_id
                 }
             }
+            # Add model info from state if available
+            model_id = state["user_preferences"].get("model_id")
+            if model_id:
+                error_response["model"] = model_id
+                error_response["model_name"] = model_id
+            return error_response
 
         result_data = tool_result["result"]
 
@@ -670,6 +820,12 @@ Respond by calling the appropriate tool function(s)."""
             if "quality_metrics" in result_data:
                 response["quality_metrics"] = result_data["quality_metrics"]
 
+            # ✅ Pass through model information if present
+            if "model" in result_data:
+                response["model"] = result_data["model"]
+            if "model_name" in result_data:
+                response["model_name"] = result_data["model_name"]
+
             return response
 
         # For other tools (smart_extraction, web_scraper, etc.):
@@ -685,8 +841,11 @@ Respond by calling the appropriate tool function(s)."""
         # Get user's chosen model from preferences
         model_id = state["user_preferences"].get("model_id")
 
-        # Call RAG service to generate natural language answer using user's model
-        from app.services.rag_service import rag_service
+        # Call enhanced RAG service to generate natural language answer using user's model
+        from app.services.rag_service_enhanced import enhanced_rag_service
+
+        # ✅ Initialize rag_response before try block so it's accessible in exception handler
+        rag_response = {}
 
         try:
             # Create a synthetic query that includes the context
@@ -695,8 +854,8 @@ Respond by calling the appropriate tool function(s)."""
 Context:
 {context}"""
 
-            # Call RAG service with user's chosen model and threshold parameters
-            rag_response = await rag_service.query(
+            # Call enhanced RAG service with user's chosen model and threshold parameters
+            rag_response = await enhanced_rag_service.query(
                 query_text=synthesis_query,
                 conversation_history=None,
                 use_cache=False,  # Don't cache synthesis queries
@@ -706,7 +865,10 @@ Context:
                 top_k=state["user_preferences"].get("top_k"),
                 similarity_threshold=state["user_preferences"].get("similarity_threshold"),
                 min_similarity_threshold=state["user_preferences"].get("min_similarity_threshold"),
-                no_relevant_docs_threshold=state["user_preferences"].get("no_relevant_docs_threshold")
+                no_relevant_docs_threshold=state["user_preferences"].get("no_relevant_docs_threshold"),
+                # Pass through weight parameters from UI
+                semantic_weight=state["user_preferences"].get("semantic_weight"),
+                keyword_weight=state["user_preferences"].get("keyword_weight")
             )
 
             # Extract answer from RAG service response
@@ -716,13 +878,17 @@ Context:
             logger.warning(f"RAG service synthesis failed, using context directly: {e}")
             # Fallback to returning formatted context
             answer = context
+            # ✅ Ensure model info is still available even on error
+            if model_id and "model" not in rag_response:
+                rag_response["model"] = model_id
+                rag_response["model_name"] = model_id
 
         # Build sources based on tool type
         if tool_id == "smart_extraction":
             table_data = result_data.get("table", [])
             row_count = result_data.get("row_count", 0)
 
-            return {
+            response = {
                 "answer": answer,
                 "sources": [{
                     "type": "web_extraction",
@@ -736,11 +902,17 @@ Context:
                     "synthesis_method": "rag_service"
                 }
             }
+            # Add model info if present in rag_response
+            if "model" in rag_response:
+                response["model"] = rag_response["model"]
+            if "model_name" in rag_response:
+                response["model_name"] = rag_response["model_name"]
+            return response
 
         elif tool_id == "web_scraper":
             text = result_data.get("text", "")
 
-            return {
+            response = {
                 "answer": answer,
                 "sources": [{
                     "type": "web_scrape",
@@ -752,16 +924,28 @@ Context:
                     "synthesis_method": "rag_service"
                 }
             }
+            # Add model info if present in rag_response
+            if "model" in rag_response:
+                response["model"] = rag_response["model"]
+            if "model_name" in rag_response:
+                response["model_name"] = rag_response["model_name"]
+            return response
 
         else:
-            # Generic response
-            return {
+            # ✅ Generic response with model info
+            generic_response = {
                 "answer": answer,
                 "sources": [],
                 "metadata": {
                     "synthesis_method": "rag_service"
                 }
             }
+            # Add model info if present in rag_response
+            if "model" in rag_response:
+                generic_response["model"] = rag_response["model"]
+            if "model_name" in rag_response:
+                generic_response["model_name"] = rag_response["model_name"]
+            return generic_response
 
     def _infer_intent_from_tool(self, tool_id: str) -> str:
         """Infer intent from selected tool"""
@@ -815,6 +999,124 @@ Context:
                     "error": str(e),
                     "fallback": True
                 }
+            }
+
+    async def _direct_llm_query(
+        self,
+        query: str,
+        session_id: Optional[str] = None,
+        user_preferences: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Direct LLM query WITHOUT document retrieval (Scenario 1: General Knowledge)
+
+        Used when strategy_weights.direct_llm > 0.8
+        Skips RAG entirely and uses LLM's internal knowledge
+
+        Args:
+            query: User's question
+            session_id: Optional session ID
+            user_preferences: User preferences dict
+
+        Returns:
+            Response with answer from LLM only
+        """
+        from app.services.llm_service import llm_service
+
+        try:
+            model_id = user_preferences.get('model_id') if user_preferences else None
+
+            logger.info(f"🤖 DIRECT_LLM: Answering '{query[:100]}...' using LLM knowledge only")
+
+            # Call LLM directly without context
+            # Build messages from conversation history + current query
+            conversation_history = user_preferences.get('conversation_history', []) if user_preferences else []
+            messages = conversation_history + [{"role": "user", "content": query}]
+
+            result = await llm_service.generate(
+                prompt=query,
+                messages=messages,
+                model_id=model_id,
+                max_tokens=1024,
+                temperature=0.7
+            )
+
+            return {
+                "answer": result.get("text", ""),
+                "sources": [],  # No sources since we skipped retrieval
+                "num_sources": 0,
+                "model": model_id or result.get("model", "default"),
+                "metadata": {
+                    "routing_strategy": "direct_llm",
+                    "routing_reason": "User set direct_llm weight > 0.8",
+                    "chunks_retrieved": 0,
+                    "use_documents": False,
+                    "latency_ms": result.get("latency_ms", 0)
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Direct LLM query failed: {e}")
+            return {
+                "answer": f"I apologize, but I encountered an error: {str(e)}",
+                "sources": [],
+                "metadata": {"error": str(e)}
+            }
+
+    async def _execute_tool_document_rag(
+        self,
+        query: str,
+        session_id: Optional[str] = None,
+        tool_params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Force RAG document search (Scenario 2: Force Document Lookup)
+
+        Used when strategy_weights.rag_short_term > 0.8 or rag_long_term > 0.8
+        MUST use vector search even if LLM "knows" the answer
+
+        Args:
+            query: User's question
+            session_id: Optional session ID
+            tool_params: Parameters for RAG search
+
+        Returns:
+            Response with answer from documents
+        """
+        from app.services.rag_service_enhanced import enhanced_rag_service
+
+        try:
+            tool_params = tool_params or {}
+
+            logger.info(f"🔍 FORCE_RAG: Searching documents for '{query[:100]}...'")
+
+            # Force RAG search with user's parameters
+            rag_response = await enhanced_rag_service.query(
+                query_text=query,
+                session_id=session_id,
+                top_k=tool_params.get('top_k'),
+                similarity_threshold=tool_params.get('similarity_threshold'),
+                semantic_weight=tool_params.get('semantic_weight'),
+                keyword_weight=tool_params.get('keyword_weight'),
+                db=tool_params.get('db')
+            )
+
+            # Ensure metadata exists
+            if 'metadata' not in rag_response:
+                rag_response['metadata'] = {}
+
+            rag_response['metadata']['routing_strategy'] = 'force_rag'
+            rag_response['metadata']['routing_reason'] = 'User set RAG weight > 0.8'
+            rag_response['metadata']['use_documents'] = True
+
+            return rag_response
+
+        except Exception as e:
+            logger.error(f"Force RAG query failed: {e}")
+            return {
+                "answer": f"I apologize, but I encountered an error searching documents: {str(e)}",
+                "sources": [],
+                "metadata": {"error": str(e)}
             }
 
 

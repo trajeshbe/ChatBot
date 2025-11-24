@@ -71,7 +71,10 @@ export const SmartExtractor = () => {
   const [extractedData, setExtractedData] = useState<ExtractionResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [globalSelectedModel, setGlobalSelectedModel] = useState<string>('gpt-4-turbo')
+  const [globalSelectedModel, setGlobalSelectedModel] = useState<string>('')
+
+  // Configurable parameters
+  const [maxSteps, setMaxSteps] = useState(10)
 
   // Fixed backend parameters (not configurable in UI)
   const outputFormat: OutputFormat = 'json'
@@ -101,7 +104,10 @@ export const SmartExtractor = () => {
 
       if (savedUrl) setUrl(savedUrl)
       if (savedInstructions) setUserInstructions(savedInstructions)
-      if (savedModel) setGlobalSelectedModel(savedModel)
+      // Load model from localStorage - no hardcoded fallback
+      if (savedModel) {
+        setGlobalSelectedModel(savedModel)
+      }
     }
   }, [])
 
@@ -215,6 +221,12 @@ export const SmartExtractor = () => {
       return
     }
 
+    // Validate that a model is selected
+    if (!globalSelectedModel || !globalSelectedModel.trim()) {
+      setError('Please select a model from the dropdown in the Chat interface first. No default model is configured.')
+      return
+    }
+
     setIsExtracting(true)
     setError(null)
     setExtractedData(null)
@@ -229,7 +241,8 @@ export const SmartExtractor = () => {
           user_instructions: userInstructions,
           llm_provider: llmProvider,
           model_id: globalSelectedModel,  // Use model from Chat UI dropdown
-          output_format: outputFormat
+          output_format: outputFormat,
+          max_steps: maxSteps
         }
       )
 
@@ -446,6 +459,24 @@ export const SmartExtractor = () => {
         {showAdvanced && (
           <div className="mt-3 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
             <div className="text-sm text-slate-600 dark:text-slate-400">
+              {/* Max Steps Control */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Max Navigation Steps (for pagination)
+                </label>
+                <input
+                  type="number"
+                  value={maxSteps}
+                  onChange={(e) => setMaxSteps(Math.max(1, Math.min(50, parseInt(e.target.value) || 10)))}
+                  min="1"
+                  max="50"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Controls how many pages the navigation agent will visit. Increase for sites with many pages. Default: 10
+                </p>
+              </div>
+
               <p className="mb-2 font-medium text-slate-700 dark:text-slate-300">Two-Step Workflow:</p>
               <p className="mb-4">
                 You can either generate a template first to review it, or directly extract data in one step.
