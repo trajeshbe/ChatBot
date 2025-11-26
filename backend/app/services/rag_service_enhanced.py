@@ -57,7 +57,8 @@ class EnhancedRAGService:
         min_similarity_threshold: Optional[float] = None,
         no_relevant_docs_threshold: Optional[float] = None,
         semantic_weight: Optional[float] = None,
-        keyword_weight: Optional[float] = None
+        keyword_weight: Optional[float] = None,
+        force_rag: bool = False  # 🆕 Force RAG search even for ai_personal/general queries
     ) -> Dict:
         """
         Process query with memory hierarchy:
@@ -184,8 +185,8 @@ class EnhancedRAGService:
             classification = await query_classifier.classify(processed_query)
             logger.info(f"📊 Classification: {classification['query_type']} (confidence: {classification['confidence']:.2f}) - {classification['reason']}")
 
-            # If it's general knowledge or AI-personal, skip RAG entirely
-            if classification['query_type'] in ['general', 'ai_personal'] and classification['confidence'] >= 0.75:
+            # If it's general knowledge or AI-personal, skip RAG entirely (UNLESS force_rag is True)
+            if classification['query_type'] in ['general', 'ai_personal'] and classification['confidence'] >= 0.75 and not force_rag:
                 track_tool("direct_llm", f"Classified as {classification['query_type']} - skipping RAG")
                 logger.info(f"✨ {classification['query_type']} query detected → using direct LLM (no documents needed)")
 
@@ -242,7 +243,10 @@ class EnhancedRAGService:
                 return result
 
             # Otherwise, proceed with RAG retrieval
-            logger.info(f"🔍 Proceeding with RAG retrieval for {classification['query_type']} query")
+            if force_rag and classification['query_type'] in ['general', 'ai_personal']:
+                logger.info(f"⚠️ Query classified as {classification['query_type']}, but FORCE_RAG is enabled → will search documents anyway")
+
+            logger.info(f"🔍 Proceeding with RAG retrieval for {classification['query_type']} query{' (FORCED)' if force_rag else ''}")
 
             # STEP 2: Check semantic cache first (use ORIGINAL query for cache key)
             if use_cache:

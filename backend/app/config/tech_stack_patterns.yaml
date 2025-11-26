@@ -1,0 +1,575 @@
+# AI/ML/GenAI Tech Stack Patterns Knowledge Base
+# Maps data characteristics to appropriate AI/ML tools and models
+# Focus: Reusable AI/ML/GenAI tools for diverse domains (Construction, Automobile, Finance, Health, etc.)
+
+# Data type-based AI/ML tool recommendations
+data_type_ai_tools:
+  images:
+    indicators:
+      - jpg_files
+      - png_files
+      - image_data
+      - photos
+      - screenshots
+    recommended_ai_tools:
+      vision_models:
+        - "GPT-4 Vision (OpenAI) - General image understanding"
+        - "Claude 3 Opus/Sonnet (Anthropic) - Advanced vision reasoning"
+        - "LLaVA (Local) - Open-source vision LLM"
+        - "BLIP-2 - Image captioning and VQA"
+      ocr_engines:
+        - "Tesseract OCR - Open-source text extraction"
+        - "AWS Textract - Advanced layout understanding"
+        - "Google Cloud Vision API - Multi-language OCR"
+        - "PaddleOCR - Fast and accurate OCR"
+      image_processing:
+        - "OpenCV - Image preprocessing and enhancement"
+        - "Pillow/PIL - Basic image operations"
+        - "scikit-image - Advanced image analysis"
+      object_detection:
+        - "YOLOv8 - Real-time object detection"
+        - "Detectron2 - Instance segmentation"
+        - "Segment Anything (SAM) - Universal segmentation"
+    use_cases:
+      - "Product catalogs with images"
+      - "Medical imaging (X-rays, MRI scans)"
+      - "Satellite/aerial imagery"
+      - "Quality inspection photos"
+
+  technical_drawings:
+    indicators:
+      - cad_files
+      - blueprints
+      - engineering_diagrams
+      - architectural_plans
+      - civil_drawings
+      - schematics
+    recommended_ai_tools:
+      vision_models:
+        - "GPT-4 Vision - Technical drawing interpretation"
+        - "Claude 3 Opus - Complex diagram understanding"
+        - "Gemini Pro Vision - Multi-modal reasoning"
+      specialized_processing:
+        - "OpenCV - Line and shape detection"
+        - "Hough Transform - Line extraction"
+        - "ezdxf - DXF file parsing"
+        - "pythonocc - CAD kernel for 3D geometry"
+      ocr_for_text:
+        - "Tesseract with preprocessing"
+        - "AWS Textract for measurements/annotations"
+    use_cases:
+      - "Construction blueprints analysis"
+      - "Electrical circuit diagrams"
+      - "Mechanical part drawings"
+      - "Infrastructure planning documents"
+
+  complex_pdfs:
+    indicators:
+      - pdf_files
+      - scanned_documents
+      - multi_page_reports
+      - forms
+      - invoices
+    recommended_ai_tools:
+      pdf_processing:
+        - "Docling - Advanced PDF extraction (layout + tables + images)"
+        - "pdfplumber - Table extraction"
+        - "PyMuPDF - Fast PDF parsing"
+        - "Camelot - Table extraction specialist"
+      ocr_for_scanned:
+        - "AWS Textract - Form and table understanding"
+        - "Azure Form Recognizer - Structured form extraction"
+        - "Google Document AI - Invoice/receipt processing"
+      llm_understanding:
+        - "GPT-4 - Document comprehension and summarization"
+        - "Claude 3 - Long-context document analysis (200K tokens)"
+        - "Gemini 1.5 Pro - Multi-page document understanding"
+    use_cases:
+      - "Financial reports and statements"
+      - "Legal contracts and agreements"
+      - "Medical records and test results"
+      - "Research papers and technical documentation"
+
+  structured_data:
+    indicators:
+      - excel_files
+      - csv_files
+      - databases
+      - time_series
+      - tabular_data
+    recommended_ai_tools:
+      data_analysis:
+        - "pandas - Data manipulation and analysis"
+        - "scikit-learn - Classical ML (regression, classification)"
+        - "Prophet - Time-series forecasting"
+        - "Statsmodels - Statistical modeling"
+      ml_frameworks:
+        - "XGBoost / LightGBM - Gradient boosting for tabular data"
+        - "CatBoost - Categorical feature handling"
+        - "AutoML (H2O, AutoGluon) - Automated model selection"
+      llm_for_insights:
+        - "GPT-4 / Claude - Data interpretation and insights"
+        - "Code Interpreter - Data analysis with Python"
+    use_cases:
+      - "Sales data analysis and forecasting"
+      - "Customer behavior analytics"
+      - "Financial trend analysis"
+      - "Operational metrics monitoring"
+
+  web_content:
+    indicators:
+      - urls
+      - html_content
+      - web_pages
+      - online_catalogs
+      - e_commerce_sites
+    recommended_ai_tools:
+      web_scraping:
+        - "Playwright - Modern browser automation"
+        - "Selenium - Cross-browser automation"
+        - "Scrapy - Fast web scraping framework"
+        - "BeautifulSoup - HTML parsing"
+      proxy_rotation:
+        - "Rotating Proxies - Avoid IP blocking"
+        - "Bright Data / Oxylabs - Professional proxy services"
+        - "Tor network - Anonymous scraping"
+      anti_detection:
+        - "undetected-chromedriver - Bypass bot detection"
+        - "playwright-stealth - Stealth mode for Playwright"
+        - "fake-useragent - Rotate user agents"
+      content_extraction:
+        - "Trafilatura - Clean web content extraction"
+        - "Newspaper3k - Article extraction"
+        - "GPT-4 / Claude - Intelligent content understanding"
+    use_cases:
+      - "Product catalog scraping (e-commerce)"
+      - "Real estate listing extraction"
+      - "News article aggregation"
+      - "Competitive intelligence gathering"
+
+  video_audio:
+    indicators:
+      - video_files
+      - audio_recordings
+      - mp4_mp3_files
+      - multimedia_content
+    recommended_ai_tools:
+      speech_to_text:
+        - "Whisper (OpenAI) - State-of-the-art transcription"
+        - "Google Speech-to-Text - Real-time transcription"
+        - "AssemblyAI - Meeting transcription with speaker diarization"
+      video_analysis:
+        - "GPT-4 Vision - Video frame analysis"
+        - "CLIP - Video-text matching"
+        - "VideoMAE - Video understanding"
+      audio_processing:
+        - "librosa - Audio feature extraction"
+        - "PyDub - Audio manipulation"
+    use_cases:
+      - "Meeting transcription and summarization"
+      - "Video surveillance analysis"
+      - "Podcast/interview processing"
+      - "Audio quality inspection"
+
+  data_engineering_pipelines:
+    indicators:
+      - large_scale_data
+      - batch_processing
+      - etl_required
+      - data_transformation
+    recommended_ai_tools:
+      orchestration:
+        - "Apache Airflow - Workflow orchestration"
+        - "Prefect - Modern workflow management"
+        - "Dagster - Data asset orchestration"
+        - "LangGraph - AI agent orchestration"
+      data_processing:
+        - "Apache Spark - Distributed data processing"
+        - "Dask - Parallel computing in Python"
+        - "Ray - Distributed AI/ML workloads"
+        - "Polars - Fast DataFrame operations"
+      stream_processing:
+        - "Apache Kafka - Event streaming"
+        - "Apache Flink - Real-time stream processing"
+        - "Redis Streams - Lightweight streaming"
+      data_quality:
+        - "Great Expectations - Data validation"
+        - "dbt - Data transformation and testing"
+        - "Soda - Data quality monitoring"
+      vector_databases:
+        - "Pinecone - Managed vector DB"
+        - "Weaviate - Open-source vector search"
+        - "Qdrant - High-performance vector DB"
+        - "pgvector - PostgreSQL extension"
+    use_cases:
+      - "Real-time data ingestion and processing"
+      - "Batch ETL workflows"
+      - "Embedding generation and storage at scale"
+      - "Multi-source data integration"
+
+  genai_integration:
+    indicators:
+      - llm_required
+      - generative_ai
+      - chatbot
+      - content_generation
+    recommended_ai_tools:
+      llm_providers:
+        - "OpenAI API - GPT-4, GPT-4 Vision, GPT-4 Turbo"
+        - "Anthropic Claude - Claude 3 Opus/Sonnet/Haiku"
+        - "Google Gemini - Gemini Pro/Ultra"
+        - "Ollama - Local LLM deployment (Llama, Mistral)"
+      llm_frameworks:
+        - "LangChain - LLM application framework"
+        - "LlamaIndex - RAG and data indexing"
+        - "LangGraph - Multi-agent workflows"
+        - "Semantic Kernel - Microsoft LLM SDK"
+      embeddings:
+        - "OpenAI Embeddings - text-embedding-3-large/small"
+        - "Sentence Transformers - Local embedding models"
+        - "Cohere Embed - Multilingual embeddings"
+      prompt_engineering:
+        - "LangSmith - Prompt monitoring and debugging"
+        - "PromptLayer - Prompt management"
+        - "Helicone - LLM observability"
+    use_cases:
+      - "Conversational AI / Chatbots"
+      - "Document Q&A systems (RAG)"
+      - "Content generation and summarization"
+      - "Code generation and analysis"
+
+# ChatBot-specific LLM Function Calling Tools
+# Our own implemented tools for intelligent document/web extraction
+chatbot_llm_tools:
+  navigation_and_extraction:
+    indicators:
+      - web_scraping_required
+      - dynamic_navigation_needed
+      - multi_page_extraction
+    tools:
+      - name: "NavigationAgent"
+        description: "AI-powered website navigation using LLM + Playwright"
+        capabilities:
+          - "Natural language-driven navigation (e.g., 'get all books under Fantasy category')"
+          - "Text-based element clicking (more reliable than CSS selectors)"
+          - "URL change validation to prevent stuck loops"
+          - "Intelligent link filtering"
+          - "Multi-step navigation workflows"
+        service: "app.services.webscraper.agents.navigation_agent.NavigationAgent"
+
+      - name: "UltraSmartExtractor"
+        description: "Multi-modal AI extraction combining Docling + Vision models + LLM"
+        capabilities:
+          - "PDF extraction with Docling (superior layout understanding)"
+          - "Image analysis with Vision LLMs (GPT-4V, Claude Vision)"
+          - "Intelligent text extraction from any content type"
+          - "Automatic fallback strategies"
+          - "Smart content type detection"
+        service: "app.services.webscraper.extractors.ultra_smart_extractor.UltraSmartExtractor"
+
+      - name: "OCRService"
+        description: "Hybrid OCR with Docling + Tesseract fallback"
+        capabilities:
+          - "Docling-first approach for complex PDFs"
+          - "Tesseract fallback for pure images"
+          - "Automatic method selection based on file type"
+          - "Confidence scoring"
+          - "Page-by-page extraction"
+        service: "app.services.ocr_service.OCRService"
+
+    use_cases:
+      - "Scraping e-commerce catalogs with complex navigation"
+      - "Extracting data from technical drawings/CAD files"
+      - "Processing scanned documents with tables and images"
+      - "Multi-page form filling and data extraction"
+
+    integration_example: |
+      # Example: Using NavigationAgent + UltraSmartExtractor
+      from app.services.webscraper.agents.navigation_agent import NavigationAgent
+      from app.services.webscraper.extractors.ultra_smart_extractor import UltraSmartExtractor
+
+      # Navigate to target page
+      nav_agent = NavigationAgent(llm_service=your_llm)
+      page = await nav_agent.navigate(
+          url="https://example.com",
+          instructions="Go to the Products page, then filter by 'Electronics'"
+      )
+
+      # Extract data intelligently
+      extractor = UltraSmartExtractor(llm_service=your_llm)
+      data = await extractor.extract(
+          page=page,
+          extraction_prompt="Extract all product names, prices, and descriptions"
+      )
+
+  document_intelligence:
+    indicators:
+      - complex_pdf_processing
+      - document_qa
+      - rag_system
+    tools:
+      - name: "DocumentService (with Docling)"
+        description: "Enterprise document processing with Docling integration"
+        capabilities:
+          - "Superior PDF layout understanding"
+          - "Table extraction from complex documents"
+          - "Image extraction from PDFs"
+          - "Chunking with semantic awareness"
+          - "Multi-format support (PDF, DOCX, PPTX)"
+        service: "app.services.document_service.DocumentService"
+
+      - name: "RAG Pipeline (Multi-Strategy)"
+        description: "State-of-the-art RAG with hybrid retrieval"
+        capabilities:
+          - "Hybrid search (vector + keyword + reranking)"
+          - "Query reformulation and expansion"
+          - "Semantic caching with Redis VSS"
+          - "Multi-strategy retrieval (pgvector + BM25)"
+          - "Source attribution and confidence scores"
+        service: "app.services.rag_service.RAGService"
+
+      - name: "VisionService"
+        description: "Vision LLM for image understanding"
+        capabilities:
+          - "Technical drawing analysis (CAD, blueprints)"
+          - "Screenshot understanding"
+          - "Chart and graph extraction"
+          - "Multi-image comparison"
+        service: "app.services.vision_service.VisionService"
+
+    use_cases:
+      - "Q&A over technical documentation"
+      - "Extracting structured data from scanned invoices"
+      - "Analyzing engineering diagrams"
+      - "Building searchable knowledge bases"
+
+  data_analytics:
+    indicators:
+      - large_datasets
+      - time_series
+      - statistical_analysis
+      - business_intelligence
+    recommended_stack:
+      data_processing:
+        - "Apache Spark (distributed processing)"
+        - "Dask (parallel computing)"
+        - "Pandas (data manipulation)"
+        - "NumPy / SciPy (numerical computing)"
+      visualization:
+        - "Grafana (real-time dashboards)"
+        - "Plotly / Dash (interactive Python viz)"
+        - "Apache Superset (BI platform)"
+      storage:
+        - "PostgreSQL (OLTP)"
+        - "ClickHouse / TimescaleDB (time-series)"
+        - "Apache Parquet (columnar storage)"
+      ml_frameworks:
+        - "Scikit-learn (classical ML)"
+        - "Prophet (time-series forecasting)"
+        - "Statsmodels (statistical modeling)"
+
+  machine_learning:
+    indicators:
+      - ml_models
+      - deep_learning
+      - neural_networks
+      - prediction
+      - classification
+    recommended_stack:
+      ml_frameworks:
+        - "PyTorch (deep learning)"
+        - "TensorFlow / Keras"
+        - "Scikit-learn (classical ML)"
+        - "XGBoost / LightGBM (gradient boosting)"
+      data_processing:
+        - "Apache Spark MLlib"
+        - "Dask-ML (distributed ML)"
+        - "Pandas / NumPy"
+      deployment:
+        - "FastAPI (model serving)"
+        - "TorchServe / TensorFlow Serving"
+        - "MLflow (experiment tracking)"
+        - "Kubeflow (ML on Kubernetes)"
+      infrastructure:
+        - "Docker + Kubernetes"
+        - "GPU support (CUDA, cuDNN)"
+        - "Redis (feature cache)"
+        - "PostgreSQL (metadata)"
+
+  web_application:
+    indicators:
+      - web_dashboard
+      - user_interface
+      - interactive
+      - crud_operations
+    recommended_stack:
+      frontend:
+        - "React.js / Next.js"
+        - "Vue.js / Nuxt.js"
+        - "Tailwind CSS (styling)"
+        - "Chart.js / Recharts (charts)"
+      backend:
+        - "FastAPI (Python)"
+        - "Node.js + Express"
+        - "Django / Flask"
+      database:
+        - "PostgreSQL (primary DB)"
+        - "Redis (caching + sessions)"
+        - "MinIO / S3 (file storage)"
+      infrastructure:
+        - "Docker + Docker Compose"
+        - "Nginx (reverse proxy)"
+        - "Let's Encrypt (SSL)"
+
+  real_time_processing:
+    indicators:
+      - streaming_data
+      - real_time_analysis
+      - event_driven
+      - message_queue
+    recommended_stack:
+      streaming:
+        - "Apache Kafka"
+        - "Apache Flink (stream processing)"
+        - "Redis Streams"
+      processing:
+        - "Apache Spark Streaming"
+        - "Python asyncio"
+        - "FastAPI (async endpoints)"
+      storage:
+        - "InfluxDB (time-series)"
+        - "ClickHouse (real-time analytics)"
+        - "Redis (caching)"
+      monitoring:
+        - "Grafana + Prometheus"
+        - "OpenTelemetry"
+
+# Data size-based recommendations
+data_size_recommendations:
+  small:  # < 1GB
+    threshold_mb: 1000
+    recommended:
+      - "SQLite / PostgreSQL"
+      - "Pandas (in-memory processing)"
+      - "Flask / FastAPI (lightweight backend)"
+
+  medium:  # 1GB - 100GB
+    threshold_mb: 100000
+    recommended:
+      - "PostgreSQL with partitioning"
+      - "Dask (out-of-core processing)"
+      - "Redis (caching layer)"
+      - "Parquet files for storage"
+
+  large:  # 100GB - 1TB
+    threshold_mb: 1000000
+    recommended:
+      - "Apache Spark (distributed processing)"
+      - "PostgreSQL + Citus (distributed SQL)"
+      - "Apache Parquet / ORC files"
+      - "MinIO / S3 (object storage)"
+      - "Redis Cluster (distributed cache)"
+
+  very_large:  # > 1TB
+    threshold_mb: 1000000
+    recommended:
+      - "Apache Spark on Kubernetes"
+      - "Data lakehouse (Delta Lake / Apache Iceberg)"
+      - "Distributed storage (HDFS / S3)"
+      - "Distributed compute (Ray / Dask on K8s)"
+      - "Columnar databases (ClickHouse / Druid)"
+
+# Data quality recommendations
+data_quality_recommendations:
+  low_quality:  # < 70% completeness
+    threshold: 0.7
+    recommended:
+      - "Great Expectations (data validation)"
+      - "Pandas Profiling (EDA)"
+      - "OpenRefine (data cleaning)"
+      - "dbt (data transformation)"
+
+  medium_quality:  # 70-95% completeness
+    threshold: 0.95
+    recommended:
+      - "Pandas (data cleaning)"
+      - "scikit-learn preprocessing"
+      - "Custom validation pipelines"
+
+  high_quality:  # > 95% completeness
+    threshold: 1.0
+    recommended:
+      - "Minimal preprocessing"
+      - "Direct ML/analytics pipelines"
+
+# File type specific recommendations
+file_type_recommendations:
+  excel:
+    tools:
+      - "openpyxl (read/write Excel)"
+      - "xlrd / xlwt (legacy Excel)"
+      - "pandas.read_excel()"
+    best_practices:
+      - "Convert to Parquet for large datasets"
+      - "Use chunked reading for large files"
+      - "Consider CSV export for simpler processing"
+
+  pdf:
+    tools:
+      - "PyPDF2 (text extraction)"
+      - "pdfplumber (table extraction)"
+      - "Camelot (advanced table parsing)"
+      - "Docling (comprehensive PDF processing)"
+    best_practices:
+      - "OCR if scanned: Tesseract / AWS Textract"
+      - "Structure extraction: layout analysis"
+
+  images:
+    tools:
+      - "PIL / Pillow (basic processing)"
+      - "OpenCV (advanced processing)"
+      - "scikit-image (image analysis)"
+    best_practices:
+      - "Vision LLMs for understanding (LLaVA, GPT-4V)"
+      - "Image segmentation for technical drawings"
+      - "OCR for text in images"
+
+  cad_drawings:
+    tools:
+      - "ezdxf (DXF file handling)"
+      - "pythonocc (CAD kernel)"
+      - "trimesh (3D meshes)"
+    best_practices:
+      - "Convert to neutral format (STEP, IGES)"
+      - "Extract geometry for analysis"
+      - "Use specialized CAD software APIs"
+
+# Complexity-based infrastructure recommendations
+complexity_infrastructure:
+  low:
+    multiplier_range: [1.0, 1.2]
+    recommended:
+      - "Single server deployment"
+      - "Docker Compose"
+      - "PostgreSQL single instance"
+      - "Nginx reverse proxy"
+
+  medium:
+    multiplier_range: [1.2, 1.6]
+    recommended:
+      - "Multi-container architecture"
+      - "Docker Swarm or lightweight K8s"
+      - "PostgreSQL with read replicas"
+      - "Redis for caching"
+      - "Load balancer (HAProxy / Nginx)"
+
+  high:
+    multiplier_range: [1.6, 2.0]
+    recommended:
+      - "Kubernetes cluster"
+      - "Distributed databases (PostgreSQL + Citus)"
+      - "Redis Cluster"
+      - "Message queue (Kafka / RabbitMQ)"
+      - "Service mesh (Istio / Linkerd)"
+      - "Auto-scaling (HPA / KEDA)"
+      - "Observability stack (Grafana + Prometheus)"

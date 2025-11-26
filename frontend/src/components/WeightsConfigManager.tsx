@@ -121,15 +121,24 @@ export const WeightsConfigManager: React.FC = () => {
 
   // Fetch configuration on mount and check for session config
   useEffect(() => {
-    fetchConfig();
-
-    // Check if user has custom session config
+    // 🆕 FIX: Check localStorage FIRST before fetching from API
     if (typeof window !== 'undefined') {
       const sessionConfig = localStorage.getItem('userWeightsConfig');
       if (sessionConfig) {
-        setHasSessionConfig(true);
+        try {
+          const parsedConfig = JSON.parse(sessionConfig);
+          setConfig(parsedConfig);
+          setHasSessionConfig(true);
+          console.log('✅ WeightsConfigManager loaded USER SESSION config from localStorage');
+          return; // Don't fetch from API if we have session config
+        } catch (parseError) {
+          console.error('Failed to parse session config:', parseError);
+        }
       }
     }
+
+    // Only fetch from API if no session config
+    fetchConfig();
   }, []);
 
   const fetchConfig = async () => {
@@ -192,6 +201,11 @@ export const WeightsConfigManager: React.FC = () => {
       setHasSessionConfig(true);
       setSuccess('Settings applied to your session! These will be used for your queries.');
       setTimeout(() => setSuccess(null), 5000);
+
+      // 🆕 FIX: Dispatch custom event to notify ChatInterface that config was updated
+      const event = new CustomEvent('weightsConfigUpdated', { detail: config });
+      window.dispatchEvent(event);
+      console.log('🔔 Dispatched weightsConfigUpdated event with', Object.keys(config).length, 'parameter groups');
     } catch (err) {
       setError('Error saving to session: ' + (err as Error).message);
     }

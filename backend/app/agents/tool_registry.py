@@ -267,6 +267,81 @@ class ToolRegistry:
             tags=["ocr", "image", "text extraction"]
         )
 
+        # Vision Language Model (Superior to OCR)
+        self.register(
+            tool_id="vision_analysis",
+            name="Vision Language Model Analysis",
+            description=(
+                "Analyze images using advanced vision-language AI (LLaMA 3.2 Vision 11B). "
+                "SUPERIOR to OCR for: construction drawings, floor plans, architectural diagrams, "
+                "handwritten notes, complex layouts, spatial understanding, and visual reasoning. "
+                "Can answer questions about images: count floors, measure dimensions, identify building types, "
+                "extract Gross Floor Area (GFA), understand construction specifications. "
+                "Best for: architectural drawings, construction documents, building plans, technical diagrams, "
+                "engineering schematics, scanned blueprints, mixed text/image documents. "
+                "Input: image/PDF path and optional question. "
+                "Output: detailed visual analysis with text extraction and spatial understanding."
+            ),
+            function=self._wrap_vision_analysis,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "image_path": {
+                        "type": "string",
+                        "description": "Path to image file, PDF, or URL (supports PNG, JPG, PDF)"
+                    },
+                    "question": {
+                        "type": "string",
+                        "description": "Specific question about the image (e.g., 'How many floors?', 'What is the GFA?'). If omitted, provides general description and text extraction."
+                    }
+                },
+                "required": ["image_path"]
+            },
+            tags=["vision", "image analysis", "construction drawings", "floor plans", "architectural", "pdf analysis"]
+        )
+
+        # Text Compression for Small LLMs
+        self.register(
+            tool_id="compress_text_for_llm",
+            name="Text Compression for Small LLMs",
+            description=(
+                "Compress text to fit within a small LLM's context window. "
+                "Automatically detects model's context window size and applies "
+                "intelligent compression while preserving key information. "
+                "Use this before calling small LLMs (LLaMA, Qwen, Mistral) with large inputs. "
+                "Best for: preparing prompts for small models, compressing long documents, "
+                "fitting large context into limited token budgets. "
+                "Input: text and target model name. "
+                "Output: compressed text that fits within model's context window."
+            ),
+            function=self._wrap_text_compression,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "The text to compress"
+                    },
+                    "model_name": {
+                        "type": "string",
+                        "description": "Name of the target LLM model (e.g., 'llama3.2-vision:11b')"
+                    },
+                    "target_tokens": {
+                        "type": "integer",
+                        "description": "Optional target token count. If not provided, automatically calculated based on model's context window"
+                    },
+                    "compression_method": {
+                        "type": "string",
+                        "enum": ["truncate", "extractive", "smart"],
+                        "description": "Compression method to use. 'smart' is recommended for preserving structure",
+                        "default": "smart"
+                    }
+                },
+                "required": ["text", "model_name"]
+            },
+            tags=["llm", "optimization", "compression", "context-window", "small-models"]
+        )
+
         # Navigation Agent
         self.register(
             tool_id="navigation_agent",
@@ -963,6 +1038,131 @@ class ToolRegistry:
                 "extraction_metadata": {},
                 "pages_visited": 0,
                 "error": str(e)
+            }
+
+    async def _wrap_vision_analysis(
+        self,
+        image_path: str,
+        question: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Wrapper for Vision Language Model Analysis
+
+        Uses LLaMA 3.2 Vision to analyze images, construction drawings,
+        floor plans, and architectural documents.
+
+        Superior to OCR for:
+        - Spatial understanding
+        - Visual reasoning
+        - Counting objects (floors, windows, etc.)
+        - Understanding technical drawings
+        - Handwritten text
+        """
+        try:
+            from app.services.vision_service import get_vision_service
+            import os
+
+            vision_service = await get_vision_service()
+
+            # Handle PDF files - need to convert first page to image
+            if image_path.lower().endswith('.pdf'):
+                logger.info(f"📄 PDF detected: {image_path}, converting to image for vision analysis")
+
+                # Use PyPDF2 to convert first page to image
+                try:
+                    from pdf2image import convert_from_path
+                    import tempfile
+
+                    # Convert first page only (construction drawings are typically single-page or page-by-page)
+                    images = convert_from_path(image_path, first_page=1, last_page=1, dpi=150)
+
+                    if images:
+                        # Save to temp file
+                        temp_image_path = f"/tmp/vision_pdf_{os.path.basename(image_path)}.png"
+                        images[0].save(temp_image_path, 'PNG')
+                        image_path = temp_image_path
+                        logger.info(f"✅ PDF converted to image: {temp_image_path}")
+                    else:
+                        raise Exception("Failed to convert PDF to image")
+
+                except ImportError:
+                    # Fallback: Try to use docling first, then analyze resulting text
+                    logger.warning("pdf2image not available, using docling fallback")
+                    return {
+                        "success": False,
+                        "error": "PDF vision analysis requires pdf2image. Please use docling_pdf tool instead.",
+                        "text": "",
+                        "analysis": ""
+                    }
+
+            # Analyze with vision model
+            if question:
+                # Specific question mode
+                result = await vision_service.describe_image(image_path, question=question)
+                text_content = result
+            else:
+                # General analysis + text extraction mode
+                result_dict = await vision_service.process_image(image_path, prompt=None)
+                text_content = result_dict.get("text", "")
+
+            return {
+                "success": True,
+                "text": text_content if isinstance(text_content, str) else text_content.get("text", ""),
+                "analysis": text_content,
+                "model": "llama3.2-vision:11b",
+                "metadata": {
+                    "source": image_path,
+                    "extraction_method": "vision_language_model",
+                    "question": question
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Vision analysis failed for {image_path}: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "text": "",
+                "analysis": ""
+            }
+
+    async def _wrap_text_compression(
+        self,
+        text: str,
+        model_name: str,
+        target_tokens: Optional[int] = None,
+        compression_method: str = "smart"
+    ) -> Dict[str, Any]:
+        """
+        Wrapper for Text Compression Tool
+
+        Compresses text to fit within small LLM context windows using
+        intelligent extractive summarization.
+
+        Returns:
+            Dict with compressed text and metadata
+        """
+        try:
+            from app.tools.text_compression_tool import execute_text_compression_tool
+
+            result = await execute_text_compression_tool(
+                text=text,
+                model_name=model_name,
+                target_tokens=target_tokens,
+                compression_method=compression_method
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Text compression failed: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "compressed_text": text,  # Return original on failure
+                "original_tokens": 0,
+                "compressed_tokens": 0,
+                "reduction_percentage": 0
             }
 
 

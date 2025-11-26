@@ -9,7 +9,7 @@ import { getCurrentRAGConfig, type RAGConfig } from './RAGSettings'
 import PerformanceMetrics from './PerformanceMetrics'
 import EvaluationMetrics from './EvaluationMetrics'
 import SettingsPanel, { MetricsSettings } from './SettingsPanel'
-import ToolUsageDisplay from './ToolUsageDisplay'
+// import ToolUsageDisplay from './ToolUsageDisplay'  // Disabled - duplicate display
 import axios from 'axios'
 
 // Unified WeightsConfig interface - all 48 parameters for dynamic per-query control
@@ -232,16 +232,71 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   useEffect(() => {
     const fetchUnifiedConfig = async () => {
       try {
+        // 🆕 PRIORITY 1: Check localStorage for user's session config
+        if (typeof window !== 'undefined') {
+          const savedConfig = localStorage.getItem('userWeightsConfig')
+          if (savedConfig) {
+            try {
+              const parsedConfig = JSON.parse(savedConfig)
+              setUnifiedConfig(parsedConfig)
+              console.log('✅ Loaded USER SESSION config from localStorage with', Object.keys(parsedConfig).length, 'parameter groups')
+              return // Use session config, don't fetch from API
+            } catch (parseError) {
+              console.error('Failed to parse saved config, fetching from API:', parseError)
+            }
+          }
+        }
+
+        // PRIORITY 2: Fetch default config from backend if no session config
         const response = await axios.get(`${API_URL}/api/v1/config/weights`)
         if (response.data.success && response.data.data) {
           setUnifiedConfig(response.data.data)
-          console.log('✅ Loaded unified config with', Object.keys(response.data.data).length, 'parameter groups')
+          console.log('✅ Loaded DEFAULT config from API with', Object.keys(response.data.data).length, 'parameter groups')
         }
       } catch (error) {
         console.warn('⚠️ Could not load unified config, using defaults:', error)
       }
     }
     fetchUnifiedConfig()
+
+    // 🆕 FIX: Listen for tab visibility changes to reload config
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('🔄 Tab became visible, reloading config from localStorage...')
+        fetchUnifiedConfig()
+      }
+    }
+
+    // 🆕 FIX: Listen for custom storage event when WeightsConfigManager saves
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'userWeightsConfig' && e.newValue) {
+        try {
+          const parsedConfig = JSON.parse(e.newValue)
+          setUnifiedConfig(parsedConfig)
+          console.log('🔄 Config updated from storage event with', Object.keys(parsedConfig).length, 'parameter groups')
+        } catch (parseError) {
+          console.error('Failed to parse storage event config:', parseError)
+        }
+      }
+    }
+
+    // 🆕 FIX: Listen for custom event when WeightsConfigManager saves (same-tab updates)
+    const handleConfigUpdate = (e: CustomEvent) => {
+      if (e.detail) {
+        setUnifiedConfig(e.detail)
+        console.log('🔄 Config updated from custom event with', Object.keys(e.detail).length, 'parameter groups')
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('storage', handleStorageChange as EventListener)
+    window.addEventListener('weightsConfigUpdated', handleConfigUpdate as EventListener)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('storage', handleStorageChange as EventListener)
+      window.removeEventListener('weightsConfigUpdated', handleConfigUpdate as EventListener)
+    }
   }, [])
 
   // Load selected model from localStorage on mount
@@ -551,6 +606,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       // 🆕 Log tool usage if available
       if (response.data.tools_used && response.data.tools_used.length > 0) {
         console.log(`🔧 Tools Used (${response.data.tools_used.length}):`, response.data.tools_used)
+        console.log(`🔧 First tool structure:`, JSON.stringify(response.data.tools_used[0], null, 2))
       }
 
       setMessages(prev => [...prev, assistantMessage])
@@ -728,7 +784,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                   {metricsSettings.showToolsUsed && message.tools_used && message.tools_used.length > 0 && (
                     <span
                       className="px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 cursor-help"
-                      title={`Tool execution order:\n${message.tools_used.map((t, i) => `${i + 1}. ${t.tool}${t.details ? ` - ${t.details}` : ''}`).join('\n')}`}
+                      title={`Tool execution order:\n${message.tools_used.map((t, i) => `${i + 1}. ${t.tool_name || t.tool_id || 'Unknown Tool'}${t.details ? ` - ${t.details}` : ''}`).join('\n')}`}
                     >
                       🔧 {message.tools_used.length} tool{message.tools_used.length !== 1 ? 's' : ''}
                     </span>
@@ -879,11 +935,6 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                             ))}
                           </div>
                         </div>
-                      )}
-
-                      {/* Tool Usage Display */}
-                      {message.tools_used && message.tools_used.length > 0 && (
-                        <ToolUsageDisplay tools={message.tools_used} />
                       )}
                     </div>
                   )}

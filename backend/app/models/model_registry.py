@@ -299,6 +299,22 @@ class ModelRegistry:
             recommended=False
         ))
 
+        # 🔍 Vision Model - Multimodal (Text + Images)
+        self.register(ModelInfo(
+            id="llama3.2-vision:11b",
+            name="LLaMA 3.2 Vision 11B (Ollama GPU) 🔍",
+            provider=ModelProvider.OLLAMA,
+            model_type=ModelType.LOCAL_CPU,  # Ollama handles GPU internally
+            model_path="llama3.2-vision:11b",
+            context_length=131072,
+            cost_per_1k_tokens=0.0,
+            requires_gpu=False,  # Ollama manages GPU
+            min_gpu_memory_gb=0,
+            description="🔍 Vision + Text multimodal model. Analyzes images, construction drawings, floor plans, architectural diagrams. Extracts text from images. Can also handle text-only conversations. ~7.8GB. Supports construction document analysis.",
+            available=True,
+            recommended=True
+        ))
+
         self.register(ModelInfo(
             id="qwen2.5:1.5b",
             name="Qwen 2.5 1.5B (Ollama)",

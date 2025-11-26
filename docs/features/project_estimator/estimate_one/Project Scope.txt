@@ -1,0 +1,34 @@
+Item	Value	Document Types	Drawing No. & Name	Field Locations	Identification Methods
+Levels (Above Ground)	Number	"Option 1: Architectural General Arrangement Plans / Floor Plans
+
+Option 2: Architectural Elevation Plans / Section Plans"	"Option 1: 
+A.105 - LEVEL 1 CONSTRUCTION PLAN
+A.106 - LEVEL 2 CONSTRUCTION PLAN
+A.107 - LEVEL 3 CONSTRUCTION PLAN
+
+Option 2: 
+A.201 - SITE SECTIONS"	"Option 1: level information generally located on the bottom right corner of the drawings.
+
+Option 2: level information generally located on each side of the elevation/section drawings."	"Option 1: Count the number of Architectural General Arrangement Plans / Floor Plans other than basement levels. Projects with staged/portion/part plans may affect the result as it may have multiple pages of plans per level. Projects have multiple levels of floor plans on the same page will also affect the result.
+
+Option 2: Count the number of levels on the elevation/section plans other than basement levels."
+Levels (Below Ground)	Number	"Option 1: Architectural General Arrangement Plans / Floor Plans
+
+Option 2: Architectural Section Plans"	"Option 1: 
+A.104 - BASEMENT CONSTRUCTION PLAN
+
+Option 2: 
+A.201 - SITE SECTIONS"	"Option 1: level information generally located on the bottom right corner of the drawings.
+
+Option 2: level information generally located on each side of the elevation/section drawings."	"Option 1: Count the number of Architectural General Arrangement Plans / Floor Plans for basement levels. Projects with staged/portion/part plans may affect the result as it may have multiple pages of plans per level. Projects have multiple levels of floor plans on the same page will also affect the result.
+
+Option 2: Count the number of basement levels on the section plans (elevation plans generally won't show levels below ground)."
+Gross Floor Area	M2	Architectural General Arrangement Plans / Floor Plans	"A.104 - BASEMENT CONSTRUCTION PLAN
+A.105 - LEVEL 1 CONSTRUCTION PLAN
+A.106 - LEVEL 2 CONSTRUCTION PLAN
+A.107 - LEVEL 3 CONSTRUCTION PLAN
+
+
+
+"	Building area, including all internal areas and covered external areas.	If the architectural drawings of the project doesn't provide GFA quantities. It needs to be measured from the General Arrangement Plans.
+External Area	M2	Architectural Site Plans	A.001 - PROPOSED SITE PLAN	External pavement, driveway, footpath, carpark, landscaping, etc. outside the building footprint.	Measure the area of the external pavement, driveway, footpath, carpark, landscaping, etc. outside the building footprint. It can generally be quantified by using the total site area minus the building area.

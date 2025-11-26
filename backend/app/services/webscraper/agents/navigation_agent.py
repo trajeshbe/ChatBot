@@ -117,9 +117,23 @@ class NavigationAgent:
                     # Step 3: Execute navigation steps
                     current_url = url
 
-                    if navigation_plan.get("requires_navigation", False):
+                    # 🆕 FIX: Check if we're ALREADY on the target page before navigating
+                    target_text = navigation_plan.get("target_category", "")
+                    already_on_target = False
+
+                    if target_text:
+                        # Check if URL already contains the target category
+                        target_slug = target_text.lower().replace(' ', '-').replace('_', '-')
+                        current_url_lower = current_url.lower()
+
+                        if target_slug in current_url_lower:
+                            logger.info(f"\n✅ Already on target page! URL contains '{target_slug}'")
+                            logger.info(f"   Current URL: {current_url}")
+                            logger.info(f"   Skipping navigation, will extract directly from this page")
+                            already_on_target = True
+
+                    if navigation_plan.get("requires_navigation", False) and not already_on_target:
                         logger.info("\n🧭 Step 3: Executing navigation...")
-                        target_text = navigation_plan.get("target_category", "")
 
                         for step_num in range(max_steps):
                             steps_taken += 1
@@ -183,29 +197,88 @@ class NavigationAgent:
                                 logger.warning(f"   ⚠️  Unknown action: {link_to_click['action']}")
                                 break
 
-                    # Step 4: Extract data from current page
+                    # Step 4: Extract data from current page (with pagination support)
                     logger.info(f"\n📊 Step 4: Extracting data from final page...")
                     logger.info(f"   Final URL: {page.url}")
 
-                    final_html = await page.content()
+                    all_extracted_data = []
+                    pages_processed = 0
+                    max_pages = 10  # Safety limit to prevent infinite loops
 
-                    # Use AI to extract the requested data
-                    extracted_data = await self._extract_data_with_ai(
-                        final_html,
-                        user_instructions,
-                        navigation_plan.get("extraction_target", ""),
-                        llm_provider,
-                        model_id
-                    )
+                    while pages_processed < max_pages:
+                        pages_processed += 1
+                        logger.info(f"\n📄 Processing page {pages_processed}...")
+                        logger.info(f"   Current URL: {page.url}")
 
-                    logger.info(f"✅ Extracted {len(extracted_data)} items")
+                        # Extract data from current page
+                        page_html = await page.content()
+                        page_data = await self._extract_data_with_ai(
+                            page_html,
+                            user_instructions,
+                            navigation_plan.get("extraction_target", ""),
+                            llm_provider,
+                            model_id
+                        )
+
+                        logger.info(f"   ✅ Extracted {len(page_data)} items from page {pages_processed}")
+                        all_extracted_data.extend(page_data)
+
+                        # 🆕 Check for "Next" button/link for pagination
+                        has_next = False
+                        try:
+                            # Common pagination patterns
+                            next_selectors = [
+                                "a:has-text('Next')",
+                                "a:has-text('next')",
+                                "a.next",
+                                "li.next > a",
+                                "[rel='next']",
+                                "a[aria-label*='Next']",
+                                ".pager-next a",
+                                ".pagination .next a"
+                            ]
+
+                            current_url_before_click = page.url
+
+                            for selector in next_selectors:
+                                try:
+                                    next_button = page.locator(selector).first
+                                    if await next_button.count() > 0:
+                                        logger.info(f"   🔗 Found 'Next' button with selector: {selector}")
+
+                                        # Click and wait for navigation
+                                        await next_button.click(timeout=5000)
+                                        await page.wait_for_load_state("networkidle", timeout=timeout)
+                                        await asyncio.sleep(2)
+
+                                        # Verify URL changed
+                                        if page.url != current_url_before_click:
+                                            logger.info(f"   ✅ Navigated to next page: {page.url}")
+                                            navigation_path.append(page.url)
+                                            has_next = True
+                                            break
+                                        else:
+                                            logger.warning(f"   ⚠️  URL unchanged after clicking next button")
+                                except Exception as e:
+                                    # Try next selector
+                                    continue
+
+                        except Exception as pagination_error:
+                            logger.info(f"   ℹ️  No more pages (pagination check failed: {pagination_error})")
+
+                        if not has_next:
+                            logger.info(f"   🏁 No more pages found. Finished pagination.")
+                            break
+
+                    logger.info(f"\n✅ Total extracted: {len(all_extracted_data)} items from {pages_processed} page(s)")
 
                     return {
                         "success": True,
-                        "data": extracted_data,
+                        "data": all_extracted_data,
                         "navigation_path": navigation_path,
                         "steps_taken": steps_taken,
                         "final_url": page.url,
+                        "pages_processed": pages_processed,
                         "error": None
                     }
 

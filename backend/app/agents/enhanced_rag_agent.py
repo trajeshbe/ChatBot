@@ -166,8 +166,26 @@ class EnhancedRAGAgent(RAGAgent):
 
             return result
 
+        # 🌐 PRIORITY: Check for URLs BEFORE applying FORCE_RAG
+        # If query contains a URL and asks to navigate/scrape/get details, use navigation regardless of RAG weights
+        import re
+        url_pattern = r'https?://[^\s]+'
+        navigation_keywords = ['navigate', 'scrape', 'get details', 'fetch from', 'access', 'browse', 'visit']
+
+        has_url = re.search(url_pattern, query)
+        has_navigation_intent = any(keyword in query.lower() for keyword in navigation_keywords)
+
+        if has_url and has_navigation_intent:
+            logger.info("🌐 ROUTING: NAVIGATION (URL detected with navigation intent - bypassing FORCE_RAG)")
+            logger.info(f"   URL found: {has_url.group()}")
+            logger.info(f"   Navigation keywords detected in query")
+
+            # Use navigation agent even if RAG weights are high
+            # This will be handled by the balanced routing below
+            pass  # Continue to balanced routing which will detect the URL properly
+
         # 🚀 Scenario 2: User forces RAG (must use document search)
-        if rag_short_term_weight > 0.8 or rag_long_term_weight > 0.8:
+        elif rag_short_term_weight > 0.8 or rag_long_term_weight > 0.8:
             logger.info("📌 ROUTING: FORCE_RAG (document search required per user's strategy_weights)")
             logger.info(f"   Reason: rag_short_term={rag_short_term_weight:.2f} or rag_long_term={rag_long_term_weight:.2f} > 0.8")
 
@@ -302,6 +320,12 @@ class EnhancedRAGAgent(RAGAgent):
             for idx, tool_id in enumerate(state["selected_tools"]):
                 tool_result = state["tool_results"].get(tool_id, {})
 
+                # 🐛 DEBUG: Log tool_result structure to diagnose timing issue
+                logger.info(f"🔍 Building UI for tool '{tool_id}':")
+                logger.info(f"   tool_result keys: {list(tool_result.keys())}")
+                logger.info(f"   success: {tool_result.get('success', 'NOT_FOUND')}")
+                logger.info(f"   execution_time_ms: {tool_result.get('execution_time_ms', 'NOT_FOUND')}")
+
                 # Get tool metadata from registry
                 tool_obj = self.tool_registry.get_tool(tool_id)
                 tool_name = tool_obj.name if tool_obj else tool_id.replace("_", " ").title()
@@ -314,11 +338,14 @@ class EnhancedRAGAgent(RAGAgent):
                 }
 
                 # Add to UI-friendly array
+                latency_ms_value = round(tool_result.get("execution_time_ms", 0), 2)
+                logger.info(f"   ✅ Final latency_ms for UI: {latency_ms_value}")
+
                 tools_used_ui.append({
                     "tool_id": tool_id,
                     "tool_name": tool_name,
                     "status": "success" if tool_result.get("success", False) else "failure",
-                    "latency_ms": round(tool_result.get("execution_time_ms", 0), 2),
+                    "latency_ms": latency_ms_value,
                     "order": idx + 1
                 })
 
@@ -1098,7 +1125,8 @@ Context:
                 similarity_threshold=tool_params.get('similarity_threshold'),
                 semantic_weight=tool_params.get('semantic_weight'),
                 keyword_weight=tool_params.get('keyword_weight'),
-                db=tool_params.get('db')
+                db=tool_params.get('db'),
+                force_rag=True  # 🆕 Force RAG even if classified as ai_personal/general
             )
 
             # Ensure metadata exists

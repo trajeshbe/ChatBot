@@ -40,7 +40,7 @@ interface ScenarioConfig {
 interface EstimationResult {
   scenario: string
   brd_url?: string
-  cost_estimation_url?: string
+  excel_url?: string  // Backend returns excel_url, not cost_estimation_url
   project_name: string
   total_cost?: number
   total_effort_hours?: number
@@ -123,6 +123,9 @@ export default function ProjectEstimator({ sessionId }: ProjectEstimatorProps) {
   const [estimationResults, setEstimationResults] = useState<EstimationResult[]>([])
   const [error, setError] = useState<string | null>(null)
   const [globalSelectedModel, setGlobalSelectedModel] = useState<string>('gpt-4-turbo')
+
+  // Project type selection for agentic workflow
+  const [projectType, setProjectType] = useState<'POC' | 'Staff Augmentation' | 'Full Service'>('Full Service')
 
   // Scenario management
   const [activeScenario, setActiveScenario] = useState<'baseline' | 'conservative' | 'aggressive'>('baseline')
@@ -334,47 +337,62 @@ export default function ProjectEstimator({ sessionId }: ProjectEstimatorProps) {
     setEstimationResults([])
 
     try {
-      // Generate estimations for all 3 scenarios
+      // Generate estimation for baseline scenario only (by default)
       const scenarios = [
-        { name: 'baseline', config: baselineConfig },
-        { name: 'conservative', config: conservativeConfig },
-        { name: 'aggressive', config: aggressiveConfig }
+        { name: 'baseline', config: baselineConfig }
+        // Uncomment below to generate all 3 scenarios:
+        // { name: 'conservative', config: conservativeConfig },
+        // { name: 'aggressive', config: aggressiveConfig }
       ]
 
       const results: EstimationResult[] = []
 
       for (const scenario of scenarios) {
         const formData = new FormData()
+
+        // NEW AGENTIC WORKFLOW PARAMETERS
         formData.append('project_scope', projectScope)
-        formData.append('session_id', sessionId)
-        formData.append('model_id', globalSelectedModel)
-        formData.append('config', JSON.stringify(scenario.config))
-        formData.append('scenario_name', scenario.name)
+        formData.append('project_type', projectType)
+        formData.append('scenario', scenario.name) // 'baseline', 'conservative', or 'aggressive'
 
-        // Append all file categories
-        if (uploadedFile) {
-          formData.append('scope_file', uploadedFile)
+        // Rate configuration (extract from scenario config)
+        const rateConfig = {
+          planning_rate: scenario.config.planning_rate,
+          development_rate: scenario.config.development_rate,
+          testing_rate: scenario.config.testing_rate,
+          ui_development_rate: scenario.config.ui_development_rate,
+          solution_architect_rate: scenario.config.solution_architect_rate,
+          scraping_development_rate: scenario.config.scraping_development_rate,
+          // Add new rate categories if not present
+          devops_rate: (scenario.config as any).devops_rate || 35,
+          data_engineering_rate: (scenario.config as any).data_engineering_rate || 40,
+          ml_engineering_rate: (scenario.config as any).ml_engineering_rate || 50
         }
+        formData.append('rate_config', JSON.stringify(rateConfig))
 
-        // Append multi-file uploads
-        projectScopeFiles.forEach((file) => {
-          formData.append('scope_files', file)
-        })
+        // Overhead configuration
+        const overheadConfig = {
+          overhead_percentage: scenario.config.contingency_percentage / 100
+        }
+        formData.append('overhead_config', JSON.stringify(overheadConfig))
+
+        // Append multi-file uploads (NEW PARAMETER NAMES)
+        // Note: projectScopeFiles not used in new API, combined with project_scope text
 
         sampleDataFiles.forEach((file) => {
-          formData.append('sample_data_files', file)
+          formData.append('sample_files', file)  // Changed from 'sample_data_files'
         })
 
         referenceBRDFiles.forEach((file) => {
-          formData.append('reference_brd_files', file)
+          formData.append('brd_files', file)  // Changed from 'reference_brd_files'
         })
 
         costTemplateFiles.forEach((file) => {
-          formData.append('cost_template_files', file)
+          formData.append('cost_files', file)  // Changed from 'cost_template_files'
         })
 
         const response = await axios.post(
-          `${API_BASE_URL}/api/v1/project-estimator/generate`,
+          `${API_BASE_URL}/api/v1/project-estimator/generate-agentic`,  // NEW ENDPOINT
           formData,
           {
             headers: {
@@ -707,6 +725,65 @@ export default function ProjectEstimator({ sessionId }: ProjectEstimatorProps) {
             </p>
           </div>
 
+          {/* Project Type Selector */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+              Project Type (Determines scope and team composition)
+            </label>
+            <div className="grid grid-cols-3 gap-4">
+              <button
+                onClick={() => setProjectType('POC')}
+                type="button"
+                className={`p-4 rounded-lg border-2 transition-all text-left ${
+                  projectType === 'POC'
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                    : 'border-slate-300 dark:border-slate-600 hover:border-purple-400'
+                }`}
+              >
+                <div className="font-semibold text-slate-900 dark:text-white mb-1">
+                  Proof of Concept
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  Quick MVP (4-8 weeks)
+                </p>
+              </button>
+
+              <button
+                onClick={() => setProjectType('Staff Augmentation')}
+                type="button"
+                className={`p-4 rounded-lg border-2 transition-all text-left ${
+                  projectType === 'Staff Augmentation'
+                    ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
+                    : 'border-slate-300 dark:border-slate-600 hover:border-orange-400'
+                }`}
+              >
+                <div className="font-semibold text-slate-900 dark:text-white mb-1">
+                  Staff Augmentation
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  Specific resources/skills
+                </p>
+              </button>
+
+              <button
+                onClick={() => setProjectType('Full Service')}
+                type="button"
+                className={`p-4 rounded-lg border-2 transition-all text-left ${
+                  projectType === 'Full Service'
+                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                    : 'border-slate-300 dark:border-slate-600 hover:border-green-400'
+                }`}
+              >
+                <div className="font-semibold text-slate-900 dark:text-white mb-1">
+                  Full Service
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  End-to-end (8-16 weeks)
+                </p>
+              </button>
+            </div>
+          </div>
+
           {/* Scenario Selector */}
           <div className="mb-6">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
@@ -987,11 +1064,11 @@ export default function ProjectEstimator({ sessionId }: ProjectEstimatorProps) {
                           </button>
                           <button
                             onClick={() => handleDownload(
-                              result.cost_estimation_url!,
+                              result.excel_url!,
                               `Cost_${result.scenario}_${result.project_name}.xlsx`
                             )}
-                            disabled={!result.cost_estimation_url}
-                            className={getScenarioButtonClasses(result.scenario, !result.cost_estimation_url)}
+                            disabled={!result.excel_url}
+                            className={getScenarioButtonClasses(result.scenario, !result.excel_url)}
                           >
                             Excel
                           </button>

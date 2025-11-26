@@ -52,7 +52,13 @@ export default function Home() {
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {activeTab === 'evaluation' ? (
+          {/* 🆕 FIX: Keep ChatInterface mounted but hidden to preserve state during tab switches */}
+          <div className={`flex-1 overflow-hidden ${activeTab === 'chat' || activeTab === 'upload' || activeTab === 'scrape' ? '' : 'hidden'}`}>
+            <ChatInterface activeTab={activeTab} ragConfig={ragConfig} />
+          </div>
+
+          {/* Show other tabs on top when active */}
+          {activeTab === 'evaluation' && (
             <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900">
               <div className="max-w-7xl mx-auto">
                 <div className="mb-6">
@@ -66,7 +72,9 @@ export default function Home() {
                 <EvaluationDashboard />
               </div>
             </div>
-          ) : activeTab === 'tools' ? (
+          )}
+
+          {activeTab === 'tools' && (
             <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900">
               <div className="max-w-7xl mx-auto">
                 <div className="mb-6">
@@ -80,15 +88,21 @@ export default function Home() {
                 <ToolUsageDashboard />
               </div>
             </div>
-          ) : activeTab === 'estimator' ? (
+          )}
+
+          {activeTab === 'estimator' && (
             <div className="flex-1 overflow-y-auto">
               <ProjectEstimator sessionId={sessionId} />
             </div>
-          ) : activeTab === 'extract' ? (
+          )}
+
+          {activeTab === 'extract' && (
             <div className="flex-1 overflow-y-auto">
               <DataExtractionHub sessionId={sessionId} />
             </div>
-          ) : activeTab === 'weights' ? (
+          )}
+
+          {activeTab === 'weights' && (
             <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900">
               <div className="max-w-7xl mx-auto">
                 <div className="mb-6">
@@ -101,10 +115,6 @@ export default function Home() {
                 </div>
                 <WeightsConfigManager />
               </div>
-            </div>
-          ) : (
-            <div className="flex-1 overflow-hidden">
-              <ChatInterface activeTab={activeTab} ragConfig={ragConfig} />
             </div>
           )}
         </div>
