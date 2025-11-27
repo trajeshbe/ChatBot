@@ -60,7 +60,7 @@ export default function PerformanceMetrics({ metrics, ragSettings }: Performance
         {/* Latency */}
         {metrics.latency_ms !== undefined && (
           <div className="flex items-center gap-1.5 text-xs bg-slate-50 dark:bg-slate-900 px-2 py-1.5 rounded-md">
-            <Clock className="w-3 h-3 text-blue-500" />
+            <Clock className="w-3 h-3 text-primary-500" />
             <span className="text-slate-600 dark:text-slate-400">Latency:</span>
             <span className="font-mono font-medium text-slate-900 dark:text-white">
               {formatLatency(metrics.latency_ms)}

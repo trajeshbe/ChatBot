@@ -912,6 +912,26 @@ except ImportError as e:
 except Exception as e:
     logger.warning(f"Could not register Scraping Configuration router: {e}")
 
+# Authentication API
+try:
+    from app.api.routes import auth
+    app.include_router(auth.router)
+    logger.info("✓ Authentication API router registered (login, register, token management)")
+except ImportError as e:
+    logger.warning(f"⚠ Authentication API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Authentication router: {e}")
+
+# RBAC Management API (Role-Based Access Control)
+try:
+    from app.api.routes import rbac_routes
+    app.include_router(rbac_routes.router)
+    logger.info("✓ RBAC Management API router registered (roles, departments, modules, permissions)")
+except ImportError as e:
+    logger.warning(f"⚠ RBAC Management API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register RBAC Management router: {e}")
+
 
 # === Admin API Endpoints ===
 

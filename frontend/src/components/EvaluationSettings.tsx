@@ -219,7 +219,7 @@ export const EvaluationSettings: React.FC<EvaluationSettingsProps> = ({
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <RefreshCw className="w-6 h-6 animate-spin text-blue-600" />
+        <RefreshCw className="w-6 h-6 animate-spin text-primary-600" />
         <span className="ml-2 text-gray-600">Loading evaluation settings...</span>
       </div>
     );
@@ -233,7 +233,7 @@ export const EvaluationSettings: React.FC<EvaluationSettingsProps> = ({
         onClick={() => setIsOpen(!isOpen)}
       >
         <div className="flex items-center space-x-3">
-          <Settings className="w-6 h-6 text-blue-600" />
+          <Settings className="w-6 h-6 text-primary-600" />
           <div>
             <h2 className="text-xl font-semibold text-gray-800">Evaluation Settings</h2>
             <p className="text-sm text-gray-600">
@@ -269,9 +269,9 @@ export const EvaluationSettings: React.FC<EvaluationSettingsProps> = ({
           )}
 
           {/* Performance Settings */}
-          <div className="bg-blue-50 p-4 rounded-lg">
+          <div className="bg-primary-50 p-4 rounded-lg">
             <div className="flex items-center space-x-2 mb-4">
-              <Zap className="w-5 h-5 text-blue-600" />
+              <Zap className="w-5 h-5 text-primary-600" />
               <h3 className="font-semibold text-gray-800">Performance Optimization</h3>
             </div>
 
@@ -282,7 +282,7 @@ export const EvaluationSettings: React.FC<EvaluationSettingsProps> = ({
                   type="checkbox"
                   checked={config.use_cache}
                   onChange={(e) => updateConfig('use_cache', e.target.checked)}
-                  className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                  className="w-5 h-5 text-primary-600 rounded focus:ring-2 focus:ring-primary-500"
                 />
                 <div>
                   <div className="font-medium text-gray-700">Enable Caching</div>
@@ -296,7 +296,7 @@ export const EvaluationSettings: React.FC<EvaluationSettingsProps> = ({
                   type="checkbox"
                   checked={config.async_evaluation}
                   onChange={(e) => updateConfig('async_evaluation', e.target.checked)}
-                  className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                  className="w-5 h-5 text-primary-600 rounded focus:ring-2 focus:ring-primary-500"
                 />
                 <div>
                   <div className="font-medium text-gray-700">Async Evaluation</div>
@@ -310,7 +310,7 @@ export const EvaluationSettings: React.FC<EvaluationSettingsProps> = ({
                   type="checkbox"
                   checked={config.auto_evaluate}
                   onChange={(e) => updateConfig('auto_evaluate', e.target.checked)}
-                  className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                  className="w-5 h-5 text-primary-600 rounded focus:ring-2 focus:ring-primary-500"
                 />
                 <div>
                   <div className="font-medium text-gray-700">Auto-Evaluate</div>
@@ -327,7 +327,7 @@ export const EvaluationSettings: React.FC<EvaluationSettingsProps> = ({
                   type="number"
                   value={config.cache_ttl_seconds}
                   onChange={(e) => updateConfig('cache_ttl_seconds', parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
                   min="60"
                   max="86400"
                 />
@@ -384,7 +384,7 @@ export const EvaluationSettings: React.FC<EvaluationSettingsProps> = ({
                             type="checkbox"
                             checked={isEnabled}
                             onChange={(e) => updateConfig(configKey, e.target.checked)}
-                            className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                            className="mt-1 w-5 h-5 text-primary-600 rounded focus:ring-2 focus:ring-primary-500"
                           />
                           <div className="flex-1">
                             <div className="flex items-center space-x-2">
@@ -426,7 +426,7 @@ export const EvaluationSettings: React.FC<EvaluationSettingsProps> = ({
                   <select
                     value={config.llm_judge_model}
                     onChange={(e) => updateConfig('llm_judge_model', e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="gpt-4-turbo-preview">GPT-4 Turbo</option>
                     <option value="gpt-4">GPT-4</option>
@@ -464,7 +464,7 @@ export const EvaluationSettings: React.FC<EvaluationSettingsProps> = ({
                   type="number"
                   value={config.batch_size}
                   onChange={(e) => updateConfig('batch_size', parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500"
                   min="1"
                   max="100"
                 />
@@ -488,7 +488,7 @@ export const EvaluationSettings: React.FC<EvaluationSettingsProps> = ({
             <button
               onClick={saveConfig}
               disabled={saving}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors flex items-center space-x-2"
+              className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:bg-gray-400 transition-colors flex items-center space-x-2"
             >
               {saving ? (
                 <>

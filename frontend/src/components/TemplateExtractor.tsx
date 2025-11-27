@@ -552,7 +552,7 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
                 onClick={() => setExtractionMode('preset')}
                 className={`flex-1 px-4 py-3 rounded-lg border-2 transition-all ${
                   extractionMode === 'preset'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                    ? 'border-primary-500 bg-primary-50 dark:bg-blue-900/20 text-primary-700 dark:text-primary-300'
                     : 'border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500 text-slate-600 dark:text-slate-400'
                 }`}
               >
@@ -586,7 +586,7 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
             <select
               value={preset}
               onChange={(e) => setPreset(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               {availablePresets.map((p) => (
                 <option key={p.name} value={p.name}>
@@ -602,7 +602,7 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
                       CSS Selector Based
                     </span>
                   ) : (
-                    <span className="px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 rounded">
+                    <span className="px-2 py-0.5 text-xs font-semibold bg-primary-100 text-blue-800 dark:bg-primary-900/30 dark:text-blue-200 rounded">
                       AI-Powered
                     </span>
                   )}
@@ -611,11 +611,11 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
                   Extracts: {availablePresets.find(p => p.name === preset)?.fields.join(', ')}
                 </p>
                 {availablePresets.find(p => p.name === preset)?.url_pattern && (
-                  <div className="flex items-start gap-2 mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
-                    <div className="text-blue-600 dark:text-blue-400 mt-0.5">ℹ️</div>
+                  <div className="flex items-start gap-2 mt-2 p-2 bg-primary-50 dark:bg-blue-900/20 rounded border border-primary-200 dark:border-primary-800">
+                    <div className="text-primary-600 dark:text-blue-400 mt-0.5">ℹ️</div>
                     <div className="flex-1">
                       <p className="text-xs font-medium text-blue-800 dark:text-blue-200">Compatible URL Pattern:</p>
-                      <p className="text-xs font-mono text-blue-700 dark:text-blue-300 mt-1">
+                      <p className="text-xs font-mono text-primary-700 dark:text-primary-300 mt-1">
                         {availablePresets.find(p => p.name === preset)?.url_pattern}
                       </p>
                     </div>
@@ -758,7 +758,7 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
                 <button
                   type="button"
                   onClick={() => setUrl(getExampleUrl(currentUrlPattern))}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                  className="text-xs text-primary-600 dark:text-blue-400 hover:underline flex items-center gap-1"
                   title="Use an example URL that matches this template"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -778,7 +778,7 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
                   ? urlMatches
                     ? 'border-green-500 dark:border-green-400 focus:ring-green-500'
                     : 'border-red-500 dark:border-red-400 focus:ring-red-500'
-                  : 'border-slate-300 dark:border-slate-600 focus:ring-blue-500'
+                  : 'border-slate-300 dark:border-slate-600 focus:ring-primary-500'
               }`}
             />
             {extractionMode === 'preset' && currentUrlPattern && url && !urlMatches && (
@@ -805,7 +805,7 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
           <button
             onClick={handleExtract}
             disabled={isProcessing || !url.trim()}
-            className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+            className="w-full px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
             {isProcessing ? (
               <>
@@ -836,7 +836,7 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <Globe className="w-4 h-4 text-blue-600" />
+                        <Globe className="w-4 h-4 text-primary-600" />
                         <p className="text-sm font-medium text-slate-900 dark:text-white break-all">
                           {job.url}
                         </p>
@@ -850,7 +850,7 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
 
                     <div className="flex items-center gap-2 ml-4">
                       {job.status === 'processing' && (
-                        <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                        <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
                       )}
                       {job.status === 'success' && (
                         <>
@@ -877,7 +877,7 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
                                   job.data!,
                                   `extraction_${new Date().getTime()}.xlsx`
                                 )}
-                                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
+                                className="px-3 py-1 bg-primary-600 text-white text-xs rounded hover:bg-primary-700 transition-colors flex items-center gap-1"
                               >
                                 <Download className="w-3 h-3" />
                                 Export Excel
@@ -983,8 +983,8 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
                 </div>
 
                 {/* Info Note */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                <div className="bg-primary-50 dark:bg-blue-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-3">
+                  <p className="text-sm text-primary-700 dark:text-primary-300">
                     💡 This will save the extraction structure as a reusable template. You can use it for similar pages in the future.
                   </p>
                 </div>
@@ -1012,7 +1012,7 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
                     }
                   }}
                   disabled={isSaving || !templateName.trim()}
-                  className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-slate-400 text-white rounded-lg transition-colors"
                 >
                   {isSaving ? 'Saving...' : 'Save Template'}
                 </button>

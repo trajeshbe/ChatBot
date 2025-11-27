@@ -304,7 +304,10 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
     if (typeof window !== 'undefined') {
       const savedModel = localStorage.getItem('globalSelectedModel')
       if (savedModel) {
+        console.log('📥 Loaded model from localStorage:', savedModel)
         setSelectedModel(savedModel)
+      } else {
+        console.log('ℹ️ No saved model in localStorage, will use backend default')
       }
     }
   }, [])
@@ -312,6 +315,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   // Save selected model to localStorage when it changes
   useEffect(() => {
     if (typeof window !== 'undefined' && selectedModel) {
+      console.log('💾 Saving selected model to localStorage:', selectedModel)
       localStorage.setItem('globalSelectedModel', selectedModel)
     }
   }, [selectedModel])
@@ -530,7 +534,10 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
 
       // Add selected model if specified
       if (selectedModel) {
+        console.log('🎯 Using selected model for query:', selectedModel)
         formData.append('model_id', selectedModel)
+      } else {
+        console.log('⚠️ No model selected, backend will use default')
       }
 
       // 🆕 UNIFIED CONFIG: Pass ALL 48 parameters as single JSON for dynamic per-query control
@@ -738,7 +745,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
             <div
               className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                 message.role === 'user'
-                  ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-br-md shadow-sm'
+                  ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-br-md shadow-sm'
                   : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-md border border-slate-200 dark:border-slate-700'
               }`}
             >
@@ -778,7 +785,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
 
                   {/* Number of Sources - only if performance metrics enabled */}
                   {metricsSettings.showPerformanceMetrics && message.num_sources !== undefined && (
-                    <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                    <span className="px-2 py-0.5 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300">
                       📄 {message.num_sources} source{message.num_sources !== 1 ? 's' : ''}
                     </span>
                   )}
@@ -916,7 +923,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                                 <div className="flex items-start justify-between">
                                   <div className="flex items-center gap-1.5">
                                     {source.source_type === 'scrape' ? (
-                                      <ExternalLink className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />
+                                      <ExternalLink className="w-3.5 h-3.5 text-primary-500 flex-shrink-0" />
                                     ) : (
                                       <FileText className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
                                     )}
@@ -940,7 +947,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                                     href={source.source_url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-[10px] text-blue-600 hover:underline mt-1 block truncate"
+                                    className="text-[10px] text-primary-600 hover:underline mt-1 block truncate"
                                   >
                                     {source.source_url}
                                   </a>
@@ -958,66 +965,52 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                 </div>
               )}
 
-              {/* User Feedback Section (Thumbs Up/Down & Star Ratings) */}
+              {/* User Feedback Section (Thumbs Up/Down & Star Ratings) - Compact */}
               {message.role === 'assistant' && (
-                <div className="mt-4 flex items-center gap-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <div className="mt-2 flex items-center gap-3 text-xs">
                   {/* Thumbs Up/Down */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500 dark:text-slate-400 mr-1">Helpful?</span>
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleFeedback(index, 'thumbs_up')}
                       disabled={(message as any).userFeedback === 'thumbs_up'}
-                      className={`p-1.5 rounded-md transition-all group cursor-pointer ${
+                      className={`p-1 rounded transition-all ${
                         (message as any).userFeedback === 'thumbs_up'
-                          ? 'bg-emerald-100 dark:bg-emerald-900/40 cursor-default'
-                          : 'hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+                          ? 'bg-emerald-100 dark:bg-emerald-900/40'
+                          : 'hover:bg-slate-100 dark:hover:bg-slate-700'
                       }`}
-                      title="Mark as helpful"
+                      title="Helpful"
                     >
-                      <span className={`text-lg transition-transform inline-block ${
-                        (message as any).userFeedback !== 'thumbs_up' && 'group-hover:scale-110'
-                      }`}>
-                        👍
-                      </span>
+                      <span className="text-sm">👍</span>
                     </button>
                     <button
                       onClick={() => handleFeedback(index, 'thumbs_down')}
                       disabled={(message as any).userFeedback === 'thumbs_down'}
-                      className={`p-1.5 rounded-md transition-all group cursor-pointer ${
+                      className={`p-1 rounded transition-all ${
                         (message as any).userFeedback === 'thumbs_down'
-                          ? 'bg-red-100 dark:bg-red-900/40 cursor-default'
-                          : 'hover:bg-red-50 dark:hover:bg-red-900/20'
+                          ? 'bg-red-100 dark:bg-red-900/40'
+                          : 'hover:bg-slate-100 dark:hover:bg-slate-700'
                       }`}
-                      title="Mark as not helpful"
+                      title="Not helpful"
                     >
-                      <span className={`text-lg transition-transform inline-block ${
-                        (message as any).userFeedback !== 'thumbs_down' && 'group-hover:scale-110'
-                      }`}>
-                        👎
-                      </span>
+                      <span className="text-sm">👎</span>
                     </button>
                   </div>
 
                   {/* Star Ratings */}
-                  <div className="flex items-center gap-2 ml-4">
-                    <span className="text-xs text-slate-500 dark:text-slate-400">Rate:</span>
-                    <div className="flex gap-1">
+                  <div className="flex items-center gap-0.5 pl-2 border-l border-slate-200 dark:border-slate-700">
+                    <div className="flex gap-0.5">
                       {[1, 2, 3, 4, 5].map(star => (
                         <button
                           key={star}
                           onClick={() => handleRating(index, star)}
                           disabled={(message as any).userFeedback === 'rated'}
-                          className={`p-0.5 transition-transform cursor-pointer ${
-                            (message as any).userFeedback !== 'rated' ? 'hover:scale-125' : 'cursor-default'
-                          }`}
-                          title={`Rate ${star} star${star > 1 ? 's' : ''}`}
+                          className="transition-transform hover:scale-110"
+                          title={`${star} star${star > 1 ? 's' : ''}`}
                         >
-                          <span className={`text-base ${
+                          <span className={`text-xs ${
                             (message as any).userRating && star <= (message as any).userRating
                               ? 'text-yellow-400'
-                              : (message as any).userFeedback === 'rated'
-                                ? 'text-slate-300 dark:text-slate-600'
-                                : 'text-slate-300 dark:text-slate-600 hover:text-yellow-500'
+                              : 'text-slate-300 dark:text-slate-600 hover:text-yellow-400'
                           }`}>
                             ★
                           </span>
@@ -1026,17 +1019,11 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                     </div>
                   </div>
 
-                  {/* Show if feedback submitted */}
+                  {/* Show if feedback submitted - compact */}
                   {(message as any).userFeedback && (
-                    <div className="ml-auto text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                      <span>✓</span>
-                      <span>
-                        {(message as any).userFeedback === 'rated'
-                          ? `Rated ${(message as any).userRating} star${(message as any).userRating > 1 ? 's' : ''}`
-                          : 'Feedback submitted'
-                        }
-                      </span>
-                    </div>
+                    <span className="ml-auto text-[10px] text-emerald-600 dark:text-emerald-400">
+                      ✓ Thanks
+                    </span>
                   )}
                 </div>
               )}
@@ -1046,7 +1033,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
               </p>
             </div>
             {message.role === 'user' && (
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white font-semibold text-sm">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white font-semibold text-sm">
                 U
               </div>
             )}
@@ -1086,13 +1073,13 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
               {attachedFiles.map((file, index) => (
                 <div
                   key={index}
-                  className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100 px-2.5 py-1.5 rounded-lg text-xs border border-blue-200 dark:border-blue-800"
+                  className="flex items-center gap-2 bg-primary-50 dark:bg-blue-900/20 text-primary-900 dark:text-primary-100 px-2.5 py-1.5 rounded-lg text-xs border border-primary-200 dark:border-primary-800"
                 >
                   <FileText className="w-3.5 h-3.5" />
                   <span className="max-w-[200px] truncate">{file.name}</span>
                   <button
                     onClick={() => removeAttachedFile(index)}
-                    className="hover:bg-blue-100 dark:hover:bg-blue-800 rounded p-0.5"
+                    className="hover:bg-primary-100 dark:hover:bg-primary-800 rounded p-0.5"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -1122,7 +1109,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
               <Paperclip className="w-5 h-5" />
             </button>
 
-            <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 focus-within:border-blue-500 dark:focus-within:border-blue-500 transition-colors">
+            <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 focus-within:border-primary-500 dark:focus-within:border-primary-500 transition-colors">
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -1137,7 +1124,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
             <button
               onClick={handleSendMessage}
               disabled={(attachedFiles.length === 0 && !input.trim()) || isLoading || uploadingFiles}
-              className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed transition-colors flex items-center"
+              className="p-3 bg-primary-600 text-white rounded-xl hover:bg-primary-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed transition-colors flex items-center"
             >
               {isLoading || uploadingFiles ? (
                 <Loader2 className="w-5 h-5 animate-spin" />

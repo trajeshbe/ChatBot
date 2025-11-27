@@ -3,23 +3,18 @@
  *
  * This theme provides a consistent design system across the entire application.
  * Based on Material Design 3 and Tailwind CSS principles.
+ * Features sage green/teal color palette with light and dark mode support.
  *
  * @module theme
  */
 
+import { lightColors, darkColors, ThemeMode, ColorPalette } from './colors';
+
+export type { ThemeMode };
+
 export interface Theme {
-  colors: {
-    primary: ColorScale;
-    secondary: ColorScale;
-    success: string;
-    warning: string;
-    error: string;
-    info: string;
-    background: BackgroundColors;
-    text: TextColors;
-    border: BorderColors;
-    ui: UIColors;
-  };
+  mode: ThemeMode;
+  colors: ColorPalette;
   typography: {
     fontFamily: {
       sans: string;
@@ -36,56 +31,7 @@ export interface Theme {
   zIndex: ZIndex;
 }
 
-interface ColorScale {
-  50: string;
-  100: string;
-  200: string;
-  300: string;
-  400: string;
-  500: string;  // Main color
-  600: string;
-  700: string;
-  800: string;
-  900: string;
-  950: string;
-}
-
-interface BackgroundColors {
-  primary: string;
-  secondary: string;
-  tertiary: string;
-  elevated: string;
-  overlay: string;
-}
-
-interface TextColors {
-  primary: string;
-  secondary: string;
-  tertiary: string;
-  disabled: string;
-  inverse: string;
-  link: string;
-  linkHover: string;
-}
-
-interface BorderColors {
-  default: string;
-  light: string;
-  strong: string;
-  focus: string;
-  error: string;
-}
-
-interface UIColors {
-  hover: string;
-  active: string;
-  selected: string;
-  disabled: string;
-  skeleton: string;
-  divider: string;
-}
-
-interface FontSizes {
+export interface FontSizes {
   xs: string;
   sm: string;
   base: string;
@@ -165,90 +111,14 @@ interface ZIndex {
 }
 
 /**
- * Main theme configuration
+ * Light theme configuration
  *
- * Primary Color: Blue (#2563eb) - Trust, professionalism, technology
- * Secondary Color: Violet (#7c3aed) - Creativity, innovation
- *
- * This theme is designed to work in light mode. Dark mode will be added in future.
+ * Primary Color: Sage Green (#6b9080) - Natural, calming, professional
+ * Secondary Color: Teal (#14b8a6) - Fresh, modern, trustworthy
  */
-export const theme: Theme = {
-  colors: {
-    // Primary - Blue scale (Material Blue 600 based)
-    primary: {
-      50: '#eff6ff',
-      100: '#dbeafe',
-      200: '#bfdbfe',
-      300: '#93c5fd',
-      400: '#60a5fa',
-      500: '#2563eb',  // Main
-      600: '#1d4ed8',
-      700: '#1e40af',
-      800: '#1e3a8a',
-      900: '#1e293b',
-      950: '#0f172a',
-    },
-
-    // Secondary - Violet scale
-    secondary: {
-      50: '#faf5ff',
-      100: '#f3e8ff',
-      200: '#e9d5ff',
-      300: '#d8b4fe',
-      400: '#c084fc',
-      500: '#7c3aed',  // Main
-      600: '#9333ea',
-      700: '#7e22ce',
-      800: '#6b21a8',
-      900: '#581c87',
-      950: '#3b0764',
-    },
-
-    // Semantic colors
-    success: '#10b981',   // Green 500
-    warning: '#f59e0b',   // Amber 500
-    error: '#ef4444',     // Red 500
-    info: '#3b82f6',      // Blue 500
-
-    // Background colors
-    background: {
-      primary: '#ffffff',
-      secondary: '#f9fafb',     // Gray 50
-      tertiary: '#f3f4f6',      // Gray 100
-      elevated: '#ffffff',       // For cards, modals
-      overlay: 'rgba(0, 0, 0, 0.5)',
-    },
-
-    // Text colors
-    text: {
-      primary: '#111827',        // Gray 900
-      secondary: '#6b7280',      // Gray 500
-      tertiary: '#9ca3af',       // Gray 400
-      disabled: '#d1d5db',       // Gray 300
-      inverse: '#ffffff',
-      link: '#2563eb',           // Primary 500
-      linkHover: '#1d4ed8',      // Primary 600
-    },
-
-    // Border colors
-    border: {
-      default: '#e5e7eb',        // Gray 200
-      light: '#f3f4f6',          // Gray 100
-      strong: '#d1d5db',         // Gray 300
-      focus: '#2563eb',          // Primary 500
-      error: '#ef4444',          // Red 500
-    },
-
-    // UI element colors
-    ui: {
-      hover: '#f3f4f6',          // Gray 100
-      active: '#e5e7eb',         // Gray 200
-      selected: '#dbeafe',       // Primary 100
-      disabled: '#f9fafb',       // Gray 50
-      skeleton: '#e5e7eb',       // Gray 200
-      divider: '#e5e7eb',        // Gray 200
-    },
-  },
+export const lightTheme: Theme = {
+  mode: 'light',
+  colors: lightColors,
 
   typography: {
     fontFamily: {
@@ -354,14 +224,47 @@ export function withOpacity(color: string, opacity: number): string {
 }
 
 /**
- * Export individual theme sections for direct access
+ * Dark theme configuration
+ *
+ * Same design principles as light theme but optimized for low-light viewing
  */
-export const colors = theme.colors;
-export const typography = theme.typography;
-export const spacing = theme.spacing;
-export const borderRadius = theme.borderRadius;
-export const shadows = theme.shadows;
-export const transitions = theme.transitions;
-export const zIndex = theme.zIndex;
+export const darkTheme: Theme = {
+  mode: 'dark',
+  colors: darkColors,
 
-export default theme;
+  typography: lightTheme.typography,
+  spacing: lightTheme.spacing,
+  borderRadius: lightTheme.borderRadius,
+  shadows: {
+    none: 'none',
+    sm: '0 1px 2px 0 rgba(0, 0, 0, 0.3)',
+    md: '0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3)',
+    lg: '0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3)',
+    xl: '0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 10px 10px -5px rgba(0, 0, 0, 0.4)',
+    '2xl': '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+  },
+  transitions: lightTheme.transitions,
+  zIndex: lightTheme.zIndex,
+};
+
+/**
+ * Get theme based on mode
+ */
+export function getTheme(mode: ThemeMode): Theme {
+  return mode === 'light' ? lightTheme : darkTheme;
+}
+
+/**
+ * Export individual theme sections for direct access (light theme by default)
+ */
+export const colors = lightTheme.colors;
+export const typography = lightTheme.typography;
+export const spacing = lightTheme.spacing;
+export const borderRadius = lightTheme.borderRadius;
+export const shadows = lightTheme.shadows;
+export const transitions = lightTheme.transitions;
+export const zIndex = lightTheme.zIndex;
+
+// Export the default theme (light)
+export const theme = lightTheme;
+export default lightTheme;

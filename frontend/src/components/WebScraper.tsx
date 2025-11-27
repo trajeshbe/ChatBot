@@ -204,7 +204,7 @@ export default function WebScraper({ sessionId }: WebScraperProps) {
                   value={url}
                   onChange={(e) => updateUrl(index, e.target.value)}
                   placeholder="https://example.com/article"
-                  className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
                 {urls.length > 1 && (
                   <button
@@ -220,7 +220,7 @@ export default function WebScraper({ sessionId }: WebScraperProps) {
 
           <button
             onClick={addUrlField}
-            className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-primary-600 hover:bg-primary-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" />
             Add Another URL
@@ -235,7 +235,7 @@ export default function WebScraper({ sessionId }: WebScraperProps) {
               value={scrapePrompt}
               onChange={(e) => setScrapePrompt(e.target.value)}
               placeholder="E.g., 'Extract only the main article content, ignore navigation and ads'"
-              className="w-full resize-none rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full resize-none rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
               rows={3}
             />
             <p className="text-xs text-slate-500 mt-1">
@@ -246,7 +246,7 @@ export default function WebScraper({ sessionId }: WebScraperProps) {
           <button
             onClick={handleScrape}
             disabled={isProcessing || urls.every(url => !url.trim())}
-            className="mt-6 w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+            className="mt-6 w-full px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
             {isProcessing ? (
               <>
@@ -277,7 +277,7 @@ export default function WebScraper({ sessionId }: WebScraperProps) {
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <Globe className="w-4 h-4 text-blue-600" />
+                        <Globe className="w-4 h-4 text-primary-600" />
                         <p className="text-sm font-medium text-slate-900 dark:text-white break-all">
                           {job.url}
                         </p>
@@ -299,7 +299,7 @@ export default function WebScraper({ sessionId }: WebScraperProps) {
 
                     <div className="flex items-center gap-2 ml-4">
                       {job.status === 'processing' && (
-                        <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                        <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
                       )}
                       {job.status === 'success' && (
                         <CheckCircle className="w-5 h-5 text-green-600" />

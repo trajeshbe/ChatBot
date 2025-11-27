@@ -32,7 +32,7 @@ export default function DataExtractionHub({ sessionId }: Props) {
             onClick={() => setMode('smart')}
             className={`px-6 py-3 rounded-lg font-semibold transition-all flex items-center gap-2 ${
               mode === 'smart'
-                ? 'bg-blue-600 text-white shadow-md'
+                ? 'bg-primary-600 text-white shadow-md'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
@@ -44,7 +44,7 @@ export default function DataExtractionHub({ sessionId }: Props) {
             onClick={() => setMode('mapper')}
             className={`px-6 py-3 rounded-lg font-semibold transition-all flex items-center gap-2 ${
               mode === 'mapper'
-                ? 'bg-blue-600 text-white shadow-md'
+                ? 'bg-primary-600 text-white shadow-md'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
@@ -56,7 +56,7 @@ export default function DataExtractionHub({ sessionId }: Props) {
             onClick={() => setMode('template')}
             className={`px-6 py-3 rounded-lg font-semibold transition-all flex items-center gap-2 ${
               mode === 'template'
-                ? 'bg-blue-600 text-white shadow-md'
+                ? 'bg-primary-600 text-white shadow-md'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
           >
@@ -67,9 +67,9 @@ export default function DataExtractionHub({ sessionId }: Props) {
 
         {/* Feature Comparison */}
         {mode === 'smart' && (
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+          <div className="bg-primary-50 dark:bg-blue-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-4 mb-6">
             <div className="flex items-start gap-3">
-              <Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <Sparkles className="h-5 w-5 text-primary-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
               <div className="text-sm text-slate-700 dark:text-slate-300">
                 <p className="font-semibold mb-2">Smart Extraction Features:</p>
                 <ul className="list-disc ml-4 space-y-1">
@@ -84,9 +84,9 @@ export default function DataExtractionHub({ sessionId }: Props) {
         )}
 
         {mode === 'mapper' && (
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+          <div className="bg-primary-50 dark:bg-blue-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-4 mb-6">
             <div className="flex items-start gap-3">
-              <Zap className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <Zap className="h-5 w-5 text-primary-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
               <div className="text-sm text-slate-700 dark:text-slate-300">
                 <p className="font-semibold mb-2">Smart Template Mapper Features:</p>
                 <ul className="list-disc ml-4 space-y-1">
@@ -95,7 +95,7 @@ export default function DataExtractionHub({ sessionId }: Props) {
                   <li><strong>Transparent missing values</strong> - Fields marked as "requires research" instead of null</li>
                   <li><strong>Perfect for predefined templates</strong> - Paste columns from Excel directly</li>
                 </ul>
-                <p className="mt-3 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 px-3 py-2 rounded">
+                <p className="mt-3 text-xs bg-primary-100 dark:bg-primary-900/30 text-blue-800 dark:text-blue-200 px-3 py-2 rounded">
                   <strong>💡 Use this when:</strong> You have a predefined list of columns (like from an Excel template) and want AI to map data to them
                 </p>
               </div>
@@ -104,9 +104,9 @@ export default function DataExtractionHub({ sessionId }: Props) {
         )}
 
         {mode === 'template' && (
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+          <div className="bg-primary-50 dark:bg-blue-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-4 mb-6">
             <div className="flex items-start gap-3">
-              <FileSpreadsheet className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <FileSpreadsheet className="h-5 w-5 text-primary-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
               <div className="text-sm text-slate-700 dark:text-slate-300">
                 <p className="font-semibold mb-2">CSS Selector Based Extraction:</p>
                 <ul className="list-disc ml-4 space-y-1">

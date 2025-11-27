@@ -111,8 +111,8 @@ export default function EvaluationMetrics({ metrics }: EvaluationMetricsProps) {
         }
       case 'good':
         return {
-          bg: 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-700',
-          text: 'text-blue-700 dark:text-blue-300',
+          bg: 'bg-primary-50 dark:bg-primary-900/30 border-primary-200 dark:border-blue-700',
+          text: 'text-primary-700 dark:text-primary-300',
           icon: TrendingUp
         }
       case 'fair':
@@ -140,7 +140,7 @@ export default function EvaluationMetrics({ metrics }: EvaluationMetricsProps) {
   const getScoreColor = (score: number | undefined): string => {
     if (score === undefined) return 'text-slate-500'
     if (score >= 0.8) return 'text-emerald-600 dark:text-emerald-400'
-    if (score >= 0.6) return 'text-blue-600 dark:text-blue-400'
+    if (score >= 0.6) return 'text-primary-600 dark:text-blue-400'
     if (score >= 0.4) return 'text-yellow-600 dark:text-yellow-400'
     return 'text-red-600 dark:text-red-400'
   }
@@ -239,7 +239,7 @@ export default function EvaluationMetrics({ metrics }: EvaluationMetricsProps) {
                                 <div className="mt-1 space-y-1">
                                   {claim.supporting_chunks.slice(0, 1).map((chunk, j) => (
                                     <div key={j} className="bg-slate-100 dark:bg-slate-900 p-1.5 rounded text-slate-600 dark:text-slate-400">
-                                      <div className="font-semibold text-blue-600 dark:text-blue-400 mb-0.5">
+                                      <div className="font-semibold text-primary-600 dark:text-blue-400 mb-0.5">
                                         {chunk.filename} ({(chunk.overlap * 100).toFixed(0)}% overlap)
                                       </div>
                                       <div className="italic">"{chunk.content.slice(0, 120)}..."</div>
@@ -347,7 +347,7 @@ export default function EvaluationMetrics({ metrics }: EvaluationMetricsProps) {
                       {metrics.context_relevancy_details.chunks_breakdown.map((chunk, i) => (
                         <div key={i} className="text-[10px] bg-slate-100 dark:bg-slate-900 p-2 rounded">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="font-semibold text-blue-600 dark:text-blue-400">{chunk.filename}</span>
+                            <span className="font-semibold text-primary-600 dark:text-blue-400">{chunk.filename}</span>
                             <span className={`font-mono ${getScoreColor(chunk.similarity)}`}>
                               {(chunk.similarity * 100).toFixed(0)}%
                             </span>

@@ -171,7 +171,7 @@ export default function APIKeysManager() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Key className="w-6 h-6 text-blue-500" />
+        <Key className="w-6 h-6 text-primary-500" />
         <h2 className="text-2xl font-bold text-gray-900">API Keys Management</h2>
       </div>
 
@@ -232,7 +232,7 @@ export default function APIKeysManager() {
                     onClick={() => setSelectedProvider(provider.id)}
                     className={`relative p-4 rounded-lg border-2 transition-all text-left ${
                       selectedProvider === provider.id
-                        ? 'border-blue-500 bg-blue-50'
+                        ? 'border-primary-500 bg-primary-50'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
@@ -264,7 +264,7 @@ export default function APIKeysManager() {
                     href={getProviderConfig(selectedProvider)?.docsUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="ml-2 text-blue-600 hover:text-blue-800 text-xs"
+                    className="ml-2 text-primary-600 hover:text-blue-800 text-xs"
                   >
                     (Get API key)
                   </a>
@@ -275,7 +275,7 @@ export default function APIKeysManager() {
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                     placeholder={getProviderConfig(selectedProvider)?.placeholder}
-                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     required
                   />
                   <button
@@ -294,7 +294,7 @@ export default function APIKeysManager() {
               <button
                 type="submit"
                 disabled={submitting || !apiKey.trim()}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2"
+                className="w-full bg-primary-600 text-white py-2 px-4 rounded-lg hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2"
               >
                 <Lock className="w-4 h-4" />
                 {submitting ? 'Saving...' : 'Save API Key (Encrypted)'}
@@ -372,7 +372,7 @@ export default function APIKeysManager() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleValidateKey(providerConfig.id)}
-                        className="px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 flex items-center gap-1"
+                        className="px-3 py-1.5 text-sm font-medium text-primary-700 bg-primary-50 rounded-lg hover:bg-primary-100 flex items-center gap-1"
                       >
                         <CheckCircle className="w-4 h-4" />
                         Validate
@@ -394,11 +394,11 @@ export default function APIKeysManager() {
       </div>
 
       {/* Security Notice */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="bg-primary-50 border border-primary-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
-          <Lock className="w-5 h-5 text-blue-500 mt-0.5" />
+          <Lock className="w-5 h-5 text-primary-500 mt-0.5" />
           <div>
-            <h4 className="font-semibold text-blue-900 mb-1">Security Features</h4>
+            <h4 className="font-semibold text-primary-900 mb-1">Security Features</h4>
             <ul className="text-sm text-blue-800 space-y-1">
               <li>• All API keys are encrypted using Fernet (AES-128) before storage</li>
               <li>• Keys are never logged in plaintext or exposed via API responses</li>

@@ -316,7 +316,7 @@ export const WeightsConfigManager: React.FC = () => {
           max={max}
           value={value}
           onChange={(e) => handleWeightChange(section, key, parseInt(e.target.value))}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
         />
       </div>
     );
@@ -541,12 +541,12 @@ export const WeightsConfigManager: React.FC = () => {
             )}
             {renderSlider('rag_settings', 'chunk_size', 'Chunk Size (characters)', 100, 2000, 50)}
             {renderSlider('rag_settings', 'chunk_overlap', 'Chunk Overlap (characters)', 0, 500, 10)}
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+            <div className="mt-6 p-4 bg-primary-50 border border-primary-200 rounded-md">
               <p className="text-sm text-blue-800">
                 <strong>Note:</strong> For semantic and keyword reranking weights, see the{' '}
                 <button
                   onClick={() => setActiveTab('reranking')}
-                  className="text-blue-600 underline hover:text-blue-700"
+                  className="text-primary-600 underline hover:text-primary-700"
                 >
                   Reranking tab
                 </button>
@@ -564,7 +564,7 @@ export const WeightsConfigManager: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
       </div>
     );
   }
@@ -576,7 +576,7 @@ export const WeightsConfigManager: React.FC = () => {
         <div className="border-b border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <Settings className="w-6 h-6 text-blue-600" />
+              <Settings className="w-6 h-6 text-primary-600" />
               <h2 className="text-2xl font-bold text-gray-900">Weights Configuration</h2>
             </div>
             <div className="flex space-x-3">
@@ -671,7 +671,7 @@ export const WeightsConfigManager: React.FC = () => {
                 onClick={() => setActiveTab(tab.key as TabType)}
                 className={`px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                   activeTab === tab.key
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'border-primary-600 text-primary-600'
                     : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
                 }`}
               >

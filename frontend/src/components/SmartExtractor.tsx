@@ -373,7 +373,7 @@ export const SmartExtractor = () => {
     <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-6 border border-slate-200 dark:border-slate-700">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg">
+        <div className="p-2 bg-gradient-to-br from-primary-500 to-cyan-500 rounded-lg">
           <Sparkles className="h-6 w-6 text-white" />
         </div>
         <div>
@@ -385,9 +385,9 @@ export const SmartExtractor = () => {
       </div>
 
       {/* Info Banner */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+      <div className="bg-primary-50 dark:bg-blue-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-4 mb-6">
         <div className="flex items-start gap-3">
-          <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+          <Info className="h-5 w-5 text-primary-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
           <div className="text-sm text-slate-700 dark:text-slate-300">
             <p className="font-semibold mb-1">How it works:</p>
             <ol className="list-decimal ml-4 space-y-1">
@@ -409,7 +409,7 @@ export const SmartExtractor = () => {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://example.com/page-to-scrape"
-          className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-slate-400"
+          className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent placeholder-slate-400"
         />
       </div>
 
@@ -426,7 +426,7 @@ export const SmartExtractor = () => {
           onChange={(e) => setUserInstructions(e.target.value)}
           placeholder="Describe what you want to extract in natural language...&#10;&#10;Example: Extract product names, prices, ratings, and availability status"
           rows={4}
-          className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder-slate-400"
+          className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none placeholder-slate-400"
         />
 
         {/* Example Prompts */}
@@ -437,7 +437,7 @@ export const SmartExtractor = () => {
               <button
                 key={idx}
                 onClick={() => useExamplePrompt(prompt)}
-                className="text-xs px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                className="text-xs px-3 py-1 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full hover:bg-primary-100 dark:hover:bg-blue-900/50 transition-colors"
               >
                 {prompt.substring(0, 50)}...
               </button>
@@ -470,7 +470,7 @@ export const SmartExtractor = () => {
                   onChange={(e) => setMaxSteps(Math.max(1, Math.min(50, parseInt(e.target.value) || 10)))}
                   min="1"
                   max="50"
-                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   Controls how many pages the navigation agent will visit. Increase for sites with many pages. Default: 10
@@ -485,7 +485,7 @@ export const SmartExtractor = () => {
               <button
                 onClick={handleAutoGenerate}
                 disabled={isGenerating || !url || !userInstructions}
-                className="w-full mb-2 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full mb-2 px-4 py-2 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isGenerating ? (
                   <>
@@ -590,7 +590,7 @@ export const SmartExtractor = () => {
                         )}
                       </div>
                       <div className="flex gap-2">
-                        <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
+                        <span className="text-xs px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded">
                           {field.type}
                         </span>
                         {field.required && (
@@ -632,7 +632,7 @@ export const SmartExtractor = () => {
             <div className="flex gap-2">
               <button
                 onClick={() => setShowSaveModal(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
                 title="Save this extraction pattern as a CSS template for faster future extractions"
               >
                 <FileText className="h-4 w-4" />
@@ -744,8 +744,8 @@ export const SmartExtractor = () => {
               </div>
 
               {/* Info Note */}
-              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                <p className="text-sm text-blue-700 dark:text-blue-300">
+              <div className="bg-primary-50 dark:bg-blue-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-3">
+                <p className="text-sm text-primary-700 dark:text-primary-300">
                   💡 Save this Smart Extraction pattern as a CSS template for faster extractions in the future!
                 </p>
               </div>
@@ -767,7 +767,7 @@ export const SmartExtractor = () => {
               <button
                 onClick={handleSaveAsTemplate}
                 disabled={isSaving || !templateName.trim()}
-                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white rounded-lg transition-colors"
+                className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:bg-slate-400 text-white rounded-lg transition-colors"
               >
                 {isSaving ? 'Saving...' : 'Save Template'}
               </button>

@@ -1,10 +1,16 @@
 import { useState, useEffect } from 'react'
 import Head from 'next/head'
-import { Users, Activity, Database, TrendingUp, Search, Filter, ChevronDown, ChevronUp, Key, Server, Wrench, Globe } from 'lucide-react'
+import { useRouter } from 'next/router'
+import { Users, Activity, Database, TrendingUp, Search, Filter, ChevronDown, ChevronUp, Key, Server, Wrench, Globe, Shield, Lock, UserPlus } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
+import UserHeader from '@/components/UserHeader'
 import APIKeysManager from '../components/APIKeysManager'
 import OllamaModelsManager from '../components/OllamaModelsManager'
 import { MCPToolsManager } from '../components/MCPToolsManager'
 import { ScrapingConfigManager } from '../components/ScrapingConfigManager'
+import RoleManager from '../components/admin/RoleManager'
+import PermissionMatrix from '../components/admin/PermissionMatrix'
+import UserRoleAssignment from '../components/admin/UserRoleAssignment'
 
 interface User {
   id: string
@@ -113,7 +119,10 @@ interface DbStats {
 }
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'users' | 'sessions' | 'audit' | 'metrics' | 'database' | 'apikeys' | 'ollama' | 'mcptools' | 'scraping'>('users')
+  const router = useRouter()
+  const { user, isAuthenticated, isLoading } = useAuth()
+  const [activeTab, setActiveTab] = useState<'users' | 'sessions' | 'audit' | 'metrics' | 'database' | 'apikeys' | 'ollama' | 'mcptools' | 'scraping' | 'rbac'>('users')
+  const [rbacSubTab, setRbacSubTab] = useState<'roles' | 'permissions' | 'users'>('roles')
   const [users, setUsers] = useState<User[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
@@ -122,6 +131,13 @@ export default function AdminPage() {
   const [selectedSession, setSelectedSession] = useState<string | null>(null)
   const [sessionDetails, setSessionDetails] = useState<any>(null)
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
+
+  // Redirect to login if not authenticated or not admin
+  useEffect(() => {
+    if (!isLoading && (!isAuthenticated || (user && user.role.toLowerCase() !== 'admin'))) {
+      router.push('/login')
+    }
+  }, [isAuthenticated, isLoading, user, router])
 
   // Database console state
   const [dbDocuments, setDbDocuments] = useState<DbDocument[]>([])
@@ -269,6 +285,23 @@ export default function AdminPage() {
     return true
   })
 
+  // Show loading state while checking auth
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-white dark:bg-slate-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-slate-600 dark:text-slate-400">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render if not authenticated or not admin
+  if (!isAuthenticated || (user && user.role.toLowerCase() !== 'admin')) {
+    return null
+  }
+
   return (
     <>
       <Head>
@@ -277,6 +310,9 @@ export default function AdminPage() {
       </Head>
 
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        {/* User Header */}
+        <UserHeader />
+
         {/* Header */}
         <header className="bg-white dark:bg-slate-800 shadow-sm border-b border-slate-200 dark:border-slate-700">
           <div className="px-6 py-4">
@@ -418,6 +454,19 @@ export default function AdminPage() {
                 <div className="flex items-center space-x-2">
                   <Globe className="w-4 h-4" />
                   <span>Scraping Config</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('rbac')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'rbac'
+                    ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <Users className="w-4 h-4" />
+                  <span>RBAC</span>
                 </div>
               </button>
             </div>
@@ -961,6 +1010,61 @@ export default function AdminPage() {
               {activeTab === 'scraping' && (
                 <div>
                   <ScrapingConfigManager />
+                </div>
+              )}
+
+              {/* RBAC Tab */}
+              {activeTab === 'rbac' && (
+                <div className="space-y-6">
+                  {/* RBAC Sub-Navigation */}
+                  <div className="border-b border-slate-200 dark:border-slate-700">
+                    <div className="flex space-x-8">
+                      <button
+                        onClick={() => setRbacSubTab('roles')}
+                        className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+                          rbacSubTab === 'roles'
+                            ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                            : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <Shield className="w-4 h-4" />
+                          <span>Roles</span>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => setRbacSubTab('permissions')}
+                        className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+                          rbacSubTab === 'permissions'
+                            ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                            : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <Lock className="w-4 h-4" />
+                          <span>Permissions</span>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => setRbacSubTab('users')}
+                        className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+                          rbacSubTab === 'users'
+                            ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                            : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <UserPlus className="w-4 h-4" />
+                          <span>User Roles</span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* RBAC Content */}
+                  {rbacSubTab === 'roles' && <RoleManager />}
+                  {rbacSubTab === 'permissions' && <PermissionMatrix />}
+                  {rbacSubTab === 'users' && <UserRoleAssignment />}
                 </div>
               )}
 

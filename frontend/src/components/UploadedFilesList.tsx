@@ -121,7 +121,7 @@ export default function UploadedFilesList({ sessionId, onRefresh, forceExpand = 
         <div className="flex items-center justify-between mb-2">
           <button
             onClick={toggleCollapse}
-            className="flex items-center gap-1.5 hover:text-blue-600 transition-colors flex-1 text-left"
+            className="flex items-center gap-1.5 hover:text-primary-600 transition-colors flex-1 text-left"
           >
             <h3 className="text-xs font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
               <FileText className="w-3.5 h-3.5" />
@@ -137,7 +137,7 @@ export default function UploadedFilesList({ sessionId, onRefresh, forceExpand = 
             <button
               onClick={loadDocuments}
               disabled={loading}
-              className="text-xs text-blue-600 hover:text-blue-700 disabled:opacity-50 flex items-center gap-1"
+              className="text-xs text-primary-600 hover:text-primary-700 disabled:opacity-50 flex items-center gap-1"
               title="Refresh list"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -172,7 +172,7 @@ export default function UploadedFilesList({ sessionId, onRefresh, forceExpand = 
                 className="flex items-center justify-between p-2 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
               >
                 <div className="flex items-start gap-2 flex-1 min-w-0">
-                  <FileText className="w-3.5 h-3.5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <FileText className="w-3.5 h-3.5 text-primary-600 flex-shrink-0 mt-0.5" />
 
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-medium text-slate-900 dark:text-white truncate">

@@ -268,7 +268,7 @@ export const ScrapingConfigManager: React.FC = () => {
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center space-x-2"
           >
             <Plus className="w-4 h-4" />
             <span>Add Domain</span>
@@ -290,14 +290,14 @@ export const ScrapingConfigManager: React.FC = () => {
             onClick={() => setActiveView('configs')}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeView === 'configs'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                ? 'border-primary-500 text-primary-600 dark:text-blue-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
             <div className="flex items-center space-x-2">
               <Globe className="w-4 h-4" />
               <span>Configurations</span>
-              <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+              <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-primary-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
                 {configs.length}
               </span>
             </div>
@@ -306,7 +306,7 @@ export const ScrapingConfigManager: React.FC = () => {
             onClick={() => setActiveView('stats')}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeView === 'stats'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                ? 'border-primary-500 text-primary-600 dark:text-blue-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
@@ -319,7 +319,7 @@ export const ScrapingConfigManager: React.FC = () => {
             onClick={() => setActiveView('audit')}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeView === 'audit'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                ? 'border-primary-500 text-primary-600 dark:text-blue-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
@@ -365,12 +365,12 @@ export const ScrapingConfigManager: React.FC = () => {
             {filteredConfigs.map((config) => (
               <div
                 key={config.id}
-                className="p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-blue-500 dark:hover:border-blue-500 transition-colors"
+                className="p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-primary-500 dark:hover:border-primary-500 transition-colors"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-3">
-                      <Globe className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      <Globe className="w-5 h-5 text-primary-600 dark:text-blue-400" />
                       <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
                         {config.domain}
                       </h3>
@@ -383,7 +383,7 @@ export const ScrapingConfigManager: React.FC = () => {
                       </span>
                       <span className={`px-2 py-1 text-xs rounded-full ${
                         config.status === 'active'
-                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200'
+                          ? 'bg-primary-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200'
                           : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200'
                       }`}>
                         {config.status}
@@ -431,7 +431,7 @@ export const ScrapingConfigManager: React.FC = () => {
                   <div className="flex items-center space-x-2 ml-4">
                     <button
                       onClick={() => loadDomainStats(config.domain)}
-                      className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900 rounded-lg"
+                      className="p-2 text-primary-600 dark:text-blue-400 hover:bg-primary-100 dark:hover:bg-blue-900 rounded-lg"
                       title="View Statistics"
                     >
                       <BarChart3 className="w-5 h-5" />
@@ -475,9 +475,9 @@ export const ScrapingConfigManager: React.FC = () => {
               Statistics for {domainStats.domain}
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <p className="text-sm text-blue-600 dark:text-blue-400">Total Requests</p>
-                <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{domainStats.total_requests}</p>
+              <div className="p-4 bg-primary-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="text-sm text-primary-600 dark:text-blue-400">Total Requests</p>
+                <p className="text-2xl font-bold text-primary-900 dark:text-primary-100">{domainStats.total_requests}</p>
               </div>
               <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
                 <p className="text-sm text-green-600 dark:text-green-400">Successful</p>
@@ -550,7 +550,7 @@ export const ScrapingConfigManager: React.FC = () => {
                         <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" title="Robots.txt OK" />
                       )}
                       {log.rate_limit_respected && (
-                        <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" title="Rate limit OK" />
+                        <Clock className="w-4 h-4 text-primary-600 dark:text-blue-400" title="Rate limit OK" />
                       )}
                     </div>
                   </td>
@@ -688,7 +688,7 @@ export const ScrapingConfigManager: React.FC = () => {
                   </button>
                   <button
                     onClick={createConfig}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
                   >
                     Create
                   </button>
@@ -780,7 +780,7 @@ export const ScrapingConfigManager: React.FC = () => {
                   </button>
                   <button
                     onClick={updateConfig}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
                   >
                     Update
                   </button>

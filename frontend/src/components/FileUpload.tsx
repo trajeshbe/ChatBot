@@ -185,14 +185,14 @@ export default function FileUpload() {
           {...getRootProps()}
           className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${
             isDragActive
-              ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20'
-              : 'border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500'
+              ? 'border-primary-600 bg-primary-50 dark:bg-blue-900/20'
+              : 'border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-primary-500'
           }`}
         >
           <input {...getInputProps()} />
           <Upload className="w-16 h-16 mx-auto text-slate-400 mb-4" />
           {isDragActive ? (
-            <p className="text-lg text-blue-600 dark:text-blue-400">
+            <p className="text-lg text-primary-600 dark:text-blue-400">
               Drop the files here...
             </p>
           ) : (
@@ -221,7 +221,7 @@ export default function FileUpload() {
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3 flex-1">
-                      <FileText className="w-8 h-8 text-blue-600" />
+                      <FileText className="w-8 h-8 text-primary-600" />
                       <div className="flex-1">
                         <p className="font-medium text-slate-900 dark:text-white">
                           {file.name}
@@ -235,13 +235,13 @@ export default function FileUpload() {
                     <div className="flex items-center gap-2">
                       {file.status === 'uploading' && (
                         <>
-                          <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                          <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
                           <span className="text-sm text-slate-600">Uploading...</span>
                         </>
                       )}
                       {file.status === 'processing' && (
                         <>
-                          <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                          <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
                           <span className="text-sm text-slate-600">Processing...</span>
                         </>
                       )}

@@ -75,7 +75,7 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
       case 'local-gpu':
         return <Zap className="w-4 h-4 text-green-500" />
       case 'local-cpu':
-        return <Cpu className="w-4 h-4 text-blue-500" />
+        return <Cpu className="w-4 h-4 text-primary-500" />
       default:
         return <Cpu className="w-4 h-4" />
     }
@@ -96,7 +96,7 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
       )
     } else {
       return (
-        <span className="text-xs px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
+        <span className="text-xs px-2 py-0.5 rounded bg-primary-100 dark:bg-blue-900 text-primary-700 dark:text-primary-300">
           CPU
         </span>
       )
@@ -169,11 +169,12 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
                 <button
                   key={model.id}
                   onClick={() => {
+                    console.log('🔄 Model selected from dropdown:', model.name, '(', model.id, ')')
                     onModelChange(model.id)
                     setIsOpen(false)
                   }}
                   className={`w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors ${
-                    selectedModel === model.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                    selectedModel === model.id ? 'bg-primary-50 dark:bg-blue-900/20' : ''
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -188,7 +189,7 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
                           </span>
                         )}
                         {selectedModel === model.id && (
-                          <Check className="w-4 h-4 text-blue-600" />
+                          <Check className="w-4 h-4 text-primary-600" />
                         )}
                       </div>
                       <div className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
@@ -221,12 +222,13 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
                 <button
                   key={model.id}
                   onClick={() => {
+                    console.log('🔄 Model selected from dropdown:', model.name, '(', model.id, ')')
                     onModelChange(model.id)
                     setIsOpen(false)
                   }}
                   disabled={!gpuAvailable}
                   className={`w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors ${
-                    selectedModel === model.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                    selectedModel === model.id ? 'bg-primary-50 dark:bg-blue-900/20' : ''
                   } ${!gpuAvailable ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -241,7 +243,7 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
                           </span>
                         )}
                         {selectedModel === model.id && (
-                          <Check className="w-4 h-4 text-blue-600" />
+                          <Check className="w-4 h-4 text-primary-600" />
                         )}
                       </div>
                       <div className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
@@ -272,11 +274,12 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
                 <button
                   key={model.id}
                   onClick={() => {
+                    console.log('🔄 Model selected from dropdown:', model.name, '(', model.id, ')')
                     onModelChange(model.id)
                     setIsOpen(false)
                   }}
                   className={`w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors ${
-                    selectedModel === model.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                    selectedModel === model.id ? 'bg-primary-50 dark:bg-blue-900/20' : ''
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -291,7 +294,7 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
                           </span>
                         )}
                         {selectedModel === model.id && (
-                          <Check className="w-4 h-4 text-blue-600" />
+                          <Check className="w-4 h-4 text-primary-600" />
                         )}
                       </div>
                       <div className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">

@@ -157,7 +157,7 @@ export default function RAGSettings({ onSettingsChange, compact = false }: RAGSe
               <label className="text-[10px] font-medium text-slate-600 dark:text-slate-400">
                 {item.label}
               </label>
-              <span className="text-[10px] font-mono text-blue-600 dark:text-blue-400">
+              <span className="text-[10px] font-mono text-primary-600 dark:text-blue-400">
                 {item.format(item.value)}
               </span>
             </div>
@@ -174,7 +174,7 @@ export default function RAGSettings({ onSettingsChange, compact = false }: RAGSe
         ))}
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="text-[10px] text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1 w-full justify-center py-1"
+          className="text-[10px] text-primary-600 hover:text-primary-700 dark:text-blue-400 flex items-center gap-1 w-full justify-center py-1"
         >
           {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           {isExpanded ? 'Less' : 'More'}
@@ -188,7 +188,7 @@ export default function RAGSettings({ onSettingsChange, compact = false }: RAGSe
                   <label className="text-[10px] font-medium text-slate-600 dark:text-slate-400">
                     {item.label}
                   </label>
-                  <span className="text-[10px] font-mono text-blue-600 dark:text-blue-400">
+                  <span className="text-[10px] font-mono text-primary-600 dark:text-blue-400">
                     {item.format(item.value)}
                   </span>
                 </div>
@@ -242,7 +242,7 @@ export default function RAGSettings({ onSettingsChange, compact = false }: RAGSe
               </p>
               <button
                 onClick={resetToDefaults}
-                className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1"
+                className="text-xs text-primary-600 hover:text-primary-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1"
               >
                 <RotateCcw className="w-3 h-3" />
                 Reset
@@ -256,7 +256,7 @@ export default function RAGSettings({ onSettingsChange, compact = false }: RAGSe
                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">
                       {item.label}
                     </label>
-                    <span className="text-xs font-mono text-blue-600 dark:text-blue-400">
+                    <span className="text-xs font-mono text-primary-600 dark:text-blue-400">
                       {item.format(item.value)}
                     </span>
                   </div>

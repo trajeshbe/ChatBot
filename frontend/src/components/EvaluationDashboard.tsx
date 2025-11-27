@@ -171,7 +171,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8 bg-white rounded-lg shadow-lg">
-        <Activity className="w-6 h-6 animate-pulse text-blue-600" />
+        <Activity className="w-6 h-6 animate-pulse text-primary-600" />
         <span className="ml-2 text-gray-600">Loading evaluation analytics...</span>
       </div>
     );
@@ -187,7 +187,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
         </p>
         <button
           onClick={() => { setLoading(true); fetchAnalytics(); fetchRecentScores(); }}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          className="mt-4 px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors"
         >
           Retry
         </button>
@@ -216,7 +216,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
 
       {/* Empty State */}
       {analytics.total_evaluations === 0 && !error && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
+        <div className="bg-primary-50 border border-primary-200 rounded-lg p-6 text-center">
           <BarChart className="w-12 h-12 text-blue-400 mx-auto mb-3" />
           <h3 className="text-lg font-semibold text-gray-800 mb-2">No Evaluations Yet</h3>
           <p className="text-gray-600 max-w-lg mx-auto">
@@ -235,7 +235,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
               <p className="text-sm text-gray-600">Total Evaluations</p>
               <p className="text-2xl font-bold text-gray-800">{analytics.total_evaluations}</p>
             </div>
-            <BarChart className="w-8 h-8 text-blue-600" />
+            <BarChart className="w-8 h-8 text-primary-600" />
           </div>
         </div>
 
@@ -282,7 +282,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
       {/* Score Distribution */}
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-          <TrendingUp className="w-5 h-5 mr-2 text-blue-600" />
+          <TrendingUp className="w-5 h-5 mr-2 text-primary-600" />
           Score Distribution
         </h3>
         <div className="space-y-3">
@@ -290,7 +290,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
             const total = analytics.total_evaluations;
             const percentage = total > 0 ? (count / total) * 100 : 0;
             const color = range === '0.8-1.0' ? 'bg-green-500' :
-                         range === '0.6-0.8' ? 'bg-blue-500' :
+                         range === '0.6-0.8' ? 'bg-primary-500' :
                          range === '0.4-0.6' ? 'bg-yellow-500' : 'bg-red-500';
 
             return (
@@ -314,7 +314,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
       {/* Average Scores by Method */}
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-          <Target className="w-5 h-5 mr-2 text-blue-600" />
+          <Target className="w-5 h-5 mr-2 text-primary-600" />
           Average Scores by Method
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -387,7 +387,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
       {analytics.time_series.length > 0 && (
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-            <Clock className="w-5 h-5 mr-2 text-blue-600" />
+            <Clock className="w-5 h-5 mr-2 text-primary-600" />
             Score Trends (Last 30 Days)
           </h3>
           <div className="space-y-2">
@@ -418,7 +418,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
       {feedback.length > 0 && (
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-            <ThumbsUp className="w-5 h-5 mr-2 text-blue-600" />
+            <ThumbsUp className="w-5 h-5 mr-2 text-primary-600" />
             Human Feedback
           </h3>
 
@@ -517,7 +517,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
           <div className="space-y-3">
             <h4 className="text-sm font-semibold text-gray-700 mb-3">Recent Feedback</h4>
             {feedback.slice(0, 10).map((fb) => (
-              <div key={fb.id} className="border-l-4 border-blue-500 bg-gray-50 rounded-r-lg p-4">
+              <div key={fb.id} className="border-l-4 border-primary-500 bg-gray-50 rounded-r-lg p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-3 mb-2">
@@ -561,7 +561,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
       {/* Recent Evaluations */}
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-          <Activity className="w-5 h-5 mr-2 text-blue-600" />
+          <Activity className="w-5 h-5 mr-2 text-primary-600" />
           Recent Evaluations
         </h3>
         <div className="space-y-3">
@@ -582,7 +582,7 @@ export const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
                     {score.enabled_methods.map((method) => (
                       <span
                         key={method}
-                        className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs"
+                        className="px-2 py-1 bg-primary-100 text-primary-700 rounded text-xs"
                       >
                         {method.replace(/_/g, ' ')}
                       </span>

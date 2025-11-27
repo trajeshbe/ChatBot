@@ -1,19 +1,31 @@
 import { useState, useEffect } from 'react'
 import Head from 'next/head'
+import { useRouter } from 'next/router'
 import ChatInterface from '@/components/ChatInterfaceEnhanced'
 import Sidebar from '@/components/Sidebar'
+import UserHeader from '@/components/UserHeader'
 import EvaluationDashboard from '@/components/EvaluationDashboard'
 import DataExtractionHub from '@/components/DataExtractionHub'
 import ProjectEstimator from '@/components/ProjectEstimator'
 import ToolUsageDashboard from '@/components/ToolUsageDashboard'
 import WeightsConfigManager from '@/components/WeightsConfigManager'
+import { useAuth } from '@/contexts/AuthContext'
 import type { RAGConfig } from '@/components/RAGSettings'
 
 export default function Home() {
+  const router = useRouter()
+  const { user, isAuthenticated, isLoading } = useAuth()
   const [activeTab, setActiveTab] = useState<'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator' | 'tools' | 'weights'>('chat')
   const [sessionId, setSessionId] = useState<string>('')
   const [currentUser, setCurrentUser] = useState<string>('Anonymous')
   const [ragConfig, setRagConfig] = useState<RAGConfig | null>(null)
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isAuthenticated, isLoading, router])
 
   useEffect(() => {
     // Get session ID from sessionStorage
@@ -23,14 +35,35 @@ export default function Home() {
         setSessionId(storedSessionId)
       }
 
-      // Get username (from localStorage or default to Anonymous)
-      const storedUsername = localStorage.getItem('username') || 'Anonymous'
-      setCurrentUser(storedUsername)
+      // Get username from auth context or localStorage
+      if (user) {
+        setCurrentUser(user.username)
+      } else {
+        const storedUsername = localStorage.getItem('username') || 'Anonymous'
+        setCurrentUser(storedUsername)
+      }
     }
-  }, [])
+  }, [user])
 
   const handleRAGSettingsChange = (settings: RAGConfig) => {
     setRagConfig(settings)
+  }
+
+  // Show loading state while checking auth
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-white dark:bg-slate-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-slate-600 dark:text-slate-400">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render if not authenticated
+  if (!isAuthenticated) {
+    return null
   }
 
   return (
@@ -52,6 +85,8 @@ export default function Home() {
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
+          {/* User Header */}
+          <UserHeader />
           {/* 🆕 FIX: Keep ChatInterface mounted but hidden to preserve state during tab switches */}
           <div className={`flex-1 overflow-hidden ${activeTab === 'chat' || activeTab === 'upload' || activeTab === 'scrape' ? '' : 'hidden'}`}>
             <ChatInterface activeTab={activeTab} ragConfig={ragConfig} />

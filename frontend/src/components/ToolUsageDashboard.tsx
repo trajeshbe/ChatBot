@@ -142,7 +142,7 @@ const ToolUsageDashboard: React.FC = () => {
 
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-4 rounded-lg shadow">
+        <div className="bg-gradient-to-br from-primary-500 to-primary-600 text-white p-4 rounded-lg shadow">
           <div className="text-xs uppercase opacity-90 mb-1">Total Tools</div>
           <div className="text-3xl font-bold">{summary.total_tools}</div>
         </div>
@@ -180,7 +180,7 @@ const ToolUsageDashboard: React.FC = () => {
             onClick={() => setSelectedCategory(null)}
             className={`px-3 py-1 rounded text-sm font-medium ${
               selectedCategory === null
-                ? 'bg-blue-600 text-white'
+                ? 'bg-primary-600 text-white'
                 : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
             }`}
           >
@@ -192,7 +192,7 @@ const ToolUsageDashboard: React.FC = () => {
               onClick={() => setSelectedCategory(category)}
               className={`px-3 py-1 rounded text-sm font-medium ${
                 selectedCategory === category
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-primary-600 text-white'
                   : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
               }`}
             >
@@ -316,7 +316,7 @@ const ToolUsageDashboard: React.FC = () => {
                           </div>
                           <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
                             <div
-                              className="bg-blue-600 h-2 rounded-full"
+                              className="bg-primary-600 h-2 rounded-full"
                               style={{ width: `${percentage}%` }}
                             />
                           </div>

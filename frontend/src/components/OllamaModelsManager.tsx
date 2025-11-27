@@ -335,7 +335,7 @@ Examples:
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
             <div className="flex items-center gap-3">
-              <Database className="w-8 h-8 text-blue-500" />
+              <Database className="w-8 h-8 text-primary-500" />
               <div>
                 <p className="text-sm text-gray-600">Total Models</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.total_models}</p>
@@ -381,7 +381,7 @@ Examples:
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="p-6 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Download className="w-5 h-5 text-blue-500" />
+            <Download className="w-5 h-5 text-primary-500" />
             Pull/Install New Model
           </h3>
         </div>
@@ -394,12 +394,12 @@ Examples:
               placeholder="e.g., llama3.1:8b, mistral:7b, qwen2.5:7b"
               disabled={pulling}
               onKeyPress={(e) => e.key === 'Enter' && handlePullModel()}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
             <button
               onClick={handlePullModel}
               disabled={pulling || !pullModelName.trim()}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
+              className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
             >
               {pulling ? (
                 <>
@@ -416,7 +416,7 @@ Examples:
           </div>
 
           {pullProgress && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="mt-4 p-3 bg-primary-50 border border-primary-200 rounded-lg">
               <p className="text-sm text-blue-800">{pullProgress}</p>
             </div>
           )}
@@ -510,7 +510,7 @@ Examples:
                               Running
                             </span>
                           )}
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary-100 text-blue-800">
                             {family}
                           </span>
                           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">

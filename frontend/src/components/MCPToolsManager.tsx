@@ -183,7 +183,7 @@ export const MCPToolsManager: React.FC = () => {
         </div>
         <button
           onClick={loadData}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
+          className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center space-x-2"
         >
           <RefreshCw className="w-4 h-4" />
           <span>Refresh</span>
@@ -204,7 +204,7 @@ export const MCPToolsManager: React.FC = () => {
             onClick={() => setActiveView('tools')}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeView === 'tools'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                ? 'border-primary-500 text-primary-600 dark:text-blue-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
@@ -212,7 +212,7 @@ export const MCPToolsManager: React.FC = () => {
               <Wrench className="w-4 h-4" />
               <span>Tools</span>
               {toolStats && (
-                <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-primary-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
                   {toolStats.total_tools}
                 </span>
               )}
@@ -222,7 +222,7 @@ export const MCPToolsManager: React.FC = () => {
             onClick={() => setActiveView('mcp')}
             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeView === 'mcp'
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                ? 'border-primary-500 text-primary-600 dark:text-blue-400'
                 : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
             }`}
           >
@@ -242,13 +242,13 @@ export const MCPToolsManager: React.FC = () => {
       {/* Statistics Cards */}
       {activeView === 'tools' && toolStats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <div className="p-4 bg-primary-50 dark:bg-blue-900/20 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-blue-600 dark:text-blue-400">Total Tools</p>
-                <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{toolStats.total_tools}</p>
+                <p className="text-sm text-primary-600 dark:text-blue-400">Total Tools</p>
+                <p className="text-2xl font-bold text-primary-900 dark:text-primary-100">{toolStats.total_tools}</p>
               </div>
-              <Wrench className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+              <Wrench className="w-8 h-8 text-primary-600 dark:text-blue-400" />
             </div>
           </div>
           <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
@@ -301,13 +301,13 @@ export const MCPToolsManager: React.FC = () => {
               <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-400" />
             </div>
           </div>
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <div className="p-4 bg-primary-50 dark:bg-blue-900/20 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-blue-600 dark:text-blue-400">External Tools</p>
-                <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{mcpStats.total_external_tools}</p>
+                <p className="text-sm text-primary-600 dark:text-blue-400">External Tools</p>
+                <p className="text-2xl font-bold text-primary-900 dark:text-primary-100">{mcpStats.total_external_tools}</p>
               </div>
-              <Wrench className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+              <Wrench className="w-8 h-8 text-primary-600 dark:text-blue-400" />
             </div>
           </div>
           <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
@@ -385,13 +385,13 @@ export const MCPToolsManager: React.FC = () => {
               return (
                 <div
                   key={tool.tool_id}
-                  className="p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-blue-500 dark:hover:border-blue-500 transition-colors cursor-pointer"
+                  className="p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-primary-500 dark:hover:border-primary-500 transition-colors cursor-pointer"
                   onClick={() => setSelectedTool(tool)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-start space-x-3 flex-1">
-                      <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
-                        <IconComponent className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      <div className="p-2 bg-primary-100 dark:bg-blue-900 rounded-lg">
+                        <IconComponent className="w-5 h-5 text-primary-600 dark:text-blue-400" />
                       </div>
                       <div className="flex-1">
                         <h3 className="font-semibold text-slate-900 dark:text-white">{tool.name}</h3>
@@ -550,7 +550,7 @@ export const MCPToolsManager: React.FC = () => {
                 </div>
                 <div>
                   <h4 className="font-semibold text-slate-700 dark:text-slate-300 mb-2">Source</h4>
-                  <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full text-sm">
+                  <span className="px-3 py-1 bg-primary-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full text-sm">
                     {selectedTool.source}
                   </span>
                 </div>

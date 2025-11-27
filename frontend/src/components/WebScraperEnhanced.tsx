@@ -184,7 +184,7 @@ function TabButton({ active, onClick, icon, label }: TabButtonProps) {
         flex items-center gap-2 px-4 py-3 border-b-2 transition-colors
         ${
           active
-            ? 'border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-500'
+            ? 'border-primary-600 text-primary-600 dark:border-primary-500 dark:text-primary-500'
             : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
         }
       `}
@@ -431,7 +431,7 @@ function BasicScrapingTab() {
                   value={url}
                   onChange={(e) => updateUrl(index, e.target.value)}
                   placeholder="https://example.com/article"
-                  className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
                 {urls.length > 1 && (
                   <button onClick={() => removeUrlField(index)} className="px-3 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
@@ -441,7 +441,7 @@ function BasicScrapingTab() {
               </div>
             ))}
           </div>
-          <button onClick={addUrlField} className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+          <button onClick={addUrlField} className="flex items-center gap-2 px-4 py-2 text-primary-600 hover:bg-primary-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
             <Plus className="w-4 h-4" />
             Add Another URL
           </button>
@@ -461,7 +461,7 @@ function BasicScrapingTab() {
               <select
                 value={complianceLevel}
                 onChange={(e) => setComplianceLevel(e.target.value as ComplianceLevel)}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="strict">Strict (Max Compliance)</option>
                 <option value="balanced">Balanced (Recommended)</option>
@@ -489,7 +489,7 @@ function BasicScrapingTab() {
                 <select
                   value={llmProvider}
                   onChange={(e) => setLLMProvider(e.target.value as LLMProvider)}
-                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="ollama">Ollama (Local)</option>
                   <option value="openai">OpenAI</option>
@@ -504,7 +504,7 @@ function BasicScrapingTab() {
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               Scraping Instructions (Optional)
               {enableSmartScraping && (
-                <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">
+                <span className="ml-2 text-xs text-primary-600 dark:text-blue-400">
                   AI-powered filtering enabled
                 </span>
               )}
@@ -513,7 +513,7 @@ function BasicScrapingTab() {
               value={scrapePrompt}
               onChange={(e) => setScrapePrompt(e.target.value)}
               placeholder="E.g., 'Extract only product pricing and specifications, ignore reviews'"
-              className="w-full resize-none rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full resize-none rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
               rows={3}
             />
           </div>
@@ -540,7 +540,7 @@ function BasicScrapingTab() {
                     onChange={(e) =>
                       setAuthConfig({ ...authConfig, auth_type: e.target.value as AuthType })
                     }
-                    className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="none">None</option>
                     <option value="basic">Basic Auth</option>
@@ -558,7 +558,7 @@ function BasicScrapingTab() {
                     <input
                       type="text"
                       placeholder="Username"
-                      className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                       onChange={(e) =>
                         setAuthConfig({
                           ...authConfig,
@@ -569,7 +569,7 @@ function BasicScrapingTab() {
                     <input
                       type="password"
                       placeholder="Password"
-                      className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                       onChange={(e) =>
                         setAuthConfig({
                           ...authConfig,
@@ -584,7 +584,7 @@ function BasicScrapingTab() {
                   <input
                     type="text"
                     placeholder="Bearer Token"
-                    className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                     onChange={(e) =>
                       setAuthConfig({
                         ...authConfig,
@@ -599,7 +599,7 @@ function BasicScrapingTab() {
                     <input
                       type="text"
                       placeholder="Header Name (e.g., X-API-Key)"
-                      className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                       onChange={(e) =>
                         setAuthConfig({
                           ...authConfig,
@@ -610,7 +610,7 @@ function BasicScrapingTab() {
                     <input
                       type="text"
                       placeholder="API Key Value"
-                      className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                       onChange={(e) =>
                         setAuthConfig({
                           ...authConfig,
@@ -637,7 +637,7 @@ function BasicScrapingTab() {
             <select
               value={strategy}
               onChange={(e) => setStrategy(e.target.value as ScrapingStrategy)}
-              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               {Object.entries(STRATEGY_DESCRIPTIONS).map(([key, desc]) => (
                 <option key={key} value={key}>
@@ -805,7 +805,7 @@ function BasicScrapingTab() {
         <button
           onClick={handleScrape}
           disabled={isProcessing || urls.every(url => !url.trim())}
-          className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+          className="w-full px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
         >
           {isProcessing ? (
             <>
@@ -1069,11 +1069,11 @@ function TemplateExtractionTab() {
     <div className="h-full overflow-y-auto p-6">
       <div className="max-w-5xl mx-auto space-y-6">
         {/* Info Banner */}
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <div className="bg-primary-50 dark:bg-blue-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-4">
           <div className="flex gap-3">
-            <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-primary-600 flex-shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
+              <h3 className="font-semibold text-primary-900 dark:text-primary-100 mb-1">
                 Phase 3: Template-Based Extraction
               </h3>
               <p className="text-sm text-blue-800 dark:text-blue-200">
@@ -1100,7 +1100,7 @@ function TemplateExtractionTab() {
               <select
                 value={selectedTemplateId || ''}
                 onChange={(e) => setSelectedTemplateId(e.target.value || null)}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">No Template (Basic Extraction)</option>
                 {templates.map(t => (
@@ -1129,7 +1129,7 @@ function TemplateExtractionTab() {
                   setShowTemplateUpload(!showTemplateUpload)
                   if (!showTemplateUpload) setShowExcelUpload(false)
                 }}
-                className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                className="flex items-center gap-2 px-4 py-2 text-primary-600 hover:bg-primary-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 {showTemplateUpload ? 'Hide' : 'Upload JSON Template'}
@@ -1223,14 +1223,14 @@ function TemplateExtractionTab() {
   }
 }`}
                       rows={12}
-                      className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                     />
                   </div>
                   <div className="flex gap-2">
                     <button
                       onClick={handleUploadTemplate}
                       disabled={!templateJson.trim()}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                      className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
                     >
                       Upload Template
                     </button>
@@ -1289,7 +1289,7 @@ function TemplateExtractionTab() {
                   value={url}
                   onChange={(e) => updateUrl(index, e.target.value)}
                   placeholder="https://example.com/data"
-                  className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
                 {urls.length > 1 && (
                   <button onClick={() => removeUrlField(index)} className="px-3 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
@@ -1304,12 +1304,12 @@ function TemplateExtractionTab() {
           </div>
 
           <div className="flex gap-3">
-            <button onClick={addUrlField} className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+            <button onClick={addUrlField} className="flex items-center gap-2 px-4 py-2 text-primary-600 hover:bg-primary-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
               <Plus className="w-4 h-4" />
               Add URL
             </button>
 
-            <label className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors cursor-pointer">
+            <label className="flex items-center gap-2 px-4 py-2 text-primary-600 hover:bg-primary-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors cursor-pointer">
               <FileText className="w-4 h-4" />
               Import from File
               <input
@@ -1332,7 +1332,7 @@ function TemplateExtractionTab() {
               <select
                 value={outputFormat}
                 onChange={(e) => setOutputFormat(e.target.value as OutputFormat)}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="excel">Excel (.xlsx)</option>
                 <option value="csv">CSV</option>
@@ -1349,7 +1349,7 @@ function TemplateExtractionTab() {
               <select
                 value={deliveryMethod}
                 onChange={(e) => setDeliveryMethod(e.target.value as DeliveryMethod)}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="download">Download</option>
                 <option value="email">Email</option>
@@ -1368,7 +1368,7 @@ function TemplateExtractionTab() {
               <input
                 type="text"
                 placeholder="user1@example.com, user2@example.com"
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                 onChange={(e) =>
                   setDeliveryConfig({
                     ...deliveryConfig,
@@ -1387,7 +1387,7 @@ function TemplateExtractionTab() {
               <input
                 type="url"
                 placeholder="https://webhook.site/your-unique-url"
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                 onChange={(e) => setDeliveryConfig({ ...deliveryConfig, webhook_url: e.target.value })}
               />
             </div>
@@ -1453,7 +1453,7 @@ function TemplateExtractionTab() {
               <select
                 value={complianceLevel}
                 onChange={(e) => setComplianceLevel(e.target.value as ComplianceLevel)}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="strict">Strict</option>
                 <option value="balanced">Balanced</option>
@@ -1471,7 +1471,7 @@ function TemplateExtractionTab() {
                 max="20"
                 value={maxConcurrent}
                 onChange={(e) => setMaxConcurrent(parseInt(e.target.value))}
-                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
           </div>
@@ -1481,7 +1481,7 @@ function TemplateExtractionTab() {
         <button
           onClick={handleCreateJob}
           disabled={isCreating || urls.every(url => !url.trim())}
-          className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+          className="w-full px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
         >
           {isCreating ? (
             <>
@@ -1683,7 +1683,7 @@ function JobMonitorTab() {
               onClick={() => setAutoRefresh(!autoRefresh)}
               className={`p-2 rounded transition-colors ${
                 autoRefresh
-                  ? 'bg-blue-100 dark:bg-blue-900 text-blue-600'
+                  ? 'bg-primary-100 dark:bg-blue-900 text-primary-600'
                   : 'text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
               }`}
               title={autoRefresh ? 'Auto-refresh enabled' : 'Auto-refresh disabled'}
@@ -1711,7 +1711,7 @@ function JobMonitorTab() {
               onClick={() => fetchJobDetails(job.job_id)}
               className={`w-full text-left p-3 rounded-lg border transition-colors ${
                 selectedJob?.job_id === job.job_id
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                  ? 'border-primary-500 bg-primary-50 dark:bg-blue-900/20'
                   : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
             >
@@ -1729,7 +1729,7 @@ function JobMonitorTab() {
               {job.progress_percentage !== undefined && job.status === 'running' && (
                 <div className="mt-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5">
                   <div
-                    className="bg-blue-600 h-1.5 rounded-full transition-all"
+                    className="bg-primary-600 h-1.5 rounded-full transition-all"
                     style={{ width: `${job.progress_percentage}%` }}
                   />
                 </div>
@@ -1763,18 +1763,18 @@ function JobMonitorTab() {
 
             {/* Progress */}
             {selectedJob.status === 'running' && selectedJob.progress_percentage !== undefined && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+              <div className="bg-primary-50 dark:bg-blue-900/20 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                  <span className="text-sm font-medium text-primary-900 dark:text-primary-100">
                     {selectedJob.current_step?.replace(/_/g, ' ').toUpperCase() || 'PROCESSING'}
                   </span>
-                  <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                  <span className="text-sm font-semibold text-primary-900 dark:text-primary-100">
                     {selectedJob.progress_percentage.toFixed(1)}%
                   </span>
                 </div>
                 <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
                   <div
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                    className="bg-primary-600 h-2 rounded-full transition-all duration-500"
                     style={{ width: `${selectedJob.progress_percentage}%` }}
                   />
                 </div>
@@ -1943,7 +1943,7 @@ function JobMonitorTab() {
               {selectedJob.status === 'completed' && (
                 <button
                   onClick={() => handleDownload(selectedJob.job_id)}
-                  className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
                 >
                   <Download className="w-5 h-5" />
                   Download Results
@@ -2005,7 +2005,7 @@ function JobResultCard({ job }: { job: ScrapeJob }) {
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
-            <Globe className="w-4 h-4 text-blue-600" />
+            <Globe className="w-4 h-4 text-primary-600" />
             <p className="text-sm font-medium text-slate-900 dark:text-white break-all">{job.url}</p>
           </div>
           {job.title && (
@@ -2021,8 +2021,8 @@ function JobResultCard({ job }: { job: ScrapeJob }) {
         <div className="flex items-center gap-2 ml-4">
           {job.status === 'processing' && (
             <>
-              <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-              <span className="text-xs text-blue-600">Scraping...</span>
+              <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
+              <span className="text-xs text-primary-600">Scraping...</span>
             </>
           )}
           {job.status === 'success' && (
@@ -2046,7 +2046,7 @@ function JobResultCard({ job }: { job: ScrapeJob }) {
 function StatusBadge({ status, large }: { status: JobStatus; large?: boolean }) {
   const configs = {
     pending: { color: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200', icon: Clock },
-    running: { color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200', icon: Loader2 },
+    running: { color: 'bg-primary-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200', icon: Loader2 },
     completed: { color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200', icon: CheckCircle },
     failed: { color: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200', icon: XCircle }
   }
@@ -2083,7 +2083,7 @@ function MetricCard({
     slate: 'text-slate-600',
     green: 'text-green-600',
     red: 'text-red-600',
-    blue: 'text-blue-600'
+    blue: 'text-primary-600'
   }
 
   return (

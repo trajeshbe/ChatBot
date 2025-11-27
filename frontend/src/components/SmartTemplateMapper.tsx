@@ -467,7 +467,7 @@ export const SmartTemplateMapper = () => {
     <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6 mb-6 border border-slate-200 dark:border-slate-700">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 bg-blue-600 rounded-lg">
+        <div className="p-2 bg-primary-600 rounded-lg">
           <Zap className="h-6 w-6 text-white" />
         </div>
         <div>
@@ -479,9 +479,9 @@ export const SmartTemplateMapper = () => {
       </div>
 
       {/* Info Banner */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+      <div className="bg-primary-50 dark:bg-blue-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-4 mb-6">
         <div className="flex items-start gap-3">
-          <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+          <Info className="h-5 w-5 text-primary-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
           <div className="text-sm text-slate-700 dark:text-slate-300">
             <p className="font-semibold mb-1">How it works:</p>
             <ol className="list-decimal ml-4 space-y-1">
@@ -490,7 +490,7 @@ export const SmartTemplateMapper = () => {
               <li>Missing fields are clearly marked as "— (requires additional research)"</li>
               <li>Download results in JSON or CSV format</li>
             </ol>
-            <p className="mt-2 text-xs text-blue-700 dark:text-blue-300 font-semibold">
+            <p className="mt-2 text-xs text-primary-700 dark:text-primary-300 font-semibold">
               ⚠️ This is designed for predefined column lists. For auto-column generation, use Smart Extractor instead.
             </p>
           </div>
@@ -577,7 +577,7 @@ export const SmartTemplateMapper = () => {
                     CSS Selector Based
                   </span>
                 ) : (
-                  <span className="px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200 rounded">
+                  <span className="px-2 py-0.5 text-xs font-semibold bg-primary-100 text-blue-800 dark:bg-primary-900/30 dark:text-blue-200 rounded">
                     AI-Powered
                   </span>
                 )}
@@ -586,11 +586,11 @@ export const SmartTemplateMapper = () => {
                 </span>
               </div>
               {availableTemplates.find(t => t.name === selectedTemplate)?.url_pattern && (
-                <div className="flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
-                  <div className="text-blue-600 dark:text-blue-400 mt-0.5">ℹ️</div>
+                <div className="flex items-start gap-2 p-2 bg-primary-50 dark:bg-blue-900/20 rounded border border-primary-200 dark:border-primary-800">
+                  <div className="text-primary-600 dark:text-blue-400 mt-0.5">ℹ️</div>
                   <div className="flex-1">
                     <p className="text-xs font-medium text-blue-800 dark:text-blue-200">Compatible URL Pattern:</p>
-                    <p className="text-xs font-mono text-blue-700 dark:text-blue-300 mt-1">
+                    <p className="text-xs font-mono text-primary-700 dark:text-primary-300 mt-1">
                       {availableTemplates.find(t => t.name === selectedTemplate)?.url_pattern}
                     </p>
                   </div>
@@ -685,7 +685,7 @@ export const SmartTemplateMapper = () => {
         <button
           onClick={handleSmartMap}
           disabled={isMapping || !url || columns.length === 0}
-          className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold shadow-md"
+          className="w-full px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-semibold shadow-md"
         >
           {isMapping ? (
             <>
@@ -770,7 +770,7 @@ export const SmartTemplateMapper = () => {
               </button>
               <button
                 onClick={handleSaveToDatabase}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-semibold"
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2 text-sm font-semibold"
                 title="Save extracted data to vector database for RAG queries"
               >
                 <Database className="h-4 w-4" />

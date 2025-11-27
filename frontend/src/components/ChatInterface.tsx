@@ -119,7 +119,7 @@ export default function ChatInterface({ activeTab }: Props) {
             <div
               className={`max-w-3xl rounded-lg p-4 ${
                 message.role === 'user'
-                  ? 'bg-blue-600 text-white'
+                  ? 'bg-primary-600 text-white'
                   : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-md'
               }`}
             >
@@ -142,7 +142,7 @@ export default function ChatInterface({ activeTab }: Props) {
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-2">
                             {source.source_type === 'scrape' ? (
-                              <ExternalLink className="w-4 h-4 text-blue-500" />
+                              <ExternalLink className="w-4 h-4 text-primary-500" />
                             ) : (
                               <FileText className="w-4 h-4 text-green-500" />
                             )}
@@ -159,7 +159,7 @@ export default function ChatInterface({ activeTab }: Props) {
                             href={source.source_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs text-blue-600 hover:underline mt-1 block"
+                            className="text-xs text-primary-600 hover:underline mt-1 block"
                           >
                             {source.source_url}
                           </a>
@@ -183,7 +183,7 @@ export default function ChatInterface({ activeTab }: Props) {
         {isLoading && (
           <div className="flex justify-start">
             <div className="bg-white dark:bg-slate-800 rounded-lg p-4 shadow-md">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+              <Loader2 className="w-6 h-6 animate-spin text-primary-600" />
             </div>
           </div>
         )}
@@ -200,14 +200,14 @@ export default function ChatInterface({ activeTab }: Props) {
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Ask a question about your documents..."
-              className="flex-1 resize-none rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 resize-none rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
               rows={3}
               disabled={isLoading}
             />
             <button
               onClick={handleSendMessage}
               disabled={!input.trim() || isLoading}
-              className="px-6 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              className="px-6 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
             >
               {isLoading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />

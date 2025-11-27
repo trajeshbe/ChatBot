@@ -113,7 +113,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onSettingsChange }) => {
                 onChange={toggleEvaluation}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
             </label>
           </div>
 
@@ -146,7 +146,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onSettingsChange }) => {
                 onChange={togglePerformanceMetrics}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
             </label>
           </div>
 
@@ -179,7 +179,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onSettingsChange }) => {
                 onChange={toggleToolsUsed}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
             </label>
           </div>
 
@@ -207,10 +207,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onSettingsChange }) => {
                 </span>
               </div>
               <div className="flex items-center gap-1">
-                <div className={`w-2 h-2 rounded-full ${settings.showToolsUsed ? 'bg-blue-500' : 'bg-gray-300'}`} />
+                <div className={`w-2 h-2 rounded-full ${settings.showToolsUsed ? 'bg-primary-500' : 'bg-gray-300'}`} />
                 <span className="text-gray-600">
                   Tools: {settings.showToolsUsed ? (
-                    <span className="text-blue-600 font-medium">ON</span>
+                    <span className="text-primary-600 font-medium">ON</span>
                   ) : (
                     <span className="text-gray-500">OFF</span>
                   )}

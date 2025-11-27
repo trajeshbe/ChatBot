@@ -1,4 +1,5 @@
 import { MessageSquare, Upload, Globe, FileText, BarChart3, FileSpreadsheet, Calculator, Wrench, Sliders } from 'lucide-react'
+import { ThemeToggle } from '@/theme/ThemeToggle'
 
 interface Props {
   activeTab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator' | 'tools' | 'weights'
@@ -22,20 +23,21 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser }: Props)
     <div className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col">
       <div className="p-4 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-sm">
+          <div className="w-9 h-9 bg-gradient-to-br from-primary-500 to-secondary-600 rounded-xl flex items-center justify-center shadow-sm">
             <MessageSquare className="w-5 h-5 text-white" />
           </div>
-          <div>
+          <div className="flex-1">
             <h2 className="font-semibold text-slate-900 dark:text-white text-sm">RAG Bot</h2>
             <p className="text-[10px] text-slate-500 dark:text-slate-400">Enterprise AI</p>
           </div>
+          <ThemeToggle />
         </div>
 
         {/* Username Display */}
         {currentUser && currentUser !== 'Anonymous' && (
           <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-              <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center text-emerald-700 dark:text-emerald-300 font-semibold">
+              <div className="w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center text-primary-700 dark:text-primary-300 font-semibold">
                 {currentUser.charAt(0).toUpperCase()}
               </div>
               <span className="font-medium">{currentUser}</span>
@@ -56,7 +58,7 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser }: Props)
                 onClick={() => setActiveTab(tab.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm ${
                   isActive
-                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white'
+                    ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-800'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                 }`}
               >

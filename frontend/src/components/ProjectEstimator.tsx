@@ -474,7 +474,7 @@ export default function ProjectEstimator({ sessionId }: ProjectEstimatorProps) {
 
   const getScenarioTextColor = (scenario: string) => {
     switch (scenario) {
-      case 'baseline': return 'text-blue-600 dark:text-blue-400'
+      case 'baseline': return 'text-primary-600 dark:text-blue-400'
       case 'conservative': return 'text-red-600 dark:text-red-400'
       case 'aggressive': return 'text-green-600 dark:text-green-400'
       default: return 'text-slate-600 dark:text-slate-400'
@@ -487,7 +487,7 @@ export default function ProjectEstimator({ sessionId }: ProjectEstimatorProps) {
     }
     switch (scenario) {
       case 'baseline':
-        return 'px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors'
+        return 'px-3 py-1 text-xs bg-primary-600 hover:bg-primary-700 text-white rounded transition-colors'
       case 'conservative':
         return 'px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition-colors'
       case 'aggressive':
@@ -503,7 +503,7 @@ export default function ProjectEstimator({ sessionId }: ProjectEstimatorProps) {
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-3">
-            <Calculator className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+            <Calculator className="h-8 w-8 text-primary-600 dark:text-blue-400" />
             Project Estimator
           </h1>
           <p className="text-slate-600 dark:text-slate-400">
@@ -516,7 +516,7 @@ export default function ProjectEstimator({ sessionId }: ProjectEstimatorProps) {
           {/* Multi-File Upload Section */}
           <div className="mb-6">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-              <FolderOpen className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <FolderOpen className="h-5 w-5 text-primary-600 dark:text-blue-400" />
               Upload Reference Files (Recommended for Higher Quality)
             </h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
@@ -533,7 +533,7 @@ export default function ProjectEstimator({ sessionId }: ProjectEstimatorProps) {
                   {...scopeDropzone.getRootProps()}
                   className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
                     scopeDropzone.isDragActive
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                      ? 'border-primary-500 bg-primary-50 dark:bg-blue-900/20'
                       : 'border-slate-300 dark:border-slate-600 hover:border-blue-400'
                   }`}
                 >
@@ -549,7 +549,7 @@ export default function ProjectEstimator({ sessionId }: ProjectEstimatorProps) {
                     {projectScopeFiles.map((file, idx) => (
                       <div key={idx} className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-900 p-2 rounded">
                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <File className="h-3 w-3 text-blue-600 flex-shrink-0" />
+                          <File className="h-3 w-3 text-primary-600 flex-shrink-0" />
                           <span className="truncate">{file.name}</span>
                           <span className="text-slate-500">{formatFileSize(file.size)}</span>
                         </div>
@@ -691,12 +691,12 @@ export default function ProjectEstimator({ sessionId }: ProjectEstimatorProps) {
 
             {/* Total file count and size */}
             {(projectScopeFiles.length + sampleDataFiles.length + referenceBRDFiles.length + costTemplateFiles.length) > 0 && (
-              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="mt-4 p-3 bg-primary-50 dark:bg-blue-900/20 rounded-lg border border-primary-200 dark:border-primary-800">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-blue-900 dark:text-blue-100">
+                  <span className="font-medium text-primary-900 dark:text-primary-100">
                     Total: {projectScopeFiles.length + sampleDataFiles.length + referenceBRDFiles.length + costTemplateFiles.length} files
                   </span>
-                  <span className="text-blue-700 dark:text-blue-300">
+                  <span className="text-primary-700 dark:text-primary-300">
                     {formatFileSize(
                       getTotalFileSize(projectScopeFiles) +
                       getTotalFileSize(sampleDataFiles) +
@@ -718,7 +718,7 @@ export default function ProjectEstimator({ sessionId }: ProjectEstimatorProps) {
               value={projectScope}
               onChange={(e) => setProjectScope(e.target.value)}
               placeholder="Describe your project scope in detail. Include objectives, features, requirements, timeline, team size, technology stack, etc."
-              className="w-full h-48 px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 resize-none"
+              className="w-full h-48 px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 resize-none"
             />
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
               The more detailed your description, the more accurate the estimation will be
@@ -794,12 +794,12 @@ export default function ProjectEstimator({ sessionId }: ProjectEstimatorProps) {
                 onClick={() => setActiveScenario('baseline')}
                 className={`p-4 rounded-lg border-2 transition-all ${
                   activeScenario === 'baseline'
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                    ? 'border-primary-500 bg-primary-50 dark:bg-blue-900/20'
                     : 'border-slate-300 dark:border-slate-600 hover:border-blue-400'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-2">
-                  <Minus className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <Minus className="h-5 w-5 text-primary-600 dark:text-blue-400" />
                   <span className="font-semibold text-slate-900 dark:text-white">Baseline</span>
                 </div>
                 <p className="text-xs text-slate-600 dark:text-slate-400">
@@ -847,7 +847,7 @@ export default function ProjectEstimator({ sessionId }: ProjectEstimatorProps) {
           <div className="mb-6">
             <button
               onClick={() => setShowConfig(!showConfig)}
-              className="flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+              className="flex items-center gap-2 text-sm font-medium text-primary-600 dark:text-blue-400 hover:underline"
             >
               <Settings className="h-4 w-4" />
               {showConfig ? 'Hide' : 'Show'} {getCurrentConfig().name} Configuration
@@ -991,7 +991,7 @@ export default function ProjectEstimator({ sessionId }: ProjectEstimatorProps) {
           <button
             onClick={handleGenerateEstimation}
             disabled={isGenerating || (!projectScope.trim() && !uploadedFile)}
-            className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
+            className="w-full px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
           >
             {isGenerating ? (
               <>
@@ -1083,12 +1083,12 @@ export default function ProjectEstimator({ sessionId }: ProjectEstimatorProps) {
             {/* Cost Variance Analysis */}
             {estimationResults.length === 3 && (
               <div className="grid grid-cols-3 gap-4">
-                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-1">Baseline Estimate</p>
-                  <p className="text-xl font-bold text-blue-900 dark:text-blue-100">
+                <div className="p-4 bg-primary-50 dark:bg-blue-900/20 rounded-lg border border-primary-200 dark:border-primary-800">
+                  <p className="text-xs font-medium text-primary-700 dark:text-primary-300 mb-1">Baseline Estimate</p>
+                  <p className="text-xl font-bold text-primary-900 dark:text-primary-100">
                     ${estimationResults.find(r => r.scenario === 'baseline')?.total_cost?.toLocaleString()}
                   </p>
-                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Reference standard</p>
+                  <p className="text-xs text-primary-600 dark:text-blue-400 mt-1">Reference standard</p>
                 </div>
 
                 <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
