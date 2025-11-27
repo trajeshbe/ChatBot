@@ -534,9 +534,26 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       }
 
       // 🆕 UNIFIED CONFIG: Pass ALL 48 parameters as single JSON for dynamic per-query control
-      if (unifiedConfig) {
-        formData.append('unified_config', JSON.stringify(unifiedConfig))
-        console.log('📦 Passing unified config with strategy weights:', unifiedConfig.strategy_weights)
+      // 🆕 FIX: Always try to load from localStorage BEFORE sending query
+      let configToSend = unifiedConfig
+      if (!configToSend && typeof window !== 'undefined') {
+        const savedConfig = localStorage.getItem('userWeightsConfig')
+        if (savedConfig) {
+          try {
+            configToSend = JSON.parse(savedConfig)
+            console.log('📦 Loaded config from localStorage for this query (unifiedConfig state was null)')
+          } catch (e) {
+            console.error('Failed to parse localStorage config:', e)
+          }
+        }
+      }
+
+      if (configToSend) {
+        formData.append('unified_config', JSON.stringify(configToSend))
+        console.log('📦 Passing unified config with strategy weights:', configToSend.strategy_weights)
+        console.log('   → Top K:', configToSend.rag_settings?.top_k || 'N/A')
+        console.log('   → Semantic Weight:', configToSend.reranking_weights?.semantic || 'N/A')
+        console.log('   → Keyword Weight:', configToSend.reranking_weights?.keyword || 'N/A')
       } else {
         // Fallback: Pass individual RAG config parameters if unified config not loaded yet
         console.warn('⚠️ Unified config not loaded, falling back to individual parameters')

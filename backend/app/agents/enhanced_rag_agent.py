@@ -1069,7 +1069,7 @@ Context:
             )
 
             return {
-                "answer": result.get("text", ""),
+                "answer": result.get("content", ""),  # 🆕 FIXED: Changed from "text" to "content" to match llm_service return format
                 "sources": [],  # No sources since we skipped retrieval
                 "num_sources": 0,
                 "model": model_id or result.get("model", "default"),

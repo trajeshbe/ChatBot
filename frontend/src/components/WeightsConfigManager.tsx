@@ -129,6 +129,7 @@ export const WeightsConfigManager: React.FC = () => {
           const parsedConfig = JSON.parse(sessionConfig);
           setConfig(parsedConfig);
           setHasSessionConfig(true);
+          setLoading(false); // 🔧 CRITICAL FIX: Set loading to false when using localStorage
           console.log('✅ WeightsConfigManager loaded USER SESSION config from localStorage');
           return; // Don't fetch from API if we have session config
         } catch (parseError) {

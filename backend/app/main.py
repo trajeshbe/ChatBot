@@ -523,11 +523,12 @@ async def query_endpoint(
         user_preferences = {
             # Start with unified config if provided (contains all 48 parameters)
             **unified_config_dict,
+            # 🆕 FIXED: Extract from correct nested structure (rag_settings, not retrieval_and_search)
             # Backward compatibility: Individual parameters override if explicitly provided
-            "top_k": top_k if top_k is not None else unified_config_dict.get("retrieval_and_search", {}).get("top_k"),
+            "top_k": top_k if top_k is not None else unified_config_dict.get("rag_settings", {}).get("top_k"),
             "similarity_threshold": similarity_threshold if similarity_threshold is not None else unified_config_dict.get("similarity_thresholds", {}).get("default"),
-            "min_similarity_threshold": min_similarity_threshold,
-            "no_relevant_docs_threshold": no_relevant_docs_threshold,
+            "min_similarity_threshold": min_similarity_threshold if min_similarity_threshold is not None else unified_config_dict.get("rag_settings", {}).get("min_similarity_threshold"),
+            "no_relevant_docs_threshold": no_relevant_docs_threshold if no_relevant_docs_threshold is not None else unified_config_dict.get("rag_settings", {}).get("no_relevant_docs_threshold"),
             "semantic_weight": semantic_weight if semantic_weight is not None else unified_config_dict.get("reranking_weights", {}).get("semantic"),
             "keyword_weight": keyword_weight if keyword_weight is not None else unified_config_dict.get("reranking_weights", {}).get("keyword"),
             # Always include these
