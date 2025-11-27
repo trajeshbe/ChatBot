@@ -100,6 +100,15 @@ class EDAAnalyzer:
                 max_row = ws.max_row
                 max_col = ws.max_column
 
+                # Fix Bug #4: Handle None values for max_row/max_col
+                if max_row is None:
+                    max_row = MAX_EXCEL_ROWS
+                    logger.warning(f"Sheet '{sheet_name}' has no max_row, using default {MAX_EXCEL_ROWS}")
+
+                if max_col is None:
+                    max_col = MAX_EXCEL_COLS
+                    logger.warning(f"Sheet '{sheet_name}' has no max_col, using default {MAX_EXCEL_COLS}")
+
                 # Limit analysis to prevent memory issues
                 analyze_rows = min(max_row, MAX_EXCEL_ROWS)
                 analyze_cols = min(max_col, MAX_EXCEL_COLS)
@@ -415,7 +424,7 @@ Provide a concise analysis in 3-5 sentences."""
                 f.get("document_type", "").find("drawing") >= 0 for f in pdf_files
             )
 
-            has_large_datasets = any(
+            has_large_data = any(
                 f.get("total_rows", 0) > 10000 for f in excel_files
             )
 
@@ -423,9 +432,9 @@ Provide a concise analysis in 3-5 sentences."""
             domain = "Unknown"
             if has_technical_drawings:
                 domain = "Engineering/CAD"
-            elif has_time_series and has_large_datasets:
+            elif has_time_series and has_large_data:
                 domain = "Data Analytics/BI"
-            elif has_large_datasets:
+            elif has_large_data:
                 domain = "Data Processing"
             elif len(pdf_files) > len(excel_files):
                 domain = "Document-heavy"
@@ -445,7 +454,7 @@ Provide a concise analysis in 3-5 sentences."""
                 "data_characteristics": {
                     "has_time_series_data": has_time_series,
                     "has_technical_drawings": has_technical_drawings,
-                    "has_large_datasets": has_large_datasets,
+                    "has_large_data": has_large_data,
                     "average_data_quality": float(avg_data_quality) if avg_data_quality else None
                 },
                 "detailed_analysis": {
@@ -453,7 +462,7 @@ Provide a concise analysis in 3-5 sentences."""
                     "pdf_files": pdf_files,
                     "image_files": image_files
                 },
-                "insights": self._generate_insights(files_analysis, domain, has_technical_drawings, has_large_datasets, has_time_series),
+                "insights": self._generate_insights(files_analysis, domain, has_technical_drawings, has_large_data, has_time_series),
                 "report_timestamp": datetime.now().isoformat()
             }
 
@@ -476,7 +485,7 @@ Provide a concise analysis in 3-5 sentences."""
             insights.append("Technical drawings detected - project likely involves CAD/engineering workflows")
             insights.append("Recommend specialized tools: AutoCAD API, GIS systems, or technical drawing parsers")
 
-        if has_large_datasets:
+        if has_large_data:
             insights.append("Large datasets detected (>10,000 rows) - data processing infrastructure required")
             insights.append("Consider Apache Spark, Dask, or distributed processing frameworks")
 

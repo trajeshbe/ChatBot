@@ -1,0 +1,21 @@
+{
+  "tools_used": [
+    "smart_extraction"
+  ],
+  "tool_timing": {
+    "smart_extraction": 17274.784326553345
+  },
+  "tool_execution_summary": {
+    "smart_extraction": {
+      "success": true,
+      "execution_time_ms": 17274.784326553345,
+      "error": null
+    }
+  },
+  "tool_selection_method": "llm_based",
+  "selection_confidence": 0.9,
+  "intent_detected": "web_extraction",
+  "tool_selection_reasoning": "GPT-4 analyzed the query and selected: smart_extraction",
+  "total_time_ms": 19265.865802764893,
+  "multi_tool_used": false
+}

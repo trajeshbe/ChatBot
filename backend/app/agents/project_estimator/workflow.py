@@ -625,8 +625,17 @@ Return ONLY a valid JSON object with these keys: project_goal, key_features (arr
             # Step 3: Generate comprehensive EDA report
             eda_report = await eda_analyzer.generate_eda_report(files_analysis)
 
-            logger.info(f"EDA Complete: Domain={eda_report.get('domain')}, "
-                       f"Data Quality={eda_report.get('overall_data_quality'):.2f}")
+            # Fix: Add null check before using eda_report.get() and handle None values
+            if eda_report:
+                domain = eda_report.get('domain', 'Unknown')
+                data_quality = eda_report.get('overall_data_quality')
+
+                if data_quality is not None:
+                    logger.info(f"EDA Complete: Domain={domain}, Data Quality={data_quality:.2f}")
+                else:
+                    logger.info(f"EDA Complete: Domain={domain}, Data Quality=N/A")
+            else:
+                logger.warning("EDA report is None - analysis may have failed")
 
             # Step 4: Load tech stack knowledge base
             tech_stack_yaml_path = Path(__file__).parent.parent.parent / "config" / "tech_stack_patterns.yaml"
@@ -700,7 +709,8 @@ Return ONLY a valid JSON object with these keys: project_goal, key_features (arr
             user_prompt = state.get("user_prompt", "")
             requirements = state.get("requirements", {})
             complexity_analysis = state.get("complexity_analysis", {})
-            eda_report = complexity_analysis.get("eda_report", {})
+            # Fix Bug #5: Handle None eda_report value from dict
+            eda_report = complexity_analysis.get("eda_report") or {}
 
             # Check if we have sample data to validate against
             if not eda_report or eda_report.get("total_files_analyzed", 0) == 0:
@@ -2767,12 +2777,16 @@ If there are CRITICAL misalignments, choose "RESTART_WORKFLOW".
             if len(updated_history) > 5:
                 updated_history = updated_history[-5:]
 
+            # Bug Fix #7: Only increment iteration_count when actually restarting workflow
+            # This prevents infinite loop by properly tracking restart attempts
+            new_iteration_count = iteration_count + 1 if decision == "RESTART_WORKFLOW" else iteration_count
+
             return {
                 **state,
                 "document_validation_report": validation_report,
                 "document_validation_decision": decision,
                 "validation_history": updated_history,
-                "iteration_count": iteration_count + 1
+                "iteration_count": new_iteration_count
             }
 
         except Exception as e:
