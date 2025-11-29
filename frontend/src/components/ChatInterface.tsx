@@ -3,6 +3,7 @@ import { Send, Loader2, FileText, ExternalLink } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import FileUpload from './FileUpload'
 import WebScraper from './WebScraper'
+import PromptCommandPalette from './PromptCommandPalette'
 import axios from 'axios'
 
 interface Message {
@@ -37,6 +38,8 @@ export default function ChatInterface({ activeTab }: Props) {
   ])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [showPromptPalette, setShowPromptPalette] = useState(false)
+  const [promptSearchQuery, setPromptSearchQuery] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -95,8 +98,38 @@ export default function ChatInterface({ activeTab }: Props) {
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      handleSendMessage()
+      // Don't send if prompt palette is open
+      if (!showPromptPalette) {
+        handleSendMessage()
+      }
     }
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value
+    setInput(value)
+
+    // Detect slash command
+    if (value.startsWith('/')) {
+      setShowPromptPalette(true)
+      // Extract search query after "/"
+      const query = value.slice(1)
+      setPromptSearchQuery(query)
+    } else {
+      setShowPromptPalette(false)
+      setPromptSearchQuery('')
+    }
+  }
+
+  const handleSelectPrompt = (promptText: string) => {
+    setInput(promptText)
+    setShowPromptPalette(false)
+    setPromptSearchQuery('')
+  }
+
+  const handleClosePalette = () => {
+    setShowPromptPalette(false)
+    setPromptSearchQuery('')
   }
 
   if (activeTab === 'upload') {
@@ -194,12 +227,21 @@ export default function ChatInterface({ activeTab }: Props) {
       {/* Input Area */}
       <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4">
         <div className="max-w-4xl mx-auto">
-          <div className="flex gap-2">
+          <div className="relative flex gap-2">
+            {/* Prompt Command Palette */}
+            <PromptCommandPalette
+              isOpen={showPromptPalette}
+              onClose={handleClosePalette}
+              onSelectPrompt={handleSelectPrompt}
+              searchQuery={promptSearchQuery}
+              module="chat"
+            />
+
             <textarea
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={handleInputChange}
               onKeyPress={handleKeyPress}
-              placeholder="Ask a question about your documents..."
+              placeholder="Type / for prompts or ask a question about your documents..."
               className="flex-1 resize-none rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-4 py-3 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
               rows={3}
               disabled={isLoading}

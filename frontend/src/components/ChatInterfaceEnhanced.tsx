@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Loader2, FileText, ExternalLink, Paperclip, X, Trash2, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react'
+import { Send, Loader2, FileText, ExternalLink, Paperclip, X, Trash2, ChevronDown, ChevronUp, ArrowLeft, Download } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import FileUpload from './FileUpload'
 import WebScraperEnhanced from './WebScraperEnhanced'
@@ -9,6 +9,8 @@ import { getCurrentRAGConfig, type RAGConfig } from './RAGSettings'
 import PerformanceMetrics from './PerformanceMetrics'
 import EvaluationMetrics from './EvaluationMetrics'
 import SettingsPanel, { MetricsSettings } from './SettingsPanel'
+import PromptCommandPalette from './PromptCommandPalette'
+import OutputExport from './OutputExport'
 // import ToolUsageDisplay from './ToolUsageDisplay'  // Disabled - duplicate display
 import axios from 'axios'
 
@@ -223,6 +225,8 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   const [isHydrated, setIsHydrated] = useState(false)
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [showPromptPalette, setShowPromptPalette] = useState(false)
+  const [promptSearchQuery, setPromptSearchQuery] = useState('')
   const [selectedModel, setSelectedModel] = useState<string | null>(null)
   const [attachedFiles, setAttachedFiles] = useState<File[]>([])
   const [uploadingFiles, setUploadingFiles] = useState(false)
@@ -238,6 +242,8 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   // 🆕 Project management state
   const [availableProjects, setAvailableProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId || null)
+  // Export functionality state
+  const [exportingMessageIndex, setExportingMessageIndex] = useState<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const previousProjectIdRef = useRef<string | null>(null)  // 🐛 FIX: Track previous project to detect switches
@@ -965,8 +971,38 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      handleSendMessage()
+      // Don't send if prompt palette is open
+      if (!showPromptPalette) {
+        handleSendMessage()
+      }
     }
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value
+    setInput(value)
+
+    // Detect slash command
+    if (value.startsWith('/')) {
+      setShowPromptPalette(true)
+      // Extract search query after "/"
+      const query = value.slice(1)
+      setPromptSearchQuery(query)
+    } else {
+      setShowPromptPalette(false)
+      setPromptSearchQuery('')
+    }
+  }
+
+  const handleSelectPrompt = (promptText: string) => {
+    setInput(promptText)
+    setShowPromptPalette(false)
+    setPromptSearchQuery('')
+  }
+
+  const handleClosePalette = () => {
+    setShowPromptPalette(false)
+    setPromptSearchQuery('')
   }
 
   const handleClearSession = async () => {
@@ -1412,6 +1448,17 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                 </div>
               )}
 
+              {/* Export Button */}
+              {message.role === 'assistant' && (
+                <button
+                  onClick={() => setExportingMessageIndex(index)}
+                  className="mt-2 text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 transition-colors"
+                >
+                  <Download className="w-3 h-3" />
+                  Export Response
+                </button>
+              )}
+
               <p className="text-[10px] text-slate-500 dark:text-slate-500 mt-2" suppressHydrationWarning>
                 {message.timestamp.toLocaleTimeString()}
               </p>
@@ -1494,12 +1541,21 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
               <Paperclip className="w-5 h-5" />
             </button>
 
-            <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 focus-within:border-primary-500 dark:focus-within:border-primary-500 transition-colors">
+            <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 focus-within:border-primary-500 dark:focus-within:border-primary-500 transition-colors relative">
+              {/* Prompt Command Palette */}
+              <PromptCommandPalette
+                isOpen={showPromptPalette}
+                onClose={handleClosePalette}
+                onSelectPrompt={handleSelectPrompt}
+                searchQuery={promptSearchQuery}
+                module="chat"
+              />
+
               <textarea
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={handleInputChange}
                 onKeyPress={handleKeyPress}
-                placeholder="Message Enterprise AI..."
+                placeholder="Type / for prompts or message Enterprise AI..."
                 className="w-full resize-none bg-transparent px-4 py-3 text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none"
                 rows={1}
                 disabled={isLoading || uploadingFiles}
@@ -1520,6 +1576,17 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
           </div>
         </div>
       </div>
+
+      {/* Export Modal */}
+      {exportingMessageIndex !== null && messages[exportingMessageIndex] && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <OutputExport
+            content={messages[exportingMessageIndex].content}
+            messageId={`msg-${exportingMessageIndex}`}
+            onClose={() => setExportingMessageIndex(null)}
+          />
+        </div>
+      )}
     </div>
   )
 }

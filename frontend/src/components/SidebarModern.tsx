@@ -19,7 +19,8 @@ import {
   Files,
   Sparkles,
   TrendingUp,
-  ChevronDown
+  ChevronDown,
+  BookOpen
 } from 'lucide-react'
 import { ThemeToggle } from '@/theme/ThemeToggle'
 import axios from 'axios'
@@ -158,6 +159,7 @@ export default function SidebarModern({ activeTab, setActiveTab, currentUser, on
     { id: 'upload' as const, icon: Upload, label: 'Upload Files' },
     { id: 'scrape' as const, icon: Globe, label: 'Web Scraping' },
     { id: 'estimator' as const, icon: Calculator, label: 'Project Estimator' },
+    { id: 'library' as const, icon: BookOpen, label: 'Prompt Library' },
   ]
 
   return (

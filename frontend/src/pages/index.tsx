@@ -14,6 +14,7 @@ import SettingsPanel from '@/components/SettingsPanel'
 import ProjectsView from '@/components/ProjectsView'
 import ProjectDetail from '@/components/ProjectDetail'
 import Library from '@/components/Library'
+import PromptLibraryManager from '@/components/PromptLibraryManager'
 import { useAuth } from '@/contexts/AuthContext'
 import type { RAGConfig } from '@/components/RAGSettings'
 
@@ -270,10 +271,10 @@ export default function Home() {
             </div>
           )}
 
-          {/* Legacy 'library' tab - redirects to 'projects' */}
+          {/* Prompt Library Manager */}
           {activeTab === 'library' && (
             <div className="flex-1 overflow-hidden">
-              <ProjectsView currentUser={user} />
+              <PromptLibraryManager />
             </div>
           )}
         </div>

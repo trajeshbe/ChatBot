@@ -126,6 +126,26 @@ async def get_current_user(
     )
 
 
+# Dependency function for optional authentication (for public endpoints)
+async def get_current_user_optional(
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer(auto_error=False)),
+    auth: AuthService = Depends(get_auth_service)
+):
+    """
+    Get current user if authenticated, otherwise return None.
+    Used for endpoints that work with or without authentication.
+    """
+    if not credentials:
+        return None
+
+    try:
+        token = credentials.credentials
+        user = await auth.get_current_user(token)
+        return user
+    except Exception:
+        return None
+
+
 @router.post("/change-password", summary="Change password")
 async def change_password(
     password_data: ChangePasswordRequest,

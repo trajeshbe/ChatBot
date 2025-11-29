@@ -1182,6 +1182,22 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Library router: {e}")
 
+# Prompt Library and Output Templates API
+try:
+    from app.api.routes import prompt_library_routes
+    app.include_router(prompt_library_routes.router)
+    logger.info("✓ Prompt Library & Output Templates API router registered")
+except Exception as e:
+    logger.warning(f"Could not register Prompt Library router: {e}")
+
+# Export Service API
+try:
+    from app.api.routes import export_routes
+    app.include_router(export_routes.router)
+    logger.info("✓ Export Service API router registered (Excel, Word, Markdown, JSON)")
+except Exception as e:
+    logger.warning(f"Could not register Export Service router: {e}")
+
 
 # === Admin API Endpoints ===
 
