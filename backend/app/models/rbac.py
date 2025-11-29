@@ -61,6 +61,7 @@ class Department(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(100), unique=True, nullable=False, index=True)
+    code = Column(String(50), unique=True, nullable=True, index=True)  # Department code
     parent_department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
     description = Column(Text)
     is_active = Column(Boolean, default=True, index=True)
@@ -79,7 +80,47 @@ class Department(Base):
         return {
             "id": str(self.id),
             "name": self.name,
+            "code": self.code,
             "parent_department_id": str(self.parent_department_id) if self.parent_department_id else None,
+            "description": self.description,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class Team(Base):
+    """Teams within departments"""
+    __tablename__ = "teams"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(100), nullable=False)
+    code = Column(String(50), nullable=False)
+    department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="CASCADE"), nullable=False, index=True)
+    team_lead_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    description = Column(Text)
+    is_active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    department = relationship("Department", backref="teams")
+
+    __table_args__ = (
+        UniqueConstraint('department_id', 'name', name='uq_team_department_name'),
+    )
+
+    def __repr__(self):
+        return f"<Team(name='{self.name}', department_id='{self.department_id}')>"
+
+    def to_dict(self):
+        """Convert to dictionary"""
+        return {
+            "id": str(self.id),
+            "name": self.name,
+            "code": self.code,
+            "department_id": str(self.department_id),
+            "team_lead_id": str(self.team_lead_id) if self.team_lead_id else None,
             "description": self.description,
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None,

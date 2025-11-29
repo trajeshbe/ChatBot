@@ -189,12 +189,13 @@ class EnhancedRAGAgent(RAGAgent):
             logger.info("📌 ROUTING: FORCE_RAG (document search required per user's strategy_weights)")
             logger.info(f"   Reason: rag_short_term={rag_short_term_weight:.2f} or rag_long_term={rag_long_term_weight:.2f} > 0.8")
 
-            # Force RAG tool selection - include db from user_preferences
+            # Force RAG tool selection - include db and model_id from user_preferences
             tool_params_rag = {
                 "top_k": top_k,
                 "similarity_threshold": similarity_threshold,
                 "semantic_weight": semantic_weight,
                 "keyword_weight": keyword_weight,
+                "model_id": user_preferences.get('model_id') if user_preferences else None,
                 "db": user_preferences.get('db') if user_preferences else None
             }
 
@@ -289,17 +290,37 @@ class EnhancedRAGAgent(RAGAgent):
             if len(state["selected_tools"]) > 1:
                 # Execute multiple tools in parallel
                 logger.info(f"Executing {len(state['selected_tools'])} tools in parallel")
+
+                # 🆕 Inject model_id and db into each tool's params
+                tool_params_with_prefs = {}
+                for tool_id in state["selected_tools"]:
+                    params = state["tool_params"][tool_id].copy()  # Copy to avoid modifying original
+                    if state["user_preferences"]:
+                        if "model_id" in state["user_preferences"] and state["user_preferences"]["model_id"]:
+                            params["model_id"] = state["user_preferences"]["model_id"]
+                        if "db" in state["user_preferences"]:
+                            params["db"] = state["user_preferences"]["db"]
+                    tool_params_with_prefs[tool_id] = params
+
                 tool_results = await self._execute_tools_parallel(
                     state["selected_tools"],
-                    state["tool_params"],
+                    tool_params_with_prefs,
                     timeout=60.0  # 60 second timeout per tool
                 )
                 state["tool_results"] = tool_results
             else:
                 # Execute single tool
                 tool_id = state["selected_tools"][0]
-                tool_params = state["tool_params"][tool_id]
-                logger.info(f"Executing single tool: {tool_id}")
+                tool_params = state["tool_params"][tool_id].copy()  # Copy to avoid modifying original
+
+                # 🆕 Inject model_id and db from user_preferences for tool execution
+                if state["user_preferences"]:
+                    if "model_id" in state["user_preferences"] and state["user_preferences"]["model_id"]:
+                        tool_params["model_id"] = state["user_preferences"]["model_id"]
+                    if "db" in state["user_preferences"]:
+                        tool_params["db"] = state["user_preferences"]["db"]
+
+                logger.info(f"Executing single tool: {tool_id} with model_id: {tool_params.get('model_id', 'default')}")
 
                 tool_result = await self._execute_tool(tool_id, tool_params)
                 state["tool_results"][tool_id] = tool_result
@@ -1125,6 +1146,7 @@ Context:
                 similarity_threshold=tool_params.get('similarity_threshold'),
                 semantic_weight=tool_params.get('semantic_weight'),
                 keyword_weight=tool_params.get('keyword_weight'),
+                model_id=tool_params.get('model_id'),  # 🆕 Pass model_id for model selection
                 db=tool_params.get('db'),
                 force_rag=True  # 🆕 Force RAG even if classified as ai_personal/general
             )

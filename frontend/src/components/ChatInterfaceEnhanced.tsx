@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Loader2, FileText, ExternalLink, Paperclip, X, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Send, Loader2, FileText, ExternalLink, Paperclip, X, Trash2, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import FileUpload from './FileUpload'
 import WebScraperEnhanced from './WebScraperEnhanced'
@@ -140,9 +140,19 @@ interface Source {
   memory_type?: 'short-term' | 'long-term'
 }
 
+interface Project {
+  id: string
+  name: string
+  description?: string
+  file_count: number
+}
+
 interface Props {
   activeTab: 'chat' | 'upload' | 'scrape' | 'evaluation'
   ragConfig?: RAGConfig | null
+  projectId?: string  // Link chat to project
+  hideHeader?: boolean  // Hide model/project selector (for embedded views)
+  onBackToProject?: () => void  // Callback to return to project view
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -203,7 +213,7 @@ const saveMessages = (sessionId: string, messages: Message[]): void => {
   }
 }
 
-export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigProp }: Props) {
+export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigProp, projectId, hideHeader = false, onBackToProject }: Props) {
   const [sessionId, setSessionId] = useState<string>('')
   const [messages, setMessages] = useState<Message[]>([{
     role: 'assistant',
@@ -219,14 +229,18 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   const [filesJustUploaded, setFilesJustUploaded] = useState(false)
   const [expandedMetrics, setExpandedMetrics] = useState<Record<number, boolean>>({})
   const [metricsSettings, setMetricsSettings] = useState<MetricsSettings>({
-    enableEvaluation: true,  // ✅ Enable by default so RAG metrics show automatically
+    enableEvaluation: false,  // Default - will be loaded from localStorage if available
     showPerformanceMetrics: true,
-    showToolsUsed: true,  // ✅ Enable by default to show tool invocations
+    showToolsUsed: true,
   })
   // 🆕 Unified configuration state - ALL 48 parameters for dynamic per-query control
   const [unifiedConfig, setUnifiedConfig] = useState<WeightsConfig | null>(null)
+  // 🆕 Project management state
+  const [availableProjects, setAvailableProjects] = useState<Project[]>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId || null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const previousProjectIdRef = useRef<string | null>(null)  // 🐛 FIX: Track previous project to detect switches
 
   // 🆕 Fetch unified configuration on mount
   useEffect(() => {
@@ -299,26 +313,99 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
     }
   }, [])
 
-  // Load selected model from localStorage on mount
+  // 🆕 Load metrics settings from localStorage (syncs with SettingsPanel in sidebar)
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const savedModel = localStorage.getItem('globalSelectedModel')
-      if (savedModel) {
-        console.log('📥 Loaded model from localStorage:', savedModel)
-        setSelectedModel(savedModel)
-      } else {
-        console.log('ℹ️ No saved model in localStorage, will use backend default')
+      const savedSettings = localStorage.getItem('metricsSettings')
+      if (savedSettings) {
+        try {
+          const parsed = JSON.parse(savedSettings)
+          setMetricsSettings(parsed)
+          console.log('✅ Loaded metrics settings from localStorage:', parsed)
+        } catch (e) {
+          console.error('Failed to load metrics settings:', e)
+        }
+      }
+
+      // Listen for storage changes (when SettingsPanel updates settings)
+      const handleMetricsChange = (e: StorageEvent) => {
+        if (e.key === 'metricsSettings' && e.newValue) {
+          try {
+            const parsed = JSON.parse(e.newValue)
+            setMetricsSettings(parsed)
+            console.log('🔄 Metrics settings updated from storage:', parsed)
+          } catch (error) {
+            console.error('Failed to parse metrics settings:', error)
+          }
+        }
+      }
+
+      window.addEventListener('storage', handleMetricsChange as EventListener)
+      return () => {
+        window.removeEventListener('storage', handleMetricsChange as EventListener)
       }
     }
   }, [])
 
-  // Save selected model to localStorage when it changes
+  // 🆕 Load model based on context (global or project-specific)
   useEffect(() => {
-    if (typeof window !== 'undefined' && selectedModel) {
-      console.log('💾 Saving selected model to localStorage:', selectedModel)
-      localStorage.setItem('globalSelectedModel', selectedModel)
+    if (typeof window !== 'undefined' && isHydrated) {
+      const currentProjectId = selectedProjectId || projectId
+      const previousProjectId = previousProjectIdRef.current
+
+      // 🐛 FIX: Detect project switch
+      const projectChanged = currentProjectId !== previousProjectId
+      previousProjectIdRef.current = currentProjectId
+
+      let modelToUse: string | null = null
+
+      if (currentProjectId) {
+        // Project context - use project's preferred model
+        const storageKey = `model_project_${currentProjectId}`
+        const projectModel = localStorage.getItem(storageKey)
+
+        if (projectModel) {
+          modelToUse = projectModel
+          console.log(`📥 ${projectChanged ? 'Project switched! ' : ''}Loaded model for project ${currentProjectId}:`, projectModel)
+        } else {
+          // Project has no model set, use global default
+          const globalModel = localStorage.getItem('globalDefaultModel')
+          modelToUse = globalModel
+          console.log(`📥 Project has no saved model, using global default:`, globalModel)
+        }
+      } else {
+        // Global context - use global default
+        const globalModel = localStorage.getItem('globalDefaultModel')
+        modelToUse = globalModel
+        console.log(`📥 Loaded global default model:`, globalModel)
+      }
+
+      if (modelToUse && modelToUse !== selectedModel) {
+        console.log(`🔄 Updating model from "${selectedModel}" to "${modelToUse}"`)
+        setSelectedModel(modelToUse)
+      }
     }
-  }, [selectedModel])
+  }, [selectedProjectId, projectId, isHydrated])
+
+  // 🆕 Save selected model to appropriate context (global or project-specific)
+  // 🐛 FIX: Only depend on selectedModel to avoid overwriting on project switch
+  useEffect(() => {
+    if (typeof window !== 'undefined' && selectedModel && isHydrated) {
+      // Use current project context (at time of model selection)
+      const currentProjectId = selectedProjectId || projectId
+
+      if (currentProjectId) {
+        // Save to project preferences
+        const storageKey = `model_project_${currentProjectId}`
+        localStorage.setItem(storageKey, selectedModel)
+        console.log(`💾 Saved model for project ${currentProjectId}:`, selectedModel)
+      } else {
+        // Save as global default
+        localStorage.setItem('globalDefaultModel', selectedModel)
+        console.log(`💾 Saved global default model:`, selectedModel)
+      }
+    }
+  }, [selectedModel, isHydrated])  // 🐛 FIX: Removed selectedProjectId and projectId from dependencies
 
   // Helper function to get current RAG config - always fresh
   const getCurrentConfig = (): RAGConfig => {
@@ -343,7 +430,21 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
 
   // Initialize session ID and load messages on mount (client-side only)
   useEffect(() => {
-    const id = getSessionId()
+    // If projectId prop is provided (from ProjectDetail), use project-specific session
+    let id: string
+    if (projectId) {
+      const storageKey = `session_project_${projectId}`
+      id = localStorage.getItem(storageKey) || `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      localStorage.setItem(storageKey, id)
+      setSelectedProjectId(projectId) // Set selected project to match prop
+      console.log(`📁 Initializing with project session: ${id} for project ${projectId}`)
+    } else {
+      // Global session (no project)
+      id = localStorage.getItem('session_global') || getSessionId()
+      localStorage.setItem('session_global', id)
+      console.log(`🌐 Initializing with global session: ${id}`)
+    }
+
     setSessionId(id)
 
     // Load messages from localStorage after hydration
@@ -357,12 +458,214 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   }, [])
 
   // Save messages to localStorage whenever they change (only after hydration)
+  // Use ref to track last saved session to prevent cross-contamination
+  const lastSavedSessionRef = useRef<string | null>(null)
+
   useEffect(() => {
     if (isHydrated && sessionId && messages.length > 0) {
-      saveMessages(sessionId, messages)
-      console.log(`💾 Saved ${messages.length} messages for session ${sessionId}`)
+      // Only save if we're saving to the same session we loaded from
+      if (!lastSavedSessionRef.current || lastSavedSessionRef.current === sessionId) {
+        saveMessages(sessionId, messages)
+        lastSavedSessionRef.current = sessionId
+        console.log(`💾 Saved ${messages.length} messages for session ${sessionId}`)
+      }
     }
   }, [messages, sessionId, isHydrated])
+
+  // Listen for new chat event from parent
+  useEffect(() => {
+    const handleNewChat = (event: CustomEvent) => {
+      const newSessionId = event.detail?.sessionId
+      if (newSessionId) {
+        console.log('🆕 Starting new chat session:', newSessionId)
+        setSessionId(newSessionId)
+        setMessages([{
+          role: 'assistant',
+          content: 'Hello! I\'m your enterprise RAG assistant. How can I help you today?',
+          timestamp: new Date()
+        }])
+        setAttachedFiles([])
+        setInput('')
+      }
+    }
+
+    window.addEventListener('new-chat', handleNewChat as EventListener)
+    return () => window.removeEventListener('new-chat', handleNewChat as EventListener)
+  }, [])
+
+  // 🐛 FIX: Reload session when selectedProjectId changes (from dropdown)
+  useEffect(() => {
+    if (!isHydrated || projectId) return // Skip if not hydrated yet, or if using fixed projectId prop
+
+    const currentProjectId = selectedProjectId || null
+    let sessionKey: string
+    let newSessionId: string
+
+    if (currentProjectId) {
+      // Project-specific session
+      sessionKey = `session_project_${currentProjectId}`
+      newSessionId = localStorage.getItem(sessionKey) || `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      localStorage.setItem(sessionKey, newSessionId)
+      console.log(`📁 Project changed! Loading session for project ${currentProjectId}:`, newSessionId)
+    } else {
+      // Global session
+      sessionKey = 'session_global'
+      newSessionId = localStorage.getItem(sessionKey) || getSessionId()
+      localStorage.setItem(sessionKey, newSessionId)
+      console.log(`🌐 Switched to global session:`, newSessionId)
+    }
+
+    // Only update if session actually changed
+    if (newSessionId !== sessionId) {
+      setSessionId(newSessionId)
+
+      // Load messages for this session
+      const loadedMessages = loadMessages(newSessionId)
+      setMessages(loadedMessages)
+      console.log(`📥 Loaded ${loadedMessages.length} messages for session ${newSessionId}`)
+
+      // Clear input and attachments
+      setInput('')
+      setAttachedFiles([])
+    }
+  }, [selectedProjectId, isHydrated, projectId])
+
+  // Listen for session-changed event (when loading from history)
+  useEffect(() => {
+    const handleSessionChanged = async (event: CustomEvent) => {
+      const loadSessionId = event.detail?.sessionId
+      if (loadSessionId) {
+        console.log('📂 Loading session from history:', loadSessionId)
+        setSessionId(loadSessionId)
+
+        // Fetch messages from backend
+        try {
+          const response = await fetch(`${API_URL}/api/v1/sessions/${loadSessionId}/messages`)
+          if (response.ok) {
+            const data = await response.json()
+            const loadedMessages = data.messages.map((msg: any) => ({
+              role: msg.role,
+              content: msg.content,
+              timestamp: new Date(msg.created_at),
+              sources: msg.sources,
+              modelUsed: msg.model_used,
+              tokensUsed: msg.tokens_used,
+              latencyMs: msg.latency_ms
+            }))
+
+            if (loadedMessages.length > 0) {
+              setMessages(loadedMessages)
+              console.log(`✅ Loaded ${loadedMessages.length} messages from backend`)
+            } else {
+              // No messages in backend, try localStorage
+              const localMessages = loadMessages(loadSessionId)
+              setMessages(localMessages)
+              console.log(`📦 Loaded ${localMessages.length} messages from localStorage`)
+            }
+
+            // 🆕 Update UI context to match session's project and model
+            if (data.project_id) {
+              console.log('📁 Setting project context from session:', data.project_id)
+              setSelectedProjectId(data.project_id)
+              // Save to localStorage for sync with FileUpload
+              localStorage.setItem('selected_project_id', data.project_id)
+            } else {
+              console.log('🌐 Session has no project, clearing project context')
+              setSelectedProjectId(null)
+              localStorage.removeItem('selected_project_id')
+            }
+
+            if (data.most_used_model) {
+              console.log('🤖 Setting model context from session:', data.most_used_model)
+              setSelectedModel(data.most_used_model)
+              // Note: Model will be saved to appropriate context by existing useEffect (lines 390-406)
+            }
+          } else {
+            // Fallback to localStorage
+            const localMessages = loadMessages(loadSessionId)
+            setMessages(localMessages)
+            console.log(`📦 Backend failed, loaded ${localMessages.length} messages from localStorage`)
+          }
+        } catch (error) {
+          console.error('Error loading session messages:', error)
+          // Fallback to localStorage
+          const localMessages = loadMessages(loadSessionId)
+          setMessages(localMessages)
+        }
+
+        setAttachedFiles([])
+        setInput('')
+      }
+    }
+
+    window.addEventListener('session-changed', handleSessionChanged as EventListener)
+    return () => window.removeEventListener('session-changed', handleSessionChanged as EventListener)
+  }, [])
+
+  // 🆕 Load available projects on mount
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        const token = localStorage.getItem('access_token')
+        const headers = token ? { Authorization: `Bearer ${token}` } : {}
+        const response = await axios.get(`${API_URL}/api/v1/projects`, { headers })
+        setAvailableProjects(response.data || [])
+        console.log('📁 Loaded projects:', response.data.length)
+      } catch (error) {
+        console.error('Failed to load projects:', error)
+      }
+    }
+    loadProjects()
+  }, [])
+
+  // 🆕 Handle project switching - create separate sessions per project
+  useEffect(() => {
+    if (!isHydrated) return // Wait for initial hydration
+    if (projectId) return // If embedded in ProjectDetail, don't switch sessions
+
+    // Get or create session for this project
+    const getProjectSession = (projId: string | null): string => {
+      const storageKey = projId ? `session_project_${projId}` : 'session_global'
+      let projSessionId = localStorage.getItem(storageKey)
+
+      if (!projSessionId) {
+        // Create new session for this project
+        projSessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        localStorage.setItem(storageKey, projSessionId)
+        console.log(`🆕 Created new session for ${projId ? `project ${projId}` : 'global'}: ${projSessionId}`)
+      } else {
+        console.log(`📂 Loaded existing session for ${projId ? `project ${projId}` : 'global'}: ${projSessionId}`)
+      }
+
+      return projSessionId
+    }
+
+    // Switch to project-specific session
+    const newSessionId = getProjectSession(selectedProjectId)
+
+    if (newSessionId !== sessionId) {
+      console.log(`🔄 Switching session from ${sessionId} to ${newSessionId}`)
+
+      // CRITICAL: Save current messages to OLD session before switching
+      if (sessionId && messages.length > 0) {
+        saveMessages(sessionId, messages)
+        console.log(`💾 Saved ${messages.length} messages to old session ${sessionId}`)
+      }
+
+      // Switch to new session
+      setSessionId(newSessionId)
+      lastSavedSessionRef.current = newSessionId // Update ref to prevent cross-contamination
+
+      // Load messages for this project's session
+      const loadedMessages = loadMessages(newSessionId)
+      setMessages(loadedMessages)
+      console.log(`📥 Loaded ${loadedMessages.length} messages for ${selectedProjectId ? 'project' : 'global'} session`)
+
+      // Clear any attached files when switching projects
+      setAttachedFiles([])
+      setInput('')
+    }
+  }, [selectedProjectId, isHydrated])
 
   // Handle file attachment
   const handleFileAttach = () => {
@@ -450,10 +753,18 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
         const formData = new FormData()
         formData.append('file', file)
         formData.append('session_id', sessionId) // 🎯 Pass session ID!
+        const activeProjectId = selectedProjectId || projectId
+        if (activeProjectId) {
+          formData.append('project_id', activeProjectId) // 🎯 Pass project ID!
+        }
+
+        const token = localStorage.getItem('access_token')
+        console.log('[ChatInterface] Token from localStorage:', token ? `${token.substring(0, 20)}...` : 'NULL')
 
         const response = await axios.post(`${API_URL}/api/v1/upload`, formData, {
           headers: {
-            'Content-Type': 'multipart/form-data'
+            'Content-Type': 'multipart/form-data',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
           }
         })
 
@@ -530,6 +841,10 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       const formData = new FormData()
       formData.append('query', input)
       formData.append('session_id', sessionId) // 🎯 Pass session ID!
+      const activeProjectId = selectedProjectId || projectId
+      if (activeProjectId) {
+        formData.append('project_id', activeProjectId) // 🎯 Pass project ID!
+      }
       formData.append('use_cache', 'true')
 
       // Add selected model if specified
@@ -697,42 +1012,111 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   }
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-900">
-      {/* Model Selector Header */}
-      <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
-              Model:
-            </span>
-            <ModelSelector
-              selectedModel={selectedModel}
-              onModelChange={setSelectedModel}
-            />
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="text-xs text-slate-500 dark:text-slate-400">
-              {messages.length - 1} messages
+    <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
+      {/* Sleek Modern Header - Model & Project Controls */}
+      {!hideHeader && (
+      <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="max-w-5xl mx-auto px-4 py-2.5">
+          <div className="flex items-center justify-between gap-4">
+            {/* Left Section: Model & Project Controls */}
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              {/* Model Selector - Compact */}
+              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-slate-200 dark:border-slate-700">
+                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Model
+                </span>
+                <div className="border-l border-slate-300 dark:border-slate-600 h-4" />
+                <ModelSelector
+                  selectedModel={selectedModel}
+                  onModelChange={setSelectedModel}
+                />
+              </div>
+
+              {/* Project Selector - Sleek Dropdown (only show if not in project context) */}
+              {!projectId && (
+                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-slate-200 dark:border-slate-700 flex-1 max-w-xs">
+                  <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                    Project
+                  </span>
+                  <div className="border-l border-slate-300 dark:border-slate-600 h-4" />
+                  <select
+                    value={selectedProjectId || ''}
+                    onChange={(e) => {
+                      const projectId = e.target.value || null
+                      setSelectedProjectId(projectId)
+                      // Save to localStorage for FileUpload sync
+                      if (projectId) {
+                        localStorage.setItem('selected_project_id', projectId)
+                      } else {
+                        localStorage.removeItem('selected_project_id')
+                      }
+                      console.log('📁 Selected project ID saved to localStorage:', projectId)
+                    }}
+                    className="flex-1 min-w-0 bg-transparent text-xs text-slate-700 dark:text-slate-300 font-medium focus:outline-none cursor-pointer"
+                  >
+                    <option value="">Global (All Projects)</option>
+                    {availableProjects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name} ({project.file_count})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
-            <button
-              onClick={handleClearSession}
-              className="text-xs text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 flex items-center gap-1 px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              title="Clear session and start fresh"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Clear
-            </button>
+
+            {/* Right Section: Context Badge & Actions */}
+            <div className="flex items-center gap-2">
+              {/* Context Badge */}
+              <div className="flex items-center gap-2 text-xs">
+                {selectedProjectId ? (
+                  <span className="px-2.5 py-1 rounded-md bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 font-medium border border-primary-200 dark:border-primary-800 flex items-center gap-1.5">
+                    <span className="text-primary-600 dark:text-primary-400">📁</span>
+                    {availableProjects.find(p => p.id === selectedProjectId)?.name || 'Project'}
+                  </span>
+                ) : projectId ? null : (
+                  <span className="px-2.5 py-1 rounded-md bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1.5">
+                    <span>🌐</span>
+                    Global
+                  </span>
+                )}
+                <span className="text-slate-400 dark:text-slate-600">•</span>
+                <span className="text-slate-500 dark:text-slate-400">
+                  {messages.length - 1} msg{messages.length - 1 !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              {/* Back to Project Button (only show when in project context) */}
+              {projectId && onBackToProject && (
+                <button
+                  onClick={onBackToProject}
+                  className="text-xs text-slate-600 hover:text-primary-600 dark:text-slate-400 dark:hover:text-primary-400 flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-all border border-transparent hover:border-primary-200 dark:hover:border-primary-800"
+                  title="Back to project"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span className="font-medium">Back</span>
+                </button>
+              )}
+
+              {/* Clear Session Button */}
+              <button
+                onClick={handleClearSession}
+                className="text-xs text-slate-600 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 transition-all border border-transparent hover:border-red-200 dark:hover:border-red-800"
+                title="Clear session and start fresh"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="font-medium">Clear</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
+      )}
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="max-w-3xl mx-auto space-y-6">
-          {/* Settings Panel for Metrics Control */}
-          <SettingsPanel onSettingsChange={setMetricsSettings} />
-
-        {messages.map((message, index) => (
+          {messages.map((message, index) => (
           <div
             key={index}
             className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -1058,6 +1442,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       {/* Uploaded Files List */}
       <UploadedFilesList
         sessionId={sessionId}
+        projectId={selectedProjectId || undefined}  // 🆕 Pass project context
         forceExpand={filesJustUploaded}
         onExpandChange={(expanded) => {
           if (!expanded) setFilesJustUploaded(false)
@@ -1114,7 +1499,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Message RAG Bot..."
+                placeholder="Message Enterprise AI..."
                 className="w-full resize-none bg-transparent px-4 py-3 text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none"
                 rows={1}
                 disabled={isLoading || uploadingFiles}

@@ -12,6 +12,7 @@ interface ScrapeJob {
   contentLength?: number
   error?: string
   timestamp: Date
+  projectId?: string
 }
 
 interface CollapsibleErrorProps {
@@ -60,9 +61,10 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 interface WebScraperProps {
   sessionId?: string
+  projectId?: string
 }
 
-export default function WebScraper({ sessionId }: WebScraperProps) {
+export default function WebScraper({ sessionId, projectId }: WebScraperProps) {
   const [urls, setUrls] = useState<string[]>([''])
   const [scrapePrompt, setScrapePrompt] = useState('')
   const [jobs, setJobs] = useState<ScrapeJob[]>([])
@@ -119,27 +121,36 @@ export default function WebScraper({ sessionId }: WebScraperProps) {
       url,
       prompt: scrapePrompt,
       status: 'processing',
-      timestamp: new Date()
+      timestamp: new Date(),
+      projectId: projectId || undefined
     }))
     setJobs(prev => [...newJobs, ...prev])
 
     // Process each URL
     for (let i = 0; i < validUrls.length; i++) {
       try {
-        const formData = new FormData()
-        formData.append('url', validUrls[i])
-        if (scrapePrompt) {
-          formData.append('scrape_prompt', scrapePrompt)
+        const requestData = {
+          url: validUrls[i],
+          scrape_prompt: scrapePrompt || undefined,
+          session_id: sessionId || undefined,
+          project_id: projectId || undefined
         }
-        if (sessionId) {
-          formData.append('session_id', sessionId)
-        }
+
+        // Filter out undefined values
+        const cleanedData = Object.fromEntries(
+          Object.entries(requestData).filter(([_, v]) => v !== undefined)
+        )
 
         console.log(`Scraping URL ${i + 1}/${validUrls.length}:`, validUrls[i])
+        console.log('Request data:', cleanedData)
 
-        const response = await axios.post(`${API_URL}/api/v1/scrape`, formData, {
+        // Get auth token for user context
+        const token = localStorage.getItem('access_token')
+
+        const response = await axios.post(`${API_URL}/api/v1/scraper/scrape`, cleanedData, {
           headers: {
-            'Content-Type': 'multipart/form-data'
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
           }
         })
 
@@ -183,13 +194,6 @@ export default function WebScraper({ sessionId }: WebScraperProps) {
   return (
     <div className="h-full p-6 overflow-y-auto">
       <div className="max-w-4xl mx-auto">
-        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-          Web Scraping
-        </h2>
-        <p className="text-slate-600 dark:text-slate-400 mb-6">
-          Scrape websites and add their content to the knowledge base. The content will be processed and embedded for semantic search.
-        </p>
-
         {/* URL Input Section */}
         <div className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-sm border border-slate-200 dark:border-slate-700 mb-6">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">

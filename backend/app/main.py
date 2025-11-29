@@ -227,6 +227,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Comprehensive Audit Logging Middleware
+# Integrates with OpenTelemetry (Tempo) and Prometheus (Grafana)
+try:
+    from app.middleware import setup_audit_middleware
+    setup_audit_middleware(app)
+    logger.info("✓ Comprehensive audit middleware enabled (OTEL + Prometheus)")
+except Exception as e:
+    logger.warning(f"Could not enable audit middleware: {e}")
+
+
+# Prometheus metrics endpoint
+@app.get("/metrics")
+async def metrics():
+    """
+    Prometheus metrics endpoint for audit logging and system metrics.
+    Exports metrics collected by the audit middleware.
+    """
+    try:
+        from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+        from fastapi.responses import Response
+
+        metrics_output = generate_latest()
+        return Response(content=metrics_output, media_type=CONTENT_TYPE_LATEST)
+    except ImportError:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Prometheus client not available"}
+        )
 
 # Health check endpoint
 @app.get("/health")
@@ -302,15 +330,107 @@ async def upload_file(
     request: Request,
     file: UploadFile = File(...),
     session_id: Optional[str] = Form(None),
+    project_id: Optional[str] = Form(None),  # Link upload to project
     db: AsyncSession = Depends(get_db)
 ):
     """Upload a file for processing and associate with session"""
     import time
     import uuid
+    from app.core.security import get_current_user_from_request
+    from app.services.document_service import construct_minio_path
 
     start_time = time.time()
     ip_address, user_agent = get_client_info(request)
-    user_id = await get_anonymous_user_id(db)
+
+    # DEBUG: Log all form parameters received
+    logger.info(f"🔍 DEBUG - session_id received: {repr(session_id)}")
+    logger.info(f"🔍 DEBUG - project_id received: {repr(project_id)}")
+
+    # Try to get authenticated user first, fallback to anonymous
+    auth_header = request.headers.get("Authorization")
+    logger.info(f"🔑 Authorization header present: {bool(auth_header)}")
+    if auth_header:
+        logger.info(f"🔑 Authorization header value: {auth_header[:20]}...")  # Log first 20 chars only
+
+    current_user = await get_current_user_from_request(request, db)
+    if current_user:
+        user_id = current_user.id
+        username = current_user.username
+        logger.info(f"👤 Authenticated upload by user: {username}")
+    else:
+        user_id = await get_anonymous_user_id(db)
+        username = "anonymous"
+        logger.info(f"👤 Anonymous upload (no authentication)")
+
+    # Fetch user's organizational details if authenticated
+    department_name = None
+    team_name = None
+    # DON'T reset project_id - it may have been passed from the form!
+    # project_id is already set from Form parameter
+    project_name = "Global"  # Default fallback
+
+    if current_user:
+        from app.models.rbac import Department, Team
+        from app.models.database_enhanced import UserTeam
+
+        # Get department
+        if current_user.department_id:
+            dept_query = select(Department).where(Department.id == current_user.department_id)
+            dept_result = await db.execute(dept_query)
+            dept = dept_result.scalar_one_or_none()
+            if dept:
+                department_name = dept.name
+                logger.info(f"📁 Department: {department_name}")
+
+        # Get primary team
+        teams_query = select(UserTeam, Team).join(
+            Team, UserTeam.team_id == Team.id
+        ).where(
+            UserTeam.user_id == current_user.id,
+            UserTeam.is_primary == True
+        ).limit(1)
+        teams_result = await db.execute(teams_query)
+        user_team_data = teams_result.first()
+        if user_team_data:
+            team_name = user_team_data[1].name  # Team.name
+            logger.info(f"👥 Team: {team_name}")
+
+        # Get user's default project (if not overridden by form)
+        if not project_id and current_user.default_project_id:
+            project_id = current_user.default_project_id
+
+    # CRITICAL FIX: If project_id was provided (from form or user default), fetch its name
+    if project_id:
+        from app.models.database_enhanced import Project
+        try:
+            # Convert string to UUID if needed
+            project_uuid = uuid.UUID(project_id) if isinstance(project_id, str) else project_id
+
+            # Fetch project name from database
+            project_query = select(Project).where(Project.id == project_uuid)
+            project_result = await db.execute(project_query)
+            project = project_result.scalar_one_or_none()
+
+            if project:
+                project_name = project.name
+                logger.info(f"📂 Project (from {'form' if isinstance(project_id, str) else 'user default'}): {project_name}")
+            else:
+                logger.warning(f"Project ID {project_id} not found in database, using default: Global")
+                project_name = "Global"
+        except (ValueError, Exception) as e:
+            logger.warning(f"Invalid project_id {project_id}: {e}, using default: Global")
+            project_name = "Global"
+
+    # Construct MinIO path with NEW format: dept/team/project/user/folder/file
+    minio_path = construct_minio_path(
+        department=department_name,
+        team=team_name,
+        username=username,
+        project=project_name,  # ← Now uses actual project name!
+        filename=file.filename,
+        folder="documents"  # Default folder type
+    )
+    logger.info(f"📍 MinIO path: {minio_path}")
 
     try:
         # Read file data
@@ -331,11 +451,12 @@ async def upload_file(
                 # Create new session
                 session = ChatSession(
                     session_id=session_id,
-                    user_id=user_id
+                    user_id=user_id,
+                    project_id=uuid.UUID(project_id) if project_id else None
                 )
                 db.add(session)
                 await db.flush()  # Get the session ID
-                logger.info(f"Created new chat session: {session_id}")
+                logger.info(f"Created new chat session: {session_id}" + (f" in project {project_id}" if project_id else ""))
 
             # Check if a document with same filename and file size already exists in this session
             duplicate_query = select(Document).join(
@@ -361,19 +482,36 @@ async def upload_file(
                 }
 
         # Upload and create document
+        # Convert project_id to UUID if provided
+        logger.info(f"📁 Received project_id from form: {repr(project_id)}")
+        project_uuid = uuid.UUID(project_id) if project_id else None
+        logger.info(f"📁 Converted to project_uuid: {project_uuid}")
+
         document = await document_service.upload_file(
             file_data=file_data,
             filename=file.filename,
             file_type=file.content_type,
             source_type="upload",
-            db=db
+            db=db,
+            user_id=user_id,
+            department=department_name,
+            team=team_name,
+            project_id=project_uuid,
+            minio_path=minio_path
         )
 
         logger.info(f"Document created: {document.id} - {document.filename}")
 
         # Process document asynchronously (chunk and embed)
         try:
-            chunks = await document_service.process_document(document.id, db)
+            chunks = await document_service.process_document(
+                document.id,
+                db,
+                user_id=user_id,
+                department=department_name,
+                team=team_name,
+                project_id=project_uuid
+            )
             logger.info(f"Document processed: {len(chunks)} chunks created")
 
             # Log embedding status
@@ -463,6 +601,7 @@ async def query_endpoint(
     request: Request,
     query: str = Form(...),
     session_id: Optional[str] = Form(None),
+    project_id: Optional[str] = Form(None),  # Link query to project
     use_cache: bool = Form(True),
     model_id: Optional[str] = Form(None),
     conversation_history: Optional[str] = Form(None),  # NEW: Accept conversation history as JSON string
@@ -537,6 +676,7 @@ async def query_endpoint(
             "conversation_history": parsed_history,
             "enable_evaluation": enable_evaluation,  # Pass evaluation flag to agent
             "user_id": user_id,
+            "project_id": project_id,  # Link to project for scoped retrieval
             "db": db
         }
 
@@ -612,6 +752,70 @@ async def query_endpoint(
                 user_agent=user_agent
             )
 
+        # 🆕 MESSAGE PERSISTENCE: Save messages to database (DB-First with localStorage cache)
+        if session_id:
+            try:
+                from app.models.database_enhanced import ChatSession, ConversationMessage
+                from datetime import datetime
+                import uuid as uuid_lib
+
+                # 1. Get or create chat session
+                chat_session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+                chat_session_result = await db.execute(chat_session_query)
+                chat_session = chat_session_result.scalar_one_or_none()
+
+                if not chat_session:
+                    # Create new chat session if it doesn't exist
+                    chat_session = ChatSession(
+                        id=uuid_lib.uuid4(),
+                        session_id=session_id,
+                        user_id=user_id,
+                        created_at=datetime.utcnow(),
+                        last_activity=datetime.utcnow(),
+                        is_active=True
+                    )
+                    db.add(chat_session)
+                    await db.flush()  # Get the ID
+                    logger.info(f"📝 Created new chat session: {session_id}")
+                else:
+                    # Update last activity
+                    chat_session.last_activity = datetime.utcnow()
+                    await db.flush()
+
+                # 2. Save user message to conversation_messages table
+                # Note: ConversationMessage.session_id is a foreign key to chat_sessions.id (UUID)
+                user_message = ConversationMessage(
+                    id=uuid_lib.uuid4(),
+                    session_id=chat_session.id,  # UUID from chat_sessions table
+                    role='user',
+                    content=query,
+                    created_at=datetime.utcnow()
+                )
+                db.add(user_message)
+
+                # 3. Save assistant response
+                assistant_message = ConversationMessage(
+                    id=uuid_lib.uuid4(),
+                    session_id=chat_session.id,  # UUID from chat_sessions table
+                    role='assistant',
+                    content=result.get('answer', ''),
+                    sources=result.get('sources'),  # Already JSON serializable
+                    model_id=result.get('model', 'unknown'),
+                    model_name=result.get('model_used', result.get('model', 'unknown')),
+                    total_tokens=result.get('tokens_used', 0),
+                    latency_ms=latency_ms,
+                    created_at=datetime.utcnow()
+                )
+                db.add(assistant_message)
+
+                await db.commit()
+                logger.info(f"💾 Saved 2 messages to conversation_messages for session {session_id}")
+
+            except Exception as msg_error:
+                # Don't fail the request if message persistence fails
+                logger.error(f"Failed to save messages to DB (non-critical): {msg_error}", exc_info=True)
+                await db.rollback()
+
         # 🆕 EXPOSE QUALITY METRICS AT TOP LEVEL (if present in metadata)
         if 'metadata' in result and 'quality_metrics' in result['metadata']:
             result['quality_metrics'] = result['metadata']['quality_metrics']
@@ -676,14 +880,33 @@ async def scrape_endpoint(
 
 
 @app.get("/api/v1/documents")
-async def get_documents(db: AsyncSession = Depends(get_db)):
-    """Get all documents"""
+async def get_documents(
+    project_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all documents, optionally filtered by project_id"""
     try:
         from sqlalchemy import select
         from app.models.database import Document
 
-        result = await db.execute(select(Document).order_by(Document.upload_date.desc()))
+        # Build query with optional project filter
+        query = select(Document).order_by(Document.upload_date.desc())
+
+        if project_id:
+            # Filter by project_id
+            import uuid
+            try:
+                project_uuid = uuid.UUID(project_id)
+                query = query.where(Document.project_id == project_uuid)
+                logger.info(f"📁 Filtering documents by project_id: {project_id}")
+            except ValueError:
+                logger.warning(f"Invalid project_id format: {project_id}")
+                raise HTTPException(status_code=400, detail="Invalid project_id format")
+
+        result = await db.execute(query)
         documents = result.scalars().all()
+
+        logger.info(f"📁 Found {len(documents)} documents" + (f" for project {project_id}" if project_id else ""))
 
         return [
             {
@@ -694,11 +917,14 @@ async def get_documents(db: AsyncSession = Depends(get_db)):
                 "source_type": doc.source_type,
                 "source_url": doc.source_url,
                 "processed": doc.processed,
-                "upload_date": doc.upload_date.isoformat()
+                "upload_date": doc.upload_date.isoformat(),
+                "project_id": str(doc.project_id) if doc.project_id else None
             }
             for doc in documents
         ]
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching documents: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -932,6 +1158,30 @@ except ImportError as e:
 except Exception as e:
     logger.warning(f"Could not register RBAC Management router: {e}")
 
+# Simple Modules API (workaround for RBAC table conflicts)
+try:
+    from app.api.routes import modules_simple
+    app.include_router(modules_simple.router)
+    logger.info("✓ Simple Modules API router registered (user module access)")
+except Exception as e:
+    logger.warning(f"Could not register Simple Modules router: {e}")
+
+# Teams & Projects Management API
+try:
+    from app.api.routes import teams_projects_routes
+    app.include_router(teams_projects_routes.router)
+    logger.info("✓ Teams & Projects Management API router registered")
+except Exception as e:
+    logger.warning(f"Could not register Teams & Projects router: {e}")
+
+# Library Management API
+try:
+    from app.api.routes import library_routes
+    app.include_router(library_routes.router)
+    logger.info("✓ Library Management API router registered")
+except Exception as e:
+    logger.warning(f"Could not register Library router: {e}")
+
 
 # === Admin API Endpoints ===
 
@@ -940,14 +1190,49 @@ async def get_all_users(db: AsyncSession = Depends(get_db)):
     """Get all users (admin endpoint)"""
     try:
         from app.models.database_enhanced import User
+        from app.models.rbac import Department
         from sqlalchemy import select, func
+        from sqlalchemy.orm import joinedload
 
-        query = select(User).order_by(User.created_at.desc())
+        # Fetch users with department relationship
+        query = select(User).outerjoin(Department, User.department_id == Department.id).order_by(User.created_at.desc())
         result = await db.execute(query)
         users = result.scalars().all()
 
-        return [
-            {
+        # For each user, fetch their teams
+        user_list = []
+        for user in users:
+            # Get department name
+            dept_name = None
+            if user.department_id:
+                dept_result = await db.execute(select(Department).where(Department.id == user.department_id))
+                dept = dept_result.scalar_one_or_none()
+                if dept:
+                    dept_name = dept.name
+
+            # Get user's teams from user_teams junction table
+            from app.models.database_enhanced import UserTeam
+            try:
+                teams_query = select(UserTeam).where(UserTeam.user_id == user.id)
+                teams_result = await db.execute(teams_query)
+                user_teams = teams_result.scalars().all()
+
+                # Get team details
+                team_ids = [str(ut.team_id) for ut in user_teams]
+                team_names = []
+                if team_ids:
+                    from app.models.rbac import Team
+                    for team_id in team_ids:
+                        team_result = await db.execute(select(Team).where(Team.id == team_id))
+                        team = team_result.scalar_one_or_none()
+                        if team:
+                            team_names.append(team.name)
+            except:
+                # UserTeam table might not exist yet
+                team_ids = []
+                team_names = []
+
+            user_list.append({
                 "id": str(user.id),
                 "username": user.username,
                 "email": user.email,
@@ -955,10 +1240,15 @@ async def get_all_users(db: AsyncSession = Depends(get_db)):
                 "role": user.role.value if user.role else None,
                 "is_active": user.is_active,
                 "created_at": user.created_at.isoformat() if user.created_at else None,
-                "last_login": user.last_login.isoformat() if user.last_login else None
-            }
-            for user in users
-        ]
+                "last_login": user.last_login.isoformat() if user.last_login else None,
+                "department_id": str(user.department_id) if user.department_id else None,
+                "department_name": dept_name,
+                "function": user.function,
+                "team_ids": team_ids,
+                "team_names": team_names
+            })
+
+        return user_list
     except Exception as e:
         logger.error(f"Error getting users: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1032,6 +1322,383 @@ async def create_user(
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.patch("/api/v1/admin/users/{user_id}")
+async def update_user(
+    user_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update user organizational fields (admin endpoint)"""
+    try:
+        from app.models.database_enhanced import User, UserRole, UserTeam
+        from app.models.rbac import Department, Team
+        from sqlalchemy import select, delete
+        import uuid
+
+        # Get JSON body
+        body = await request.json()
+
+        # Find user
+        query = select(User).where(User.id == user_id)
+        result = await db.execute(query)
+        user = result.scalar_one_or_none()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Update fields if provided
+        if 'department_id' in body:
+            dept_id = body['department_id']
+            if dept_id:
+                # Verify department exists
+                dept_query = select(Department).where(Department.id == dept_id)
+                dept_result = await db.execute(dept_query)
+                dept = dept_result.scalar_one_or_none()
+                if not dept:
+                    raise HTTPException(status_code=400, detail="Department not found")
+                user.department_id = uuid.UUID(dept_id)
+            else:
+                user.department_id = None
+
+        if 'function' in body:
+            user.function = body['function']
+
+        if 'team_ids' in body:
+            # Delete existing team assignments
+            delete_query = delete(UserTeam).where(UserTeam.user_id == user.id)
+            await db.execute(delete_query)
+
+            # Add new team assignments
+            team_ids = body['team_ids']
+            if team_ids:
+                for idx, team_id in enumerate(team_ids):
+                    # Verify team exists
+                    team_query = select(Team).where(Team.id == team_id)
+                    team_result = await db.execute(team_query)
+                    team = team_result.scalar_one_or_none()
+                    if not team:
+                        continue  # Skip invalid team IDs
+
+                    # Create team assignment
+                    user_team = UserTeam(
+                        user_id=user.id,
+                        team_id=uuid.UUID(team_id),
+                        is_primary=(idx == 0)  # First team is primary
+                    )
+                    db.add(user_team)
+
+        if 'role' in body:
+            role = body['role']
+            user.role = UserRole[role.upper()] if hasattr(UserRole, role.upper()) else user.role
+
+        if 'is_active' in body:
+            user.is_active = body['is_active']
+
+        await db.commit()
+        await db.refresh(user)
+
+        # Get updated user info
+        dept_name = None
+        if user.department_id:
+            dept_result = await db.execute(select(Department).where(Department.id == user.department_id))
+            dept = dept_result.scalar_one_or_none()
+            if dept:
+                dept_name = dept.name
+
+        # Get teams
+        teams_query = select(UserTeam).where(UserTeam.user_id == user.id)
+        teams_result = await db.execute(teams_query)
+        user_teams = teams_result.scalars().all()
+        team_ids = [str(ut.team_id) for ut in user_teams]
+        team_names = []
+        for team_id in team_ids:
+            team_result = await db.execute(select(Team).where(Team.id == team_id))
+            team = team_result.scalar_one_or_none()
+            if team:
+                team_names.append(team.name)
+
+        logger.info(f"✓ Updated user: {user.username}")
+
+        return {
+            "id": str(user.id),
+            "username": user.username,
+            "email": user.email,
+            "full_name": user.full_name,
+            "role": user.role.value if user.role else None,
+            "is_active": user.is_active,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+            "last_login": user.last_login.isoformat() if user.last_login else None,
+            "department_id": str(user.department_id) if user.department_id else None,
+            "department_name": dept_name,
+            "function": user.function,
+            "team_ids": team_ids,
+            "team_names": team_names
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating user: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# === User Session Endpoints ===
+
+@app.get("/api/v1/sessions")
+async def get_user_sessions(
+    user_id: Optional[str] = None,
+    project_id: Optional[str] = None,  # 🆕 Add project_id filter
+    limit: int = 50,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get chat sessions for a user and/or project"""
+    try:
+        from app.models.database_enhanced import ChatSession, ConversationMessage
+        from sqlalchemy import select, func, and_
+
+        # Build query
+        query = select(
+            ChatSession,
+            func.count(ConversationMessage.id).label('message_count')
+        ).outerjoin(
+            ConversationMessage, ChatSession.id == ConversationMessage.session_id
+        ).group_by(ChatSession.id)
+
+        # Apply filters
+        filters = []
+        if user_id:
+            from uuid import UUID
+            filters.append(ChatSession.user_id == UUID(user_id))
+
+        if project_id:
+            from uuid import UUID
+            filters.append(ChatSession.project_id == UUID(project_id))
+
+        if filters:
+            query = query.where(and_(*filters))
+
+        query = query.order_by(ChatSession.last_activity.desc()).limit(limit).offset(offset)
+
+        result = await db.execute(query)
+        sessions = result.all()
+
+        return {
+            "sessions": [
+                {
+                    "id": str(session.ChatSession.id),
+                    "session_id": session.ChatSession.session_id,
+                    "user_id": str(session.ChatSession.user_id) if session.ChatSession.user_id else None,
+                    "project_id": str(session.ChatSession.project_id) if session.ChatSession.project_id else None,  # 🆕 Include project_id
+                    "title": session.ChatSession.title,
+                    "created_at": session.ChatSession.created_at.isoformat(),
+                    "last_activity": session.ChatSession.last_activity.isoformat(),
+                    "is_active": session.ChatSession.is_active,
+                    "message_count": session.message_count
+                }
+                for session in sessions
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error getting sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/v1/sessions/{session_id}")
+async def delete_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a chat session"""
+    try:
+        from app.models.database_enhanced import ChatSession
+        from sqlalchemy import select
+
+        # Find session
+        query = select(ChatSession).where(ChatSession.session_id == session_id)
+        result = await db.execute(query)
+        session = result.scalar_one_or_none()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Delete session (messages will cascade delete)
+        await db.delete(session)
+        await db.commit()
+
+        return {"message": "Session deleted successfully", "session_id": session_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting session: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/v1/sessions/{session_id}/title")
+async def update_session_title(
+    session_id: str,
+    title: str = None,
+    auto_generate: bool = False,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update session title (auto-generate or manual)"""
+    try:
+        from app.models.database_enhanced import ChatSession, ConversationMessage
+        from sqlalchemy import select
+
+        # Find session
+        query = select(ChatSession).where(ChatSession.session_id == session_id)
+        result = await db.execute(query)
+        session = result.scalar_one_or_none()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Auto-generate title using LLM (2-3 words max)
+        if auto_generate:
+            msg_query = select(ConversationMessage).where(
+                ConversationMessage.session_id == session.id
+            ).order_by(ConversationMessage.created_at.asc()).limit(3)
+
+            msg_result = await db.execute(msg_query)
+            messages = msg_result.scalars().all()
+
+            if messages:
+                try:
+                    # Use LLM to generate concise 2-3 word title
+                    conversation_text = "\n".join([
+                        f"{msg.role.upper()}: {msg.content[:300]}"
+                        for msg in messages
+                    ])
+
+                    title_prompt = f"""Extract the main topic from this conversation in EXACTLY 2-3 words.
+
+Conversation:
+{conversation_text}
+
+Rules:
+- EXACTLY 2-3 words (e.g., "RAG Systems", "Vector Databases", "Project Estimation")
+- Topic only, NO questions
+- NO full sentences
+- Title case (e.g., "Machine Learning" not "machine learning")
+
+Topic:"""
+
+                    response = await llm_service.generate(
+                        prompt=title_prompt,
+                        max_tokens=50,  # ✅ Increased from 15 to allow proper responses
+                        temperature=0.3
+                    )
+
+                    title = response.get('answer', '').strip()
+                    title = title.replace('"', '').replace("'", '').strip()
+
+                    # Validate: 2-3 words only
+                    if title:
+                        word_count = len(title.split())
+                        if word_count > 3:
+                            # Take first 3 words
+                            title = ' '.join(title.split()[:3])
+                        logger.info(f"✅ Generated title: '{title}'")
+                    else:
+                        # Empty response - use fallback
+                        logger.warning("LLM returned empty title, using fallback")
+                        raise ValueError("Empty LLM response")
+
+                except Exception as e:
+                    logger.warning(f"LLM title generation failed: {e}, using fallback")
+                    # Fallback: extract key nouns from first message
+                    first_content = messages[0].content.lower()
+                    words = first_content.split()
+                    # Skip common words
+                    skip_words = {'what', 'how', 'why', 'when', 'where', 'which', 'who', 'can', 'could', 'would', 'should', 'you', 'help', 'explain', 'tell', 'me', 'about', 'the', 'a', 'an', 'is', 'are', 'was', 'were'}
+                    keywords = [w.strip('.,!?:;').title() for w in words if len(w) > 3 and w.lower() not in skip_words]
+                    title = ' '.join(keywords[:2]) if len(keywords) >= 2 else (keywords[0] if keywords else "Chat")
+            else:
+                title = "New Chat"
+
+        # Update title
+        session.title = title
+        await db.commit()
+        await db.refresh(session)
+
+        return {
+            "session_id": session.session_id,
+            "title": session.title,
+            "message": "Title updated successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating session title: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/sessions/{session_id}/messages")
+async def get_session_messages(
+    session_id: str,
+    limit: int = 100,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get messages for a specific session"""
+    try:
+        from app.models.database_enhanced import ChatSession, ConversationMessage
+        from sqlalchemy import select
+
+        # Find session
+        session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+        session_result = await db.execute(session_query)
+        session = session_result.scalar_one_or_none()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Get messages
+        messages_query = select(ConversationMessage).where(
+            ConversationMessage.session_id == session.id
+        ).order_by(ConversationMessage.created_at.asc()).limit(limit).offset(offset)
+
+        messages_result = await db.execute(messages_query)
+        messages = messages_result.scalars().all()
+
+        # Determine most used model from messages
+        model_usage = {}
+        for msg in messages:
+            if msg.model_id:
+                model_usage[msg.model_id] = model_usage.get(msg.model_id, 0) + 1
+        most_used_model = max(model_usage.items(), key=lambda x: x[1])[0] if model_usage else None
+
+        return {
+            "session_id": session_id,
+            "title": session.title,
+            "project_id": str(session.project_id) if session.project_id else None,  # 🆕 Include project context
+            "most_used_model": most_used_model,  # 🆕 Include most frequently used model
+            "messages": [
+                {
+                    "id": str(msg.id),
+                    "role": msg.role,
+                    "content": msg.content,
+                    "sources": msg.sources,
+                    "model_used": msg.model_name or msg.model_id,  # Use model_name (display name)
+                    "tokens_used": msg.total_tokens,  # Map to frontend field name
+                    "latency_ms": msg.latency_ms,
+                    "created_at": msg.created_at.isoformat()
+                }
+                for msg in messages
+            ]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting session messages: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# === Admin Endpoints ===
 
 @app.get("/api/v1/admin/sessions")
 async def get_all_sessions(

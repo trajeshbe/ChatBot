@@ -73,6 +73,18 @@ class ScrapeRequest(BaseModel):
         None,
         description="Optional session ID to associate scraped document"
     )
+    project_id: Optional[str] = Field(
+        None,
+        description="Optional project/module ID for organization"
+    )
+    department: Optional[str] = Field(
+        None,
+        description="Optional department name for organization"
+    )
+    team: Optional[str] = Field(
+        None,
+        description="Optional team name for organization"
+    )
 
 
 class BulkScrapeRequest(BaseModel):
@@ -93,6 +105,18 @@ class BulkScrapeRequest(BaseModel):
     session_id: Optional[str] = Field(
         None,
         description="Optional session ID to associate scraped documents"
+    )
+    project_id: Optional[str] = Field(
+        None,
+        description="Optional project/module ID for organization"
+    )
+    department: Optional[str] = Field(
+        None,
+        description="Optional department name for organization"
+    )
+    team: Optional[str] = Field(
+        None,
+        description="Optional team name for organization"
     )
 
 

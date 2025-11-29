@@ -28,7 +28,8 @@
       "Bash(then echo '✅ RAG Query successful!' echo echo '   Answer:' jq -r .answer /tmp/test7_rag_query_fixed.json)",
       "Bash(fold:*)",
       "Bash(bash scripts/testing/test_comprehensive_chat.sh:*)",
-      "Bash(docker cp:*)"
+      "Bash(docker cp:*)",
+      "Bash(docker-compose build:*)"
     ],
     "deny": [],
     "ask": []

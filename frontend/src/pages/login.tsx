@@ -16,125 +16,148 @@ interface LoginResponse {
   };
 }
 
-// Smooth smoke-like cloud animations
+// Horizontal cloud drift - like watching clouds pass by in the sky
 const cloudStyles = `
-  @keyframes float-1 {
-    0%, 100% {
-      transform: translate(0, 0) scale(1);
-      opacity: 0.4;
-    }
-    50% {
-      transform: translate(30px, -40px) scale(1.1);
-      opacity: 0.6;
-    }
-  }
-
-  @keyframes float-2 {
-    0%, 100% {
-      transform: translate(0, 0) scale(1) rotate(0deg);
-      opacity: 0.3;
-    }
-    50% {
-      transform: translate(-40px, 30px) scale(1.15) rotate(5deg);
-      opacity: 0.5;
-    }
-  }
-
-  @keyframes float-3 {
-    0%, 100% {
-      transform: translate(0, 0) scale(1);
-      opacity: 0.35;
-    }
-    33% {
-      transform: translate(20px, 30px) scale(1.08);
-      opacity: 0.5;
-    }
-    66% {
-      transform: translate(-20px, -20px) scale(1.12);
-      opacity: 0.45;
-    }
-  }
-
-  @keyframes float-4 {
-    0%, 100% {
-      transform: translate(0, 0) scale(1) rotate(0deg);
-      opacity: 0.4;
-    }
-    50% {
-      transform: translate(40px, 40px) scale(1.2) rotate(-5deg);
-      opacity: 0.6;
-    }
-  }
-
-  @keyframes drift {
+  @keyframes cloud-pass-1 {
     0% {
-      transform: translateX(-10%);
-      opacity: 0.3;
+      transform: translateX(-120%);
+      opacity: 0;
     }
-    50% {
-      transform: translateX(10%);
-      opacity: 0.5;
+    10% {
+      opacity: 0.4;
+    }
+    90% {
+      opacity: 0.4;
     }
     100% {
-      transform: translateX(-10%);
-      opacity: 0.3;
+      transform: translateX(120%);
+      opacity: 0;
     }
   }
 
-  .smoke-cloud {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(60px);
-    mix-blend-mode: soft-light;
+  @keyframes cloud-pass-2 {
+    0% {
+      transform: translateX(-120%);
+      opacity: 0;
+    }
+    10% {
+      opacity: 0.35;
+    }
+    90% {
+      opacity: 0.35;
+    }
+    100% {
+      transform: translateX(120%);
+      opacity: 0;
+    }
   }
 
+  @keyframes cloud-pass-3 {
+    0% {
+      transform: translateX(-120%);
+      opacity: 0;
+    }
+    10% {
+      opacity: 0.45;
+    }
+    90% {
+      opacity: 0.45;
+    }
+    100% {
+      transform: translateX(120%);
+      opacity: 0;
+    }
+  }
+
+  @keyframes cloud-pass-4 {
+    0% {
+      transform: translateX(-120%);
+      opacity: 0;
+    }
+    10% {
+      opacity: 0.38;
+    }
+    90% {
+      opacity: 0.38;
+    }
+    100% {
+      transform: translateX(120%);
+      opacity: 0;
+    }
+  }
+
+  @keyframes cloud-pass-5 {
+    0% {
+      transform: translateX(-120%);
+      opacity: 0;
+    }
+    10% {
+      opacity: 0.42;
+    }
+    90% {
+      opacity: 0.42;
+    }
+    100% {
+      transform: translateX(120%);
+      opacity: 0;
+    }
+  }
+
+  .cloud-patch {
+    position: absolute;
+    filter: blur(70px);
+    mix-blend-mode: soft-light;
+    border-radius: 50%;
+    will-change: transform;
+  }
+
+  /* Cloud patches positioned in the center area */
   .cloud-1 {
-    width: 500px;
-    height: 500px;
-    top: 5%;
-    left: 10%;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.6), rgba(107, 144, 128, 0.3));
-    animation: float-1 40s ease-in-out infinite;
+    width: 600px;
+    height: 250px;
+    top: 20%;
+    left: 0;
+    background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.6), rgba(107, 144, 128, 0.3), transparent);
+    animation: cloud-pass-1 35s linear infinite;
   }
 
   .cloud-2 {
-    width: 600px;
-    height: 600px;
-    top: 20%;
-    right: 5%;
-    background: radial-gradient(circle, rgba(20, 184, 166, 0.25), rgba(255, 255, 255, 0.4));
-    animation: float-2 50s ease-in-out infinite;
+    width: 700px;
+    height: 280px;
+    top: 35%;
+    left: 0;
+    background: radial-gradient(ellipse at center, rgba(107, 144, 128, 0.5), rgba(255, 255, 255, 0.4), transparent);
+    animation: cloud-pass-2 42s linear infinite;
     animation-delay: -10s;
   }
 
   .cloud-3 {
-    width: 450px;
-    height: 450px;
-    bottom: 10%;
-    left: 15%;
-    background: radial-gradient(circle, rgba(107, 144, 128, 0.4), rgba(255, 255, 255, 0.3));
-    animation: float-3 45s ease-in-out infinite;
+    width: 550px;
+    height: 230px;
+    top: 50%;
+    left: 0;
+    background: radial-gradient(ellipse at center, rgba(20, 184, 166, 0.4), rgba(107, 144, 128, 0.4), transparent);
+    animation: cloud-pass-3 38s linear infinite;
     animation-delay: -20s;
   }
 
   .cloud-4 {
-    width: 550px;
-    height: 550px;
-    bottom: 15%;
-    right: 10%;
-    background: radial-gradient(circle, rgba(255, 255, 255, 0.5), rgba(20, 184, 166, 0.2));
-    animation: float-4 55s ease-in-out infinite;
+    width: 650px;
+    height: 270px;
+    top: 15%;
+    left: 0;
+    background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.5), rgba(20, 184, 166, 0.3), transparent);
+    animation: cloud-pass-4 40s linear infinite;
     animation-delay: -30s;
   }
 
   .cloud-5 {
-    width: 700px;
-    height: 700px;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: radial-gradient(circle, rgba(107, 144, 128, 0.2), transparent);
-    animation: drift 60s ease-in-out infinite;
+    width: 580px;
+    height: 240px;
+    top: 60%;
+    left: 0;
+    background: radial-gradient(ellipse at center, rgba(107, 144, 128, 0.45), rgba(255, 255, 255, 0.5), transparent);
+    animation: cloud-pass-5 36s linear infinite;
     animation-delay: -15s;
   }
 `;
@@ -153,8 +176,11 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      console.log('Sending login request to /api/v1/auth/login');
-      const response = await fetch('/api/v1/auth/login', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const loginUrl = `${API_URL}/api/v1/auth/login`;
+      console.log('Sending login request to', loginUrl);
+
+      const response = await fetch(loginUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -171,11 +197,20 @@ export default function Login() {
       const data: LoginResponse = await response.json();
       console.log('Login successful:', data.user);
 
+      // Store auth data first
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('user', JSON.stringify(data.user));
+      console.log('Stored token and user in localStorage');
+
+      // Small delay to ensure localStorage is written
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       console.log('Redirecting to /');
-      router.push('/');
+      // Force a full page navigation instead of client-side routing
+      window.location.href = '/';
+
+      // Also try router.push as fallback
+      // router.push('/');
     } catch (err) {
       console.error('Login error:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -188,12 +223,12 @@ export default function Login() {
     <>
       <style>{cloudStyles}</style>
       <div className="min-h-screen bg-gradient-to-br from-primary-500 via-primary-400 to-secondary-500 flex items-center justify-center relative overflow-hidden">
-        {/* Smooth Smoke-like Clouds */}
-        <div className="smoke-cloud cloud-1"></div>
-        <div className="smoke-cloud cloud-2"></div>
-        <div className="smoke-cloud cloud-3"></div>
-        <div className="smoke-cloud cloud-4"></div>
-        <div className="smoke-cloud cloud-5"></div>
+        {/* Horizontal Cloud Patches - Passing by like watching the sky */}
+        <div className="cloud-patch cloud-1"></div>
+        <div className="cloud-patch cloud-2"></div>
+        <div className="cloud-patch cloud-3"></div>
+        <div className="cloud-patch cloud-4"></div>
+        <div className="cloud-patch cloud-5"></div>
 
         {/* Centered Login Container */}
         <div className="relative z-10 w-full max-w-md px-6">

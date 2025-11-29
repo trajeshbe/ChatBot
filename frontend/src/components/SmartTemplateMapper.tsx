@@ -403,6 +403,10 @@ export const SmartTemplateMapper = () => {
 
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+      // Get auth token for user context
+      const token = localStorage.getItem('access_token')
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+
       const response = await axios.post(
         `${API_URL}/api/v1/extract/save-to-db`,
         {
@@ -411,10 +415,12 @@ export const SmartTemplateMapper = () => {
           extraction_type: 'smart_mapper',
           data: mappedData.data,
           template_name: domain + '_mapper',
-          session_id: sessionId
+          session_id: sessionId,
+          project_id: projectId || undefined  // Include project context
         },
         {
-          timeout: 30000
+          timeout: 30000,
+          headers
         }
       )
 

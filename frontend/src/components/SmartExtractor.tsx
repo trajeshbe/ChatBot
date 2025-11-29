@@ -61,7 +61,11 @@ interface ExtractionResponse {
 // COMPONENT
 // ============================================================================
 
-export const SmartExtractor = () => {
+interface SmartExtractorProps {
+  projectId?: string
+}
+
+export const SmartExtractor = ({ projectId }: SmartExtractorProps = {}) => {
   // State
   const [url, setUrl] = useState('')
   const [userInstructions, setUserInstructions] = useState('')
@@ -194,7 +198,8 @@ export const SmartExtractor = () => {
           url,
           user_instructions: userInstructions,
           llm_provider: llmProvider,
-          max_fields: maxFields
+          max_fields: maxFields,
+          project_id: projectId || undefined
         }
       )
 
@@ -233,6 +238,10 @@ export const SmartExtractor = () => {
 
     const llmProvider = getLLMProvider(globalSelectedModel)
 
+    // Get auth token for user context
+    const token = localStorage.getItem('access_token')
+    const headers = token ? { Authorization: `Bearer ${token}` } : {}
+
     try {
       const response = await axios.post<ExtractionResponse>(
         `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/extract/ultra-smart`,
@@ -242,8 +251,10 @@ export const SmartExtractor = () => {
           llm_provider: llmProvider,
           model_id: globalSelectedModel,  // Use model from Chat UI dropdown
           output_format: outputFormat,
-          max_steps: maxSteps
-        }
+          max_steps: maxSteps,
+          project_id: projectId || undefined
+        },
+        { headers }
       )
 
       if (response.data.success) {
@@ -344,14 +355,19 @@ export const SmartExtractor = () => {
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+      // Get auth token for user context
+      const token = localStorage.getItem('access_token')
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+
       const response = await axios.post(`${API_URL}/api/v1/extract/save-to-db`, {
         company_name: companyName,
         source_url: extractedData.url || url,
         extraction_type: 'smart',
         template_name: null,
         data: extractedData.table,
-        session_id: sessionId
-      })
+        session_id: sessionId,
+        project_id: projectId || undefined  // Include project context
+      }, { headers })
 
       alert(`✅ Saved ${extractedData.table.length} rows to vector store! Data is now available for RAG queries about ${companyName}.`)
       setShowSaveToDBModal(false)

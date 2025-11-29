@@ -23,6 +23,14 @@ class Document(Base):
     processed = Column(Boolean, default=False)
     processing_error = Column(Text, nullable=True)
 
+    # Hierarchical organization: role/dept/team/username/project/folder/file
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    uploaded_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    department = Column(String(100), nullable=True)
+    team = Column(String(100), nullable=True)
+    user_role = Column(String(50), nullable=True)  # Role at upload time
+    minio_path = Column(String(1024), nullable=True)  # Full hierarchical path
+
 
 class DocumentChunk(Base):
     __tablename__ = "document_chunks"
@@ -35,6 +43,12 @@ class DocumentChunk(Base):
     meta_info = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    # Denormalized fields for fast RAG queries and access control
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    uploaded_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    department = Column(String(100), nullable=True)
+    team = Column(String(100), nullable=True)
+
 
 class Conversation(Base):
     __tablename__ = "conversations"
@@ -44,6 +58,11 @@ class Conversation(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     meta_info = Column(JSON, nullable=True)
+
+    # Project context
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    title = Column(String(255), nullable=True)
+    summary = Column(Text, nullable=True)
 
 
 class Message(Base):
@@ -81,6 +100,12 @@ class WebScrapeJob(Base):
     llm_provider = Column(String(50), nullable=True)  # ollama, openai, anthropic
     scraping_time_ms = Column(Float, nullable=True)
     protocols_detected = Column(JSON, nullable=True)
+
+    # Project tracking
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    scraped_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    department = Column(String(100), nullable=True)
+    team = Column(String(100), nullable=True)
 
 
 class QueryCache(Base):

@@ -43,6 +43,71 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 logger = logging.getLogger(__name__)
 
 
+def sanitize_path_component(component: str) -> str:
+    """
+    Remove dangerous characters from path components for safe MinIO paths
+
+    Args:
+        component: Raw path component (e.g., "DevOps Team")
+
+    Returns:
+        Sanitized component (e.g., "DevOps-Team")
+    """
+    if not component:
+        return ""
+
+    # Replace spaces with hyphens
+    sanitized = component.replace(" ", "-")
+
+    # Remove dangerous characters: / \ : * ? " < > | and ..
+    sanitized = re.sub(r'[/\\:*?"<>|]', '', sanitized)
+    sanitized = sanitized.replace('..', '')
+
+    return sanitized.strip()
+
+
+def construct_minio_path(
+    department: Optional[str],
+    team: Optional[str],
+    username: str,
+    project: str,
+    filename: str,
+    folder: str = "documents"
+) -> str:
+    """
+    Construct hierarchical MinIO path for file organization
+
+    Format: {department}/{team}/{project}/{username}/{folder}/{filename}
+    Example: Technology/Tech-Team-1/Construction-Intelligence/admin/documents/blueprint.pdf
+
+    Args:
+        department: Department name (or None → "Unassigned")
+        team: Team name (or None → "General")
+        username: Username
+        project: Project name (defaults to "Global" in caller)
+        filename: Original filename (preserved as-is)
+        folder: Folder type (documents, extractions, exports, temp)
+
+    Returns:
+        Full MinIO path
+    """
+    # Valid folder types
+    VALID_FOLDERS = ['documents', 'extractions', 'exports', 'temp']
+
+    # Sanitize organizational components
+    safe_dept = sanitize_path_component(department) if department else "Unassigned"
+    safe_team = sanitize_path_component(team) if team else "General"
+    safe_project = sanitize_path_component(project) if project else "Global"
+    safe_username = sanitize_path_component(username) if username else "anonymous"
+    safe_folder = folder if folder in VALID_FOLDERS else "documents"
+
+    # DON'T sanitize filename - preserve original name
+    # MinIO/S3 handles special chars in filenames
+
+    # Construct path: dept/team/project/user/folder/file
+    return f"{safe_dept}/{safe_team}/{safe_project}/{safe_username}/{safe_folder}/{filename}"
+
+
 class DocumentService:
     def __init__(self):
         self.minio_client = None
@@ -88,9 +153,30 @@ class DocumentService:
         source_type: str = "upload",
         source_url: Optional[str] = None,
         session_id: Optional[str] = None,
-        db: AsyncSession = None
+        db: AsyncSession = None,
+        user_id: Optional[uuid.UUID] = None,
+        department: Optional[str] = None,
+        team: Optional[str] = None,
+        project_id: Optional[uuid.UUID] = None,
+        minio_path: Optional[str] = None
     ) -> Document:
-        """Upload file to MinIO and create database record"""
+        """
+        Upload file to MinIO and create database record
+
+        Args:
+            file_data: File bytes
+            filename: Original filename
+            file_type: MIME type
+            source_type: "upload" or "scrape"
+            source_url: Source URL if scraped
+            session_id: Chat session ID
+            db: Database session
+            user_id: Uploading user ID
+            department: User's department
+            team: User's team
+            project_id: Project ID
+            minio_path: Hierarchical MinIO path (dept/team/user/project/file)
+        """
         if not self._initialized:
             await self.initialize()
 
@@ -100,27 +186,37 @@ class DocumentService:
             file_extension = Path(filename).suffix
             object_name = f"{file_id}{file_extension}"
 
+            # Use organizational path if provided, otherwise fall back to UUID
+            final_object_name = minio_path if minio_path else object_name
+
             # Upload to MinIO
             self.minio_client.put_object(
                 settings.MINIO_BUCKET_NAME,
-                object_name,
+                final_object_name,
                 io.BytesIO(file_data),
                 length=len(file_data),
                 content_type=file_type
             )
 
-            logger.info(f"Uploaded file to MinIO: {object_name}")
+            logger.info(f"Uploaded file to MinIO: {final_object_name}")
+            if minio_path:
+                logger.info(f"📁 Organizational path: {minio_path}")
 
-            # Create database record
+            # Create database record with organizational metadata
             document = Document(
                 id=uuid.UUID(file_id),
                 filename=filename,
-                file_path=object_name,
+                file_path=object_name,  # Keep UUID for backward compatibility
+                minio_path=minio_path,  # Store hierarchical path
                 file_type=file_type,
                 file_size=len(file_data),
                 source_type=source_type,
                 source_url=source_url,
-                processed=False
+                processed=False,
+                uploaded_by=user_id,
+                department=department,
+                team=team,
+                project_id=project_id  # Added: link to project
             )
 
             if db:
@@ -201,9 +297,23 @@ class DocumentService:
     async def process_document(
         self,
         document_id: uuid.UUID,
-        db: AsyncSession
+        db: AsyncSession,
+        user_id: Optional[uuid.UUID] = None,
+        department: Optional[str] = None,
+        team: Optional[str] = None,
+        project_id: Optional[uuid.UUID] = None
     ) -> List[DocumentChunk]:
-        """Process document and create embeddings"""
+        """
+        Process document and create embeddings
+
+        Args:
+            document_id: Document UUID
+            db: Database session
+            user_id: Uploading user ID
+            department: User's department
+            team: User's team
+            project_id: Project ID
+        """
         if not self._initialized:
             await self.initialize()
 
@@ -215,10 +325,13 @@ class DocumentService:
             if not document:
                 raise ValueError(f"Document not found: {document_id}")
 
-            # Download file from MinIO
+            # Download file from MinIO (use minio_path if available, fallback to file_path)
+            object_key = document.minio_path if document.minio_path else document.file_path
+            logger.info(f"Retrieving file from MinIO: {object_key}")
+
             response = self.minio_client.get_object(
                 settings.MINIO_BUCKET_NAME,
-                document.file_path
+                object_key
             )
             file_data = response.read()
             response.close()
@@ -351,7 +464,11 @@ class DocumentService:
                         'source_url': document.source_url,
                         'char_start': chunk.get('start', 0),
                         'char_end': chunk.get('end', 0)
-                    }
+                    },
+                    project_id=project_id,
+                    uploaded_by=user_id,
+                    department=department,
+                    team=team
                 )
                 db.add(chunk_record)
                 document_chunks.append(chunk_record)
@@ -454,7 +571,8 @@ class DocumentService:
         use_hybrid: bool = True,
         use_cascading_fallback: bool = True,
         semantic_weight: Optional[float] = None,
-        keyword_weight: Optional[float] = None
+        keyword_weight: Optional[float] = None,
+        project_id: Optional[str] = None  # Filter by project
     ) -> List[Dict]:
         """
         Search for similar document chunks using robust hybrid search with cascading fallback:
@@ -543,6 +661,7 @@ class DocumentService:
                     use_hybrid=use_hybrid,
                     semantic_weight=_semantic_weight,
                     keyword_weight=_keyword_weight,
+                    project_id=project_id,
                     db=db
                 )
 
@@ -556,7 +675,7 @@ class DocumentService:
             # Final fallback: pure keyword search (if query_text provided and still no results)
             if not chunks and query_text and use_hybrid:
                 logger.info("🔍 Final fallback: trying pure keyword search...")
-                chunks = await self._keyword_only_search(query_text, top_k, db)
+                chunks = await self._keyword_only_search(query_text, top_k, project_id, db)
                 if chunks:
                     logger.info(f"✅ Found {len(chunks)} chunks with keyword-only search")
                     # Add low semantic scores for keyword-only results
@@ -590,6 +709,7 @@ class DocumentService:
         use_hybrid: bool,
         semantic_weight: float,
         keyword_weight: float,
+        project_id: Optional[str],
         db: AsyncSession
     ) -> List[Dict]:
         """
@@ -617,7 +737,7 @@ class DocumentService:
                     # If no keywords extracted, fall back to semantic only
                     return await self._execute_search(
                         query_embedding, None, threshold, top_k, False,
-                        semantic_weight, keyword_weight, db
+                        semantic_weight, keyword_weight, project_id, db
                     )
 
                 # SECURITY FIX: Sanitize keywords to prevent SQL injection
@@ -629,7 +749,7 @@ class DocumentService:
                     logger.warning("All keywords filtered out during sanitization, using semantic search only")
                     return await self._execute_search(
                         query_embedding, None, threshold, top_k, False,
-                        semantic_weight, keyword_weight, db
+                        semantic_weight, keyword_weight, project_id, db
                     )
 
                 # Build parameterized keyword conditions (SAFE from SQL injection)
@@ -642,6 +762,11 @@ class DocumentService:
                 # CONFIGURABLE WEIGHTS: Default 80% semantic, 20% keyword (can be overridden)
                 # This fixes the issue where good semantic matches (0.56) were filtered out
                 # due to low combined scores with old weights (0.56 * 0.6 = 0.336 < threshold 0.35)
+                # Build WHERE clause with optional project filter
+                project_filter = ""
+                if project_id:
+                    project_filter = "AND d.project_id = :project_id"
+
                 query = sql_text(f"""
                     WITH semantic_search AS (
                         SELECT
@@ -655,7 +780,7 @@ class DocumentService:
                             1 - (dc.embedding <=> '{embedding_str}'::vector) as semantic_score
                         FROM document_chunks dc
                         JOIN documents d ON dc.document_id = d.id
-                        WHERE dc.embedding IS NOT NULL
+                        WHERE dc.embedding IS NOT NULL {project_filter}
                     ),
                     keyword_search AS (
                         SELECT
@@ -685,6 +810,11 @@ class DocumentService:
                 """)
             else:
                 # Standard semantic search only
+                # Build WHERE clause with optional project filter
+                project_filter = ""
+                if project_id:
+                    project_filter = "AND d.project_id = :project_id"
+
                 query = sql_text(f"""
                     SELECT
                         dc.id,
@@ -700,6 +830,7 @@ class DocumentService:
                     FROM document_chunks dc
                     JOIN documents d ON dc.document_id = d.id
                     WHERE dc.embedding IS NOT NULL
+                        {project_filter}
                         AND 1 - (dc.embedding <=> '{embedding_str}'::vector) > :threshold
                     ORDER BY dc.embedding <=> '{embedding_str}'::vector
                     LIMIT :limit
@@ -710,6 +841,10 @@ class DocumentService:
                 "threshold": threshold,
                 "limit": top_k * 2  # Get more results for better diversity
             }
+
+            # Add project_id if provided
+            if project_id:
+                params["project_id"] = project_id
 
             # Add keyword parameters if using hybrid search (SECURITY: Parameterized queries)
             if use_hybrid and query_text and 'sanitized_keywords' in locals():
@@ -744,6 +879,7 @@ class DocumentService:
         self,
         query_text: str,
         top_k: int,
+        project_id: Optional[str],
         db: AsyncSession
     ) -> List[Dict]:
         """
@@ -760,6 +896,11 @@ class DocumentService:
             keyword_conditions = [f"dc.content ILIKE :kw{i}" for i in range(len(keywords))]
             keyword_clause = " OR ".join(keyword_conditions)
 
+            # Build project filter
+            project_filter = ""
+            if project_id:
+                project_filter = "AND d.project_id = :project_id"
+
             query = sql_text(f"""
                 SELECT
                     dc.id,
@@ -771,13 +912,17 @@ class DocumentService:
                     d.source_url
                 FROM document_chunks dc
                 JOIN documents d ON dc.document_id = d.id
-                WHERE {keyword_clause}
+                WHERE ({keyword_clause}) {project_filter}
                 LIMIT :limit
             """)
 
             # Build parameters dict
             params = {f"kw{i}": f"%{kw}%" for i, kw in enumerate(keywords)}
             params["limit"] = top_k * 2
+
+            # Add project_id if provided
+            if project_id:
+                params["project_id"] = project_id
 
             result = await db.execute(query, params)
 

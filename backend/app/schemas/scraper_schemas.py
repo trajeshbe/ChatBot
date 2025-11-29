@@ -140,6 +140,18 @@ class ScrapeRequest(BaseModel):
         default=None,
         description="Session ID to associate document with"
     )
+    project_id: Optional[str] = Field(
+        default=None,
+        description="Project/Module ID for organization"
+    )
+    department: Optional[str] = Field(
+        default=None,
+        description="Department name for organization"
+    )
+    team: Optional[str] = Field(
+        default=None,
+        description="Team name for organization"
+    )
 
     class Config:
         schema_extra = {

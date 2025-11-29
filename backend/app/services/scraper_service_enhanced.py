@@ -74,6 +74,11 @@ class EnhancedScraperService:
         strategy: Optional[str] = None,
         config: Optional[ScraperConfig] = None,
         session_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        department: Optional[str] = None,
+        team: Optional[str] = None,
+        user_id: Optional[str] = None,
+        username: Optional[str] = None,
         db: Optional[AsyncSession] = None
     ) -> Dict:
         """
@@ -141,7 +146,11 @@ class EnhancedScraperService:
             job = WebScrapeJob(
                 url=url,
                 scrape_prompt=scrape_prompt,
-                status="processing"
+                status="processing",
+                project_id=project_id,
+                scraped_by=user_id,
+                department=department,
+                team=team
             )
             db.add(job)
             await db.commit()
@@ -189,6 +198,41 @@ class EnhancedScraperService:
             filename = f"scraped_{urlparse(url).netloc}_{uuid.uuid4().hex[:8]}.txt"
             content_bytes = self._format_document_content(scraped_content).encode('utf-8')
 
+            # Construct hierarchical MinIO path
+            from app.services.document_service import construct_minio_path
+            import re
+
+            # Get project name from project_id
+            project_name = "Global"
+            if db and project_id:
+                try:
+                    from sqlalchemy import select
+                    from app.models.database_enhanced import Project
+                    project_result = await db.execute(
+                        select(Project).where(Project.id == project_id)
+                    )
+                    project_obj = project_result.scalar_one_or_none()
+                    if project_obj:
+                        project_name = project_obj.name
+                except Exception as e:
+                    logger.warning(f"Could not fetch project name: {e}")
+
+            # Extract domain name for folder organization
+            domain = urlparse(url).netloc.replace('www.', '')
+            safe_domain = re.sub(r'[^\w\-]', '_', domain)
+
+            # Construct base path and add domain folder
+            base_path = construct_minio_path(
+                department=department,
+                team=team,
+                username=username or "anonymous",
+                project=project_name,
+                filename="",  # We'll add domain folder + filename manually
+                folder="extractions"
+            )
+            minio_path = f"{base_path}{safe_domain}/{filename}"
+            logger.info(f"📁 Constructed MinIO path: {minio_path}")
+
             document = await document_service.upload_file(
                 file_data=content_bytes,
                 filename=filename,
@@ -196,6 +240,11 @@ class EnhancedScraperService:
                 source_type="scrape",
                 source_url=url,
                 session_id=session_id,
+                project_id=project_id,
+                department=department,
+                team=team,
+                user_id=user_id,
+                minio_path=minio_path,  # Pass hierarchical path
                 db=db
             )
 
@@ -287,6 +336,10 @@ class EnhancedScraperService:
         strategy: Optional[str] = None,
         config: Optional[ScraperConfig] = None,
         session_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        department: Optional[str] = None,
+        team: Optional[str] = None,
+        user_id: Optional[str] = None,
         db: Optional[AsyncSession] = None
     ) -> List[Dict]:
         """
@@ -298,6 +351,10 @@ class EnhancedScraperService:
             strategy: Scraping strategy to use
             config: Custom scraper configuration
             session_id: Optional session ID
+            project_id: Optional project/module ID for organization
+            department: Optional department name for organization
+            team: Optional team name for organization
+            user_id: Optional user ID who initiated the scraping
             db: Database session
 
         Returns:
@@ -318,6 +375,10 @@ class EnhancedScraperService:
                         strategy=strategy,
                         config=config,
                         session_id=session_id,
+                        project_id=project_id,
+                        department=department,
+                        team=team,
+                        user_id=user_id,
                         db=db
                     )
                     # Add delay between requests

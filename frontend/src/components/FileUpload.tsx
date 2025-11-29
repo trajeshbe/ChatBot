@@ -2,6 +2,15 @@ import { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { Upload, FileText, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react'
 import axios from 'axios'
+import ProjectSelector from './ProjectSelector'
+
+interface Project {
+  id: string
+  name: string
+  description?: string
+  department_name?: string
+  team_name?: string
+}
 
 interface UploadedFile {
   name: string
@@ -9,6 +18,16 @@ interface UploadedFile {
   status: 'uploading' | 'processing' | 'success' | 'error' | 'duplicate'
   documentId?: string
   error?: string
+}
+
+interface FileUploadProps {
+  currentUser?: {
+    id: string
+    username: string
+    role: string
+    department_id?: string
+    team_id?: string
+  }
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -26,12 +45,23 @@ const getSessionId = (): string => {
   return sessionId
 }
 
-export default function FileUpload() {
+export default function FileUpload({ currentUser }: FileUploadProps) {
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [sessionId, setSessionId] = useState<string>('')
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('')
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
 
   useEffect(() => {
     setSessionId(getSessionId())
+
+    // 🆕 Load selected project from localStorage (syncs with ChatInterface)
+    if (typeof window !== 'undefined') {
+      const savedProjectId = localStorage.getItem('selected_project_id')
+      if (savedProjectId) {
+        setSelectedProjectId(savedProjectId)
+        console.log('📁 [FileUpload] Loaded project ID from localStorage:', savedProjectId)
+      }
+    }
   }, [])
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
@@ -67,10 +97,18 @@ export default function FileUpload() {
         const formData = new FormData()
         formData.append('file', file)
         formData.append('session_id', currentSessionId) // 🎯 Pass session ID!
+        if (selectedProjectId) {
+          formData.append('project_id', selectedProjectId) // 🎯 Pass project ID!
+        }
+
+        const token = localStorage.getItem('access_token')
+        console.log('[FileUpload] Token from localStorage:', token ? `${token.substring(0, 20)}...` : 'NULL')
+        console.log('[FileUpload] Sending Authorization header:', !!token)
 
         const response = await axios.post(`${API_URL}/api/v1/upload`, formData, {
           headers: {
-            'Content-Type': 'multipart/form-data'
+            'Content-Type': 'multipart/form-data',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
           },
           onUploadProgress: (progressEvent) => {
             // Update progress if needed
@@ -179,6 +217,38 @@ export default function FileUpload() {
         <p className="text-slate-600 dark:text-slate-400 mb-6">
           Upload documents to be processed and added to the knowledge base. Supported formats: PDF, TXT, DOC, DOCX, JSON, MD
         </p>
+
+        {/* Project Selector */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            Project (Optional)
+          </label>
+          <ProjectSelector
+            value={selectedProjectId}
+            onChange={(projectId, project) => {
+              setSelectedProjectId(projectId)
+              setSelectedProject(project)
+              // Save to localStorage for ChatInterface sync
+              if (projectId) {
+                localStorage.setItem('selected_project_id', projectId)
+              } else {
+                localStorage.removeItem('selected_project_id')
+              }
+              console.log('📁 [FileUpload] Selected project ID saved to localStorage:', projectId)
+            }}
+            currentUser={currentUser}
+            placeholder="Select a project or upload without a project"
+          />
+          {selectedProject && (
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+              Files will be organized in:{' '}
+              <span className="font-mono text-primary-600 dark:text-primary-400">
+                {selectedProject.department_name}/{selectedProject.team_name}/
+                {currentUser?.username || 'username'}/{selectedProject.name}/
+              </span>
+            </p>
+          )}
+        </div>
 
         {/* Dropzone */}
         <div

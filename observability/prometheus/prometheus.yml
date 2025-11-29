@@ -1,0 +1,31 @@
+# Prometheus Configuration for RAG Chatbot Audit Logging
+
+global:
+  scrape_interval: 15s      # Scrape metrics every 15 seconds
+  evaluation_interval: 15s  # Evaluate rules every 15 seconds
+  external_labels:
+    cluster: 'rag-chatbot'
+    environment: 'dev'
+
+# Scrape configurations
+scrape_configs:
+  # Backend API metrics (audit middleware exports these)
+  - job_name: 'backend'
+    static_configs:
+      - targets: ['backend:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s  # Scrape more frequently for audit metrics
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Optional: Add other services if they export metrics
+  # - job_name: 'redis'
+  #   static_configs:
+  #     - targets: ['redis:6379']
+
+  # - job_name: 'postgres'
+  #   static_configs:
+  #     - targets: ['postgres:5432']

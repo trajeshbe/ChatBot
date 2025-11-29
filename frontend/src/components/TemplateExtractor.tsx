@@ -497,14 +497,19 @@ export default function TemplateExtractor({ sessionId }: { sessionId: string }) 
 
     setIsSavingToDB(true)
     try {
+      // Get auth token for user context
+      const token = localStorage.getItem('access_token')
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+
       const response = await axios.post(`${API_URL}/api/v1/extract/save-to-db`, {
         company_name: companyName,
         source_url: job.url,
         extraction_type: 'css_selector',
         template_name: job.preset,
         data: job.data,
-        session_id: sessionId
-      })
+        session_id: sessionId,
+        project_id: projectId || undefined  // Include project context
+      }, { headers })
 
       alert(`✅ Saved ${job.data.length} rows to vector store! Data is now available for RAG queries about ${companyName}.`)
       setShowSaveToDBModal(false)

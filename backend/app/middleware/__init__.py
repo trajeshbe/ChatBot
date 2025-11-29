@@ -1,5 +1,5 @@
 """
-Middleware package for RBAC and authentication.
+Middleware package for RBAC, authentication, and audit logging.
 """
 
 from app.middleware.rbac_middleware import (
@@ -19,6 +19,11 @@ from app.middleware.rbac_middleware import (
     check_permission_compat,
 )
 
+from app.middleware.audit_middleware import (
+    AuditMiddleware,
+    setup_audit_middleware,
+)
+
 __all__ = [
     # Authentication
     "get_current_user",
@@ -34,4 +39,7 @@ __all__ = [
     "require_permission",
     # Backward compatibility
     "check_permission_compat",
+    # Audit logging
+    "AuditMiddleware",
+    "setup_audit_middleware",
 ]

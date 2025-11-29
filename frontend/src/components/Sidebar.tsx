@@ -1,18 +1,21 @@
-import { MessageSquare, Upload, Globe, FileText, BarChart3, FileSpreadsheet, Calculator, Wrench, Sliders } from 'lucide-react'
+import { MessageSquare, Upload, Globe, FileText, BarChart3, FileSpreadsheet, Calculator, Wrench, Sliders, History, Home, Plus, FolderOpen } from 'lucide-react'
 import { ThemeToggle } from '@/theme/ThemeToggle'
 
 interface Props {
-  activeTab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator' | 'tools' | 'weights'
-  setActiveTab: (tab: 'chat' | 'upload' | 'scrape' | 'extract' | 'evaluation' | 'estimator' | 'tools' | 'weights') => void
+  activeTab: 'dashboard' | 'chat' | 'upload' | 'scrape' | 'history' | 'evaluation' | 'estimator' | 'tools' | 'weights' | 'library'
+  setActiveTab: (tab: 'dashboard' | 'chat' | 'upload' | 'scrape' | 'history' | 'evaluation' | 'estimator' | 'tools' | 'weights' | 'library') => void
   currentUser?: string
+  onNewChat?: () => void
 }
 
-export default function Sidebar({ activeTab, setActiveTab, currentUser }: Props) {
+export default function Sidebar({ activeTab, setActiveTab, currentUser, onNewChat }: Props) {
   const tabs = [
+    { id: 'dashboard' as const, icon: Home, label: 'Dashboard' },
     { id: 'chat' as const, icon: MessageSquare, label: 'Chat' },
+    { id: 'history' as const, icon: History, label: 'Chat History' },
+    { id: 'library' as const, icon: FolderOpen, label: 'Library' },
     { id: 'upload' as const, icon: Upload, label: 'Upload Files' },
     { id: 'scrape' as const, icon: Globe, label: 'Web Scraping' },
-    { id: 'extract' as const, icon: FileSpreadsheet, label: 'Data Extraction' },
     { id: 'estimator' as const, icon: Calculator, label: 'Project Estimator' },
     { id: 'evaluation' as const, icon: BarChart3, label: 'Evaluation' },
     { id: 'tools' as const, icon: Wrench, label: 'Tool Usage' },
@@ -27,8 +30,8 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser }: Props)
             <MessageSquare className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
-            <h2 className="font-semibold text-slate-900 dark:text-white text-sm">RAG Bot</h2>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400">Enterprise AI</p>
+            <h2 className="font-semibold text-slate-900 dark:text-white text-sm">Enterprise AI</h2>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400">Intelligent Assistant</p>
           </div>
           <ThemeToggle />
         </div>
@@ -45,6 +48,22 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser }: Props)
           </div>
         )}
       </div>
+
+      {/* New Chat Button */}
+      {onNewChat && (
+        <div className="p-3 border-b border-slate-200 dark:border-slate-800">
+          <button
+            onClick={() => {
+              console.log('🆕 [Sidebar] New Chat button clicked')
+              onNewChat()
+            }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary-600 hover:bg-primary-700 text-white font-medium transition-colors shadow-sm hover:shadow-md"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Chat</span>
+          </button>
+        </div>
+      )}
 
       <nav className="flex-1 p-3 overflow-y-auto">
         <div className="space-y-1">

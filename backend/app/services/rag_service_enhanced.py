@@ -155,9 +155,19 @@ class EnhancedRAGService:
 
             logger.info(f"🔧 RAG Config: top_k={_top_k}, sim_threshold={_similarity_threshold:.2f}, min_sim={_min_similarity_threshold:.2f}, no_relevant={_no_relevant_docs_threshold:.2f}, semantic_weight={_semantic_weight:.2f}, keyword_weight={_keyword_weight:.2f}")
 
-            # Ensure session exists
+            # Ensure session exists and get project_id if session-based
+            project_id = None
             if session_id:
                 await self._ensure_session_exists(session_id, user_id, db)
+
+                # Get project_id from session to scope retrieval
+                from app.models.database_enhanced import ChatSession
+                session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+                session_result = await db.execute(session_query)
+                session = session_result.scalar_one_or_none()
+                if session and session.project_id:
+                    project_id = str(session.project_id)
+                    logger.info(f"📁 Query scoped to project: {project_id}")
 
             # STEP 0: Preprocess query for better retrieval and classification
             track_tool("query_preprocessing", "Normalize and extract proper nouns")
@@ -314,7 +324,9 @@ class EnhancedRAGService:
                     logger.info(f"⚠️ No session-specific documents found for session {session_id}")
 
             # Step 3: Search long-term memory (all documents) using hybrid search with cascading fallback
-            track_tool("long_term_memory_search", "Search all documents (hybrid + cascading fallback)")
+            # If project_id exists, scope to project documents only
+            search_scope = f"project {project_id}" if project_id else "all documents"
+            track_tool("long_term_memory_search", f"Search {search_scope} (hybrid + cascading fallback)")
             long_term_chunks = await document_service.search_similar_chunks(
                 query_embedding=query_embedding,
                 query_text=query_text,  # For keyword matching
@@ -324,6 +336,7 @@ class EnhancedRAGService:
                 use_cascading_fallback=True,  # Enable cascading fallback
                 semantic_weight=_semantic_weight,  # UI-provided or config default
                 keyword_weight=_keyword_weight,    # UI-provided or config default
+                project_id=project_id,  # Scope to project if provided
                 db=db
             )
             logger.info(f"Found {len(long_term_chunks)} chunks in long-term memory - hybrid search with fallback")

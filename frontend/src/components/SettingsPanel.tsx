@@ -62,26 +62,26 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onSettingsChange }) => {
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-sm mb-4">
+    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm mb-4">
       {/* Header */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors rounded-t-lg"
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors rounded-t-lg"
       >
         <div className="flex items-center gap-2">
-          <Settings className="w-5 h-5 text-gray-600" />
-          <span className="font-medium text-gray-700">Metrics & Evaluation Settings</span>
+          <Settings className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          <span className="font-medium text-gray-700 dark:text-gray-200">Explainable RAG Settings</span>
         </div>
         {isExpanded ? (
-          <ChevronUp className="w-5 h-5 text-gray-500" />
+          <ChevronUp className="w-5 h-5 text-gray-500 dark:text-gray-400" />
         ) : (
-          <ChevronDown className="w-5 h-5 text-gray-500" />
+          <ChevronDown className="w-5 h-5 text-gray-500 dark:text-gray-400" />
         )}
       </button>
 
       {/* Settings Panel */}
       {isExpanded && (
-        <div className="px-4 py-3 border-t border-gray-200 space-y-4">
+        <div className="px-4 py-3 border-t border-gray-200 dark:border-slate-700 space-y-4">
           {/* Evaluation Toggle */}
           <div className="flex items-start justify-between">
             <div className="flex-1">

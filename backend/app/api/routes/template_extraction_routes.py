@@ -2,7 +2,7 @@
 API routes for template-based data extraction
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Response
+from fastapi import APIRouter, HTTPException, Depends, Response, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Any, Dict, Union
@@ -1711,11 +1711,15 @@ class SaveToDBRequest(BaseModel):
     data: List[Dict[str, Any]] = Field(..., description="Extracted data rows")
     template_name: Optional[str] = Field(None, description="Template name used (if any)")
     session_id: Optional[str] = Field(None, description="Session ID for tracking")
+    project_id: Optional[str] = Field(None, description="Project ID for organization")
+    department: Optional[str] = Field(None, description="Department name")
+    team: Optional[str] = Field(None, description="Team name")
 
 
 @router.post("/save-to-db")
 async def save_extracted_data_to_db(
     request: SaveToDBRequest,
+    http_request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -1756,8 +1760,62 @@ async def save_extracted_data_to_db(
         # Initialize document service (for MinIO access)
         await document_service.initialize()
 
-        # Create a sanitized company folder name
-        company_folder = request.company_name.lower().replace(' ', '_').replace('/', '_')
+        # Get current user for organizational context
+        from app.core.security import get_current_user_from_request
+        current_user = await get_current_user_from_request(http_request, db)
+        user_id = str(current_user.id) if current_user else None
+        username = current_user.username if current_user else "anonymous"
+
+        # Get department and team from user if not provided
+        department = request.department
+        team = request.team
+
+        if current_user and not department:
+            try:
+                from app.models.rbac import Department, Team
+                from app.models.database_enhanced import UserTeam
+                from sqlalchemy import select
+
+                # Get department name
+                if current_user.department_id:
+                    dept_result = await db.execute(
+                        select(Department).where(Department.id == current_user.department_id)
+                    )
+                    dept = dept_result.scalar_one_or_none()
+                    if dept:
+                        department = dept.name
+                        logger.info(f"📁 Department: {department}")
+
+                # Get primary team (matching upload logic)
+                teams_query = select(UserTeam, Team).join(
+                    Team, UserTeam.team_id == Team.id
+                ).where(
+                    UserTeam.user_id == current_user.id,
+                    UserTeam.is_primary == True
+                ).limit(1)
+                teams_result = await db.execute(teams_query)
+                user_team_data = teams_result.first()
+                if user_team_data:
+                    team = user_team_data[1].name  # Team.name
+                    logger.info(f"👥 Team: {team}")
+            except Exception as e:
+                logger.warning(f"Could not fetch user department/team: {e}")
+
+        # Get project name from project_id
+        project_name = "Global"
+        project_id = request.project_id
+        if db and project_id:
+            try:
+                from sqlalchemy import select
+                from app.models.database_enhanced import Project
+                project_result = await db.execute(
+                    select(Project).where(Project.id == project_id)
+                )
+                project_obj = project_result.scalar_one_or_none()
+                if project_obj:
+                    project_name = project_obj.name
+            except Exception as e:
+                logger.warning(f"Could not fetch project name: {e}")
 
         # Generate unique identifier for this extraction
         extraction_id = str(uuid_lib.uuid4())
@@ -1765,7 +1823,28 @@ async def save_extracted_data_to_db(
 
         # Create filename for MinIO
         json_filename = f"{timestamp}_{extraction_id}.json"
-        minio_path = f"extractions/{company_folder}/{json_filename}"
+
+        # Apply defaults for department/team (same as construct_minio_path)
+        department_final = department if department else "Unassigned"
+        team_final = team if team else "General"
+
+        # Sanitize company name for folder
+        import re
+        safe_company_name = re.sub(r'[^\w\-]', '_', request.company_name)
+
+        # Construct hierarchical MinIO path with company subfolder
+        from app.services.document_service import construct_minio_path
+        base_path = construct_minio_path(
+            department=department,
+            team=team,
+            username=username,
+            project=project_name,
+            filename="",  # We'll add company folder + filename manually
+            folder="extractions"
+        )
+        # Add company folder and filename: extractions/company_name/file.json
+        minio_path = f"{base_path}{safe_company_name}/{json_filename}"
+        logger.info(f"📁 Constructed hierarchical MinIO path: {minio_path}")
 
         # Prepare JSON data for MinIO
         json_data = {
@@ -1792,15 +1871,20 @@ async def save_extracted_data_to_db(
         )
         logger.info(f"✅ Uploaded to MinIO: {minio_path}")
 
-        # Create document record
+        # Create document record with organizational metadata
         document_record = Document(
             id=uuid_lib.UUID(extraction_id),
             filename=f"{request.company_name} - {request.extraction_type}",
-            file_path=minio_path,
+            file_path=f"{extraction_id}.json",  # UUID path for backward compatibility
+            minio_path=minio_path,  # Hierarchical path
             file_type="application/json",
             file_size=len(json_bytes),
             source_type="extraction",
             source_url=request.source_url,
+            uploaded_by=user_id,  # User who extracted
+            department=department_final,  # Department context (with defaults applied)
+            team=team_final,  # Team context (with defaults applied)
+            project_id=project_id,  # Project context
             meta_info={
                 "company_name": request.company_name,
                 "extraction_type": request.extraction_type,

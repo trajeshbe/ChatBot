@@ -1,7 +1,7 @@
 """
 Enhanced database models for RBAC, Sessions, and Audit Logging
 """
-from sqlalchemy import Column, String, DateTime, Integer, Text, ForeignKey, Boolean, Float, JSON, Enum as SQLEnum
+from sqlalchemy import Column, String, DateTime, Integer, Text, ForeignKey, Boolean, Float, JSON, Enum as SQLEnum, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
@@ -24,16 +24,64 @@ class UserRole(str, enum.Enum):
 
 
 class ActionType(str, enum.Enum):
-    """Types of auditable actions"""
-    QUERY = "query"
-    UPLOAD = "upload"
-    SCRAPE = "scrape"
-    DELETE = "delete"
+    """Types of auditable actions - comprehensive coverage"""
+    # Authentication & Session
     LOGIN = "login"
     LOGOUT = "logout"
+    LOGIN_FAILED = "login_failed"
+    SESSION_CREATE = "session_create"
+    SESSION_DESTROY = "session_destroy"
+    SESSION_TIMEOUT = "session_timeout"
+    PASSWORD_CHANGE = "password_change"
+    PASSWORD_RESET = "password_reset"
+
+    # Data Operations
+    QUERY = "query"
+    UPLOAD = "upload"
+    DOWNLOAD = "download"
+    SCRAPE = "scrape"
+    DELETE = "delete"
     CREATE = "create"
     UPDATE = "update"
     VIEW = "view"
+    EXPORT = "export"
+
+    # Module Access
+    MODULE_ACCESS = "module_access"
+    MODULE_EXIT = "module_exit"
+    FEATURE_USAGE = "feature_usage"
+
+    # Admin Operations
+    USER_CREATE = "user_create"
+    USER_UPDATE = "user_update"
+    USER_DELETE = "user_delete"
+    ROLE_ASSIGN = "role_assign"
+    ROLE_REVOKE = "role_revoke"
+    PERMISSION_GRANT = "permission_grant"
+    PERMISSION_DENY = "permission_deny"
+    SETTINGS_CHANGE = "settings_change"
+
+    # File Operations
+    FILE_DELETE = "file_delete"
+    FILE_MOVE = "file_move"
+    FILE_SHARE = "file_share"
+
+    # Project Operations
+    PROJECT_CREATE = "project_create"
+    PROJECT_UPDATE = "project_update"
+    PROJECT_DELETE = "project_delete"
+    PROJECT_ARCHIVE = "project_archive"
+
+    # API Operations
+    API_KEY_CREATE = "api_key_create"
+    API_KEY_REVOKE = "api_key_revoke"
+    API_REQUEST = "api_request"
+
+    # Errors & Security
+    ERROR = "error"
+    PERMISSION_DENIED = "permission_denied"
+    UNAUTHORIZED_ACCESS = "unauthorized_access"
+    RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
 
 
 # User and RBAC Models
@@ -53,6 +101,22 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)
     meta_info = Column(JSON, nullable=True)
+
+    # Default project for uploads (set after project creation)
+    default_project_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="SET NULL"),
+        nullable=True
+    )
+
+    # Organizational fields
+    department_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("departments.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True
+    )
+    function = Column(String(100), nullable=True, index=True)  # Job function/title from predefined list
 
 
 class APIKey(Base):
@@ -79,6 +143,7 @@ class ChatSession(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id = Column(String(255), unique=True, nullable=False, index=True)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True)
     title = Column(String(255), nullable=True)  # Auto-generated from first query
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -380,3 +445,60 @@ class APIKeyAccessLog(Base):
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     meta_info = Column(JSON, nullable=True)
+
+
+# ============================================================================
+# NOTE: RBAC Models (Module, Role, RoleModulePermission, UserRole) are now
+# defined in app/models/rbac.py to avoid table definition conflicts.
+# Import from there if you need RBAC models.
+# ============================================================================
+
+
+# Project Management
+class Project(Base):
+    """Projects for organizing files and work"""
+    __tablename__ = "projects"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    # Organizational hierarchy
+    department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
+    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="SET NULL"), nullable=True)
+    department = Column(String(100), nullable=True)  # Deprecated - use department_id
+
+    status = Column(String(50), default='active')  # 'active', 'archived', 'completed'
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    archived_at = Column(DateTime(timezone=True), nullable=True)
+    meta_info = Column(JSON, nullable=True)
+
+
+class ProjectMember(Base):
+    """Project team members"""
+    __tablename__ = "project_members"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String(50), default='member')  # 'owner', 'admin', 'member', 'viewer'
+    joined_at = Column(DateTime(timezone=True), server_default=func.now())
+    meta_info = Column(JSON, nullable=True)
+
+
+class UserTeam(Base):
+    """User to Team many-to-many junction table"""
+    __tablename__ = "user_teams"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    assigned_at = Column(DateTime(timezone=True), server_default=func.now())
+    assigned_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    is_primary = Column(Boolean, default=False)  # One team can be marked as primary
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'team_id', name='uq_user_team'),
+    )

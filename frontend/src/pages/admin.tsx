@@ -21,6 +21,29 @@ interface User {
   is_active: boolean
   created_at: string
   last_login: string | null
+  department_id: string | null
+  department_name: string | null
+  function: string | null
+  team_ids: string[]
+  team_names: string[]
+}
+
+interface Department {
+  id: string
+  name: string
+  code: string
+  description: string | null
+  is_active: boolean
+}
+
+interface Team {
+  id: string
+  name: string
+  code: string
+  department_id: string
+  department_name: string | null
+  description: string | null
+  is_active: boolean
 }
 
 interface Session {
@@ -120,7 +143,7 @@ interface DbStats {
 
 export default function AdminPage() {
   const router = useRouter()
-  const { user, isAuthenticated, isLoading } = useAuth()
+  const { user, token, isAuthenticated, isLoading } = useAuth()
   const [activeTab, setActiveTab] = useState<'users' | 'sessions' | 'audit' | 'metrics' | 'database' | 'apikeys' | 'ollama' | 'mcptools' | 'scraping' | 'rbac'>('users')
   const [rbacSubTab, setRbacSubTab] = useState<'roles' | 'permissions' | 'users'>('roles')
   const [users, setUsers] = useState<User[]>([])
@@ -157,6 +180,16 @@ export default function AdminPage() {
     role: 'user'
   })
   const [creatingUser, setCreatingUser] = useState(false)
+
+  // Edit user modal
+  const [showEditUserModal, setShowEditUserModal] = useState(false)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [teams, setTeams] = useState<Team[]>([])
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('')
+  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([])
+  const [selectedFunction, setSelectedFunction] = useState<string>('')
+  const [updatingUser, setUpdatingUser] = useState(false)
 
   // Filters
   const [actionFilter, setActionFilter] = useState<string>('')
@@ -277,6 +310,106 @@ export default function AdminPage() {
       alert('Error creating user. Please try again.')
     }
     setCreatingUser(false)
+  }
+
+  const loadDepartments = async () => {
+    try {
+      const headers: HeadersInit = {}
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+      const res = await fetch(`${API_BASE}/api/v1/departments`, { headers })
+      const data = await res.json()
+      if (Array.isArray(data)) {
+        setDepartments(data)
+      } else {
+        console.error('Departments response is not an array:', data)
+        setDepartments([])
+      }
+    } catch (error) {
+      console.error('Error loading departments:', error)
+      setDepartments([])
+    }
+  }
+
+  const loadTeams = async (departmentId?: string) => {
+    try {
+      const headers: HeadersInit = {}
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+      const url = departmentId
+        ? `${API_BASE}/api/v1/teams?department_id=${departmentId}`
+        : `${API_BASE}/api/v1/teams`
+      const res = await fetch(url, { headers })
+      const data = await res.json()
+      if (Array.isArray(data)) {
+        setTeams(data)
+      } else {
+        console.error('Teams response is not an array:', data)
+        setTeams([])
+      }
+    } catch (error) {
+      console.error('Error loading teams:', error)
+      setTeams([])
+    }
+  }
+
+  const handleEditUser = (user: User) => {
+    setEditingUser(user)
+    setSelectedDepartmentId(user.department_id || '')
+    setSelectedTeamIds(user.team_ids || [])
+    setSelectedFunction(user.function || '')
+    setShowEditUserModal(true)
+    // Load departments and teams
+    loadDepartments()
+    if (user.department_id) {
+      loadTeams(user.department_id)
+    }
+  }
+
+  const handleUpdateUser = async () => {
+    if (!editingUser) return
+
+    setUpdatingUser(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/admin/users/${editingUser.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          department_id: selectedDepartmentId || null,
+          function: selectedFunction || null,
+          team_ids: selectedTeamIds
+        })
+      })
+
+      if (res.ok) {
+        const updatedUser = await res.json()
+        setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u))
+        setShowEditUserModal(false)
+        setEditingUser(null)
+        alert('User updated successfully!')
+      } else {
+        const error = await res.json()
+        alert(`Error updating user: ${error.detail || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Error updating user:', error)
+      alert('Error updating user. Please try again.')
+    }
+    setUpdatingUser(false)
+  }
+
+  const handleDepartmentChange = (deptId: string) => {
+    setSelectedDepartmentId(deptId)
+    setSelectedTeamIds([]) // Clear team selection when department changes
+    if (deptId) {
+      loadTeams(deptId)
+    } else {
+      setTeams([])
+    }
   }
 
   const filteredAuditLogs = auditLogs.filter(log => {
@@ -610,13 +743,19 @@ export default function AdminPage() {
                             Role
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            Department
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            Teams
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            Function
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                             Status
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                            Created
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                            Last Login
+                            Actions
                           </th>
                         </tr>
                       </thead>
@@ -638,6 +777,17 @@ export default function AdminPage() {
                                 {user.role}
                               </span>
                             </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
+                              {user.department_name || '-'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
+                              {user.team_names && user.team_names.length > 0
+                                ? user.team_names.join(', ')
+                                : '-'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
+                              {user.function || '-'}
+                            </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                 user.is_active
@@ -648,16 +798,148 @@ export default function AdminPage() {
                               </span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
-                              {formatDate(user.created_at)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
-                              {user.last_login ? formatDate(user.last_login) : 'Never'}
+                              <button
+                                onClick={() => handleEditUser(user)}
+                                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
+                              >
+                                Edit
+                              </button>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Edit User Modal */}
+              {showEditUserModal && editingUser && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                  <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                    <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                        Edit User: {editingUser.username}
+                      </h3>
+                    </div>
+                    <div className="px-6 py-4 space-y-4">
+                      {/* Department */}
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          Department
+                        </label>
+                        <select
+                          value={selectedDepartmentId}
+                          onChange={(e) => handleDepartmentChange(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">No Department</option>
+                          {departments.map((dept) => (
+                            <option key={dept.id} value={dept.id}>
+                              {dept.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Function */}
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          Function
+                        </label>
+                        <select
+                          value={selectedFunction}
+                          onChange={(e) => setSelectedFunction(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">Select Function</option>
+                          <option value="Software Engineer">Software Engineer</option>
+                          <option value="Senior Software Engineer">Senior Software Engineer</option>
+                          <option value="Tech Lead">Tech Lead</option>
+                          <option value="Engineering Manager">Engineering Manager</option>
+                          <option value="Data Analyst">Data Analyst</option>
+                          <option value="Data Scientist">Data Scientist</option>
+                          <option value="Data Engineer">Data Engineer</option>
+                          <option value="Product Manager">Product Manager</option>
+                          <option value="Project Manager">Project Manager</option>
+                          <option value="Business Analyst">Business Analyst</option>
+                          <option value="QA Engineer">QA Engineer</option>
+                          <option value="DevOps Engineer">DevOps Engineer</option>
+                          <option value="System Administrator">System Administrator</option>
+                          <option value="Database Administrator">Database Administrator</option>
+                          <option value="UI/UX Designer">UI/UX Designer</option>
+                          <option value="Solution Architect">Solution Architect</option>
+                          <option value="Technical Architect">Technical Architect</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+
+                      {/* Teams (Multi-select) */}
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          Teams (Hold Ctrl/Cmd to select multiple)
+                        </label>
+                        <select
+                          multiple
+                          value={selectedTeamIds}
+                          onChange={(e) => {
+                            const options = Array.from(e.target.selectedOptions, option => option.value)
+                            setSelectedTeamIds(options)
+                          }}
+                          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px]"
+                          disabled={!selectedDepartmentId}
+                        >
+                          {teams.map((team) => (
+                            <option key={team.id} value={team.id}>
+                              {team.name}
+                            </option>
+                          ))}
+                        </select>
+                        {!selectedDepartmentId && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            Select a department first to see available teams
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Current Selection Display */}
+                      {selectedTeamIds.length > 0 && (
+                        <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-lg">
+                          <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                            Selected Teams ({selectedTeamIds.length}):
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedTeamIds.map(teamId => {
+                              const team = teams.find(t => t.id === teamId)
+                              return team ? (
+                                <span key={teamId} className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-xs">
+                                  {team.name}
+                                </span>
+                              ) : null
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
+                      <button
+                        onClick={() => {
+                          setShowEditUserModal(false)
+                          setEditingUser(null)
+                        }}
+                        className="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleUpdateUser}
+                        disabled={updatingUser}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {updatingUser ? 'Saving...' : 'Save Changes'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

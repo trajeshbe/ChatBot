@@ -67,7 +67,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const login = async (username: string, password: string) => {
     try {
       console.log('AuthContext.login called');
-      const response = await fetch('/api/v1/auth/login', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const loginUrl = `${API_URL}/api/v1/auth/login`;
+      console.log('Auth login URL:', loginUrl);
+
+      const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -5,11 +5,12 @@ Provides comprehensive web scraping capabilities with multiple strategies
 and configuration options.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List
 
 from app.core.database import get_db
+from app.core.security import get_current_user_from_request
 from app.services.scraper_service_enhanced import enhanced_scraper_service
 from app.services.scraper_strategies import ScraperConfig, ScraperStrategy
 from app.schemas.scraper_schemas import (
@@ -47,14 +48,15 @@ async def get_scraper_capabilities():
 
 @router.post("/scrape", response_model=ScrapeResponse)
 async def scrape_url(
-    request: ScrapeRequest,
+    scrape_request: ScrapeRequest,
+    http_request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """
     Scrape a single URL with customizable options.
 
     Supports multiple scraping strategies, custom configuration,
-    and AI-powered content filtering.
+    AI-powered content filtering, and project-based organization.
 
     Example:
     ```json
@@ -66,7 +68,10 @@ async def scrape_url(
             "include_tables": true,
             "enable_javascript": false
         },
-        "session_id": "session_123"
+        "session_id": "session_123",
+        "project_id": "uuid-here",
+        "department": "Engineering",
+        "team": "AI-Team"
     }
     ```
     """
@@ -78,12 +83,67 @@ async def scrape_url(
                 detail="Web scraping is disabled. Contact administrator to enable."
             )
 
+        # Get current user (optional - returns None if not authenticated)
+        current_user = await get_current_user_from_request(http_request, db)
+        user_id = str(current_user.id) if current_user else None
+
+        # Extract organizational context from request or user
+        project_id = scrape_request.project_id
+        department = scrape_request.department
+        team = scrape_request.team
+
+        # Validate project_id exists if provided
+        if project_id:
+            from sqlalchemy import select
+            from app.models.database_enhanced import Project
+            project_result = await db.execute(
+                select(Project).where(Project.id == project_id)
+            )
+            project = project_result.scalar_one_or_none()
+            if not project:
+                logger.warning(f"⚠️ Project {project_id} not found, setting to None")
+                project_id = None
+
+        # If user is authenticated but dept/team not provided, get from user
+        if current_user and not department:
+            from app.models.rbac import Department, Team
+            from app.models.database_enhanced import UserTeam
+            from sqlalchemy import select
+
+            # Get department name
+            if current_user.department_id:
+                dept_result = await db.execute(
+                    select(Department).where(Department.id == current_user.department_id)
+                )
+                dept = dept_result.scalar_one_or_none()
+                if dept:
+                    department = dept.name
+                    logger.info(f"📁 Department: {department}")
+
+            # Get primary team (matching upload logic)
+            teams_query = select(UserTeam, Team).join(
+                Team, UserTeam.team_id == Team.id
+            ).where(
+                UserTeam.user_id == current_user.id,
+                UserTeam.is_primary == True
+            ).limit(1)
+            teams_result = await db.execute(teams_query)
+            user_team_data = teams_result.first()
+            if user_team_data:
+                team = user_team_data[1].name  # Team.name
+                logger.info(f"👥 Team: {team}")
+
+        # Get username for MinIO path
+        username = current_user.username if current_user else "anonymous"
+
+        logger.info(f"🔍 Scraping with context - User: {username}/{user_id}, Project: {project_id}, Dept: {department}, Team: {team}")
+
         # ============================================================
         # SCRAPING COMPLIANCE CHECK - Check configured policies
         # ============================================================
         from app.services.scraping_config_service import scraping_config_service
 
-        compliance_check = await scraping_config_service.check_scraping_allowed(db, str(request.url))
+        compliance_check = await scraping_config_service.check_scraping_allowed(db, str(scrape_request.url))
 
         # If scraping is not allowed, block the request
         if not compliance_check.get('allowed', False):
@@ -96,55 +156,60 @@ async def scrape_url(
             # Log the blocked attempt
             await scraping_config_service.log_scraping_attempt(
                 db=db,
-                url=str(request.url),
-                method=request.strategy.value if request.strategy else 'auto',
+                url=str(scrape_request.url),
+                method=scrape_request.strategy.value if scrape_request.strategy else 'auto',
                 success=False,
                 error_message=error_msg,
                 robots_txt_allowed=compliance_check.get('status') != 'robots_blocked',
-                session_id=request.session_id
+                session_id=scrape_request.session_id
             )
 
             logger.warning(f"🚫 Web scraping blocked by compliance: {error_msg}")
 
             return ScrapeResponse(
                 success=False,
-                url=str(request.url),
+                url=str(scrape_request.url),
                 error=error_msg
             )
 
-        logger.info(f"✅ Compliance check passed for {request.url}")
+        logger.info(f"✅ Compliance check passed for {scrape_request.url}")
 
         # Convert Pydantic config to ScraperConfig if provided
         scraper_config = None
-        if request.config:
+        if scrape_request.config:
             scraper_config = ScraperConfig(
-                strategy=ScraperStrategy(request.config.strategy) if request.config.strategy else ScraperStrategy.AUTO,
-                timeout=request.config.timeout,
-                max_retries=request.config.max_retries,
-                follow_redirects=request.config.follow_redirects,
-                user_agent=request.config.user_agent or settings.SCRAPER_USER_AGENT,
-                include_links=request.config.include_links,
-                include_tables=request.config.include_tables,
-                include_images=request.config.include_images,
-                include_metadata=request.config.include_metadata,
-                remove_nav=request.config.remove_nav,
-                remove_footer=request.config.remove_footer,
-                remove_header=request.config.remove_header,
-                remove_ads=request.config.remove_ads,
-                enable_javascript=request.config.enable_javascript,
-                wait_for_selector=request.config.wait_for_selector,
-                wait_timeout=request.config.wait_timeout,
-                min_content_length=request.config.min_content_length,
-                max_content_length=request.config.max_content_length,
+                strategy=ScraperStrategy(scrape_request.config.strategy) if scrape_request.config.strategy else ScraperStrategy.AUTO,
+                timeout=scrape_request.config.timeout,
+                max_retries=scrape_request.config.max_retries,
+                follow_redirects=scrape_request.config.follow_redirects,
+                user_agent=scrape_request.config.user_agent or settings.SCRAPER_USER_AGENT,
+                include_links=scrape_request.config.include_links,
+                include_tables=scrape_request.config.include_tables,
+                include_images=scrape_request.config.include_images,
+                include_metadata=scrape_request.config.include_metadata,
+                remove_nav=scrape_request.config.remove_nav,
+                remove_footer=scrape_request.config.remove_footer,
+                remove_header=scrape_request.config.remove_header,
+                remove_ads=scrape_request.config.remove_ads,
+                enable_javascript=scrape_request.config.enable_javascript,
+                wait_for_selector=scrape_request.config.wait_for_selector,
+                wait_timeout=scrape_request.config.wait_timeout,
+                min_content_length=scrape_request.config.min_content_length,
+                max_content_length=scrape_request.config.max_content_length,
             )
 
-        # Perform scraping
+        # Perform scraping with project context
         result = await enhanced_scraper_service.scrape_url(
-            url=str(request.url),
-            scrape_prompt=request.scrape_prompt,
-            strategy=request.strategy.value if request.strategy else None,
+            url=str(scrape_request.url),
+            scrape_prompt=scrape_request.scrape_prompt,
+            strategy=scrape_request.strategy.value if scrape_request.strategy else None,
             config=scraper_config,
-            session_id=request.session_id,
+            session_id=scrape_request.session_id,
+            project_id=project_id,
+            department=department,
+            team=team,
+            user_id=user_id,
+            username=username,  # Pass username for MinIO path
             db=db
         )
 
@@ -153,24 +218,25 @@ async def scrape_url(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error scraping URL {request.url}: {e}")
+        logger.error(f"Error scraping URL {scrape_request.url}: {e}")
         return ScrapeResponse(
             success=False,
-            url=str(request.url),
+            url=str(scrape_request.url),
             error=str(e)
         )
 
 
 @router.post("/scrape/bulk", response_model=BulkScrapeResponse)
 async def scrape_multiple_urls(
-    request: BulkScrapeRequest,
+    scrape_request: BulkScrapeRequest,
+    http_request: Request,
     db: AsyncSession = Depends(get_db)
 ):
     """
     Scrape multiple URLs in a single request.
 
-    Supports up to 50 URLs per request with automatic concurrency control
-    and rate limiting.
+    Supports up to 50 URLs per request with automatic concurrency control,
+    rate limiting, and project-based organization.
 
     Example:
     ```json
@@ -181,7 +247,10 @@ async def scrape_multiple_urls(
         ],
         "scrape_prompt": "Extract product information",
         "strategy": "hybrid",
-        "session_id": "session_123"
+        "session_id": "session_123",
+        "project_id": "uuid-here",
+        "department": "Engineering",
+        "team": "AI-Team"
     }
     ```
     """
@@ -193,6 +262,52 @@ async def scrape_multiple_urls(
                 detail="Web scraping is disabled. Contact administrator to enable."
             )
 
+        # Get current user (optional - returns None if not authenticated)
+        current_user = await get_current_user_from_request(http_request, db)
+        user_id = str(current_user.id) if current_user else None
+
+        # Extract organizational context from request or user
+        project_id = scrape_request.project_id
+        department = scrape_request.department
+        team = scrape_request.team
+
+        # Validate project_id exists if provided
+        if project_id:
+            from sqlalchemy import select
+            from app.models.database_enhanced import Project
+            project_result = await db.execute(
+                select(Project).where(Project.id == project_id)
+            )
+            project = project_result.scalar_one_or_none()
+            if not project:
+                logger.warning(f"⚠️ Project {project_id} not found, setting to None")
+                project_id = None
+
+        # If user is authenticated but dept/team not provided, get from user
+        if current_user and not department:
+            from app.models.database_enhanced import Department, Team
+            from sqlalchemy import select
+
+            # Get department name
+            if current_user.department_id:
+                dept_result = await db.execute(
+                    select(Department).where(Department.id == current_user.department_id)
+                )
+                dept = dept_result.scalar_one_or_none()
+                if dept:
+                    department = dept.name
+
+            # Get team name
+            if current_user.team_id:
+                team_result = await db.execute(
+                    select(Team).where(Team.id == current_user.team_id)
+                )
+                team_obj = team_result.scalar_one_or_none()
+                if team_obj:
+                    team = team_obj.name
+
+        logger.info(f"🔍 Bulk scraping with context - User: {user_id}, Project: {project_id}, Dept: {department}, Team: {team}")
+
         # ============================================================
         # SCRAPING COMPLIANCE CHECK - Check each URL for compliance
         # ============================================================
@@ -200,7 +315,7 @@ async def scrape_multiple_urls(
 
         # Check compliance for all URLs before processing
         blocked_urls = []
-        for url in request.urls:
+        for url in scrape_request.urls:
             compliance_check = await scraping_config_service.check_scraping_allowed(db, str(url))
 
             if not compliance_check.get('allowed', False):
@@ -210,11 +325,11 @@ async def scrape_multiple_urls(
                 await scraping_config_service.log_scraping_attempt(
                     db=db,
                     url=str(url),
-                    method=request.strategy.value if request.strategy else 'auto',
+                    method=scrape_request.strategy.value if scrape_request.strategy else 'auto',
                     success=False,
                     error_message=error_msg,
                     robots_txt_allowed=compliance_check.get('status') != 'robots_blocked',
-                    session_id=request.session_id
+                    session_id=scrape_request.session_id
                 )
 
                 blocked_urls.append({
@@ -237,7 +352,7 @@ async def scrape_multiple_urls(
             ]
 
             # Filter out blocked URLs from processing
-            allowed_urls = [str(url) for url in request.urls if not any(str(url) == item["url"] for item in blocked_urls)]
+            allowed_urls = [str(url) for url in scrape_request.urls if not any(str(url) == item["url"] for item in blocked_urls)]
 
             # If ALL URLs are blocked, return all failed
             if not allowed_urls:
@@ -248,44 +363,48 @@ async def scrape_multiple_urls(
                     failed=len(blocked_urls)
                 )
 
-            # Otherwise, update request URLs to only include allowed ones
+            # Otherwise, update URLs to only include allowed ones
             logger.info(f"✅ {len(allowed_urls)} URLs passed compliance check, {len(blocked_urls)} blocked")
         else:
-            allowed_urls = [str(url) for url in request.urls]
+            allowed_urls = [str(url) for url in scrape_request.urls]
             failed_responses = []
 
         # Convert Pydantic config to ScraperConfig if provided
         scraper_config = None
-        if request.config:
+        if scrape_request.config:
             scraper_config = ScraperConfig(
-                strategy=ScraperStrategy(request.config.strategy) if request.config.strategy else ScraperStrategy.AUTO,
-                timeout=request.config.timeout,
-                max_retries=request.config.max_retries,
-                follow_redirects=request.config.follow_redirects,
-                user_agent=request.config.user_agent or settings.SCRAPER_USER_AGENT,
-                include_links=request.config.include_links,
-                include_tables=request.config.include_tables,
-                include_images=request.config.include_images,
-                include_metadata=request.config.include_metadata,
-                remove_nav=request.config.remove_nav,
-                remove_footer=request.config.remove_footer,
-                remove_header=request.config.remove_header,
-                remove_ads=request.config.remove_ads,
-                enable_javascript=request.config.enable_javascript,
-                wait_for_selector=request.config.wait_for_selector,
-                wait_timeout=request.config.wait_timeout,
-                min_content_length=request.config.min_content_length,
-                max_content_length=request.config.max_content_length,
+                strategy=ScraperStrategy(scrape_request.config.strategy) if scrape_request.config.strategy else ScraperStrategy.AUTO,
+                timeout=scrape_request.config.timeout,
+                max_retries=scrape_request.config.max_retries,
+                follow_redirects=scrape_request.config.follow_redirects,
+                user_agent=scrape_request.config.user_agent or settings.SCRAPER_USER_AGENT,
+                include_links=scrape_request.config.include_links,
+                include_tables=scrape_request.config.include_tables,
+                include_images=scrape_request.config.include_images,
+                include_metadata=scrape_request.config.include_metadata,
+                remove_nav=scrape_request.config.remove_nav,
+                remove_footer=scrape_request.config.remove_footer,
+                remove_header=scrape_request.config.remove_header,
+                remove_ads=scrape_request.config.remove_ads,
+                enable_javascript=scrape_request.config.enable_javascript,
+                wait_for_selector=scrape_request.config.wait_for_selector,
+                wait_timeout=scrape_request.config.wait_timeout,
+                min_content_length=scrape_request.config.min_content_length,
+                max_content_length=scrape_request.config.max_content_length,
             )
 
-        # Scrape only allowed URLs
+        # Scrape only allowed URLs with project context
         if allowed_urls:
             results = await enhanced_scraper_service.scrape_multiple_urls(
                 urls=allowed_urls,
-                scrape_prompt=request.scrape_prompt,
-                strategy=request.strategy.value if request.strategy else None,
+                scrape_prompt=scrape_request.scrape_prompt,
+                strategy=scrape_request.strategy.value if scrape_request.strategy else None,
                 config=scraper_config,
-                session_id=request.session_id,
+                session_id=scrape_request.session_id,
+                project_id=project_id,
+                department=department,
+                team=team,
+                user_id=user_id,
                 db=db
             )
 
