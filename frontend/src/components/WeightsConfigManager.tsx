@@ -15,7 +15,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Save, RotateCcw, AlertCircle, CheckCircle, Settings, User, X } from 'lucide-react';
+import { Save, RotateCcw, AlertCircle, CheckCircle, Settings, User, X, TrendingUp, Zap, Target } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import CountUp from 'react-countup';
 
 interface WeightsConfig {
   strategy_weights: {
@@ -276,23 +278,55 @@ export const WeightsConfigManager: React.FC = () => {
     if (!config) return null;
 
     const value = (config[section] as any)[key];
+    const percentage = ((value - min) / (max - min)) * 100;
 
     return (
-      <div key={`${section}-${key}`} className="mb-4">
-        <div className="flex justify-between items-center mb-1">
-          <label className="text-sm font-medium text-gray-700">{label}</label>
-          <span className="text-sm font-mono text-gray-600">{value.toFixed(2)}</span>
+      <motion.div
+        key={`${section}-${key}`}
+        className="mb-3"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <div className="glass-card-light p-3 rounded-lg hover-glow-primary smooth-transition">
+          <div className="flex justify-between items-center mb-2">
+            <label className="text-sm font-semibold text-gray-800 dark:text-gray-200">{label}</label>
+            <motion.span
+              key={value}
+              className="text-sm font-bold gradient-text-primary px-2 py-0.5 rounded-md bg-white/50 dark:bg-slate-800/50"
+              initial={{ scale: 1.2 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.2 }}
+            >
+              {value.toFixed(2)}
+            </motion.span>
+          </div>
+          <div className="relative">
+            <input
+              type="range"
+              min={min}
+              max={max}
+              step={step}
+              value={value}
+              onChange={(e) => handleWeightChange(section, key, parseFloat(e.target.value))}
+              className="w-full h-2 rounded-full appearance-none cursor-pointer smooth-transition"
+              style={{
+                background: `linear-gradient(90deg, rgb(107, 144, 128) 0%, rgb(20, 184, 166) ${percentage}%, rgb(226, 232, 240) ${percentage}%, rgb(226, 232, 240) 100%)`,
+              }}
+            />
+          </div>
+          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+            <span className="flex items-center gap-1">
+              <Target className="w-3 h-3" />
+              {min.toFixed(2)}
+            </span>
+            <span className="flex items-center gap-1">
+              <Zap className="w-3 h-3" />
+              {max.toFixed(2)}
+            </span>
+          </div>
         </div>
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(e) => handleWeightChange(section, key, parseFloat(e.target.value))}
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-        />
-      </div>
+      </motion.div>
     );
   };
 
@@ -570,15 +604,67 @@ export const WeightsConfigManager: React.FC = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      <div className="bg-white rounded-lg shadow-lg">
-        {/* Header */}
-        <div className="border-b border-gray-200 p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Settings className="w-6 h-6 text-primary-600" />
-              <h2 className="text-2xl font-bold text-gray-900">Weights Configuration</h2>
+    <div className="max-w-7xl mx-auto p-6">
+      {/* Hero Section */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="mb-8"
+      >
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-600 via-secondary-600 to-secondary-500 p-8 text-white shadow-2xl">
+          <div className="absolute inset-0 bg-black/10"></div>
+          <div className="relative z-10">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="p-3 bg-white/20 backdrop-blur-sm rounded-2xl">
+                <Settings className="w-8 h-8" />
+              </div>
+              <div>
+                <h1 className="text-4xl font-bold mb-2">Weights Configuration</h1>
+                <p className="text-primary-100 text-lg">Fine-tune your RAG system's behavior with precision controls</p>
+              </div>
             </div>
+
+            {/* Quick Stats */}
+            <div className="grid grid-cols-3 gap-4 mt-6">
+              <div className="glass-card p-4 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <TrendingUp className="w-5 h-5 text-secondary-300" />
+                  <div>
+                    <p className="text-xs text-primary-100">Total Parameters</p>
+                    <p className="text-2xl font-bold">
+                      <CountUp end={50} duration={2} />
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="glass-card p-4 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <Target className="w-5 h-5 text-primary-300" />
+                  <div>
+                    <p className="text-xs text-primary-100">Active Profile</p>
+                    <p className="text-xl font-semibold">{hasSessionConfig ? 'Custom' : 'Global'}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="glass-card p-4 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <Zap className="w-5 h-5 text-secondary-400" />
+                  <div>
+                    <p className="text-xs text-primary-100">Optimization</p>
+                    <p className="text-xl font-semibold">Balanced</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      <div className="glass-card-light rounded-2xl shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="border-b border-gray-200 dark:border-gray-700 p-6 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
+          <div className="flex items-center justify-between">{/* Keeping existing header content */}
             <div className="flex space-x-3">
               <button
                 onClick={resetToDefaults}
@@ -650,33 +736,36 @@ export const WeightsConfigManager: React.FC = () => {
           )}
         </div>
 
-        {/* Tabs */}
-        <div className="border-b border-gray-200">
-          <div className="flex overflow-x-auto">
+        {/* Tabs - Pill Style */}
+        <div className="p-4 bg-gray-50 dark:bg-slate-800/30">
+          <div className="flex overflow-x-auto gap-2 pb-2">
             {[
-              { key: 'strategy', label: 'Strategy' },
-              { key: 'scoring', label: 'Scoring' },
-              { key: 'source_quality', label: 'Source Quality' },
-              { key: 'classification', label: 'Classification' },
-              { key: 'similarity', label: 'Similarity' },
-              { key: 'reranking', label: 'Reranking' },
-              { key: 'preprocessing', label: 'Preprocessing' },
-              { key: 'cache', label: 'Cache' },
-              { key: 'multi_tool', label: 'Multi-Tool' },
-              { key: 'fusion', label: 'Fusion' },
-              { key: 'rag_settings', label: 'RAG Settings' },
+              { key: 'strategy', label: 'Strategy', icon: '🎯' },
+              { key: 'scoring', label: 'Scoring', icon: '📊' },
+              { key: 'source_quality', label: 'Source Quality', icon: '⭐' },
+              { key: 'classification', label: 'Classification', icon: '🏷️' },
+              { key: 'similarity', label: 'Similarity', icon: '🔍' },
+              { key: 'reranking', label: 'Reranking', icon: '📈' },
+              { key: 'preprocessing', label: 'Preprocessing', icon: '⚙️' },
+              { key: 'cache', label: 'Cache', icon: '⚡' },
+              { key: 'multi_tool', label: 'Multi-Tool', icon: '🛠️' },
+              { key: 'fusion', label: 'Fusion', icon: '🔀' },
+              { key: 'rag_settings', label: 'RAG Settings', icon: '🎛️' },
             ].map((tab) => (
-              <button
+              <motion.button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as TabType)}
-                className={`px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className={`px-6 py-3 text-sm font-semibold whitespace-nowrap rounded-full smooth-transition ${
                   activeTab === tab.key
-                    ? 'border-primary-600 text-primary-600'
-                    : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                    ? 'bg-gradient-to-r from-primary-600 to-secondary-600 text-white shadow-lg'
+                    : 'bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-600 shadow'
                 }`}
               >
+                <span className="mr-2">{tab.icon}</span>
                 {tab.label}
-              </button>
+              </motion.button>
             ))}
           </div>
         </div>
@@ -686,22 +775,37 @@ export const WeightsConfigManager: React.FC = () => {
       </div>
 
       <style jsx>{`
-        .slider::-webkit-slider-thumb {
+        /* Custom slider thumb styles with sage green gradient */
+        input[type="range"]::-webkit-slider-thumb {
           appearance: none;
-          width: 20px;
-          height: 20px;
-          background: #3b82f6;
+          width: 18px;
+          height: 18px;
+          background: linear-gradient(135deg, #6b9080 0%, #14b8a6 100%);
           cursor: pointer;
           border-radius: 50%;
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2), 0 0 0 3px rgba(107, 144, 128, 0.1);
+          transition: all 0.2s ease;
         }
 
-        .slider::-moz-range-thumb {
-          width: 20px;
-          height: 20px;
-          background: #3b82f6;
+        input[type="range"]::-webkit-slider-thumb:hover {
+          transform: scale(1.15);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 4px rgba(107, 144, 128, 0.2);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+          width: 18px;
+          height: 18px;
+          background: linear-gradient(135deg, #6b9080 0%, #14b8a6 100%);
           cursor: pointer;
           border-radius: 50%;
           border: none;
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+          transition: all 0.2s ease;
+        }
+
+        input[type="range"]::-moz-range-thumb:hover {
+          transform: scale(1.15);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         }
       `}</style>
     </div>

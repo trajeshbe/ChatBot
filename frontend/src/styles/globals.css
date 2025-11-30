@@ -116,3 +116,82 @@ body {
 .user-message-text a {
   @apply text-blue-100 hover:text-white !important;
 }
+
+/* Glass Morphism Utilities */
+.glass-card {
+  @apply bg-white/5 dark:bg-white/5 backdrop-blur-lg border border-white/10 dark:border-white/10;
+}
+
+.glass-card-light {
+  @apply bg-white/80 dark:bg-slate-800/80 backdrop-blur-lg border border-gray-200/50 dark:border-slate-700/50;
+}
+
+/* Gradient Text */
+.gradient-text {
+  @apply bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent;
+}
+
+.gradient-text-primary {
+  @apply bg-gradient-to-r from-primary-500 to-secondary-500 bg-clip-text text-transparent;
+}
+
+/* Hover Glow Effects */
+.hover-glow {
+  @apply transition-shadow duration-300;
+}
+
+.hover-glow:hover {
+  box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+}
+
+.hover-glow-primary:hover {
+  box-shadow: 0 0 20px rgba(107, 144, 128, 0.4);
+}
+
+/* Smooth Transitions */
+.smooth-transition {
+  @apply transition-all duration-300 ease-in-out;
+}
+
+/* Gradient Backgrounds */
+.gradient-bg-primary {
+  @apply bg-gradient-to-br from-primary-500 to-secondary-500;
+}
+
+.gradient-bg-blue-purple {
+  @apply bg-gradient-to-br from-blue-500 to-purple-500;
+}
+
+/* Custom Slider Styles */
+input[type="range"].gradient-slider {
+  @apply appearance-none h-2 rounded-full cursor-pointer;
+  background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
+}
+
+input[type="range"].gradient-slider::-webkit-slider-thumb {
+  @apply appearance-none w-5 h-5 rounded-full cursor-pointer;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+input[type="range"].gradient-slider::-moz-range-thumb {
+  @apply w-5 h-5 rounded-full cursor-pointer border-0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Animated Number */
+@keyframes countUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-count-up {
+  animation: countUp 0.5s ease-out;
+}

@@ -3009,3 +3009,19 @@ docker-compose logs -f worker
 # 8. Open frontend
 open http://localhost:3000
 ```
+
+
+
+
+
+Reference:
+
+There is a similar implemenation - https://github.com/bitswired/demos/tree/main/projects/agentic-loop
+
+
+
+Claude Codebox: https://www.reddit.com/r/ClaudeAI/comments/1l56jrs/i_made_claudebox_run_claude_code_without/
+
+
+
+https://github.com/RchGrav/claudebox

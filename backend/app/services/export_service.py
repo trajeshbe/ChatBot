@@ -216,51 +216,72 @@ class ExportService:
             else:
                 content_dict = data
 
-            # Add sections
-            for section_config in sections_config:
-                section_type = section_config.get('type')
-                style = section_config.get('style', 'Normal')
+            # Handle simple title/content format (when no sections provided)
+            if not sections_config:
+                # Check if config has title/content directly (frontend format)
+                title = config.get('title', content_dict.get('title', 'Exported Content'))
+                content = config.get('content', content_dict.get('content', data if isinstance(data, str) else str(data)))
 
-                if section_type == 'title':
-                    title = content_dict.get('title', 'Document Title')
-                    heading = doc.add_heading(title, level=1)
-                    heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                # Add title
+                heading = doc.add_heading(title, level=1)
+                heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-                elif section_type == 'executive_summary':
-                    doc.add_heading('Executive Summary', level=2)
-                    summary = content_dict.get('executive_summary', content_dict.get('summary', ''))
-                    p = doc.add_paragraph(str(summary))
-                    p.paragraph_format.line_spacing = formatting.get('line_spacing', 1.15)
+                # Add content
+                if content:
+                    # Split content by paragraphs and add each
+                    paragraphs = str(content).split('\n')
+                    for para_text in paragraphs:
+                        if para_text.strip():  # Skip empty lines
+                            p = doc.add_paragraph(para_text)
+                            p.paragraph_format.line_spacing = formatting.get('line_spacing', 1.15)
 
-                elif section_type == 'key_findings':
-                    doc.add_heading('Key Findings', level=2)
-                    findings = content_dict.get('key_findings', content_dict.get('findings', []))
-                    if isinstance(findings, list):
-                        for finding in findings:
-                            doc.add_paragraph(str(finding), style='List Bullet')
+                logger.info(f"Generated Word document with simple title/content format")
+            else:
+                # Add sections (original logic)
+                for section_config in sections_config:
+                    section_type = section_config.get('type')
+                    style = section_config.get('style', 'Normal')
+
+                    if section_type == 'title':
+                        title = content_dict.get('title', 'Document Title')
+                        heading = doc.add_heading(title, level=1)
+                        heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+                    elif section_type == 'executive_summary':
+                        doc.add_heading('Executive Summary', level=2)
+                        summary = content_dict.get('executive_summary', content_dict.get('summary', ''))
+                        p = doc.add_paragraph(str(summary))
+                        p.paragraph_format.line_spacing = formatting.get('line_spacing', 1.15)
+
+                    elif section_type == 'key_findings':
+                        doc.add_heading('Key Findings', level=2)
+                        findings = content_dict.get('key_findings', content_dict.get('findings', []))
+                        if isinstance(findings, list):
+                            for finding in findings:
+                                doc.add_paragraph(str(finding), style='List Bullet')
+                        else:
+                            doc.add_paragraph(str(findings), style='List Bullet')
+
+                    elif section_type == 'recommendations':
+                        doc.add_heading('Recommendations', level=2)
+                        recommendations = content_dict.get('recommendations', [])
+                        if isinstance(recommendations, list):
+                            for idx, rec in enumerate(recommendations, start=1):
+                                doc.add_paragraph(str(rec), style='List Number')
+                        else:
+                            doc.add_paragraph(str(recommendations), style='List Number')
+
+                    elif section_type == 'conclusion':
+                        doc.add_heading('Conclusion', level=2)
+                        conclusion = content_dict.get('conclusion', '')
+                        p = doc.add_paragraph(str(conclusion))
+                        p.paragraph_format.line_spacing = formatting.get('line_spacing', 1.15)
+
                     else:
-                        doc.add_paragraph(str(findings), style='List Bullet')
-
-                elif section_type == 'recommendations':
-                    doc.add_heading('Recommendations', level=2)
-                    recommendations = content_dict.get('recommendations', [])
-                    if isinstance(recommendations, list):
-                        for idx, rec in enumerate(recommendations, start=1):
-                            doc.add_paragraph(str(rec), style='List Number')
-                    else:
-                        doc.add_paragraph(str(recommendations), style='List Number')
-
-                elif section_type == 'conclusion':
-                    doc.add_heading('Conclusion', level=2)
-                    conclusion = content_dict.get('conclusion', '')
-                    p = doc.add_paragraph(str(conclusion))
-                    p.paragraph_format.line_spacing = formatting.get('line_spacing', 1.15)
-
-                else:
-                    # Generic section
-                    if section_type in content_dict:
-                        doc.add_heading(section_type.replace('_', ' ').title(), level=2)
-                        doc.add_paragraph(str(content_dict[section_type]))
+                        # Generic section
+                        if section_type in content_dict:
+                            doc.add_heading(section_type.replace('_', ' ').title(), level=2)
+                            doc.add_paragraph(str(content_dict[section_type]))
 
             # Apply global formatting
             font_name = formatting.get('font', 'Calibri')

@@ -109,6 +109,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
     ) -> Response:
         """Process each HTTP request with comprehensive audit logging"""
 
+        # Skip OPTIONS requests (CORS preflight) - must be handled by CORS middleware
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         # Skip excluded paths
         if any(request.url.path.startswith(path) for path in self.exclude_paths):
             return await call_next(request)

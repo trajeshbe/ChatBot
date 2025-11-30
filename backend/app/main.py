@@ -482,9 +482,18 @@ async def upload_file(
                 }
 
         # Upload and create document
-        # Convert project_id to UUID if provided
+        # Convert project_id to UUID if provided (handle both string and UUID types)
         logger.info(f"📁 Received project_id from form: {repr(project_id)}")
-        project_uuid = uuid.UUID(project_id) if project_id else None
+        if project_id:
+            # Handle both string and UUID types
+            if isinstance(project_id, uuid.UUID):
+                project_uuid = project_id
+            elif isinstance(project_id, str):
+                project_uuid = uuid.UUID(project_id)
+            else:
+                project_uuid = None
+        else:
+            project_uuid = None
         logger.info(f"📁 Converted to project_uuid: {project_uuid}")
 
         document = await document_service.upload_file(
