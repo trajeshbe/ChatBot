@@ -3,7 +3,6 @@ Script to create a default admin user
 Usage: python create_admin_user.py
 """
 import asyncio
-import hashlib
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import select
@@ -11,6 +10,7 @@ from sqlalchemy import select
 # Import models
 from app.models.database_enhanced import User, UserRole, Base
 from app.core.config import settings
+from app.core.security import get_password_hash  # 🔧 FIX: Use bcrypt hashing
 
 
 async def create_default_admin():
@@ -45,7 +45,8 @@ async def create_default_admin():
             # Create admin user
             # Default password: 'admin' (change in production!)
             default_password = 'admin'
-            hashed_password = hashlib.sha256(default_password.encode()).hexdigest()
+            # 🔧 FIX: Changed from hashlib.sha256 to bcrypt
+            hashed_password = get_password_hash(default_password)
 
             admin_user = User(
                 username='admin',

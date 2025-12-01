@@ -162,7 +162,7 @@ async def lifespan(app: FastAPI):
         logger.info("Checking for default admin user...")
         from app.models.database_enhanced import User, UserRole
         from app.core.database import AsyncSessionLocal
-        import hashlib
+        from app.core.security import get_password_hash  # 🔧 FIX: Use bcrypt hashing
 
         async with AsyncSessionLocal() as session:
             query = select(User).where(User.username == 'admin')
@@ -172,7 +172,8 @@ async def lifespan(app: FastAPI):
             if not existing_admin:
                 # Create default admin user
                 default_password = 'admin123'
-                hashed_password = hashlib.sha256(default_password.encode()).hexdigest()
+                # 🔧 FIX: Changed from hashlib.sha256 to bcrypt
+                hashed_password = get_password_hash(default_password)
 
                 admin_user = User(
                     username='admin',
