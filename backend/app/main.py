@@ -506,10 +506,12 @@ async def upload_file(
             department=department_name,
             team=team_name,
             project_id=project_uuid,
-            minio_path=minio_path
+            minio_path=minio_path,
+            user_role=current_user.role if current_user else None
         )
 
         logger.info(f"Document created: {document.id} - {document.filename}")
+        # NOTE: Files are stored in MinIO and agent runtime fetches them as needed
 
         # Process document asynchronously (chunk and embed)
         try:
@@ -899,7 +901,7 @@ async def get_documents(
         from app.models.database import Document
 
         # Build query with optional project filter
-        query = select(Document).order_by(Document.upload_date.desc())
+        query = select(Document).order_by(Document.created_at.desc())
 
         if project_id:
             # Filter by project_id
@@ -925,8 +927,8 @@ async def get_documents(
                 "file_size": doc.file_size,
                 "source_type": doc.source_type,
                 "source_url": doc.source_url,
-                "processed": doc.processed,
-                "upload_date": doc.upload_date.isoformat(),
+                "processed": doc.processing_status == 'completed',
+                "upload_date": doc.created_at.isoformat(),
                 "project_id": str(doc.project_id) if doc.project_id else None
             }
             for doc in documents
@@ -1206,6 +1208,14 @@ try:
     logger.info("✓ Export Service API router registered (Excel, Word, Markdown, JSON)")
 except Exception as e:
     logger.warning(f"Could not register Export Service router: {e}")
+
+# Agent Task Management API
+try:
+    from app.api.routes import agent_routes
+    app.include_router(agent_routes.router)
+    logger.info("✓ Agent Task Management API router registered (LLM-driven autonomous agent)")
+except Exception as e:
+    logger.warning(f"Could not register Agent router: {e}")
 
 
 # === Admin API Endpoints ===
@@ -1911,9 +1921,9 @@ async def get_session_documents(
         documents = []
         for doc, session_doc, chunk_count in rows:
             # Derive processing status from Document model fields
-            if doc.processing_error:
+            if doc.error_message:
                 processing_status = 'failed'
-            elif doc.processed:
+            elif doc.processing_status == 'completed':
                 processing_status = 'completed'
             elif chunk_count > 0:
                 processing_status = 'completed'
@@ -1927,7 +1937,7 @@ async def get_session_documents(
                 "processing_status": processing_status,
                 "has_embeddings": chunk_count > 0,
                 "chunk_count": chunk_count,
-                "created_at": doc.upload_date.isoformat() if doc.upload_date else None,
+                "created_at": doc.created_at.isoformat() if doc.created_at else None,
                 "priority": session_doc.priority
             })
 
@@ -2046,7 +2056,7 @@ async def get_admin_documents(
         if embedded_only:
             query = query.having(func.count(DocumentChunk.id) > 0)
 
-        query = query.order_by(Document.upload_date.desc()).limit(limit)
+        query = query.order_by(Document.created_at.desc()).limit(limit)
 
         result = await db.execute(query)
         rows = result.all()
@@ -2054,9 +2064,9 @@ async def get_admin_documents(
         documents = []
         for doc, chunk_count, user_email, username, session_id in rows:
             # Derive processing status from Document model fields
-            if doc.processing_error:
+            if doc.error_message:
                 processing_status = 'failed'
-            elif doc.processed:
+            elif doc.processing_status == 'completed':
                 processing_status = 'completed'
             elif chunk_count > 0:
                 processing_status = 'completed'
@@ -2072,7 +2082,7 @@ async def get_admin_documents(
                 "user_email": user_email or "anonymous",
                 "username": username or "anonymous",
                 "session_id": session_id,
-                "created_at": doc.upload_date.isoformat() if doc.upload_date else None
+                "created_at": doc.created_at.isoformat() if doc.created_at else None
             })
 
         logger.info(f"Retrieved {len(documents)} documents for admin")
@@ -2260,7 +2270,7 @@ async def debug_session_query(
                 "document_id": str(doc.id),
                 "filename": doc.filename,
                 "priority": sd.priority,
-                "processed": doc.processed,
+                "processed": doc.processing_status == 'completed',
                 "chunk_count": chunk_count,
                 "chunks_with_embeddings": embed_count
             })
@@ -2481,9 +2491,9 @@ async def db_console_documents(
                 d.file_size,
                 d.source_type,
                 d.source_url,
-                d.upload_date,
-                d.processed,
-                d.processing_error,
+                d.created_at,
+                d.processing_status,
+                d.error_message,
                 COUNT(DISTINCT dc.id) as total_chunks,
                 COUNT(DISTINCT CASE WHEN dc.embedding IS NOT NULL THEN dc.id END) as chunks_with_embeddings,
                 COUNT(DISTINCT sd.session_id) as session_count,
@@ -2493,8 +2503,8 @@ async def db_console_documents(
             LEFT JOIN session_documents sd ON d.id = sd.document_id
             LEFT JOIN chat_sessions cs ON sd.session_id = cs.id
             WHERE d.filename ILIKE :search_pattern
-            GROUP BY d.id, d.filename, d.file_type, d.file_size, d.source_type, d.source_url, d.upload_date, d.processed, d.processing_error
-            ORDER BY d.upload_date DESC
+            GROUP BY d.id, d.filename, d.file_type, d.file_size, d.source_type, d.source_url, d.created_at, d.processing_status, d.error_message
+            ORDER BY d.created_at DESC
             LIMIT :limit OFFSET :offset
         """)
 
@@ -2521,9 +2531,9 @@ async def db_console_documents(
                 "file_size": row.file_size,
                 "source_type": row.source_type,
                 "source_url": row.source_url,
-                "upload_date": row.upload_date.isoformat() if row.upload_date else None,
-                "processed": row.processed,
-                "processing_error": row.processing_error,
+                "upload_date": row.created_at.isoformat() if row.created_at else None,
+                "processed": row.processing_status == 'completed',
+                "processing_error": row.error_message,
                 "total_chunks": row.total_chunks,
                 "chunks_with_embeddings": row.chunks_with_embeddings,
                 "embedding_percentage": round(embedding_percentage, 2),
@@ -2625,7 +2635,7 @@ async def db_console_document_chunks(
                 "id": str(document.id),
                 "filename": document.filename,
                 "file_type": document.file_type,
-                "upload_date": document.upload_date.isoformat() if document.upload_date else None
+                "upload_date": document.created_at.isoformat() if document.created_at else None
             },
             "chunks": chunks,
             "total": total,
@@ -2649,8 +2659,8 @@ async def db_console_stats(db: AsyncSession = Depends(get_db)):
         stats_query = sql_text("""
             SELECT
                 (SELECT COUNT(*) FROM documents) as total_documents,
-                (SELECT COUNT(*) FROM documents WHERE processed = true) as processed_documents,
-                (SELECT COUNT(*) FROM documents WHERE processing_error IS NOT NULL) as failed_documents,
+                (SELECT COUNT(*) FROM documents WHERE processing_status = 'completed') as processed_documents,
+                (SELECT COUNT(*) FROM documents WHERE error_message IS NOT NULL) as failed_documents,
                 (SELECT COUNT(*) FROM document_chunks) as total_chunks,
                 (SELECT COUNT(*) FROM document_chunks WHERE embedding IS NOT NULL) as chunks_with_embeddings,
                 (SELECT COUNT(DISTINCT session_id) FROM session_documents) as total_sessions,
@@ -2749,14 +2759,14 @@ async def debug_embeddings(db: AsyncSession = Depends(get_db)):
             diagnostic_info['embedding_dimensions'] = None
 
         # 5. Check for processing errors
-        error_query = select(Document).where(Document.processing_error != None)
+        error_query = select(Document).where(Document.error_message != None)
         error_result = await db.execute(error_query)
         error_docs = error_result.scalars().all()
         diagnostic_info['documents_with_errors'] = len(error_docs)
         diagnostic_info['error_details'] = [
             {
                 'filename': doc.filename,
-                'error': doc.processing_error[:200]  # Truncate long errors
+                'error': doc.error_message[:200]  # Truncate long errors
             }
             for doc in error_docs[:5]  # Limit to 5 examples
         ]
@@ -2802,7 +2812,7 @@ async def debug_embeddings(db: AsyncSession = Depends(get_db)):
                     END as embedding_dimensions
                 FROM document_chunks dc
                 JOIN documents d ON dc.document_id = d.id
-                ORDER BY d.upload_date DESC, dc.chunk_index
+                ORDER BY d.created_at DESC, dc.chunk_index
                 LIMIT 5
             """)
             sample_result = await db.execute(sample_query)

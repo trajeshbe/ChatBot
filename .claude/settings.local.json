@@ -29,7 +29,8 @@
       "Bash(fold:*)",
       "Bash(bash scripts/testing/test_comprehensive_chat.sh:*)",
       "Bash(docker cp:*)",
-      "Bash(docker-compose build:*)"
+      "Bash(docker-compose build:*)",
+      "Bash(bash:*)"
     ],
     "deny": [],
     "ask": []

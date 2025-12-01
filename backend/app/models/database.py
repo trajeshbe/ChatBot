@@ -18,18 +18,19 @@ class Document(Base):
     file_size = Column(Integer, nullable=False)
     source_type = Column(String(50), nullable=False)  # 'upload' or 'scrape'
     source_url = Column(String(1024), nullable=True)  # For scraped content
-    meta_info = Column(JSON, nullable=True)
-    upload_date = Column(DateTime(timezone=True), server_default=func.now())
-    processed = Column(Boolean, default=False)
-    processing_error = Column(Text, nullable=True)
+    processing_status = Column(String(50), default='pending', nullable=True)  # 'pending', 'processing', 'completed', 'failed'
+    error_message = Column(Text, nullable=True)
+    meta_info = Column('metadata', JSON, nullable=True)  # Mapped to 'metadata' column in DB (metadata is reserved in SQLAlchemy)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Hierarchical organization: role/dept/team/username/project/folder/file
+    # Organizational hierarchy
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
     uploaded_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     department = Column(String(100), nullable=True)
     team = Column(String(100), nullable=True)
-    user_role = Column(String(50), nullable=True)  # Role at upload time
-    minio_path = Column(String(1024), nullable=True)  # Full hierarchical path
+    user_role = Column(String(50), nullable=True)  # Role of uploader at upload time
+    minio_path = Column(String(1024), nullable=True)  # Full hierarchical MinIO path
 
 
 class DocumentChunk(Base):
@@ -122,6 +123,54 @@ class QueryCache(Base):
     ttl_seconds = Column(Integer, default=3600)
 
 
+class AgentTask(Base):
+    """Agent task tracking table"""
+    __tablename__ = "agent_tasks"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_id = Column(String(255), unique=True, nullable=False, index=True)  # Human-readable task ID
+
+    # Task details
+    task_description = Column(Text, nullable=False)
+    status = Column(String(50), nullable=False, default='pending')  # pending, running, completed, failed, cancelled
+    session_id = Column(String(255), nullable=True, index=True)
+    model = Column(String(100), nullable=False, default='qwen2.5-coder:7b')
+
+    # Configuration
+    max_iterations = Column(Integer, default=20)
+    timeout_seconds = Column(Integer, default=600)
+
+    # Progress tracking
+    current_iteration = Column(Integer, default=0)
+    current_phase = Column(String(50), nullable=True)  # THINK, PLAN, ACT, OBSERVE
+
+    # Execution details
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    duration_seconds = Column(Float, nullable=True)
+
+    # Results
+    result = Column(Text, nullable=True)  # Final answer or result
+    artifacts = Column(ARRAY(String), default=[])  # List of generated artifact paths
+    tools_used = Column(ARRAY(String), default=[])  # List of tools executed
+    llm_calls = Column(Integer, default=0)
+
+    # Error handling
+    error = Column(Text, nullable=True)
+    error_details = Column(JSON, nullable=True)
+
+    # Metadata
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    meta_info = Column(JSON, nullable=True)
+
+    # Project tracking (similar to other models)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    department = Column(String(100), nullable=True)
+    team = Column(String(100), nullable=True)
+
+
 # Import enhanced models (RBAC, audit logs, sessions)
 # These are imported here to ensure they use the same Base
 try:
@@ -132,7 +181,7 @@ try:
     )
     __all__ = [
         'Document', 'DocumentChunk', 'Conversation', 'Message',
-        'WebScrapeJob', 'QueryCache',
+        'WebScrapeJob', 'QueryCache', 'AgentTask',
         'User', 'APIKey', 'ChatSession', 'SessionDocument', 'ConversationMessage',
         'AuditLog', 'UsageMetrics', 'DocumentPermission', 'SessionContext',
         'UserRole', 'ActionType', 'Base'
@@ -141,5 +190,5 @@ except ImportError:
     # Enhanced models not available yet
     __all__ = [
         'Document', 'DocumentChunk', 'Conversation', 'Message',
-        'WebScrapeJob', 'QueryCache', 'Base'
+        'WebScrapeJob', 'QueryCache', 'AgentTask', 'Base'
     ]

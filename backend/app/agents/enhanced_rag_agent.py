@@ -214,6 +214,54 @@ class EnhancedRAGAgent(RAGAgent):
 
             return result
 
+        # 🎯 NEW: Check if user wants to use Claude Code (hybrid agent mode)
+        use_agent_mode = user_preferences.get('use_agent_mode', False)
+        force_claude_cli = user_preferences.get('force_claude_cli', False)
+
+        if use_agent_mode:
+            logger.info("🤖 AGENT MODE ENABLED - Checking task complexity for hybrid routing")
+
+            # Use hybrid agent router to decide which agent to use
+            from app.agents.hybrid_agent_router import hybrid_agent_router
+
+            # Route to appropriate agent
+            agent_option, routing_metadata = await hybrid_agent_router.route(
+                query=query,
+                session_id=session_id or "default",
+                user_preferences=user_preferences
+            )
+
+            logger.info(
+                f"🎯 Hybrid routing decision: {agent_option.value}\n"
+                f"   Complexity: {routing_metadata['complexity']}\n"
+                f"   Task Type: {routing_metadata['task_type']}\n"
+                f"   Reason: {routing_metadata['reason']}\n"
+                f"   Estimated Cost: ${routing_metadata['estimated_cost']:.2f}"
+            )
+
+            # If agent mode is required (not DIRECT_RAG), execute with agent
+            if agent_option.value != "direct_rag":
+                logger.info(f"🚀 Executing with {agent_option.value} agent")
+
+                # Execute task with selected agent
+                agent_result = await self._execute_with_agent(
+                    agent_option=agent_option.value,
+                    query=query,
+                    session_id=session_id or "default",
+                    task_type=routing_metadata['task_type'],
+                    user_preferences=user_preferences
+                )
+
+                # Add routing metadata
+                agent_result['metadata'] = agent_result.get('metadata', {})
+                agent_result['metadata']['agent_routing'] = routing_metadata
+                agent_result['metadata']['routing_strategy'] = 'hybrid_agent'
+
+                return agent_result
+
+            else:
+                logger.info("📌 Task is SIMPLE - continuing with normal RAG pipeline")
+
         # 🎯 Default: Use normal tool selection (balanced approach)
         logger.info("📌 ROUTING: BALANCED (using tool selection based on query analysis)")
         logger.info(f"   Reason: Balanced weights - no single strategy dominates")
@@ -1167,6 +1215,115 @@ Context:
                 "answer": f"I apologize, but I encountered an error searching documents: {str(e)}",
                 "sources": [],
                 "metadata": {"error": str(e)}
+            }
+    async def _execute_with_agent(
+        self,
+        agent_option: str,
+        query: str,
+        session_id: str,
+        task_type: str,
+        user_preferences: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Execute task with selected agent (local_mini or claude_cli)
+
+        Args:
+            agent_option: "local_mini" or "claude_cli"
+            query: User query
+            session_id: Session ID
+            task_type: Task type classification
+            user_preferences: User preferences
+
+        Returns:
+            Agent execution result
+        """
+
+        import uuid
+
+        task_id = f"task-{uuid.uuid4().hex[:12]}"
+
+        logger.info(
+            f"🤖 Executing with agent: {agent_option}\n"
+            f"   Task ID: {task_id}\n"
+            f"   Task Type: {task_type}\n"
+            f"   Session: {session_id}"
+        )
+
+        try:
+            if agent_option == "local_mini":
+                # Use local mini agent (free, fast)
+                from app.agents.local_mini_agent import create_local_mini_agent
+
+                agent = create_local_mini_agent(
+                    task_id=task_id,
+                    session_id=session_id,
+                    redis_client=None  # TODO: Pass Redis client for streaming
+                )
+
+                # Get uploaded files from user preferences
+                uploaded_files = user_preferences.get('uploaded_files', [])
+
+                result = await agent.execute_task(
+                    query=query,
+                    task_type=task_type,
+                    uploaded_files=uploaded_files
+                )
+
+                return result
+
+            elif agent_option == "claude_cli":
+                # Use Claude CLI agent (powerful, costly)
+                from app.agents.claude_cli_agent import create_claude_cli_agent
+                from app.core.config import settings
+
+                # Get Anthropic API key
+                anthropic_api_key = user_preferences.get('anthropic_api_key')
+                if not anthropic_api_key:
+                    anthropic_api_key = settings.ANTHROPIC_API_KEY
+
+                if not anthropic_api_key:
+                    logger.error("❌ Anthropic API key not found!")
+                    return {
+                        "success": False,
+                        "error": "Anthropic API key not configured",
+                        "answer": "Claude CLI requires an Anthropic API key. Please configure it in settings.",
+                        "artifacts": []
+                    }
+
+                agent = create_claude_cli_agent(
+                    task_id=task_id,
+                    session_id=session_id,
+                    anthropic_api_key=anthropic_api_key,
+                    redis_client=None  # TODO: Pass Redis client for streaming
+                )
+
+                # Get uploaded files from user preferences
+                uploaded_files = user_preferences.get('uploaded_files', [])
+
+                result = await agent.execute_task(
+                    query=query,
+                    task_type=task_type,
+                    uploaded_files=uploaded_files
+                )
+
+                return result
+
+            else:
+                logger.error(f"❌ Unknown agent option: {agent_option}")
+                return {
+                    "success": False,
+                    "error": f"Unknown agent option: {agent_option}",
+                    "answer": "Internal error: Unknown agent option",
+                    "artifacts": []
+                }
+
+        except Exception as e:
+            logger.error(f"❌ Agent execution failed: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "answer": f"Agent execution failed: {str(e)}",
+                "artifacts": []
             }
 
 

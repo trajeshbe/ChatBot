@@ -1,0 +1,87 @@
+# Dockerfile for Claude Code Agent Runtime Container
+# This container runs autonomously with orchestration, agentic loop, and execution layers
+
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    bash \
+    curl \
+    git \
+    wget \
+    build-essential \
+    libpq-dev \
+    vim \
+    nano \
+    jq \
+    # For file operations
+    file \
+    tree \
+    libmagic1 \
+    # For network tools
+    netcat-openbsd \
+    iputils-ping \
+    # OCR dependencies (tesseract)
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    libtesseract-dev \
+    # Image processing dependencies (OpenCV)
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    # PDF to image conversion
+    poppler-utils \
+    # Clean up
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for security
+RUN useradd -m -u 1000 -s /bin/bash agentuser
+
+# Set working directory
+WORKDIR /workspace
+
+# Create necessary directories
+RUN mkdir -p /workspace/input \
+    /workspace/output \
+    /workspace/artifacts \
+    /workspace/temp \
+    && chown -R agentuser:agentuser /workspace
+
+# Copy requirements for agent runtime
+COPY requirements-agent.txt /tmp/requirements-agent.txt
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r /tmp/requirements-agent.txt
+
+# Copy necessary service files
+COPY app/services/task_complexity_analyzer.py /app/services/task_complexity_analyzer.py
+COPY app/services/api_usage_tracker.py /app/services/api_usage_tracker.py
+COPY app/services/__init__.py /app/services/__init__.py
+
+# Copy enhanced tools (Month 1 & 2: Data Science, Documents, Vision)
+COPY agent_tools_enhanced.py /app/agent_tools_enhanced.py
+
+# Copy entry point
+COPY entrypoint_agent.py /app/entrypoint_agent.py
+
+# Set ownership
+RUN chown -R agentuser:agentuser /app
+
+# Switch to non-root user
+USER agentuser
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV AGENT_WORKSPACE=/workspace
+ENV AGENT_MAX_ITERATIONS=20
+ENV AGENT_TIMEOUT_SECONDS=600
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)"
+
+# Entry point
+ENTRYPOINT ["python", "/app/entrypoint_agent.py"]

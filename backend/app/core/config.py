@@ -66,6 +66,46 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4-turbo-preview"
     ANTHROPIC_API_KEY: Optional[str] = None  # For Claude models
 
+    # ========================================
+    # HYBRID AGENT SYSTEM (Claude Code Integration)
+    # ========================================
+
+    # Agent Mode Configuration
+    AGENT_MODE_ENABLED: bool = True  # Enable/disable agent mode globally
+    AGENT_MODE_DEFAULT: bool = False  # Default state for "Use Claude Code" checkbox
+
+    # API Budget Limits (Cost Control)
+    DAILY_API_BUDGET_LIMIT: float = 10.0  # $10/day for Anthropic API
+    MONTHLY_API_BUDGET_LIMIT: float = 200.0  # $200/month for Anthropic API
+
+    # Agent Iteration Limits
+    LOCAL_MINI_AGENT_MAX_ITERATIONS: int = 20  # Max iterations for local agent
+    CLAUDE_CLI_AGENT_MAX_ITERATIONS: int = 50  # Max iterations for Claude CLI agent
+    AGENT_EXECUTION_TIMEOUT_SECONDS: int = 600  # 10 minutes max per task
+
+    # Ollama Model Configuration (Local Agent)
+    AGENT_CODE_MODEL: str = "qwen2.5-coder:7b"  # Code generation, EDA, data analysis
+    AGENT_VISION_MODEL: str = "llama3.2-vision:11b"  # Image analysis, OCR, screenshots
+    AGENT_BACKUP_MODEL: str = "deepseek-coder:6.7b"  # Backup for code tasks
+    OLLAMA_BASE_URL: str = "http://rag-ollama:11434"  # Updated to match actual container
+
+    # Agent Runtime Configuration
+    AGENT_WORKSPACE_BASE: str = "/tmp/agent_workspaces"  # Base directory for agent workspaces
+    AGENT_CONTAINER_IMAGE: str = "chatbot-agent-runtime:latest"  # Sandbox container image
+    AGENT_ENABLE_STREAMING: bool = True  # Enable real-time event streaming via Redis
+
+    # Task Complexity Thresholds (Auto-routing)
+    COMPLEXITY_SIMPLE_THRESHOLD: float = 0.3  # Below this = SIMPLE (direct RAG)
+    COMPLEXITY_MEDIUM_THRESHOLD: float = 0.6  # Between 0.3-0.6 = MEDIUM (local agent)
+    # Above 0.6 = COMPLEX (local or Claude CLI based on task type)
+
+    # Hybrid Routing Preferences (can be overridden by user)
+    PREFER_LOCAL_FOR_DATA_ANALYSIS: bool = True  # Use free local agent for data tasks
+    PREFER_LOCAL_FOR_CODE_GENERATION: bool = True  # Use free local agent for code gen
+    PREFER_LOCAL_FOR_VISION: bool = True  # Use free local agent for vision tasks
+    PREFER_CLAUDE_FOR_RESEARCH: bool = True  # Use Claude CLI for research (if budget allows)
+    PREFER_CLAUDE_FOR_WEB_AUTOMATION: bool = True  # Use Claude CLI for web tasks (if budget allows)
+
     # Embeddings
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     EMBEDDING_DIMENSION: int = 384

@@ -48,7 +48,6 @@ router = APIRouter(prefix="/api/v1", tags=["teams-projects"])
 class DepartmentResponse(BaseModel):
     id: str
     name: str
-    code: str
     description: Optional[str] = None
     is_active: bool
 
@@ -127,7 +126,6 @@ async def get_departments(
         DepartmentResponse(
             id=str(dept.id),
             name=dept.name,
-            code=dept.code or "",
             description=dept.description,
             is_active=dept.is_active
         )
@@ -414,17 +412,21 @@ async def _enrich_project_response(project: Project, db: AsyncSession) -> Projec
     )
     owner = owner_result.scalar_one_or_none()
 
-    # Get department name
-    dept_result = await db.execute(
-        select(Department).where(Department.id == project.department_id)
-    )
-    dept = dept_result.scalar_one_or_none()
+    # Get department name (only if department_id is not NULL)
+    dept = None
+    if project.department_id:
+        dept_result = await db.execute(
+            select(Department).where(Department.id == project.department_id)
+        )
+        dept = dept_result.scalar_one_or_none()
 
-    # Get team name
-    team_result = await db.execute(
-        select(Team).where(Team.id == project.team_id)
-    )
-    team = team_result.scalar_one_or_none()
+    # Get team name (only if team_id is not NULL)
+    team = None
+    if project.team_id:
+        team_result = await db.execute(
+            select(Team).where(Team.id == project.team_id)
+        )
+        team = team_result.scalar_one_or_none()
 
     # Get file stats
     from app.models.database import Document

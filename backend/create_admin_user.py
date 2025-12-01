@@ -18,7 +18,7 @@ async def create_default_admin():
 
     # Create async engine
     engine = create_async_engine(
-        settings.ASYNC_DATABASE_URL,
+        settings.SQLALCHEMY_DATABASE_URI,
         echo=False,
         future=True
     )
@@ -43,8 +43,8 @@ async def create_default_admin():
                 return
 
             # Create admin user
-            # Default password: 'admin123' (change in production!)
-            default_password = 'admin123'
+            # Default password: 'admin' (change in production!)
+            default_password = 'admin'
             hashed_password = hashlib.sha256(default_password.encode()).hexdigest()
 
             admin_user = User(

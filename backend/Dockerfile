@@ -7,10 +7,13 @@ FROM mcr.microsoft.com/playwright/python:v1.48.0-jammy
 
 WORKDIR /app
 
-# Install PostgreSQL client libraries (required for psycopg2)
+# Install system dependencies
+# - libpq-dev: PostgreSQL client libraries (required for psycopg2)
+# - docker.io: Docker CLI for executing agent tasks in agent-runtime container
 # Note: Playwright image is based on Ubuntu, so we can use apt-get
 RUN apt-get update && apt-get install -y \
     libpq-dev \
+    docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip to latest version

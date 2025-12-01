@@ -28,6 +28,10 @@ interface FileUploadProps {
     department_id?: string
     team_id?: string
   }
+  sessionId?: string
+  projectId?: string  // ✅ Accept project ID from parent
+  onUploadComplete?: () => void  // ✅ Callback after upload
+  hideProjectSelector?: boolean  // ✅ Hide internal project selector when parent manages it
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -45,24 +49,34 @@ const getSessionId = (): string => {
   return sessionId
 }
 
-export default function FileUpload({ currentUser }: FileUploadProps) {
+export default function FileUpload({
+  currentUser,
+  sessionId: externalSessionId,
+  projectId: externalProjectId,
+  onUploadComplete,
+  hideProjectSelector = false
+}: FileUploadProps) {
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [sessionId, setSessionId] = useState<string>('')
   const [selectedProjectId, setSelectedProjectId] = useState<string>('')
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
 
   useEffect(() => {
-    setSessionId(getSessionId())
+    // Use external session if provided, otherwise generate one
+    setSessionId(externalSessionId || getSessionId())
 
-    // 🆕 Load selected project from localStorage (syncs with ChatInterface)
-    if (typeof window !== 'undefined') {
+    // Use external project ID if provided, otherwise load from localStorage
+    if (externalProjectId) {
+      setSelectedProjectId(externalProjectId)
+      console.log('📁 [FileUpload] Using external project ID:', externalProjectId)
+    } else if (typeof window !== 'undefined') {
       const savedProjectId = localStorage.getItem('selected_project_id')
       if (savedProjectId) {
         setSelectedProjectId(savedProjectId)
         console.log('📁 [FileUpload] Loaded project ID from localStorage:', savedProjectId)
       }
     }
-  }, [])
+  }, [externalSessionId, externalProjectId])
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const currentSessionId = getSessionId()
@@ -164,6 +178,11 @@ export default function FileUpload({ currentUser }: FileUploadProps) {
               : f
           )
         )
+
+        // ✅ Call onUploadComplete callback if provided
+        if (onUploadComplete) {
+          onUploadComplete()
+        }
       } catch (error: any) {
         console.error('Upload error:', error)
 
@@ -218,37 +237,39 @@ export default function FileUpload({ currentUser }: FileUploadProps) {
           Upload documents to be processed and added to the knowledge base. Supported formats: PDF, TXT, DOC, DOCX, JSON, MD
         </p>
 
-        {/* Project Selector */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            Project (Optional)
-          </label>
-          <ProjectSelector
-            value={selectedProjectId}
-            onChange={(projectId, project) => {
-              setSelectedProjectId(projectId)
-              setSelectedProject(project)
-              // Save to localStorage for ChatInterface sync
-              if (projectId) {
-                localStorage.setItem('selected_project_id', projectId)
-              } else {
-                localStorage.removeItem('selected_project_id')
-              }
-              console.log('📁 [FileUpload] Selected project ID saved to localStorage:', projectId)
-            }}
-            currentUser={currentUser}
-            placeholder="Select a project or upload without a project"
-          />
-          {selectedProject && (
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-              Files will be organized in:{' '}
-              <span className="font-mono text-primary-600 dark:text-primary-400">
-                {selectedProject.department_name}/{selectedProject.team_name}/
-                {currentUser?.username || 'username'}/{selectedProject.name}/
-              </span>
-            </p>
-          )}
-        </div>
+        {/* Project Selector - Hide when parent component manages project selection */}
+        {!hideProjectSelector && (
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              Project (Optional)
+            </label>
+            <ProjectSelector
+              value={selectedProjectId}
+              onChange={(projectId, project) => {
+                setSelectedProjectId(projectId)
+                setSelectedProject(project)
+                // Save to localStorage for ChatInterface sync
+                if (projectId) {
+                  localStorage.setItem('selected_project_id', projectId)
+                } else {
+                  localStorage.removeItem('selected_project_id')
+                }
+                console.log('📁 [FileUpload] Selected project ID saved to localStorage:', projectId)
+              }}
+              currentUser={currentUser}
+              placeholder="Select a project or upload without a project"
+            />
+            {selectedProject && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                Files will be organized in:{' '}
+                <span className="font-mono text-primary-600 dark:text-primary-400">
+                  {selectedProject.department_name}/{selectedProject.team_name}/
+                  {currentUser?.username || 'username'}/{selectedProject.name}/
+                </span>
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Dropzone */}
         <div

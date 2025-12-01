@@ -15,13 +15,14 @@ import ProjectsView from '@/components/ProjectsView'
 import ProjectDetail from '@/components/ProjectDetail'
 import Library from '@/components/Library'
 import PromptLibraryManager from '@/components/PromptLibraryManager'
+import AgentTaskMonitor from '@/components/AgentTaskMonitor'
 import { useAuth } from '@/contexts/AuthContext'
 import type { RAGConfig } from '@/components/RAGSettings'
 
 export default function Home() {
   const router = useRouter()
   const { user, isAuthenticated, isLoading } = useAuth()
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'chat' | 'upload' | 'scrape' | 'history' | 'evaluation' | 'estimator' | 'tools' | 'weights' | 'library' | 'projects' | 'files' | 'explainable'>('chat')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'chat' | 'upload' | 'scrape' | 'history' | 'evaluation' | 'estimator' | 'tools' | 'weights' | 'library' | 'projects' | 'files' | 'explainable' | 'agent'>('chat')
   const [sessionId, setSessionId] = useState<string>('')
   const [currentUser, setCurrentUser] = useState<string>('Anonymous')
   const [ragConfig, setRagConfig] = useState<RAGConfig | null>(null)
@@ -275,6 +276,23 @@ export default function Home() {
           {activeTab === 'library' && (
             <div className="flex-1 overflow-hidden">
               <PromptLibraryManager />
+            </div>
+          )}
+
+          {/* Agent Task Monitor */}
+          {activeTab === 'agent' && (
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900">
+              <div className="max-w-7xl mx-auto">
+                <div className="mb-6">
+                  <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
+                    🤖 Agent Task Monitor
+                  </h1>
+                  <p className="text-slate-600 dark:text-slate-400">
+                    Create and monitor autonomous agent tasks with LLM-driven tool execution
+                  </p>
+                </div>
+                <AgentTaskMonitor sessionId={sessionId} />
+              </div>
             </div>
           )}
         </div>

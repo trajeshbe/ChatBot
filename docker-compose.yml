@@ -118,6 +118,38 @@ services:
     networks:
       - rag-network
 
+  # Agent Runtime - Autonomous AI Agent with LLM Integration
+  # Executes multi-step tasks using 13 tools (data analysis, documents, vision)
+  agent-runtime:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.agent-runtime
+    image: chatbot-agent-runtime:llm-enabled
+    container_name: rag-agent-runtime
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      AGENT_LLM_MODEL: qwen2.5-coder:7b
+      POSTGRES_SERVER: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ragchatbot
+      AGENT_MAX_ITERATIONS: 20
+      AGENT_TIMEOUT_SECONDS: 600
+      AGENT_WORKSPACE: /workspace
+    volumes:
+      - agent_workspace:/workspace
+      - agent_artifacts:/artifacts
+    depends_on:
+      - ollama
+      - postgres
+    networks:
+      - rag-network
+    # Agent runs on-demand via API calls, not as a persistent service
+    # Override ENTRYPOINT to keep container alive for docker exec commands
+    entrypoint: ["/bin/bash", "-c"]
+    command: ["tail -f /dev/null"]  # Keep container running for on-demand execution
+    restart: unless-stopped
+
   # llama.cpp CPU fallback (DISABLED - replaced by Ollama)
   # Ollama has better WSL2 compatibility
   # llama-cpp:
@@ -295,6 +327,8 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - agent_workspace:/workspace  # Shared with agent-runtime for file uploads
+      - /var/run/docker.sock:/var/run/docker.sock  # Mount docker socket for agent task execution
     depends_on:
       - postgres
       - redis
@@ -363,3 +397,5 @@ volumes:
   grafana_data:
   flink_data:
   frontend_nextjs_cache:
+  agent_workspace:
+  agent_artifacts:

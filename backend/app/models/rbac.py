@@ -61,7 +61,6 @@ class Department(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(100), unique=True, nullable=False, index=True)
-    code = Column(String(50), unique=True, nullable=True, index=True)  # Department code
     parent_department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
     description = Column(Text)
     is_active = Column(Boolean, default=True, index=True)
@@ -80,7 +79,6 @@ class Department(Base):
         return {
             "id": str(self.id),
             "name": self.name,
-            "code": self.code,
             "parent_department_id": str(self.parent_department_id) if self.parent_department_id else None,
             "description": self.description,
             "is_active": self.is_active,

@@ -158,7 +158,8 @@ class DocumentService:
         department: Optional[str] = None,
         team: Optional[str] = None,
         project_id: Optional[uuid.UUID] = None,
-        minio_path: Optional[str] = None
+        minio_path: Optional[str] = None,
+        user_role: Optional[str] = None
     ) -> Document:
         """
         Upload file to MinIO and create database record
@@ -212,10 +213,11 @@ class DocumentService:
                 file_size=len(file_data),
                 source_type=source_type,
                 source_url=source_url,
-                processed=False,
+                processing_status='pending',  # Fixed: was 'processed'
                 uploaded_by=user_id,
                 department=department,
                 team=team,
+                user_role=user_role,  # Add user role
                 project_id=project_id  # Added: link to project
             )
 
@@ -474,7 +476,7 @@ class DocumentService:
                 document_chunks.append(chunk_record)
 
             # Mark document as processed
-            document.processed = True
+            document.processing_status = 'completed'
             await db.flush()  # Flush changes without committing
 
             logger.info(f"Successfully processed document {document_id} with {len(document_chunks)} chunks")

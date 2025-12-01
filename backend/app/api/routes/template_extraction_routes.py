@@ -1892,7 +1892,7 @@ async def save_extracted_data_to_db(
                 "row_count": len(request.data),
                 "session_id": request.session_id
             },
-            processed=False
+            processing_status='pending'
         )
         db.add(document_record)
         await db.flush()
@@ -1958,7 +1958,7 @@ async def save_extracted_data_to_db(
             document_chunks.append(chunk_record)
 
         # Mark document as processed
-        document_record.processed = True
+        document_record.processing_status = 'completed'
 
         # Commit all changes
         await db.commit()

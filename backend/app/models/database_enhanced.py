@@ -94,7 +94,7 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     full_name = Column(String(255), nullable=True)
     hashed_password = Column(String(255), nullable=False)
-    role = Column(SQLEnum(UserRole), default=UserRole.USER, nullable=False)
+    role = Column(SQLEnum(UserRole, name="user_role", values_callable=lambda x: [e.value for e in x]), default=UserRole.USER, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -196,7 +196,7 @@ class AuditLog(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id", ondelete="SET NULL"), nullable=True)
-    action = Column(SQLEnum(ActionType), nullable=False, index=True)
+    action = Column(SQLEnum(ActionType, name="action_type", values_callable=lambda x: [e.value for e in x]), nullable=False, index=True)
     resource_type = Column(String(50), nullable=True)  # 'document', 'query', 'model', etc.
     resource_id = Column(UUID(as_uuid=True), nullable=True)
     description = Column(Text, nullable=True)
@@ -243,7 +243,7 @@ class DocumentPermission(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
-    role = Column(SQLEnum(UserRole), nullable=True)  # Permission for entire role
+    role = Column(SQLEnum(UserRole, name="user_role", values_callable=lambda x: [e.value for e in x]), nullable=True)  # Permission for entire role
     can_read = Column(Boolean, default=True)
     can_write = Column(Boolean, default=False)
     can_delete = Column(Boolean, default=False)
@@ -464,10 +464,10 @@ class Project(Base):
     description = Column(Text, nullable=True)
     owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
-    # Organizational hierarchy
+    # Organizational hierarchy (proper foreign keys for MinIO path construction)
     department_id = Column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
     team_id = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="SET NULL"), nullable=True)
-    department = Column(String(100), nullable=True)  # Deprecated - use department_id
+    department = Column(String(100), nullable=True)  # Deprecated - use department_id instead
 
     status = Column(String(50), default='active')  # 'active', 'archived', 'completed'
     created_at = Column(DateTime(timezone=True), server_default=func.now())
