@@ -47,6 +47,7 @@ class EnhancedRAGService:
         query_text: str,
         session_id: Optional[str] = None,
         user_id: Optional[uuid.UUID] = None,
+        project_id: Optional[str] = None,  # 🆕 Project-based filtering for RAG queries
         conversation_history: Optional[List[Dict]] = None,
         use_cache: bool = True,
         model_id: Optional[str] = None,

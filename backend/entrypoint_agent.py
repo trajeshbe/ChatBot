@@ -154,7 +154,7 @@ class AgentOrchestrator:
             }
         }
 
-        logger.info(f"📚 Registered {len(tools)} tools (6 core + 7 enhanced)")
+        logger.info(f"📚 Registered {len(tools)} tools (6 core + 7 enhanced + install_package)")
         return tools
 
     def validate_tool_call(self, tool_name: str, args: Dict[str, Any]) -> bool:
@@ -228,6 +228,57 @@ class AgentOrchestrator:
             if 'old_stdout' in locals():
                 sys.stdout = old_stdout
             logger.error(f"Python execution error: {str(e)}")
+            return {"success": False, "error": str(e)}
+
+    async def _install_package(self, package: str) -> Dict[str, Any]:
+        """
+        Install Python package using pip.
+
+        Args:
+            package: Package name (e.g., 'scikit-learn', 'seaborn==0.12.0')
+
+        Returns:
+            dict with success status and output
+        """
+        try:
+            import subprocess
+
+            # Security: validate package name format
+            if not package or any(char in package for char in [';', '&', '|', '`', '$', '(', ')']):
+                return {"success": False, "error": "Invalid package name"}
+
+            logger.info(f"📦 Installing package: {package}")
+
+            # Run pip install with timeout
+            result = subprocess.run(
+                ["pip", "install", "--no-cache-dir", package],
+                capture_output=True,
+                text=True,
+                timeout=120,  # 2 minutes for package installation
+                cwd=str(self.workspace)
+            )
+
+            if result.returncode == 0:
+                logger.info(f"✅ Package installed successfully: {package}")
+                return {
+                    "success": True,
+                    "package": package,
+                    "output": result.stdout,
+                    "message": f"Successfully installed {package}"
+                }
+            else:
+                logger.error(f"❌ Package installation failed: {result.stderr}")
+                return {
+                    "success": False,
+                    "package": package,
+                    "error": result.stderr
+                }
+
+        except subprocess.TimeoutExpired:
+            logger.error(f"⏰ Package installation timeout: {package}")
+            return {"success": False, "error": f"Installation timeout after 120s"}
+        except Exception as e:
+            logger.error(f"❌ Package installation error: {str(e)}")
             return {"success": False, "error": str(e)}
 
     async def _execute_bash(self, command: str) -> Dict[str, Any]:
@@ -507,42 +558,66 @@ class AgenticLoop:
                 for name, tool in self.orchestrator.available_tools.items()
             ])
 
-            system_prompt = f"""You are an autonomous AI agent with access to tools. You MUST use tools to complete tasks.
+            system_prompt = f"""You are a TOOL-CALLING AI agent. Your ONLY job is to call tools to complete tasks.
 
-IMPORTANT RULES:
-1. ALWAYS use tools to accomplish tasks - DO NOT just describe what you would do
-2. For data analysis: read_file → execute_python → write_file → FINAL_ANSWER
-3. For visualizations: MUST use execute_python with matplotlib/pandas to create actual files
-4. Break complex tasks into steps, using one tool at a time
-5. ONLY use FINAL_ANSWER after you've completed all tool calls successfully
+⚠️ CRITICAL RULES:
+1. NEVER write explanations, plans, or descriptions
+2. NEVER say "we should do X" or "let's start by doing Y"
+3. IMMEDIATELY call a tool in EVERY response
+4. If no more tools needed → use FINAL_ANSWER
 
-Available Tools:
+🔧 AUTONOMOUS CAPABILITIES:
+- Install ANY Python package: use `install_package` tool
+- Execute ANY Python code: use `execute_python` tool
+- Read/write files, run bash commands, analyze data
+
+📋 Available Tools:
 {available_tools_desc}
 
-RESPONSE FORMAT (use EXACTLY this format):
+🎯 RESPONSE FORMAT (STRICT):
 
-To call a tool:
-TOOL_CALL: tool_name
-ARGS: {{"arg1": "value1", "arg2": "value2"}}
-
-To provide final answer (ONLY after using tools):
-FINAL_ANSWER: your answer here
-
-EXAMPLE - Data Analysis Task:
-User: "Analyze sales.txt and create visualizations"
-
-Step 1 (Read data):
+✅ CORRECT - Immediately call tool:
 TOOL_CALL: read_file
 ARGS: {{"path": "sales.txt"}}
 
-Step 2 (After seeing data, create viz code):
+❌ WRONG - Do NOT explain or describe:
+"To analyze sales.txt, we should first read the file using read_file..."  ← NEVER DO THIS!
+
+📚 EXAMPLES:
+
+Example 1 - Data Analysis:
+User: "Analyze sales.txt and create chart"
+
+Your Response (Step 1):
+TOOL_CALL: read_file
+ARGS: {{"path": "sales.txt"}}
+
+Your Response (Step 2 - after seeing data):
 TOOL_CALL: execute_python
-ARGS: {{"code": "import pandas as pd\\nimport matplotlib.pyplot as plt\\ndata = pd.read_csv('sales.txt', sep='\\\\t')\\nplt.figure()\\nplt.bar(data['Product'], data['Sales'])\\nplt.savefig('/workspace/artifacts/sales_chart.png')\\nprint('Chart saved!')"}}
+ARGS: {{"code": "import pandas as pd\\nimport matplotlib.pyplot as plt\\ndf = pd.read_csv('sales.txt', sep='\\\\t')\\nplt.bar(df['Product'], df['Revenue'])\\nplt.savefig('/workspace/artifacts/chart.png')\\nprint('Done')"}}
 
-Step 3 (Final answer):
-FINAL_ANSWER: Created visualization showing sales trends. Chart saved to /workspace/artifacts/sales_chart.png
+Your Response (Step 3):
+FINAL_ANSWER: Chart created at /workspace/artifacts/chart.png showing revenue by product
 
-NOW - Complete the user's task step by step using tools!"""
+Example 2 - ML Task (needs package):
+User: "Build XGBoost model on data.csv"
+
+Your Response (Step 1):
+TOOL_CALL: install_package
+ARGS: {{"package": "xgboost"}}
+
+Your Response (Step 2):
+TOOL_CALL: read_file
+ARGS: {{"path": "data.csv"}}
+
+Your Response (Step 3):
+TOOL_CALL: execute_python
+ARGS: {{"code": "import pandas as pd\\nimport xgboost as xgb\\ndf = pd.read_csv('data.csv')\\nX = df.drop('target', axis=1)\\ny = df['target']\\nmodel = xgb.XGBRegressor()\\nmodel.fit(X, y)\\nprint(f'Model R2: {{model.score(X, y):.3f}}')"}}
+
+Your Response (Step 4):
+FINAL_ANSWER: XGBoost model trained with R² score displayed in output
+
+🚀 START NOW - Call your first tool immediately!"""
 
             # Build messages for LLM
             messages = [{"role": "system", "content": system_prompt}]

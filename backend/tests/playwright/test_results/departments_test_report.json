@@ -1,0 +1,53 @@
+{
+  "session_start": "2025-12-01T12:21:44.798567",
+  "session_end": "2025-12-01T12:23:12.719212",
+  "total_tests": 2,
+  "passed_tests": 0,
+  "failed_tests": 2,
+  "test_cases": [
+    {
+      "test_id": "TC_DEPT_001",
+      "test_name": "Create New Department",
+      "test_description": "Verify that admin can create a new department",
+      "status": "failed",
+      "start_time": "2025-12-01T12:22:02.111121",
+      "end_time": "2025-12-01T12:22:33.480790",
+      "duration": 31.369669,
+      "steps": [
+        {
+          "step_number": 1,
+          "description": "Navigate to Departments tab",
+          "expected_result": "Departments tab is displayed with department list",
+          "actual_result": "",
+          "status": "failed",
+          "screenshot_before": "TC_DEPT_001_step1_before.png",
+          "screenshot_after": "",
+          "error_message": "Page.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"button:has-text(\\\"Departments\\\"), [role=\\\"tab\\\"]:has-text(\\\"Departments\\\")\")\n"
+        }
+      ],
+      "overall_error": "Page.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"button:has-text(\\\"Departments\\\"), [role=\\\"tab\\\"]:has-text(\\\"Departments\\\")\")\n"
+    },
+    {
+      "test_id": "TC_DEPT_002",
+      "test_name": "View Departments List",
+      "test_description": "Verify that admin can view the list of departments",
+      "status": "failed",
+      "start_time": "2025-12-01T12:22:41.168468",
+      "end_time": "2025-12-01T12:23:12.479893",
+      "duration": 31.311425,
+      "steps": [
+        {
+          "step_number": 1,
+          "description": "Navigate to Departments tab",
+          "expected_result": "Departments tab is displayed",
+          "actual_result": "",
+          "status": "failed",
+          "screenshot_before": "TC_DEPT_002_step1_before.png",
+          "screenshot_after": "",
+          "error_message": "Page.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"button:has-text(\\\"Departments\\\"), [role=\\\"tab\\\"]:has-text(\\\"Departments\\\")\")\n"
+        }
+      ],
+      "overall_error": "Page.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"button:has-text(\\\"Departments\\\"), [role=\\\"tab\\\"]:has-text(\\\"Departments\\\")\")\n"
+    }
+  ]
+}

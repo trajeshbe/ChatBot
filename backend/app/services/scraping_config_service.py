@@ -232,6 +232,8 @@ class ScrapingConfigService:
         Returns detailed compliance information
         """
         try:
+            from app.core.config import settings
+
             # Extract domain from URL
             parsed_url = urlparse(url)
             domain = parsed_url.netloc
@@ -240,13 +242,28 @@ class ScrapingConfigService:
             config = await self.get_config(db, domain)
 
             if not config:
-                # No config exists - default to blocked with recommendation
-                return {
-                    'allowed': False,
-                    'reason': 'No scraping configuration exists for this domain',
-                    'status': 'no_config',
-                    'recommendation': 'Create a scraping config with proper permissions'
-                }
+                # No config exists - check if compliance is enforced
+                if settings.SCRAPING_ENFORCE_COMPLIANCE:
+                    # Production mode: require explicit configuration
+                    return {
+                        'allowed': False,
+                        'reason': 'No scraping configuration exists for this domain',
+                        'status': 'no_config',
+                        'recommendation': 'Create a scraping config with proper permissions'
+                    }
+                else:
+                    # Development mode: allow by default with warning
+                    logger.warning(f"⚠️ No scraping config for {domain}, allowing by default (SCRAPING_ENFORCE_COMPLIANCE=False)")
+                    return {
+                        'allowed': True,
+                        'status': 'allowed_no_config',
+                        'reason': 'No config exists but compliance enforcement is disabled',
+                        'rate_limit': {
+                            'requests_per_minute': 30,
+                            'delay_seconds': 2.0
+                        },
+                        'preferred_method': 'auto'
+                    }
 
             # Check if explicitly blocked
             if not config['allow_scraping']:

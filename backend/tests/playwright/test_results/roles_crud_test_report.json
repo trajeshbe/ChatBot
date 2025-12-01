@@ -1,0 +1,95 @@
+{
+  "session_start": "2025-12-01T12:21:45.159862",
+  "session_end": "2025-12-01T12:24:37.294576",
+  "total_tests": 4,
+  "passed_tests": 1,
+  "failed_tests": 3,
+  "test_cases": [
+    {
+      "test_id": "TC_ROLE_001",
+      "test_name": "Create New Role",
+      "test_description": "Verify that admin can create a new role",
+      "status": "failed",
+      "start_time": "2025-12-01T12:23:20.155291",
+      "end_time": "2025-12-01T12:23:34.863107",
+      "duration": 14.707816,
+      "steps": [
+        {
+          "step_number": 1,
+          "description": "Navigate to Roles tab",
+          "expected_result": "Roles tab is displayed with role list",
+          "actual_result": "Roles tab opened successfully",
+          "status": "passed",
+          "screenshot_before": "TC_ROLE_001_step1_before.png",
+          "screenshot_after": "TC_ROLE_001_step1_after.png",
+          "error_message": ""
+        },
+        {
+          "step_number": 2,
+          "description": "Click Create Role button",
+          "expected_result": "Role creation modal/form is displayed",
+          "actual_result": "",
+          "status": "failed",
+          "screenshot_before": "TC_ROLE_001_step2_before.png",
+          "screenshot_after": "",
+          "error_message": "Page.wait_for_selector: Timeout 10000ms exceeded.\nCall log:\n  - waiting for locator(\"input[name=\\\"name\\\"], input[placeholder*=\\\"Role Name\\\"]\") to be visible\n"
+        }
+      ],
+      "overall_error": "Page.wait_for_selector: Timeout 10000ms exceeded.\nCall log:\n  - waiting for locator(\"input[name=\\\"name\\\"], input[placeholder*=\\\"Role Name\\\"]\") to be visible\n"
+    },
+    {
+      "test_id": "TC_ROLE_002",
+      "test_name": "View Roles List",
+      "test_description": "Verify that admin can view the list of roles",
+      "status": "passed",
+      "start_time": "2025-12-01T12:23:44.726820",
+      "end_time": "2025-12-01T12:23:48.512568",
+      "duration": 3.785748,
+      "steps": [
+        {
+          "step_number": 1,
+          "description": "Navigate to Roles tab",
+          "expected_result": "Roles tab is displayed",
+          "actual_result": "Roles tab opened successfully",
+          "status": "passed",
+          "screenshot_before": "TC_ROLE_002_step1_before.png",
+          "screenshot_after": "TC_ROLE_002_step1_after.png",
+          "error_message": ""
+        },
+        {
+          "step_number": 2,
+          "description": "Verify roles table is displayed",
+          "expected_result": "Roles table with role data is visible",
+          "actual_result": "Roles table displayed with 5 roles",
+          "status": "passed",
+          "screenshot_before": "TC_ROLE_002_step2_before.png",
+          "screenshot_after": "TC_ROLE_002_step2_after.png",
+          "error_message": ""
+        }
+      ],
+      "overall_error": ""
+    },
+    {
+      "test_id": "TC_ROLE_003",
+      "test_name": "Update Existing Role",
+      "test_description": "Verify that admin can update an existing role's information",
+      "status": "failed",
+      "start_time": "2025-12-01T12:23:56.204135",
+      "end_time": "2025-12-01T12:24:10.577918",
+      "duration": 14.373783,
+      "steps": [],
+      "overall_error": "Page.wait_for_selector: Timeout 10000ms exceeded.\nCall log:\n  - waiting for locator(\"input[name=\\\"name\\\"], input[placeholder*=\\\"Role Name\\\"]\") to be visible\n"
+    },
+    {
+      "test_id": "TC_ROLE_004",
+      "test_name": "Delete Role",
+      "test_description": "Verify that admin can delete a role",
+      "status": "failed",
+      "start_time": "2025-12-01T12:24:20.487688",
+      "end_time": "2025-12-01T12:24:34.776778",
+      "duration": 14.28909,
+      "steps": [],
+      "overall_error": "Page.wait_for_selector: Timeout 10000ms exceeded.\nCall log:\n  - waiting for locator(\"input[name=\\\"name\\\"], input[placeholder*=\\\"Role Name\\\"]\") to be visible\n"
+    }
+  ]
+}

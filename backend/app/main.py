@@ -1296,9 +1296,10 @@ async def create_user(
 ):
     """Create a new user (admin endpoint)"""
     try:
-        from app.models.database_enhanced import User, UserRole
+        from app.models.database_enhanced import User, UserRole, Project, ProjectMember
         from sqlalchemy import select
-        import hashlib
+        from app.core.security import get_password_hash
+        import uuid as uuid_module
 
         # Get JSON body
         body = await request.json()
@@ -1320,8 +1321,8 @@ async def create_user(
         if existing_user:
             raise HTTPException(status_code=400, detail="Username or email already exists")
 
-        # Hash password (simple hash for demo - use bcrypt in production)
-        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+        # Hash password using bcrypt (production-ready)
+        hashed_password = get_password_hash(password)
 
         # Create user
         new_user = User(
@@ -1337,6 +1338,33 @@ async def create_user(
         db.add(new_user)
         await db.commit()
         await db.refresh(new_user)
+
+        # Auto-add user to Global project
+        try:
+            global_project_query = select(Project).where(Project.name == 'Global')
+            global_result = await db.execute(global_project_query)
+            global_project = global_result.scalar_one_or_none()
+
+            if global_project:
+                # Check if already a member
+                member_check = select(ProjectMember).where(
+                    (ProjectMember.project_id == global_project.id) &
+                    (ProjectMember.user_id == new_user.id)
+                )
+                existing_member = await db.execute(member_check)
+                if not existing_member.scalar_one_or_none():
+                    # Add as member
+                    project_member = ProjectMember(
+                        id=uuid_module.uuid4(),
+                        project_id=global_project.id,
+                        user_id=new_user.id,
+                        role='member'
+                    )
+                    db.add(project_member)
+                    await db.commit()
+                    logger.info(f"✓ Added {username} to Global project")
+        except Exception as e:
+            logger.warning(f"Could not add user to Global project: {e}")
 
         logger.info(f"✓ Created user: {username} ({role})")
 

@@ -66,6 +66,7 @@ class Department(Base):
     is_active = Column(Boolean, default=True, index=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    meta_info = Column('meta_info', Text, nullable=True)  # JSONB column in DB
 
     # Relationships
     parent_department = relationship("Department", remote_side=[id], backref="child_departments")
@@ -131,18 +132,24 @@ class Module(Base):
     __tablename__ = "modules"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String(100), unique=True, nullable=False)
-    code = Column(String(50), unique=True, nullable=False, index=True)
+    name = Column('module_name', String(255), nullable=False)  # Maps to module_name in DB
+    code = Column('module_key', String(100), unique=True, nullable=False, index=True)  # Maps to module_key in DB
     description = Column(Text)
     icon = Column(String(50))  # Lucide icon name
-    route = Column(String(100))  # Frontend route
+    # route = Column(String(100))  # Frontend route (not in current DB - commented out until migration added)
     is_active = Column(Boolean, default=True, index=True)
     display_order = Column(Integer, default=0, index=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    meta_info = Column('meta_info', Text, nullable=True)  # JSONB column in DB
 
     # Relationships
     permissions = relationship("RoleModulePermission", back_populates="module", cascade="all, delete-orphan")
+
+    @property
+    def route(self):
+        """Property to provide route attribute for Pydantic schemas (column not yet in DB)"""
+        return None
 
     def __repr__(self):
         return f"<Module(name='{self.name}', code='{self.code}')>"
@@ -155,7 +162,7 @@ class Module(Base):
             "code": self.code,
             "description": self.description,
             "icon": self.icon,
-            "route": self.route,
+            "route": getattr(self, 'route', None),  # Safely access route (may not exist in DB yet)
             "is_active": self.is_active,
             "display_order": self.display_order,
             "created_at": self.created_at.isoformat() if self.created_at else None,

@@ -1090,12 +1090,27 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                     }}
                     className="flex-1 min-w-0 bg-transparent text-xs text-slate-700 dark:text-slate-300 font-medium focus:outline-none cursor-pointer"
                   >
-                    <option value="">Global (All Projects)</option>
-                    {availableProjects.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.name} ({project.file_count})
-                      </option>
-                    ))}
+                    {/* Show Global project from database if exists, otherwise show hardcoded fallback */}
+                    {(() => {
+                      const globalProject = availableProjects.find(p => p.name.toLowerCase() === 'global')
+                      if (globalProject) {
+                        return (
+                          <option value={globalProject.id}>
+                            Global ({globalProject.file_count})
+                          </option>
+                        )
+                      } else {
+                        return <option value="">Global (All Projects)</option>
+                      }
+                    })()}
+                    {/* Show all other non-global projects */}
+                    {availableProjects
+                      .filter(project => project.name.toLowerCase() !== 'global')
+                      .map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.name} ({project.file_count})
+                        </option>
+                      ))}
                   </select>
                 </div>
               )}

@@ -257,6 +257,7 @@ async def query_endpoint(
     request: Request,
     query: str = Form(...),
     session_id: Optional[str] = Form(None),
+    project_id: Optional[str] = Form(None),  # 🆕 Project-based filtering
     use_cache: bool = Form(True),
     model_id: Optional[str] = Form(None),
     # NEW: Optional threshold parameters from UI
@@ -285,6 +286,7 @@ async def query_endpoint(
         result = await rag_service.query(
             query_text=query,
             session_id=session_id,
+            project_id=project_id,  # 🆕 Pass project_id for filtering
             user_id=user_id,
             conversation_history=None,
             use_cache=use_cache,

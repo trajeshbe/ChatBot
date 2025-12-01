@@ -181,6 +181,9 @@ class Settings(BaseSettings):
     SCRAPER_DELAY_BETWEEN_REQUESTS: float = 1.0  # Delay in seconds
     SCRAPER_MAX_CONCURRENT_REQUESTS: int = 5
 
+    # Compliance and governance
+    SCRAPING_ENFORCE_COMPLIANCE: bool = False  # Set to True in production to require scraping configs
+
     # Content quality
     SCRAPER_MIN_CONTENT_LENGTH: int = 100  # Minimum content length in characters
     SCRAPER_MAX_CONTENT_LENGTH: Optional[int] = 1000000  # Maximum content length (1MB)

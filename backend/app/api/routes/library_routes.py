@@ -125,7 +125,7 @@ async def get_project_files(
         query = query.where(Document.file_type == file_type)
 
     # Order and paginate
-    query = query.order_by(desc(Document.upload_date)).limit(limit).offset(offset)
+    query = query.order_by(desc(Document.created_at)).limit(limit).offset(offset)
 
     result = await db.execute(query)
     documents = result.scalars().all()
@@ -189,7 +189,7 @@ async def get_user_files(
         query = query.where(Document.project_id == project_id)
 
     # Order and paginate
-    query = query.order_by(desc(Document.upload_date)).limit(limit).offset(offset)
+    query = query.order_by(desc(Document.created_at)).limit(limit).offset(offset)
 
     result = await db.execute(query)
     documents = result.scalars().all()
@@ -434,22 +434,26 @@ async def _enrich_file_response(document: Document, db: AsyncSession) -> FileRes
     has_embeddings = (has_embeddings_result.scalar() or 0) > 0
 
     # Determine processing status
-    if document.processing_error:
+    # Document has processing_status field directly ('pending', 'processing', 'completed', 'failed')
+    if document.error_message:
         processing_status = 'failed'
-    elif not document.processed:
-        processing_status = 'processing'
+    elif document.processing_status:
+        processing_status = document.processing_status
     elif chunk_count > 0:
         processing_status = 'completed'
     else:
         processing_status = 'pending'
+
+    # Derive processed boolean from processing_status
+    processed = (processing_status == 'completed')
 
     return FileResponse(
         id=str(document.id),
         filename=document.filename,
         file_type=document.file_type,
         file_size=document.file_size,
-        upload_date=document.upload_date,
-        processed=document.processed,
+        upload_date=document.created_at,  # Document has created_at, not upload_date
+        processed=processed,
         processing_status=processing_status,
         project_id=str(document.project_id) if document.project_id else None,
         project_name=project_name,

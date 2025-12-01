@@ -176,7 +176,8 @@ export const ScrapingConfigManager: React.FC = () => {
     if (!selectedConfig) return;
 
     try {
-      const res = await fetch(`${API_BASE}/api/v1/admin/scraping-configs/${selectedConfig.domain}`, {
+      // URL-encode domain to handle domains with special characters like "https://example.com"
+      const res = await fetch(`${API_BASE}/api/v1/admin/scraping-configs/${encodeURIComponent(selectedConfig.domain)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -199,7 +200,8 @@ export const ScrapingConfigManager: React.FC = () => {
     if (!confirm(`Are you sure you want to delete configuration for ${domain}?`)) return;
 
     try {
-      const res = await fetch(`${API_BASE}/api/v1/admin/scraping-configs/${domain}`, {
+      // URL-encode domain to handle domains with special characters like "https://example.com"
+      const res = await fetch(`${API_BASE}/api/v1/admin/scraping-configs/${encodeURIComponent(domain)}`, {
         method: 'DELETE'
       });
 

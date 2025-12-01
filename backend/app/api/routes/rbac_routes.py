@@ -268,7 +268,7 @@ async def list_departments(
 ):
     """List all departments with pagination."""
     try:
-        departments = rbac.get_all_departments()
+        departments = await rbac.get_all_departments()
 
         # Pagination
         total = len(departments)
@@ -296,7 +296,7 @@ async def get_department_hierarchy(
 ):
     """Get departments as hierarchical tree structure."""
     try:
-        hierarchy = rbac.get_department_hierarchy()
+        hierarchy = await rbac.get_department_hierarchy()
         return hierarchy
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting hierarchy: {str(e)}")
@@ -363,7 +363,7 @@ async def list_modules(
 ):
     """List all application modules."""
     try:
-        modules = rbac.get_all_modules()
+        modules = await rbac.get_all_modules()
 
         # Filter active only if requested
         if active_only:

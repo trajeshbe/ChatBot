@@ -195,16 +195,18 @@ class RBACService:
         result = await self.db.execute(select(Department).where(Department.id == dept_id))
         return result.scalar_one_or_none()
 
-    def get_all_departments(self, active_only: bool = True) -> List[Department]:
+    async def get_all_departments(self, active_only: bool = True) -> List[Department]:
         """Get all departments"""
-        query = self.db.query(Department)
+        stmt = select(Department)
         if active_only:
-            query = query.filter(Department.is_active == True)
-        return query.order_by(Department.name).all()
+            stmt = stmt.where(Department.is_active == True)
+        stmt = stmt.order_by(Department.name)
+        result = await self.db.execute(stmt)
+        return result.scalars().all()
 
-    def get_department_hierarchy(self) -> List[Dict[str, Any]]:
+    async def get_department_hierarchy(self) -> List[Dict[str, Any]]:
         """Get departments in hierarchical structure"""
-        departments = self.get_all_departments()
+        departments = await self.get_all_departments()
 
         # Build hierarchy
         dept_dict = {dept.id: dept.to_dict() for dept in departments}
@@ -484,10 +486,11 @@ class RBACService:
                 role_names.append(role.name)
 
         # Determine highest privilege level
+        # Database enum expects lowercase values: 'admin', 'user', 'viewer', 'api_user'
         if 'Admin' in role_names or 'CxO' in role_names or 'Manager' in role_names:
-            enum_role = 'ADMIN'
+            enum_role = 'admin'  # Lowercase for database enum
         else:
-            enum_role = 'USER'
+            enum_role = 'user'   # Lowercase for database enum
 
         # Update users.role enum field
         stmt = update(User).where(User.id == user_id).values(role=enum_role)

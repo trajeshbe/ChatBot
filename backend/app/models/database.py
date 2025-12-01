@@ -86,27 +86,27 @@ class WebScrapeJob(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     url = Column(String(1024), nullable=False)
     scrape_prompt = Column(Text, nullable=True)
-    status = Column(String(50), nullable=False)  # 'pending', 'processing', 'completed', 'failed'
+    status = Column(String(50), nullable=False, default='pending')  # 'pending', 'processing', 'completed', 'failed'
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)
-    meta_info = Column(JSON, nullable=True)
 
-    # Enhanced scraping fields
-    compliance_level = Column(String(50), default='balanced')  # strict, balanced, aggressive
-    proxy_used = Column(String(255), nullable=True)
-    user_agent_used = Column(String(512), nullable=True)
-    auth_method = Column(String(50), nullable=True)  # none, basic, bearer, api_key, etc.
-    llm_provider = Column(String(50), nullable=True)  # ollama, openai, anthropic
-    scraping_time_ms = Column(Float, nullable=True)
-    protocols_detected = Column(JSON, nullable=True)
-
-    # Project tracking
-    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
+    # Project tracking (fixed FK to reference modules, not projects)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("modules.id", ondelete="SET NULL"), nullable=True)
     scraped_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     department = Column(String(100), nullable=True)
     team = Column(String(100), nullable=True)
+
+    # NOTE: Enhanced scraping fields commented out until migration is created
+    # compliance_level = Column(String(50), default='balanced')  # strict, balanced, aggressive
+    # proxy_used = Column(String(255), nullable=True)
+    # user_agent_used = Column(String(512), nullable=True)
+    # auth_method = Column(String(50), nullable=True)  # none, basic, bearer, api_key, etc.
+    # llm_provider = Column(String(50), nullable=True)  # ollama, openai, anthropic
+    # scraping_time_ms = Column(Float, nullable=True)
+    # protocols_detected = Column(JSON, nullable=True)
+    # meta_info = Column(JSON, nullable=True)
 
 
 class QueryCache(Base):

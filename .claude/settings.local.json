@@ -30,7 +30,9 @@
       "Bash(bash scripts/testing/test_comprehensive_chat.sh:*)",
       "Bash(docker cp:*)",
       "Bash(docker-compose build:*)",
-      "Bash(bash:*)"
+      "Bash(bash:*)",
+      "Bash(source:*)",
+      "Bash(python -m pytest:*)"
     ],
     "deny": [],
     "ask": []

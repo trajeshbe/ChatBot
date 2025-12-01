@@ -160,7 +160,56 @@ class AuthService:
         await self.db.commit()
         await self.db.refresh(user)
 
+        # Auto-add user to Global project
+        await self._add_user_to_global_project(user.id)
+
         return user
+
+    async def _add_user_to_global_project(self, user_id: uuid.UUID) -> None:
+        """
+        Automatically add a new user to the Global project
+
+        Args:
+            user_id: UUID of the user to add to Global project
+        """
+        try:
+            from app.models.database_enhanced import Project, ProjectMember
+
+            # Find Global project
+            stmt = select(Project).where(Project.name == 'Global')
+            result = await self.db.execute(stmt)
+            global_project = result.scalar_one_or_none()
+
+            if not global_project:
+                # Global project doesn't exist yet, skip
+                return
+
+            # Check if user is already a member
+            stmt = select(ProjectMember).where(
+                (ProjectMember.project_id == global_project.id) &
+                (ProjectMember.user_id == user_id)
+            )
+            result = await self.db.execute(stmt)
+            existing_member = result.scalar_one_or_none()
+
+            if existing_member:
+                # User is already a member, skip
+                return
+
+            # Add user as member of Global project
+            project_member = ProjectMember(
+                id=uuid.uuid4(),
+                project_id=global_project.id,
+                user_id=user_id,
+                role='member'
+            )
+
+            self.db.add(project_member)
+            await self.db.commit()
+
+        except Exception as e:
+            # Log error but don't fail user registration
+            print(f"Warning: Could not add user to Global project: {e}")
 
     async def change_password(
         self,

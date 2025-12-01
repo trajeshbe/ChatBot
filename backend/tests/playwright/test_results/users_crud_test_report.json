@@ -1,0 +1,147 @@
+{
+  "session_start": "2025-12-01T12:21:45.204502",
+  "session_end": "2025-12-01T12:27:59.082738",
+  "total_tests": 4,
+  "passed_tests": 2,
+  "failed_tests": 2,
+  "test_cases": [
+    {
+      "test_id": "TC_USER_001",
+      "test_name": "Create New User",
+      "test_description": "Verify that admin can create a new user with valid credentials",
+      "status": "passed",
+      "start_time": "2025-12-01T12:24:44.728080",
+      "end_time": "2025-12-01T12:24:56.607555",
+      "duration": 11.879475,
+      "steps": [
+        {
+          "step_number": 1,
+          "description": "Navigate to Users tab",
+          "expected_result": "Users tab is displayed with user list",
+          "actual_result": "Users tab opened successfully",
+          "status": "passed",
+          "screenshot_before": "TC_USER_001_step1_before.png",
+          "screenshot_after": "TC_USER_001_step1_after.png",
+          "error_message": ""
+        },
+        {
+          "step_number": 2,
+          "description": "Click Create User button",
+          "expected_result": "User creation modal/form is displayed",
+          "actual_result": "User creation form displayed",
+          "status": "passed",
+          "screenshot_before": "TC_USER_001_step2_before.png",
+          "screenshot_after": "TC_USER_001_step2_after.png",
+          "error_message": ""
+        },
+        {
+          "step_number": 3,
+          "description": "Fill user form with valid data",
+          "expected_result": "Form fields populated: username=testuser_1764591890, email=testuser_1764591890@example.com, role=User",
+          "actual_result": "Form filled with username=testuser_1764591890, email=testuser_1764591890@example.com",
+          "status": "passed",
+          "screenshot_before": "TC_USER_001_step3_before.png",
+          "screenshot_after": "TC_USER_001_step3_after.png",
+          "error_message": ""
+        },
+        {
+          "step_number": 4,
+          "description": "Click Save button",
+          "expected_result": "User is created and appears in user list",
+          "actual_result": "User created successfully",
+          "status": "passed",
+          "screenshot_before": "TC_USER_001_step4_before.png",
+          "screenshot_after": "TC_USER_001_step4_after.png",
+          "error_message": ""
+        },
+        {
+          "step_number": 5,
+          "description": "Verify user appears in table",
+          "expected_result": "User 'testuser_1764591890' is visible in the user list",
+          "actual_result": "User 'testuser_1764591890' found in table",
+          "status": "passed",
+          "screenshot_before": "TC_USER_001_step5_before.png",
+          "screenshot_after": "TC_USER_001_step5_after.png",
+          "error_message": ""
+        }
+      ],
+      "overall_error": ""
+    },
+    {
+      "test_id": "TC_USER_002",
+      "test_name": "View Users List",
+      "test_description": "Verify that admin can view the list of users",
+      "status": "passed",
+      "start_time": "2025-12-01T12:25:36.426243",
+      "end_time": "2025-12-01T12:25:40.072216",
+      "duration": 3.645973,
+      "steps": [
+        {
+          "step_number": 1,
+          "description": "Navigate to Users tab",
+          "expected_result": "Users tab is displayed",
+          "actual_result": "Users tab opened successfully",
+          "status": "passed",
+          "screenshot_before": "TC_USER_002_step1_before.png",
+          "screenshot_after": "TC_USER_002_step1_after.png",
+          "error_message": ""
+        },
+        {
+          "step_number": 2,
+          "description": "Verify users table is displayed",
+          "expected_result": "Users table with user data is visible",
+          "actual_result": "Users table displayed with 10 users",
+          "status": "passed",
+          "screenshot_before": "TC_USER_002_step2_before.png",
+          "screenshot_after": "TC_USER_002_step2_after.png",
+          "error_message": ""
+        }
+      ],
+      "overall_error": ""
+    },
+    {
+      "test_id": "TC_USER_003",
+      "test_name": "Update Existing User",
+      "test_description": "Verify that admin can update an existing user's information using PATCH method",
+      "status": "failed",
+      "start_time": "2025-12-01T12:25:47.628166",
+      "end_time": "2025-12-01T12:26:08.526383",
+      "duration": 20.898217,
+      "steps": [
+        {
+          "step_number": 1,
+          "description": "Click Edit button for user 'updateuser_1764591950'",
+          "expected_result": "Edit user modal/form is displayed",
+          "actual_result": "",
+          "status": "failed",
+          "screenshot_before": "TC_USER_003_step1_before.png",
+          "screenshot_after": "",
+          "error_message": "Page.wait_for_selector: Timeout 10000ms exceeded.\nCall log:\n  - waiting for locator(\"input[type=\\\"text\\\"]\") to be visible\n"
+        }
+      ],
+      "overall_error": "Page.wait_for_selector: Timeout 10000ms exceeded.\nCall log:\n  - waiting for locator(\"input[type=\\\"text\\\"]\") to be visible\n"
+    },
+    {
+      "test_id": "TC_USER_004",
+      "test_name": "Soft Delete User",
+      "test_description": "Verify that admin can deactivate a user (soft delete)",
+      "status": "failed",
+      "start_time": "2025-12-01T12:26:46.558984",
+      "end_time": "2025-12-01T12:27:26.549850",
+      "duration": 39.990866,
+      "steps": [
+        {
+          "step_number": 1,
+          "description": "Click Delete button for user 'deleteuser_1764592009'",
+          "expected_result": "Delete confirmation dialog is displayed",
+          "actual_result": "",
+          "status": "failed",
+          "screenshot_before": "TC_USER_004_step1_before.png",
+          "screenshot_after": "",
+          "error_message": "Locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"tr:has-text(\\\"deleteuser_1764592009\\\")\").locator(\"button:has-text(\\\"Delete\\\"), button[title*=\\\"Delete\\\"]\").first\n"
+        }
+      ],
+      "overall_error": "Locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator(\"tr:has-text(\\\"deleteuser_1764592009\\\")\").locator(\"button:has-text(\\\"Delete\\\"), button[title*=\\\"Delete\\\"]\").first\n"
+    }
+  ]
+}
