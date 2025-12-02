@@ -711,7 +711,7 @@ class RAGService:
             # Check if association already exists
             existing_query = select(SessionDocument).where(
                 and_(
-                    SessionDocument.session_id == session.id,
+                    SessionDocument.session_id == session.session_id,
                     SessionDocument.document_id == document_id
                 )
             )
@@ -720,7 +720,7 @@ class RAGService:
 
             if not existing:
                 session_doc = SessionDocument(
-                    session_id=session.id,
+                    session_id=session.session_id,
                     document_id=document_id,
                     priority=priority
                 )
@@ -764,7 +764,7 @@ class RAGService:
 
             # Check if there are any session documents
             count_query = select(func.count()).select_from(SessionDocument).where(
-                SessionDocument.session_id == session.id
+                SessionDocument.session_id == session.session_id
             )
             count_result = await db.execute(count_query)
             session_doc_count = count_result.scalar()

@@ -136,8 +136,7 @@ class HybridRetriever:
                     AND dc.document_id IN (
                         SELECT sd.document_id
                         FROM session_documents sd
-                        JOIN chat_sessions cs ON sd.session_id = cs.id
-                        WHERE cs.session_id = :session_id
+                        WHERE sd.session_id = :session_id
                     )
                 """
 

@@ -235,7 +235,7 @@ class DocumentService:
                     try:
                         from app.models.database_enhanced import SessionDocument
                         session_doc = SessionDocument(
-                            session_id=uuid.UUID(session_id) if isinstance(session_id, str) else session_id,
+                            session_id=session_id,
                             document_id=document.id
                         )
                         db.add(session_doc)
@@ -406,8 +406,7 @@ class DocumentService:
                         except Exception as track_err:
                             logger.warning(f"Failed to track Docling usage: {track_err}")
 
-                    # Clean up
-                    os.remove(temp_path)
+                    # NOTE: Don't clean up temp_path yet - hybrid extraction may need it
                 except Exception as e:
                     logger.warning(f"Docling processing failed, using fallback: {e}")
                     start_time = time.time()
@@ -643,6 +642,14 @@ class DocumentService:
             document.processing_status = 'completed'
             await db.flush()  # Flush changes without committing
 
+            # Clean up temp file after all processing (Docling + hybrid extraction) is complete
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                    logger.debug(f"Cleaned up temp file: {temp_path}")
+            except Exception as cleanup_err:
+                logger.warning(f"Failed to clean up temp file {temp_path}: {cleanup_err}")
+
             logger.info(f"Successfully processed document {document_id} with {len(document_chunks)} chunks")
             return document_chunks
 
@@ -652,6 +659,15 @@ class DocumentService:
             if document:
                 document.processing_error = str(e)
                 await db.flush()  # Flush error state without committing
+
+            # Clean up temp file even on error
+            try:
+                if 'temp_path' in locals() and os.path.exists(temp_path):
+                    os.remove(temp_path)
+                    logger.debug(f"Cleaned up temp file after error: {temp_path}")
+            except Exception as cleanup_err:
+                logger.warning(f"Failed to clean up temp file {temp_path}: {cleanup_err}")
+
             raise
 
     def _chunk_text(self, text: str) -> List[Dict]:

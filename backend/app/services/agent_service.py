@@ -349,7 +349,7 @@ class AgentOrchestrationService:
         documents_query = (
             select(Document)
             .join(SessionDocument, Document.id == SessionDocument.document_id)
-            .where(SessionDocument.session_id == session.id)
+            .where(SessionDocument.session_id == session.session_id)
         )
         documents_result = await self.db.execute(documents_query)
         documents = documents_result.scalars().all()

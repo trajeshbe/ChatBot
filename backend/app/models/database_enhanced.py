@@ -157,7 +157,7 @@ class SessionDocument(Base):
     __tablename__ = "session_documents"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(String(255), ForeignKey("chat_sessions.session_id", ondelete="CASCADE"), nullable=False, index=True)
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     added_at = Column(DateTime(timezone=True), server_default=func.now())
     priority = Column(Integer, default=0)  # Higher priority documents checked first

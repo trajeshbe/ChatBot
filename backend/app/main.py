@@ -451,7 +451,7 @@ async def upload_file(
                 SessionDocument, Document.id == SessionDocument.document_id
             ).where(
                 and_(
-                    SessionDocument.session_id == session.id,
+                    SessionDocument.session_id == session.session_id,
                     Document.filename == file.filename,
                     Document.file_size == len(file_data)
                 )
@@ -2065,7 +2065,7 @@ async def get_session_documents(
             select(Document, SessionDocument, func.count(DocumentChunk.id).label('chunk_count'))
             .join(SessionDocument, Document.id == SessionDocument.document_id)
             .outerjoin(DocumentChunk, Document.id == DocumentChunk.document_id)
-            .where(SessionDocument.session_id == session.id)
+            .where(SessionDocument.session_id == session.session_id)
             .group_by(Document.id, SessionDocument.id)
             .order_by(SessionDocument.added_at.desc())
         )
@@ -2153,7 +2153,7 @@ async def clear_session(
         if session:
             # Delete session document associations (short-term memory)
             await db.execute(
-                sql_delete(SessionDocument).where(SessionDocument.session_id == session.id)
+                sql_delete(SessionDocument).where(SessionDocument.session_id == session.session_id)
             )
 
             # Delete conversation messages
@@ -2385,7 +2385,7 @@ async def debug_session_query(
 
         # 2. Check session documents count
         count_query = select(func.count()).select_from(SessionDocument).where(
-            SessionDocument.session_id == session.id
+            SessionDocument.session_id == session.session_id
         )
         count_result = await db.execute(count_query)
         session_doc_count = count_result.scalar()
@@ -2398,7 +2398,7 @@ async def debug_session_query(
         # 3. Get session documents details
         doc_query = select(SessionDocument, Document).join(
             Document, SessionDocument.document_id == Document.id
-        ).where(SessionDocument.session_id == session.id)
+        ).where(SessionDocument.session_id == session.session_id)
         doc_result = await db.execute(doc_query)
         doc_rows = doc_result.all()
 
@@ -2656,7 +2656,7 @@ async def db_console_documents(
             FROM documents d
             LEFT JOIN document_chunks dc ON d.id = dc.document_id
             LEFT JOIN session_documents sd ON d.id = sd.document_id
-            LEFT JOIN chat_sessions cs ON sd.session_id = cs.id
+            LEFT JOIN chat_sessions cs ON sd.session_id = cs.session_id
             WHERE d.filename ILIKE :search_pattern
             GROUP BY d.id, d.filename, d.file_type, d.file_size, d.source_type, d.source_url, d.created_at, d.processing_status, d.error_message
             ORDER BY d.created_at DESC
