@@ -32,7 +32,18 @@ export default function UnifiedWebScraper() {
         const response = await axios.get(`${API_URL}/api/v1/projects`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined
         })
-        setProjects(response.data || [])
+        const fetchedProjects = response.data || []
+        setProjects(fetchedProjects)
+
+        // Auto-select Global project or first active project as default
+        const activeProjects = fetchedProjects.filter((p: Project) => p.status === 'active')
+        if (activeProjects.length > 0 && !selectedProjectId) {
+          // Try to find Global project first
+          const globalProject = activeProjects.find((p: Project) =>
+            p.name.toLowerCase() === 'global'
+          )
+          setSelectedProjectId(globalProject?.id || activeProjects[0].id)
+        }
       } catch (error) {
         console.error('Error fetching projects:', error)
         // Silently fail - projects are optional
@@ -104,7 +115,6 @@ export default function UnifiedWebScraper() {
               onChange={(e) => setSelectedProjectId(e.target.value)}
               className="max-w-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
-              <option value="">Global (No Project)</option>
               {projects.filter(p => p.status === 'active').map(project => (
                 <option key={project.id} value={project.id}>
                   {project.name}

@@ -303,7 +303,7 @@ class EvaluationService:
         - Helpfulness: Is the answer helpful to the user?
         """
         try:
-            from app.services.llm_service_enhanced import llm_service
+            from app.services.llm_service import llm_service
 
             contexts_text = "\n\n".join([
                 f"Context {i+1}: {chunk.get('content', '')[:500]}"
@@ -660,7 +660,7 @@ Respond ONLY with a JSON object in this exact format:
     ) -> Dict[str, Any]:
         """Detect hallucinations (claims not supported by context)"""
         try:
-            from app.services.llm_service_enhanced import llm_service
+            from app.services.llm_service import llm_service
 
             contexts_text = "\n\n".join([
                 chunk.get('content', '')[:500]

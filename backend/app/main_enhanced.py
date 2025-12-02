@@ -24,25 +24,15 @@ from app.core.database import init_db, close_db, get_db
 from app.api.graphql.schema import schema
 from app.services.embedding_service import embedding_service
 
-# Try to import enhanced RAG service
-try:
-    from app.services.rag_service_enhanced import enhanced_rag_service as rag_service
-    logger_temp = logging.getLogger(__name__)
-    logger_temp.info("✓ Using Enhanced RAG Service with memory hierarchy")
-    ENHANCED_RAG_AVAILABLE = True
-except ImportError:
-    from app.services.rag_service import rag_service
-    logger_temp = logging.getLogger(__name__)
-    logger_temp.warning("⚠ Enhanced RAG service not available, using basic RAG")
-    ENHANCED_RAG_AVAILABLE = False
+# Import consolidated RAG service with memory hierarchy
+from app.services.rag_service import rag_service
+logger_temp = logging.getLogger(__name__)
+logger_temp.info("✓ Using RAG Service with memory hierarchy")
+ENHANCED_RAG_AVAILABLE = True  # Always true now (consolidated)
 
-# Try to import enhanced LLM service
-try:
-    from app.services.llm_service_enhanced import llm_service
-    logger_temp.info("✓ Using Enhanced LLM Service with multi-model support")
-except ImportError as e:
-    from app.services.llm_service import llm_service
-    logger_temp.warning(f"⚠ Enhanced LLM service not available: {e}")
+# Import consolidated LLM service with multi-model support
+from app.services.llm_service import llm_service
+logger_temp.info("✓ Using LLM Service with multi-model support and Claude integration")
 
 from app.services.document_service import document_service
 from app.services.scraper_service import scraper_service

@@ -16,31 +16,18 @@ from app.services.embedding_service import embedding_service
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
-# Try to import enhanced LLM service, fallback to basic if it fails
-try:
-    from app.services.llm_service_enhanced import llm_service
-    logger_temp = logging.getLogger(__name__)
-    logger_temp.info("✓ Using Enhanced LLM Service with multi-model support")
-except ImportError as e:
-    from app.services.llm_service import llm_service
-    logger_temp = logging.getLogger(__name__)
-    logger_temp.warning(f"⚠ Enhanced LLM service not available: {e}")
-    logger_temp.warning("⚠ Using basic LLM service - model selection will not work")
-    import traceback
-    logger_temp.debug(f"Import traceback: {traceback.format_exc()}")
+# Import consolidated LLM service with multi-model support
+from app.services.llm_service import llm_service
+logger_temp = logging.getLogger(__name__)
+logger_temp.info("✓ Using LLM Service with multi-model support and Claude integration")
 
 from app.services.document_service import document_service
 from app.services.scraper_service import scraper_service
 
-# Try to import enhanced RAG service with memory hierarchy
-try:
-    from app.services.rag_service_enhanced import enhanced_rag_service as rag_service
-    logger_temp.info("✓ Using Enhanced RAG Service with memory hierarchy")
-    ENHANCED_RAG_AVAILABLE = True
-except ImportError:
-    from app.services.rag_service import rag_service
-    logger_temp.warning("⚠ Enhanced RAG service not available, using basic RAG")
-    ENHANCED_RAG_AVAILABLE = False
+# Import consolidated RAG service with memory hierarchy
+from app.services.rag_service import rag_service
+logger_temp.info("✓ Using RAG Service with memory hierarchy")
+ENHANCED_RAG_AVAILABLE = True  # Always true now (consolidated)
 
 # Import audit service
 try:
@@ -1011,7 +998,7 @@ except Exception as e:
 
 # Also import the enhanced scraper service (with fallback to basic)
 try:
-    from app.services.scraper_service_enhanced import enhanced_scraper_service
+    from app.services.scraper_service import scraper_service
     logger.info("✓ Enhanced Scraper Service loaded")
 except ImportError as e:
     logger.warning(f"Enhanced Scraper Service not available: {e}")

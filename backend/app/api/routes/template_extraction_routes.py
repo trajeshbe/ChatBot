@@ -113,7 +113,7 @@ async def extract_with_custom_template(
 
             # Import required services
             from app.services.scraper_service import scraper_service
-            from app.services.llm_service_enhanced import EnhancedLLMService
+            from app.services.llm_service import llm_service  # Use singleton
             from app.services.webscraper.extractors.llm_extractor import LLMExtractor
 
             # Step 1: Scrape the webpage
@@ -133,8 +133,7 @@ async def extract_with_custom_template(
             template_columns = [f.name for f in request.fields]
 
             # Step 3: Map using LLM with dynamic model selection
-            llm_service = EnhancedLLMService()
-            await llm_service.initialize()
+            # Use singleton llm_service (already initialized)
             extractor = LLMExtractor(llm_service=llm_service)
 
             mapping_result = await extractor.map_to_custom_template(
@@ -1072,7 +1071,7 @@ async def smart_extract_without_template(
     try:
         # Import Ultra-Smart Extractor and required services
         from app.services.webscraper.extractors.ultra_smart_extractor import UltraSmartExtractor
-        from app.services.llm_service_enhanced import EnhancedLLMService
+        from app.services.llm_service import llm_service  # Use singleton
         from app.services.scraper_service import scraper_service
 
         logger.info(f"🚀 Ultra-Smart extraction from: {request.url}")
@@ -1080,8 +1079,7 @@ async def smart_extract_without_template(
         logger.info(f"🤖 Model: {request.model_id} (provider: {request.llm_provider})")
 
         # Initialize Enhanced LLM Service with dynamic model selection
-        llm_service = EnhancedLLMService()
-        await llm_service.initialize()
+        # Use singleton llm_service (already initialized)
 
         # Initialize Ultra-Smart Extractor
         ultra_extractor = UltraSmartExtractor(
@@ -1254,7 +1252,6 @@ async def smart_map_to_custom_template(
         # Step 2: Initialize LLM extractor and map to template
         logger.info(f"Mapping to {len(request.template_columns)} template columns using {request.llm_provider}...")
 
-        await llm_service.initialize()
         extractor = LLMExtractor(llm_service=llm_service)
 
         mapping_result = await extractor.map_to_custom_template(

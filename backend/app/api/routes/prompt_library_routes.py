@@ -248,9 +248,9 @@ async def update_prompt(
         if not existing_prompt:
             raise HTTPException(status_code=404, detail="Prompt not found")
 
-        # Check ownership
-        if existing_prompt.created_by != current_user.id:
-            raise HTTPException(status_code=403, detail="Only the creator can update this prompt")
+        # Check ownership (admins can update any prompt)
+        if existing_prompt.created_by != current_user.id and current_user.role != 'admin':
+            raise HTTPException(status_code=403, detail="Only the creator or an admin can update this prompt")
 
         # Update fields
         update_data = prompt_update.model_dump(exclude_unset=True)
@@ -304,9 +304,9 @@ async def delete_prompt(
         if not existing_prompt:
             raise HTTPException(status_code=404, detail="Prompt not found")
 
-        # Check ownership
-        if existing_prompt.created_by != current_user.id:
-            raise HTTPException(status_code=403, detail="Only the creator can delete this prompt")
+        # Check ownership (admins can delete any prompt)
+        if existing_prompt.created_by != current_user.id and current_user.role != 'admin':
+            raise HTTPException(status_code=403, detail="Only the creator or an admin can delete this prompt")
 
         await db.delete(existing_prompt)
         await db.commit()

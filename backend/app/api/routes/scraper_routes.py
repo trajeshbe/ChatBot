@@ -11,7 +11,7 @@ from typing import Optional, List
 
 from app.core.database import get_db
 from app.core.security import get_current_user_from_request
-from app.services.scraper_service_enhanced import enhanced_scraper_service
+from app.services.scraper_service import scraper_service
 from app.services.scraper_strategies import ScraperConfig, ScraperStrategy
 from app.schemas.scraper_schemas import (
     ScrapeRequest,
@@ -39,7 +39,7 @@ async def get_scraper_capabilities():
     and default configuration.
     """
     try:
-        capabilities = await enhanced_scraper_service.get_scraper_capabilities()
+        capabilities = await scraper_service.get_scraper_capabilities()
         return ScraperCapabilitiesResponse(**capabilities)
     except Exception as e:
         logger.error(f"Error getting scraper capabilities: {e}")
@@ -199,7 +199,7 @@ async def scrape_url(
             )
 
         # Perform scraping with project context
-        result = await enhanced_scraper_service.scrape_url(
+        result = await scraper_service.scrape_url(
             url=str(scrape_request.url),
             scrape_prompt=scrape_request.scrape_prompt,
             strategy=scrape_request.strategy.value if scrape_request.strategy else None,
@@ -395,7 +395,7 @@ async def scrape_multiple_urls(
 
         # Scrape only allowed URLs with project context
         if allowed_urls:
-            results = await enhanced_scraper_service.scrape_multiple_urls(
+            results = await scraper_service.scrape_multiple_urls(
                 urls=allowed_urls,
                 scrape_prompt=scrape_request.scrape_prompt,
                 strategy=scrape_request.strategy.value if scrape_request.strategy else None,

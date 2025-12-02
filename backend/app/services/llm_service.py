@@ -1,109 +1,566 @@
+"""
+Enhanced LLM Service with Multi-Model Support
+
+Supports intelligent model selection across:
+- Proprietary APIs: OpenAI, Claude/Anthropic
+- Local GPU: vLLM with auto-detection
+- Local CPU: llama.cpp fallback
+
+Features:
+- Automatic GPU detection
+- Dynamic model switching
+- Cost tracking
+- Unified API across all providers
+"""
+
 import httpx
 from openai import AsyncOpenAI
-from typing import Dict, List, Optional, AsyncGenerator
+from anthropic import AsyncAnthropic
+from typing import Dict, List, Optional
 import logging
 from app.core.config import settings
+from app.core.database import get_db
+from app.models.model_registry import get_model_registry, ModelInfo, ModelProvider
+from app.utils.gpu_detector import get_gpu_detector
+from app.utils.resource_checker import resource_checker
+from app.services.secrets_service import get_secrets_service
 from tenacity import retry, stop_after_attempt, wait_exponential
 import time
 
 logger = logging.getLogger(__name__)
 
-# 🆕 Tool usage tracking
-try:
-    from app.services.tool_usage_tracker import tool_tracker, ToolCategory
-    from app.core.database import AsyncSessionLocal
-    TOOL_TRACKING_ENABLED = True
-    logger.info("✅ Tool usage tracking enabled for LLM service")
-except ImportError:
-    TOOL_TRACKING_ENABLED = False
-    logger.warning("⚠️  Tool usage tracking not available")
-
 
 class LLMService:
+    """Enhanced LLM service with multi-model support"""
+
     def __init__(self):
-        self.openai_client = None
+        # API clients
+        self.openai_client: Optional[AsyncOpenAI] = None
+        self.anthropic_client: Optional[AsyncAnthropic] = None
+
+        # HTTP clients for local models (lazy initialization to avoid stale connections)
         self.vllm_client = None
-        self.llama_cpp_client = None
         self.ollama_client = None
+        self.llama_cpp_client = None
+
+        # Model registry and GPU detector
+        self.model_registry = get_model_registry()
+        self.gpu_detector = get_gpu_detector()
+
+        # State
         self._initialized = False
+        self._default_model_id: Optional[str] = None
+        self._gpu_info = None
+
+        # Cache for Ollama model list (refreshed periodically)
+        self._ollama_models_cache = None
+        self._ollama_models_cache_time = 0
+
+    async def _get_available_ollama_models(self) -> List[Dict]:
+        """
+        Get list of available Ollama models dynamically from API
+
+        Returns:
+            List of model dicts with name and size
+        """
+        import time
+
+        # Cache for 5 minutes
+        cache_duration = 300  # seconds
+        current_time = time.time()
+
+        if self._ollama_models_cache and (current_time - self._ollama_models_cache_time) < cache_duration:
+            logger.debug(f"📦 Using cached Ollama models ({len(self._ollama_models_cache)} models)")
+            return self._ollama_models_cache
+
+        try:
+            # Query Ollama API for available models
+            if not self.ollama_client:
+                self.ollama_client = httpx.AsyncClient(
+                    base_url=settings.OLLAMA_BASE_URL,
+                    timeout=30.0
+                )
+
+            response = await self.ollama_client.get("/api/tags")
+            response.raise_for_status()
+            data = response.json()
+
+            models = []
+            for model in data.get("models", []):
+                name = model.get("name", "")
+                size_bytes = model.get("size", 0)
+                size_mb = size_bytes / (1024 * 1024)
+
+                models.append({
+                    "name": name,
+                    "size_mb": size_mb,
+                    "size_gb": size_mb / 1024,
+                    "modified": model.get("modified_at", "")
+                })
+
+            # Sort by size (ascending) for fallback selection
+            models.sort(key=lambda m: m["size_mb"])
+
+            self._ollama_models_cache = models
+            self._ollama_models_cache_time = current_time
+
+            logger.info(f"📦 Loaded {len(models)} Ollama models from API")
+            return models
+
+        except Exception as e:
+            logger.error(f"❌ Failed to get Ollama models: {e}")
+            return []
+
+    async def _select_model_with_memory_check(self, model_id: str) -> Dict[str, any]:
+        """
+        Check if model fits in available memory, fallback to best available lighter model if needed
+
+        Args:
+            model_id: Requested model ID
+
+        Returns:
+            Dict with:
+                - model_id: Model to use (original or fallback)
+                - fallback: True if fallback was used
+                - reason: Reason for fallback
+                - original_model: Original requested model
+                - available_memory_mb: Available memory
+                - required_memory_mb: Required memory for original model
+        """
+        # Get available memory
+        resources = resource_checker.get_resource_summary()
+        available_mb = resources["memory"]["available_mb"]
+
+        # Get all available Ollama models
+        available_models = await self._get_available_ollama_models()
+
+        if not available_models:
+            logger.warning("⚠️  Could not get Ollama models, using requested model")
+            return {
+                "model_id": model_id,
+                "fallback": False,
+                "reason": "Could not query Ollama API",
+                "original_model": model_id,
+                "available_memory_mb": available_mb,
+                "required_memory_mb": None
+            }
+
+        # Find requested model in available models
+        requested_model = next((m for m in available_models if m["name"] == model_id), None)
+
+        if not requested_model:
+            logger.warning(f"⚠️  Requested model {model_id} not found in Ollama, using as-is")
+            return {
+                "model_id": model_id,
+                "fallback": False,
+                "reason": "Model not found in Ollama list",
+                "original_model": model_id,
+                "available_memory_mb": available_mb,
+                "required_memory_mb": None
+            }
+
+        required_mb = requested_model["size_mb"]
+        # Add 20% safety buffer for runtime overhead
+        required_with_buffer = required_mb * 1.2
+
+        logger.info(
+            f"💾 Memory check: {model_id} "
+            f"requires {required_mb:.0f}MB (+20% buffer = {required_with_buffer:.0f}MB), "
+            f"available: {available_mb:.0f}MB"
+        )
+
+        # Check if requested model fits
+        if required_with_buffer <= available_mb:
+            logger.info(f"✅ Memory check passed for {model_id}")
+            return {
+                "model_id": model_id,
+                "fallback": False,
+                "reason": None,
+                "original_model": model_id,
+                "available_memory_mb": available_mb,
+                "required_memory_mb": required_mb
+            }
+
+        # Requested model doesn't fit - find best alternative
+        logger.warning(
+            f"⚠️  Model {model_id} requires {required_mb:.0f}MB "
+            f"(+buffer: {required_with_buffer:.0f}MB) "
+            f"but only {available_mb:.0f}MB available"
+        )
+
+        # Filter models that fit in memory (with 20% buffer)
+        fitting_models = [
+            m for m in available_models
+            if (m["size_mb"] * 1.2) <= available_mb
+        ]
+
+        if not fitting_models:
+            logger.error("❌ No Ollama models fit in available memory!")
+            return {
+                "model_id": model_id,
+                "fallback": False,
+                "reason": "No models fit in available memory",
+                "original_model": model_id,
+                "available_memory_mb": available_mb,
+                "required_memory_mb": required_mb
+            }
+
+        # Select LARGEST model that fits (best quality within constraints)
+        best_fit = max(fitting_models, key=lambda m: m["size_mb"])
+
+        logger.info(
+            f"✅ Falling back to best available model: {best_fit['name']} "
+            f"(size: {best_fit['size_mb']:.0f}MB, with buffer: {best_fit['size_mb']*1.2:.0f}MB)"
+        )
+
+        return {
+            "model_id": best_fit["name"],
+            "fallback": True,
+            "reason": f"insufficient_memory (requested: {required_mb:.0f}MB, available: {available_mb:.0f}MB)",
+            "original_model": model_id,
+            "available_memory_mb": available_mb,
+            "required_memory_mb": required_mb,
+            "fallback_model_size_mb": best_fit["size_mb"]
+        }
+
+    async def _get_api_key_with_fallback(self, provider: str, env_key: Optional[str] = None) -> Optional[str]:
+        """
+        Get API key from database first, fallback to environment variable
+
+        Args:
+            provider: Provider name (openai, anthropic)
+            env_key: Environment variable value as fallback
+
+        Returns:
+            API key string or None
+        """
+        try:
+            # Try to get key from database first
+            secrets_service = get_secrets_service()
+
+            # Create temporary database session
+            async for db in get_db():
+                try:
+                    db_key = await secrets_service.get_api_key(db, provider)
+                    if db_key:
+                        logger.info(f"✓ Using {provider} API key from database")
+                        return db_key
+                finally:
+                    await db.close()
+                break  # Only need one iteration
+        except Exception as e:
+            logger.warning(f"Could not load {provider} key from database: {e}")
+
+        # Fallback to environment variable
+        if env_key and env_key.strip():
+            logger.info(f"✓ Using {provider} API key from environment")
+            return env_key
+
+        return None
 
     async def initialize(self):
-        """Initialize LLM clients with database fallback to environment variables"""
+        """Initialize LLM clients and detect hardware"""
         if self._initialized:
             return
 
-        # Try to get OpenAI API key with fallback chain:
-        # 1. Try encrypted database first (SecretsService)
-        # 2. Fall back to environment variable (.env file)
-        openai_api_key = None
-        api_key_source = None
+        logger.info("Initializing Enhanced LLM Service...")
 
-        try:
-            # Import here to avoid circular dependencies
-            from app.services.secrets_service import get_secrets_service
-            from app.core.database import get_db
+        # Detect GPU
+        self._gpu_info = self.gpu_detector.detect()
+        logger.info(f"GPU Detection: {self._gpu_info.type} ({'available' if self._gpu_info.available else 'not available'})")
 
-            logger.info("🔐 Attempting to load OpenAI API key from encrypted database...")
-
-            secrets_service = get_secrets_service()
-
-            # Get database session
-            async for db in get_db():
-                try:
-                    openai_api_key = await secrets_service.get_api_key(db, "openai")
-                    if openai_api_key:
-                        api_key_source = "encrypted_database"
-                        logger.info("✅ Successfully loaded OpenAI API key from ENCRYPTED DATABASE")
-                        logger.info("🔒 Using encrypted API key storage (secure)")
-                    break
-                except Exception as db_error:
-                    logger.warning(f"⚠️  Failed to retrieve API key from database: {db_error}")
-                    break
-
-        except Exception as e:
-            logger.warning(f"⚠️  Could not access encrypted database: {e}")
-            logger.info("📝 Falling back to environment variable...")
-
-        # Fallback to environment variable if database retrieval failed
-        if not openai_api_key and settings.OPENAI_API_KEY:
-            openai_api_key = settings.OPENAI_API_KEY
-            api_key_source = "environment_variable"
-            logger.info("✅ Using OpenAI API key from ENVIRONMENT VARIABLE (.env file)")
-            logger.warning("⚠️  Consider migrating to encrypted database storage for better security")
-
-        # Initialize OpenAI client if we have a key
-        if openai_api_key:
-            self.openai_client = AsyncOpenAI(api_key=openai_api_key)
-            logger.info(f"🤖 OpenAI client initialized successfully")
-            logger.info(f"📊 API Key Source: {api_key_source.upper().replace('_', ' ')}")
+        # Initialize OpenAI (check database first, then environment)
+        openai_key = await self._get_api_key_with_fallback('openai', settings.OPENAI_API_KEY)
+        if openai_key:
+            self.openai_client = AsyncOpenAI(api_key=openai_key)
+            logger.info("✓ OpenAI client initialized")
         else:
-            logger.warning("⚠️  No OpenAI API key found in database or environment")
-            logger.info("💡 To use OpenAI:")
-            logger.info("   1. Add to encrypted database via Admin UI → API Keys")
-            logger.info("   2. Or add OPENAI_API_KEY to .env file")
+            logger.info("OpenAI API key not configured")
+
+        # Initialize Anthropic/Claude (check database first, then environment)
+        anthropic_env_key = getattr(settings, 'ANTHROPIC_API_KEY', None)
+        anthropic_key = await self._get_api_key_with_fallback('anthropic', anthropic_env_key)
+        if anthropic_key:
+            self.anthropic_client = AsyncAnthropic(api_key=anthropic_key)
+            logger.info("✓ Anthropic/Claude client initialized")
+        else:
+            logger.info("Anthropic API key not configured")
+
+        # Initialize HuggingFace token (check database first, then environment)
+        # This is used by vLLM and huggingface_hub for downloading models
+        import os
+        hf_env_key = getattr(settings, 'HUGGING_FACE_HUB_TOKEN', None)
+        hf_token = await self._get_api_key_with_fallback('huggingface', hf_env_key)
+        if hf_token:
+            # Set as environment variable for huggingface_hub library
+            os.environ['HUGGING_FACE_HUB_TOKEN'] = hf_token
+            os.environ['HF_TOKEN'] = hf_token  # Alternative env var name
+            logger.info("✓ HuggingFace token configured for model downloads")
+        else:
+            logger.info("HuggingFace token not configured (optional - needed for private/gated models)")
+
+        # Update model availability based on hardware and API keys
+        self._update_model_availability()
+
+        # Check which Ollama models are actually installed (async check)
+        installed_ollama_models = await self._check_ollama_model_availability()
+        if installed_ollama_models:
+            # Update Ollama model availability based on what's actually installed
+            for model in self.model_registry.get_models_by_provider(ModelProvider.OLLAMA):
+                # Check if the model's path is in the installed models
+                is_available = model.model_path in installed_ollama_models
+                self.model_registry.update_availability(model.id, is_available)
+                if is_available:
+                    logger.info(f"   ✅ {model.name} ({model.model_path}) - Available")
+                else:
+                    logger.warning(f"   ❌ {model.name} ({model.model_path}) - Not installed")
+
+        # Set default model
+        self._set_default_model()
 
         self._initialized = True
+        logger.info(f"✓ LLM Service initialized. Default model: {self._default_model_id}")
+
+    async def _check_ollama_model_availability(self) -> set:
+        """
+        Check which Ollama models are actually installed
+        AUTO-REGISTERS any unknown models discovered in Ollama
+
+        Returns:
+            Set of installed model names
+        """
+        try:
+            client = httpx.AsyncClient(timeout=10.0)
+            try:
+                response = await client.get(f"{settings.OLLAMA_ENDPOINT}/api/tags")
+                response.raise_for_status()
+                data = response.json()
+
+                # Extract model names and auto-register unknown ones
+                installed_models = set()
+                for model in data.get("models", []):
+                    model_name = model.get("name", "")
+                    model_size = model.get("size", 0)
+                    installed_models.add(model_name)
+
+                    # AUTO-REGISTER if not already in registry
+                    if not self.model_registry.get_model(model_name):
+                        logger.info(f"🆕 Auto-registering new Ollama model: {model_name}")
+                        self._auto_register_ollama_model(model_name, model_size)
+
+                logger.info(f"🔍 Ollama installed models: {installed_models}")
+                return installed_models
+            finally:
+                await client.aclose()
+        except Exception as e:
+            logger.warning(f"⚠️  Failed to check Ollama model availability: {e}")
+            logger.warning("    Assuming all registered Ollama models are available")
+            return set()  # Return empty set, will mark all as unavailable
+
+    def _auto_register_ollama_model(self, model_name: str, model_size: int):
+        """
+        Auto-register a discovered Ollama model with intelligent defaults
+
+        Args:
+            model_name: Model name from Ollama (e.g., "llama3.1:8b", "mistral:7b")
+            model_size: Model size in bytes
+        """
+        import re
+        from app.models.model_registry import ModelInfo, ModelProvider, ModelType
+
+        # Extract parameter size from name (e.g., "8b", "7b", "3b", "1.5b")
+        size_match = re.search(r'(\d+\.?\d*)b', model_name.lower())
+        param_size = float(size_match.group(1)) if size_match else 0
+
+        # Determine if GPU model based on size
+        # Models > 3GB are likely GPU models (Q4 quantized 7B+ models)
+        size_gb = model_size / (1024 ** 3)
+        is_gpu_model = size_gb > 3.0 or param_size >= 7.0
+
+        # Extract model family (e.g., "llama3.1" from "llama3.1:8b")
+        family = model_name.split(':')[0] if ':' in model_name else model_name
+        family_title = family.replace('.', ' ').replace('-', ' ').title()
+
+        # Create friendly display name
+        display_name = f"{family_title}"
+        if param_size > 0:
+            display_name += f" {param_size:.1f}B".replace('.0B', 'B')
+        display_name += " (Ollama"
+        if is_gpu_model:
+            display_name += " GPU"
+        display_name += ")"
+
+        # Determine context length based on model family
+        context_length = 128000  # Default for newer models
+        if 'llama3' in model_name:
+            context_length = 128000
+        elif 'qwen' in model_name:
+            context_length = 32768
+        elif 'mistral' in model_name or 'mixtral' in model_name:
+            context_length = 32768
+        elif 'phi' in model_name:
+            context_length = 128000
+
+        # Create intelligent description
+        description = f"Auto-registered Ollama model. "
+        if is_gpu_model:
+            description += f"GPU-accelerated. ~{size_gb:.1f}GB VRAM. "
+        else:
+            description += f"CPU model. ~{size_gb:.1f}GB RAM. "
+
+        if param_size > 0:
+            description += f"{param_size:.1f}B parameters. "
+
+        # Add family-specific notes
+        if 'llama' in model_name:
+            description += "Good for general tasks and RAG."
+        elif 'qwen' in model_name:
+            description += "Multilingual support, good reasoning."
+        elif 'mistral' in model_name:
+            description += "Fast inference, balanced quality."
+        elif 'deepseek' in model_name:
+            description += "Specialized for coding tasks."
+        elif 'phi' in model_name:
+            description += "Compact model with good reasoning."
+
+        # Register the model
+        # Note: Ollama models don't require backend GPU since Ollama handles GPU inference
+        model_info = ModelInfo(
+            id=model_name,
+            name=display_name,
+            provider=ModelProvider.OLLAMA,
+            model_type=ModelType.LOCAL_GPU if is_gpu_model else ModelType.LOCAL_CPU,
+            model_path=model_name,
+            context_length=context_length,
+            cost_per_1k_tokens=0.0,  # Free local model
+            requires_gpu=False,  # Ollama handles GPU internally, backend doesn't need GPU
+            min_gpu_memory_gb=0,  # Ollama manages its own GPU memory
+            description=description,
+            recommended=param_size >= 7.0  # Recommend 7B+ models
+        )
+
+        self.model_registry.register(model_info)
+        logger.info(f"   ✅ Auto-registered: {display_name} ({size_gb:.1f}GB, GPU={is_gpu_model})")
+
+    def _update_model_availability(self):
+        """Update model availability based on API keys and hardware"""
+
+        # Update OpenAI models
+        for model in self.model_registry.get_models_by_provider(ModelProvider.OPENAI):
+            available = self.openai_client is not None
+            self.model_registry.update_availability(model.id, available)
+
+        # Update Claude models
+        for model in self.model_registry.get_models_by_provider(ModelProvider.ANTHROPIC):
+            available = self.anthropic_client is not None
+            self.model_registry.update_availability(model.id, available)
+
+        # Update vLLM models (GPU required)
+        for model in self.model_registry.get_models_by_provider(ModelProvider.VLLM):
+            available = (self._gpu_info.available and
+                        self._gpu_info.memory_gb >= model.min_gpu_memory_gb and
+                        settings.USE_VLLM)
+            self.model_registry.update_availability(model.id, available)
+
+        # Ollama models: Dynamically check what's actually installed
+        # Note: This is synchronous init, actual check happens in initialize()
+        for model in self.model_registry.get_models_by_provider(ModelProvider.OLLAMA):
+            # Set to True initially, will be updated during async initialize()
+            self.model_registry.update_availability(model.id, True)
+
+        # llama.cpp models (deprecated - use Ollama instead)
+        for model in self.model_registry.get_models_by_provider(ModelProvider.LLAMA_CPP):
+            self.model_registry.update_availability(model.id, True)
+
+    def _set_default_model(self):
+        """Set the default model based on availability - dynamically selects best GPU model"""
+
+        # Get all available models
+        available_models = self.model_registry.get_available_models(
+            gpu_available=self._gpu_info.available if self._gpu_info else False,
+            gpu_memory_gb=self._gpu_info.memory_gb if self._gpu_info else 0
+        )
+
+        if not available_models:
+            logger.warning("No models available!")
+            return
+
+        # Priority: GPU models > CPU models, larger parameter count > smaller
+        # Rank models by desirability
+        def rank_model(model):
+            score = 0
+            model_id = model.id.lower()
+
+            # GPU models get priority
+            if model.requires_gpu or 'gpu' in model_id:
+                score += 1000
+
+            # Extract parameter size (8b > 7b > 3b > 1.5b)
+            import re
+            size_match = re.search(r'(\d+\.?\d*)b', model_id)
+            if size_match:
+                size = float(size_match.group(1))
+                score += size * 10  # 8b gets 80 points, 3b gets 30 points
+
+            # Prefer qwen models (optimized for GPU, multilingual)
+            if 'qwen' in model_id:
+                score += 10
+
+            # Prefer recommended models from registry
+            if model.recommended:
+                score += 100
+
+            # Prefer instruct/chat variants
+            if any(x in model_id for x in ['instruct', 'chat', 'turbo']):
+                score += 2
+
+            # Ollama models are local and free
+            if 'ollama/' in model_id or model.model_type.value == 'local':
+                score += 3
+
+            return score
+
+        # Sort by rank and pick the best
+        available_models.sort(key=rank_model, reverse=True)
+        best_model = available_models[0]
+        self._default_model_id = best_model.id
+        logger.info(f"🚀 Default model auto-selected: {best_model.name} (score: {rank_model(best_model)})")
+
+        # Fallback to proprietary if no local models
+        if not self._default_model_id:
+            fallback_priority = ["gpt-4-turbo", "claude-3.5-sonnet", "gpt-3.5-turbo"]
+            for model_id in fallback_priority:
+                model = self.model_registry.get_model(model_id)
+                if model and model.available:
+                    self._default_model_id = model_id
+                    logger.info(f"Default model set to fallback: {model.name}")
+                    return
+
+            logger.warning("No models available!")
 
     async def _ensure_ollama_client(self):
-        """Ensure Ollama client is initialized with fresh connection"""
-        if self.ollama_client is None:
-            # CRITICAL: Initialize httpx client at runtime to avoid stale connections
-            # This follows the same pattern as Playwright fix in PLAYWRIGHT_INVESTIGATION.md
-            self.ollama_client = httpx.AsyncClient(timeout=120.0)
-            logger.debug("🔄 Ollama httpx client initialized (runtime)")
-        return self.ollama_client
+        """Create fresh Ollama client for each request (no caching)
+
+        CRITICAL FIX: Always create a NEW client to avoid stale connections and event loop issues.
+        This ensures each request gets a fresh httpx client with proper async context binding.
+        Similar to how direct curl calls work - new connection per request.
+        """
+        # Always create NEW client - do not cache
+        client = httpx.AsyncClient(timeout=120.0)
+        logger.debug("🔄 Ollama httpx client created (fresh per request)")
+        return client
 
     async def _ensure_vllm_client(self):
         """Ensure vLLM client is initialized with fresh connection"""
         if self.vllm_client is None:
-            self.vllm_client = httpx.AsyncClient(timeout=60.0)
+            self.vllm_client = httpx.AsyncClient(timeout=120.0)
             logger.debug("🔄 vLLM httpx client initialized (runtime)")
         return self.vllm_client
 
     async def _ensure_llama_cpp_client(self):
         """Ensure llama.cpp client is initialized with fresh connection"""
         if self.llama_cpp_client is None:
-            self.llama_cpp_client = httpx.AsyncClient(timeout=60.0)
+            self.llama_cpp_client = httpx.AsyncClient(timeout=120.0)
             logger.debug("🔄 llama.cpp httpx client initialized (runtime)")
         return self.llama_cpp_client
 
@@ -111,82 +568,110 @@ class LLMService:
         """Close HTTP clients"""
         if self.vllm_client:
             await self.vllm_client.aclose()
-        if self.llama_cpp_client:
-            await self.llama_cpp_client.aclose()
         if self.ollama_client:
             await self.ollama_client.aclose()
+        if self.llama_cpp_client:
+            await self.llama_cpp_client.aclose()
 
-    def _calculate_cost(self, model_name: str, tokens: int) -> float:
-        """Calculate approximate cost in USD based on model and tokens"""
-        # Pricing per 1M tokens (as of 2025)
-        pricing = {
-            "gpt-4": 0.03,  # $30 per 1M tokens (average input/output)
-            "gpt-4-turbo-preview": 0.02,
-            "gpt-3.5-turbo": 0.002,  # $2 per 1M tokens
-            "claude-3-opus": 0.04,  # $40 per 1M tokens
-            "claude-3-sonnet": 0.01,
-            "claude-3-haiku": 0.001,
-            # Local models have no API cost
-            "ollama": 0.0,
-            "vllm": 0.0,
-            "llama-cpp": 0.0
-        }
-
-        # Find matching price (check if model_name contains key)
-        cost_per_1m = 0.0
-        for model_key, price in pricing.items():
-            if model_key in model_name.lower():
-                cost_per_1m = price
-                break
-
-        return (tokens / 1_000_000) * cost_per_1m
-
-    async def _track_llm_usage(
-        self,
-        tool_name: str,
-        operation: str,
-        latency_ms: float,
-        success: bool,
-        input_size: int = 0,
-        output_size: int = 0,
-        tokens_used: int = 0,
-        cost_usd: float = 0.0,
-        error_message: str = None,
-        session_id: Optional[str] = None
-    ):
-        """Helper to track LLM usage without requiring external db session"""
-        if not TOOL_TRACKING_ENABLED:
-            return
-
-        try:
-            async with AsyncSessionLocal() as db:
-                await tool_tracker.record_tool_usage(
-                    category=ToolCategory.LLM_SERVICE,
-                    tool_name=tool_name,
-                    operation=operation,
-                    latency_ms=latency_ms,
-                    success=success,
-                    db=db,
-                    session_id=session_id,
-                    input_size=input_size,
-                    output_size=output_size,
-                    tokens_used=tokens_used,
-                    cost_usd=cost_usd,
-                    error_message=error_message
-                )
-        except Exception as e:
-            # Don't fail the main operation if tracking fails
-            logger.debug(f"Failed to track LLM usage: {e}")
+    # ============================================================================
+    # PROVIDER-SPECIFIC IMPLEMENTATIONS
+    # ============================================================================
 
     @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
-    async def _call_vllm(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> Dict:
-        """Call vLLM service"""
+    async def _call_openai(
+        self,
+        model_info: ModelInfo,
+        messages: List[Dict],
+        max_tokens: int = 512,
+        temperature: float = 0.7
+    ) -> Dict:
+        """Call OpenAI API"""
+        if not self.openai_client:
+            raise ValueError("OpenAI client not initialized")
+
+        try:
+            response = await self.openai_client.chat.completions.create(
+                model=model_info.model_path,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            return {
+                "content": response.choices[0].message.content,
+                "model": model_info.id,
+                "model_name": model_info.name,
+                "provider": "openai",
+                "tokens": response.usage.total_tokens,
+                "cost": (response.usage.total_tokens / 1000) * model_info.cost_per_1k_tokens
+            }
+        except Exception as e:
+            logger.error(f"OpenAI call failed: {e}")
+            raise
+
+    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
+    async def _call_anthropic(
+        self,
+        model_info: ModelInfo,
+        messages: List[Dict],
+        max_tokens: int = 512,
+        temperature: float = 0.7
+    ) -> Dict:
+        """Call Anthropic Claude API"""
+        if not self.anthropic_client:
+            raise ValueError("Anthropic client not initialized")
+
+        try:
+            # Convert OpenAI-style messages to Claude format
+            system_message = None
+            claude_messages = []
+
+            for msg in messages:
+                if msg["role"] == "system":
+                    system_message = msg["content"]
+                else:
+                    claude_messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"]
+                    })
+
+            # Call Claude API
+            response = await self.anthropic_client.messages.create(
+                model=model_info.model_path,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system_message if system_message else "You are a helpful AI assistant.",
+                messages=claude_messages
+            )
+
+            total_tokens = response.usage.input_tokens + response.usage.output_tokens
+
+            return {
+                "content": response.content[0].text,
+                "model": model_info.id,
+                "model_name": model_info.name,
+                "provider": "anthropic",
+                "tokens": total_tokens,
+                "cost": (total_tokens / 1000) * model_info.cost_per_1k_tokens
+            }
+        except Exception as e:
+            logger.error(f"Anthropic call failed: {e}")
+            raise
+
+    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
+    async def _call_vllm(
+        self,
+        model_info: ModelInfo,
+        prompt: str,
+        max_tokens: int = 512,
+        temperature: float = 0.7
+    ) -> Dict:
+        """Call vLLM service (local GPU)"""
         try:
             client = await self._ensure_vllm_client()
             response = await client.post(
                 f"{settings.VLLM_ENDPOINT}/v1/completions",
                 json={
-                    "model": settings.VLLM_MODEL,
+                    "model": model_info.model_path,
                     "prompt": prompt,
                     "max_tokens": max_tokens,
                     "temperature": temperature,
@@ -194,213 +679,115 @@ class LLMService:
                 }
             )
             response.raise_for_status()
+            result = response.json()
+
             return {
-                "content": response.json()["choices"][0]["text"],
-                "model": "vllm",
-                "model_name": "Local GPU (vLLM)",
-                "tokens": response.json().get("usage", {}).get("total_tokens", 0)
+                "content": result["choices"][0]["text"],
+                "model": model_info.id,
+                "model_name": model_info.name,
+                "provider": "vllm",
+                "tokens": result.get("usage", {}).get("total_tokens", 0),
+                "cost": 0.0  # Local, no cost
             }
         except Exception as e:
             logger.warning(f"vLLM call failed: {e}")
             raise
 
     @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
-    async def _call_llama_cpp(self, prompt: str, max_tokens: int = 512, temperature: float = 0.7) -> Dict:
-        """Call llama.cpp service as CPU fallback (DEPRECATED - use Ollama instead)"""
+    async def _call_ollama(
+        self,
+        model_info: ModelInfo,
+        prompt: str,
+        max_tokens: int = 512,
+        temperature: float = 0.7
+    ) -> Dict:
+        """Call Ollama service (local CPU/GPU)"""
+        # CRITICAL: Get fresh httpx client for this request
+        client = await self._ensure_ollama_client()
+
         try:
-            client = await self._ensure_llama_cpp_client()
+            logger.info(f"🔧 Calling Ollama: model={model_info.model_path}, endpoint={settings.OLLAMA_ENDPOINT}")
+            logger.info(f"🔧 Prompt length: {len(prompt)} chars, max_tokens: {max_tokens}")
+
             response = await client.post(
+                f"{settings.OLLAMA_ENDPOINT}/api/generate",
+                json={
+                    "model": model_info.model_path,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "num_predict": max_tokens,
+                        "temperature": temperature,
+                        "top_p": 0.9,
+                        "stop": ["</s>", "Human:", "User:"],
+                    }
+                }
+            )
+
+            logger.info(f"🔧 Response status: {response.status_code}")
+            response.raise_for_status()
+            result = response.json()
+
+            logger.info(f"✅ Ollama response received: {len(result.get('response', ''))} chars")
+
+            return {
+                "content": result["response"],
+                "model": model_info.id,
+                "model_name": model_info.name,
+                "provider": "ollama",
+                "tokens": result.get("eval_count", 0) + result.get("prompt_eval_count", 0),
+                "cost": 0.0  # Local, no cost
+            }
+        except Exception as e:
+            logger.error(f"❌ Ollama call failed: {e}")
+            logger.error(f"❌ Exception type: {type(e).__name__}")
+            if hasattr(e, 'response'):
+                logger.error(f"❌ Response status: {e.response.status_code}")
+                logger.error(f"❌ Response body: {e.response.text[:500]}")
+            raise
+        finally:
+            # Always close the fresh client after use (no caching)
+            await client.aclose()
+            logger.debug("🔒 Ollama httpx client closed")
+
+    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
+    async def _call_llama_cpp(
+        self,
+        model_info: ModelInfo,
+        prompt: str,
+        max_tokens: int = 512,
+        temperature: float = 0.7
+    ) -> Dict:
+        """Call llama.cpp service (local CPU) - DEPRECATED, use Ollama instead"""
+        try:
+            response = await self.llama_cpp_client.post(
                 f"{settings.LLAMA_CPP_ENDPOINT}/completion",
                 json={
                     "prompt": prompt,
                     "n_predict": max_tokens,
                     "temperature": temperature,
                     "top_p": 0.9,
+                    "stop": ["</s>", "Human:", "User:"],
                 }
             )
             response.raise_for_status()
+            result = response.json()
+
             return {
-                "content": response.json()["content"],
-                "model": "llama-cpp",
-                "model_name": "Local CPU (llama.cpp)",
-                "tokens": response.json().get("tokens_evaluated", 0)
+                "content": result["content"],
+                "model": model_info.id,
+                "model_name": model_info.name,
+                "provider": "llama.cpp",
+                "tokens": result.get("tokens_evaluated", 0),
+                "cost": 0.0  # Local, no cost
             }
         except Exception as e:
             logger.warning(f"llama.cpp call failed: {e}")
             raise
 
-    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
-    async def _call_ollama(self, prompt: str, messages: Optional[List[Dict]] = None, max_tokens: int = 512, temperature: float = 0.7, session_id: Optional[str] = None) -> Dict:
-        """Call Ollama service for local LLM inference"""
-        start_time = time.time()
-        success = False
-        error_msg = None
-        tokens = 0
-        content = ""
-        # Get default model from registry (no hardcoded fallback)
-        from app.models.model_registry import get_model_registry
-        registry = get_model_registry()
-        default_model = registry.get_recommended_model()
-        ollama_model = getattr(settings, 'OLLAMA_MODEL', default_model.model_path if default_model else 'qwen2.5:1.5b-instruct-q4_K_M')
-
-        try:
-            # CRITICAL: Ensure fresh httpx client (runtime initialization)
-            client = await self._ensure_ollama_client()
-
-            # Ollama endpoint (from settings or default)
-            ollama_endpoint = getattr(settings, 'OLLAMA_ENDPOINT', 'http://ollama:11434')
-
-            logger.info(f"🦙 Calling Ollama at {ollama_endpoint}")
-            logger.info(f"📦 Using model: {ollama_model}")
-
-            # Ollama supports chat API (preferred)
-            if messages:
-                logger.info(f"💬 Using Ollama chat API with {len(messages)} messages")
-                response = await client.post(
-                    f"{ollama_endpoint}/api/chat",
-                    json={
-                        "model": ollama_model,
-                        "messages": messages,
-                        "stream": False,
-                        "options": {
-                            "temperature": temperature,
-                            "num_predict": max_tokens,
-                        }
-                    }
-                )
-            else:
-                # Fallback to generate API
-                logger.info(f"📝 Using Ollama generate API")
-                response = await client.post(
-                    f"{ollama_endpoint}/api/generate",
-                    json={
-                        "model": ollama_model,
-                        "prompt": prompt,
-                        "stream": False,
-                        "options": {
-                            "temperature": temperature,
-                            "num_predict": max_tokens,
-                        }
-                    }
-                )
-
-            response.raise_for_status()
-            result_json = response.json()
-
-            # Extract content based on API used
-            if messages:
-                content = result_json.get("message", {}).get("content", "")
-            else:
-                content = result_json.get("response", "")
-
-            tokens = result_json.get("eval_count", 0) + result_json.get("prompt_eval_count", 0)
-            success = True
-
-            logger.info(f"✅ Ollama response received ({len(content)} chars)")
-
-            return {
-                "content": content,
-                "model": f"ollama/{ollama_model}",
-                "model_name": f"ollama/{ollama_model}",
-                "tokens": tokens
-            }
-
-        except httpx.ConnectError as e:
-            error_msg = str(e)
-            logger.error(f"❌ Ollama connection failed: {e}")
-            logger.error("💡 Is Ollama service running? Check: docker ps | grep ollama")
-            raise
-        except httpx.HTTPStatusError as e:
-            error_msg = str(e)
-            logger.error(f"❌ Ollama HTTP error: {e}")
-            logger.error(f"💡 Status: {e.response.status_code}")
-            if e.response.status_code == 404:
-                logger.error(f"💡 Model '{ollama_model}' not found. Pull it with: ollama pull {ollama_model}")
-            raise
-        except Exception as e:
-            error_msg = str(e)
-            logger.error(f"❌ Ollama call failed: {e}")
-            raise
-
-        finally:
-            # 🆕 Track LLM usage (success or failure)
-            latency_ms = (time.time() - start_time) * 1000
-            if messages:
-                prompt_text = " ".join([m.get("content", "") for m in messages])
-            else:
-                prompt_text = prompt
-
-            await self._track_llm_usage(
-                tool_name=f"ollama/{ollama_model}",
-                operation="chat_completion" if messages else "generate",
-                latency_ms=latency_ms,
-                success=success,
-                input_size=len(prompt_text),
-                output_size=len(content),
-                tokens_used=tokens,
-                cost_usd=0.0,  # Ollama is free/local
-                error_message=error_msg,
-                session_id=session_id
-            )
-
-    async def _call_openai(self, messages: List[Dict], max_tokens: int = 512, temperature: float = 0.7, session_id: Optional[str] = None) -> Dict:
-        """Call OpenAI API as final fallback"""
-        if not self.openai_client:
-            raise ValueError("OpenAI client not initialized")
-
-        start_time = time.time()
-        success = False
-        error_msg = None
-        tokens = 0
-        content = ""
-
-        try:
-            response = await self.openai_client.chat.completions.create(
-                model=settings.OPENAI_MODEL,
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
-            content = response.choices[0].message.content
-            tokens = response.usage.total_tokens
-            success = True
-
-            result = {
-                "content": content,
-                "model": "openai",
-                "model_name": f"OpenAI ({settings.OPENAI_MODEL})",
-                "tokens": tokens
-            }
-            return result
-
-        except Exception as e:
-            error_msg = str(e)
-            error_str = error_msg.lower()
-            if "api_key" in error_str or "authentication" in error_str or "401" in error_str:
-                logger.error(f"OpenAI authentication failed: {e}. Please check OPENAI_API_KEY in .env")
-            elif "rate_limit" in error_str or "429" in error_str:
-                logger.error(f"OpenAI rate limit exceeded: {e}")
-            else:
-                logger.error(f"OpenAI call failed: {e}")
-            raise
-
-        finally:
-            # 🆕 Track LLM usage (success or failure)
-            latency_ms = (time.time() - start_time) * 1000
-            prompt_text = " ".join([m.get("content", "") for m in messages])
-
-            await self._track_llm_usage(
-                tool_name=f"openai/{settings.OPENAI_MODEL}",
-                operation="chat_completion",
-                latency_ms=latency_ms,
-                success=success,
-                input_size=len(prompt_text),
-                output_size=len(content),
-                tokens_used=tokens,
-                cost_usd=self._calculate_cost(settings.OPENAI_MODEL, tokens),
-                error_message=error_msg,
-                session_id=session_id
-            )
+    # ============================================================================
+    # PUBLIC API
+    # ============================================================================
 
     async def generate(
         self,
@@ -408,98 +795,192 @@ class LLMService:
         messages: Optional[List[Dict]] = None,
         max_tokens: int = 512,
         temperature: float = 0.7,
-        use_fallback: bool = True,
         model_id: Optional[str] = None
     ) -> Dict:
         """
-        Generate response with automatic fallback chain:
-        OpenAI -> Ollama -> vLLM -> llama.cpp
-
-        Prioritizes OpenAI for speed and reliability, with local LLM fallback
+        Generate response using specified or default model
 
         Args:
-            model_id: Optional model identifier (for enhanced service compatibility)
+            prompt: Text prompt
+            messages: Chat messages (for chat models)
+            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature
+            model_id: Optional model ID (uses default if not specified)
+
+        Returns:
+            Dict with content, model, tokens, cost
         """
+        # DEBUG: Log entry to this method
+        logger.info(f"🚀 generate() called with model_id={model_id}, prompt_len={len(prompt)}")
+
+        # Lazy initialization - ensure service is initialized before first use
+        # This handles cases where uvicorn --reload prevents lifespan from running
+        if not self._initialized:
+            logger.warning("⚠️  LLM service not initialized, initializing now (lazy init)")
+            await self.initialize()
+            logger.info("✅ Lazy init completed")
+
         start_time = time.time()
 
-        logger.info("="*60)
-        logger.info("🤖 LLM GENERATION REQUEST")
-        logger.info(f"📝 Prompt length: {len(prompt)} chars")
-        logger.info(f"💬 Messages: {len(messages) if messages else 0}")
-        logger.info(f"🎯 Max tokens: {max_tokens}")
-        logger.info(f"🌡️  Temperature: {temperature}")
-        logger.info("="*60)
+        # Get model info
+        requested_model_id = model_id  # Store original request for logging
+        if model_id is None:
+            model_id = self._default_model_id
+            logger.info(f"🎯 No model specified, using default: {model_id}")
+        else:
+            logger.info(f"🎯 Model requested: {model_id}")
 
-        # Note: Basic service uses automatic fallback chain
-        # model_id parameter accepted for compatibility with enhanced service
+        model_info = self.model_registry.get_model(model_id)
+        if not model_info:
+            logger.error(f"❌ Model not found in registry: {model_id}")
+            raise ValueError(f"Model not found: {model_id}")
 
-        # Try OpenAI first (fastest and most reliable)
-        if self.openai_client:
-            try:
-                logger.info("🔵 Trying OpenAI...")
-                if not messages:
-                    messages = [{"role": "user", "content": prompt}]
-                result = await self._call_openai(messages, max_tokens, temperature)
-                result["latency_ms"] = (time.time() - start_time) * 1000
-                logger.info(f"✅ Using OpenAI (latency: {result['latency_ms']:.0f}ms)")
-                return result
-            except Exception as e:
-                logger.warning(f"⚠️  OpenAI failed, trying Ollama: {e}")
+        if not model_info.available:
+            logger.error(f"❌ Model not available: {model_info.name} (provider: {model_info.provider.value})")
+            logger.error(f"   Reasons: API key missing or hardware insufficient")
+            raise ValueError(f"Model not available: {model_info.name}")
 
-        # Fallback to Ollama (local LLM - preferred for privacy)
-        if use_fallback:
-            try:
-                logger.info("🦙 Trying Ollama (local LLM)...")
-                if not messages:
-                    messages = [{"role": "user", "content": prompt}]
-                result = await self._call_ollama(prompt, messages, max_tokens, temperature)
-                result["latency_ms"] = (time.time() - start_time) * 1000
-                logger.info(f"✅ Using Ollama fallback (latency: {result['latency_ms']:.0f}ms)")
-                return result
-            except Exception as e:
-                logger.warning(f"⚠️  Ollama failed, trying vLLM: {e}")
+        logger.info(f"✅ Routing to: {model_info.name} via {model_info.provider.value} provider")
 
-        # Fallback to vLLM if enabled (GPU-accelerated)
-        if use_fallback and getattr(settings, 'USE_VLLM', False):
-            try:
-                logger.info("🚀 Trying vLLM (GPU)...")
-                result = await self._call_vllm(prompt, max_tokens, temperature)
-                result["latency_ms"] = (time.time() - start_time) * 1000
-                logger.info(f"✅ Using vLLM fallback (latency: {result['latency_ms']:.0f}ms)")
-                return result
-            except Exception as e:
-                logger.warning(f"⚠️  vLLM failed, trying llama.cpp: {e}")
+        # MEMORY CHECK: For Ollama models, check if model fits in available memory
+        # If not, fallback to best available lighter model (follows resource-constrained best practices)
+        memory_check_result = None
+        if model_info.provider == ModelProvider.OLLAMA:
+            original_model_id = model_id
+            memory_check_result = await self._select_model_with_memory_check(model_id)
+            model_id = memory_check_result["model_id"]
 
-        # Final fallback to llama.cpp CPU (DEPRECATED)
-        if use_fallback:
-            try:
-                logger.info("🔧 Trying llama.cpp (deprecated, use Ollama instead)...")
-                result = await self._call_llama_cpp(prompt, max_tokens, temperature)
-                result["latency_ms"] = (time.time() - start_time) * 1000
-                logger.info(f"✅ Using llama.cpp fallback (latency: {result['latency_ms']:.0f}ms)")
-                return result
-            except Exception as e:
-                logger.warning(f"⚠️  llama.cpp failed: {e}")
+            # If model changed due to memory constraints, update model_info and log audit trail
+            if memory_check_result["fallback"]:
+                logger.warning(
+                    f"🔄 MODEL FALLBACK: Memory constraints detected\n"
+                    f"   Requested: {original_model_id} (requires {memory_check_result.get('required_memory_mb', 0):.0f}MB)\n"
+                    f"   Available memory: {memory_check_result['available_memory_mb']:.0f}MB\n"
+                    f"   Fallback: {model_id} (requires {memory_check_result.get('fallback_model_size_mb', 0):.0f}MB)\n"
+                    f"   Reason: {memory_check_result['reason']}\n"
+                    f"   Strategy: Selected LARGEST model that fits in available memory\n"
+                    f"   Audit: User selected {original_model_id}, system used {model_id} for this request only"
+                )
 
-        # No LLM backend available
-        error_msg = (
-            "❌ No LLM backend available. Please configure one of the following:\n\n"
-            "1. 🔵 OpenAI (Recommended - Fast & Reliable)\n"
-            "   - Get your key from: https://platform.openai.com/api-keys\n"
-            "   - Add to .env file: OPENAI_API_KEY=sk-...\n\n"
-            "2. 🦙 Ollama (Recommended for local/privacy)\n"
-            "   - Start service: docker-compose up -d ollama\n"
-            "   - Pull a model: docker exec ollama ollama pull llama3.2:3b\n"
-            "   - Configure in .env: OLLAMA_ENDPOINT=http://ollama:11434\n\n"
-            "3. 🚀 vLLM (For GPU acceleration)\n"
-            "   - Set USE_VLLM=true in .env\n"
-            "   - Requires NVIDIA GPU with CUDA\n\n"
-            "4. 🔧 llama.cpp (DEPRECATED - use Ollama instead)\n"
-            "   - Configure LLAMA_CPP_ENDPOINT in .env\n\n"
-            "💡 Note: Some features will use fallback analysis when LLM is unavailable."
+                model_info = self.model_registry.get_model(model_id)
+                if not model_info:
+                    logger.error(f"❌ Fallback model not found in registry: {model_id}")
+                    raise ValueError(f"Fallback model not found: {model_id}")
+            else:
+                logger.info(f"✅ Using user-selected model: {model_id} (no fallback needed)")
+
+        # Convert prompt to messages if needed
+        if not messages:
+            messages = [{"role": "user", "content": prompt}]
+
+        # Route to appropriate provider
+        try:
+            if model_info.provider == ModelProvider.OPENAI:
+                result = await self._call_openai(model_info, messages, max_tokens, temperature)
+
+            elif model_info.provider == ModelProvider.ANTHROPIC:
+                result = await self._call_anthropic(model_info, messages, max_tokens, temperature)
+
+            elif model_info.provider == ModelProvider.VLLM:
+                # vLLM works better with raw prompts
+                prompt_text = self._messages_to_prompt(messages)
+                result = await self._call_vllm(model_info, prompt_text, max_tokens, temperature)
+
+            elif model_info.provider == ModelProvider.OLLAMA:
+                # Ollama works with raw prompts
+                prompt_text = self._messages_to_prompt(messages)
+                result = await self._call_ollama(model_info, prompt_text, max_tokens, temperature)
+
+            elif model_info.provider == ModelProvider.LLAMA_CPP:
+                # llama.cpp works with raw prompts (deprecated - use Ollama)
+                prompt_text = self._messages_to_prompt(messages)
+                result = await self._call_llama_cpp(model_info, prompt_text, max_tokens, temperature)
+
+            else:
+                raise ValueError(f"Unknown provider: {model_info.provider}")
+
+            # Add latency
+            result["latency_ms"] = (time.time() - start_time) * 1000
+
+            # Add memory check audit information if fallback occurred
+            if memory_check_result and memory_check_result["fallback"]:
+                result["model_fallback"] = {
+                    "occurred": True,
+                    "user_selected_model": memory_check_result["original_model"],
+                    "system_used_model": memory_check_result["model_id"],
+                    "reason": memory_check_result["reason"],
+                    "available_memory_mb": memory_check_result["available_memory_mb"],
+                    "required_memory_mb": memory_check_result.get("required_memory_mb"),
+                    "fallback_model_size_mb": memory_check_result.get("fallback_model_size_mb"),
+                    "strategy": "selected_largest_fitting_model"
+                }
+                logger.info(
+                    f"📊 AUDIT: Model fallback metadata added to response for transparency\n"
+                    f"   User will see that {memory_check_result['original_model']} was requested\n"
+                    f"   but {memory_check_result['model_id']} was used due to memory constraints"
+                )
+            else:
+                result["model_fallback"] = {"occurred": False}
+
+            # Log successful generation with detailed model info
+            logger.info(f"✅ SUCCESS: Generated {result['tokens']} tokens in {result['latency_ms']:.0f}ms using {result['model_name']} (${result.get('cost', 0):.4f})")
+
+            # Validation: Ensure the model used matches what was requested (or fallback)
+            if requested_model_id and result['model'] != model_id:
+                logger.warning(f"⚠️ Model mismatch: requested={requested_model_id}, used={result['model']}")
+            else:
+                logger.debug(f"✅ Model routing validated: requested={requested_model_id or 'default'}, used={result['model']}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Generation FAILED with {model_info.name} ({model_info.provider.value}): {e}")
+            raise
+
+    def _messages_to_prompt(self, messages: List[Dict]) -> str:
+        """Convert chat messages to a single prompt string"""
+        prompt_parts = []
+        for msg in messages:
+            role = msg["role"]
+            content = msg["content"]
+            if role == "system":
+                prompt_parts.append(f"System: {content}")
+            elif role == "user":
+                prompt_parts.append(f"User: {content}")
+            elif role == "assistant":
+                prompt_parts.append(f"Assistant: {content}")
+
+        prompt_parts.append("Assistant:")
+        return "\n\n".join(prompt_parts)
+
+    def get_available_models(self) -> Dict:
+        """Get all available models grouped by type"""
+        available = self.model_registry.get_available_models(
+            gpu_available=self._gpu_info.available if self._gpu_info else False,
+            gpu_memory_gb=self._gpu_info.memory_gb if self._gpu_info else 0
         )
-        logger.error(error_msg)
-        raise Exception(error_msg)
+
+        return {
+            "models": [m.to_dict() for m in available],
+            "grouped": self.model_registry.get_models_grouped(),
+            "default": self._default_model_id,
+            "gpu_info": {
+                "available": self._gpu_info.available if self._gpu_info else False,
+                "type": self._gpu_info.type if self._gpu_info else "cpu",
+                "memory_gb": self._gpu_info.memory_gb if self._gpu_info else 0
+            }
+        }
+
+    def set_default_model(self, model_id: str):
+        """Set the default model"""
+        model = self.model_registry.get_model(model_id)
+        if not model:
+            raise ValueError(f"Model not found: {model_id}")
+        if not model.available:
+            raise ValueError(f"Model not available: {model.name}")
+
+        self._default_model_id = model_id
+        logger.info(f"Default model changed to: {model.name}")
 
     async def generate_with_context(
         self,
@@ -511,44 +992,54 @@ class LLMService:
         model_id: Optional[str] = None
     ) -> Dict:
         """Generate response with RAG context"""
-        # Build context from chunks with quality indicators
-        context_text = "\n\n".join([
-            f"Source {i+1} - {chunk.get('filename', 'unknown')} (Relevance: {chunk.get('similarity', 0):.0%}):\n{chunk['content']}"
-            for i, chunk in enumerate(context_chunks)
-        ])
+        # Build context from chunks
+        context_parts = []
+        for i, chunk in enumerate(context_chunks):
+            # Get source info from chunk metadata
+            source_info = chunk.get('filename', chunk.get('source', 'unknown'))
+            memory_type = chunk.get('memory_type', '')
+            memory_indicator = f" [Session Document]" if memory_type == 'short-term' else ""
 
-        # Build improved prompt
+            context_parts.append(
+                f"[Source {i+1}: {source_info}{memory_indicator}]\n{chunk['content']}"
+            )
+
+        context_text = "\n\n".join(context_parts)
+
+        # Build prompt with clear instructions
         system_prompt = """You are a helpful AI assistant with access to relevant documents and information.
-Your task is to answer questions based ONLY on the provided context.
 
-IMPORTANT RULES:
-1. Use ONLY information from the provided sources to answer the question
-2. Always cite your sources using [Source N] notation when using information
-3. If the sources don't contain enough information to answer the question completely, say so clearly
-4. Do not make up information or use knowledge outside the provided context
-5. Focus on the most relevant sources (those with higher relevance scores)
-6. Be concise and accurate"""
+IMPORTANT INSTRUCTIONS:
+- Use the provided context documents to answer questions accurately and comprehensively
+- Always cite your sources using [Source N] notation when referencing information
+- Documents marked as [Session Document] are specifically uploaded for this conversation
+- If the context contains the answer, provide it in detail
+- If the context doesn't contain enough information, say so clearly
+- Be conversational and helpful in your responses"""
 
-        user_prompt = f"""Context (sources with relevance scores):
+        user_prompt = f"""Here are the relevant documents to help answer the question:
+
 {context_text}
 
 Question: {query}
 
-Based on the context above, provide a clear and accurate answer. Cite your sources using [Source N] format. If the sources don't fully answer the question, acknowledge this limitation."""
+Based on the documents provided above, please give a detailed and accurate answer. Cite your sources using [Source N] format."""
 
-        # Prepare messages
+        # Prepare messages with conversation history
         messages = [
             {"role": "system", "content": system_prompt}
         ]
 
+        # Include conversation history for context continuity
         if conversation_history:
-            messages.extend(conversation_history[-6:])  # Last 3 turns
+            # Include last 6 messages (3 exchanges) for context window management
+            messages.extend(conversation_history[-6:])
 
+        # Add the current query with context
         messages.append({"role": "user", "content": user_prompt})
 
-        # Convert to single prompt for vLLM/llama.cpp
-        prompt = "\n\n".join([f"{m['role'].upper()}: {m['content']}" for m in messages])
-        prompt += "\n\nASSISTANT:"
+        # Convert to single prompt for compatibility with non-chat models
+        prompt = self._messages_to_prompt(messages)
 
         return await self.generate(
             prompt=prompt,
@@ -559,5 +1050,5 @@ Based on the context above, provide a clear and accurate answer. Cite your sourc
         )
 
 
-# Singleton instance
+# Global singleton
 llm_service = LLMService()

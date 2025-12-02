@@ -15,7 +15,7 @@ from fastapi import APIRouter, File, Form, UploadFile, Depends, HTTPException, s
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.services.llm_service import LLMService
+from app.services.llm_service import llm_service  # Use singleton
 from app.agents.project_estimator.workflow import ProjectEstimatorWorkflow
 
 logger = logging.getLogger(__name__)
@@ -215,10 +215,7 @@ async def generate_agentic_estimate(
         # 4. INITIALIZE WORKFLOW
         # ====================================================================
 
-        # Initialize LLM service (no parameters needed)
-        llm_service = LLMService()
-        await llm_service.initialize()  # Initialize async clients
-
+        # Use singleton LLM service (already initialized)
         # Initialize workflow
         workflow = ProjectEstimatorWorkflow(llm_service=llm_service, db=db)
 
@@ -523,10 +520,7 @@ async def get_workflow_visualization(db: Session = Depends(get_db)):
         - Workflow execution flow information
     """
     try:
-        # Initialize services
-        llm_service = LLMService()
-        await llm_service.initialize()
-
+        # Use singleton LLM service (already initialized)
         # Create workflow instance
         workflow = ProjectEstimatorWorkflow(llm_service=llm_service, db=db)
         

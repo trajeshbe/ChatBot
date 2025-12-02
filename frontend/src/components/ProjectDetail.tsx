@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { ArrowLeft, Plus, FileText, MessageSquare, Upload, Folder, Calendar, Trash2, X } from 'lucide-react'
 import axios from 'axios'
 import ChatInterface from './ChatInterfaceEnhanced'
+import FileUpload from './FileUpload'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -44,6 +45,7 @@ export default function ProjectDetail({ projectId, onBack, onNewChat }: ProjectD
   const [error, setError] = useState<string | null>(null)
   const [activeView, setActiveView] = useState<'all' | 'files' | 'chats'>('all')
   const [isInChatMode, setIsInChatMode] = useState(false) // Track if we're chatting within project
+  const [showFileUpload, setShowFileUpload] = useState(false) // Track file upload modal
 
   useEffect(() => {
     loadProjectData()
@@ -192,8 +194,8 @@ export default function ProjectDetail({ projectId, onBack, onNewChat }: ProjectD
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
-                  // TODO: Open file upload for this project
-                  console.log('Upload to project:', projectId)
+                  console.log('📤 Opening file upload for project:', projectId)
+                  setShowFileUpload(true)
                 }}
                 className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
               >
@@ -282,7 +284,10 @@ export default function ProjectDetail({ projectId, onBack, onNewChat }: ProjectD
               </p>
               {activeView === 'files' && (
                 <button
-                  onClick={() => console.log('Upload to project')}
+                  onClick={() => {
+                    console.log('📤 Opening file upload for project (empty state):', projectId)
+                    setShowFileUpload(true)
+                  }}
                   className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium"
                 >
                   Add files
@@ -392,6 +397,40 @@ export default function ProjectDetail({ projectId, onBack, onNewChat }: ProjectD
           )}
         </div>
       </div>
+
+      {/* File Upload Modal */}
+      {showFileUpload && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
+            {/* Close button */}
+            <button
+              onClick={() => setShowFileUpload(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors z-10"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* FileUpload Component */}
+            <div className="p-6">
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                Upload Files to {project?.name}
+              </h2>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+                Files will be added to this project and available for all chats within it.
+              </p>
+              <FileUpload
+                projectId={projectId}
+                hideProjectSelector={true}
+                onUploadComplete={() => {
+                  console.log('✅ Upload complete, reloading project data')
+                  loadProjectData()
+                  setShowFileUpload(false)
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

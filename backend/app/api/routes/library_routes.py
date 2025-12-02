@@ -13,7 +13,7 @@ from datetime import datetime
 from app.core.database import get_db
 from app.api.routes.auth import get_current_user
 from app.models.database import Document
-from app.services.document_service_enhanced import enhanced_document_service
+from app.services.document_service import document_service
 
 # Import models from correct modules
 try:
@@ -250,7 +250,7 @@ async def get_file_download_url(
 
     # Generate presigned URL
     try:
-        url = await enhanced_document_service.get_file_download_url(
+        url = await document_service.get_file_download_url(
             document_id=file_id,
             db=db,
             expires_hours=expires_hours
@@ -285,7 +285,7 @@ async def delete_file(
 
     # Delete file
     try:
-        await enhanced_document_service.delete_file(
+        await document_service.delete_file(
             document_id=file_id,
             db=db
         )

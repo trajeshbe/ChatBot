@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.services.llm_service_enhanced import llm_service
+from app.services.llm_service import llm_service
 import logging
 
 logger = logging.getLogger(__name__)

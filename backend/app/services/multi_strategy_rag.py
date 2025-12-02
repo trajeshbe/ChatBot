@@ -266,7 +266,7 @@ class MultiStrategyRAG:
 
         try:
             # Import LLM service
-            from app.services.llm_service_enhanced import llm_service
+            from app.services.llm_service import llm_service
 
             # Generate answer directly
             result = await llm_service.generate(
@@ -315,10 +315,10 @@ class MultiStrategyRAG:
         start_time = time.time()
 
         try:
-            from app.services.rag_service_enhanced import enhanced_rag_service
+            from app.services.rag_service import rag_service
 
             # Query with session documents only
-            result = await enhanced_rag_service.query(
+            result = await rag_service.query(
                 query_text=query_text,
                 session_id=session_id,
                 model_id=model_id,
@@ -372,10 +372,10 @@ class MultiStrategyRAG:
         start_time = time.time()
 
         try:
-            from app.services.rag_service_enhanced import enhanced_rag_service
+            from app.services.rag_service import rag_service
 
             # Query all documents (no session filter)
-            result = await enhanced_rag_service.query(
+            result = await rag_service.query(
                 query_text=query_text,
                 session_id=None,  # No session filter
                 model_id=model_id,
@@ -588,7 +588,7 @@ class MultiStrategyRAG:
 
     async def _fallback_answer(self, query_text: str, model_id: Optional[str]) -> Dict[str, Any]:
         """Fallback answer when all strategies fail"""
-        from app.services.llm_service_enhanced import llm_service
+        from app.services.llm_service import llm_service
 
         try:
             result = await llm_service.generate(

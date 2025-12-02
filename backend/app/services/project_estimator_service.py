@@ -19,7 +19,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-from app.services.llm_service_enhanced import llm_service
+from app.services.llm_service import llm_service
 from app.services.template_parser_service import template_parser_service
 
 logger = logging.getLogger(__name__)

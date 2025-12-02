@@ -1,271 +1,237 @@
+"""
+Enhanced Scraper Service with Plugin Architecture
+
+This service integrates the scraper strategy plugin system with
+the document processing pipeline.
+"""
+
 import httpx
-from bs4 import BeautifulSoup
-from trafilatura import extract
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import logging
-from urllib.parse import urlparse
 import uuid
-import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
+from urllib.parse import urlparse
+
 from app.models.database import Document, WebScrapeJob
 from app.services.document_service import document_service
+from app.services.scraper_strategies import (
+    ScraperStrategy,
+    ScraperConfig,
+    ScraperStrategyFactory,
+    ScrapedContent
+)
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class ScraperService:
+    """
+    Enhanced scraper service with plugin architecture support.
+    Provides flexible scraping with multiple strategies and comprehensive configuration.
+    """
+
     def __init__(self):
-        # Realistic browser headers to avoid 403 errors
         self.http_client = httpx.AsyncClient(
-            timeout=30.0,
-            follow_redirects=True,
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Accept-Encoding': 'gzip, deflate',  # Removed 'br' - httpx only auto-decompresses gzip/deflate
-                'DNT': '1',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Sec-Fetch-User': '?1',
-                'Cache-Control': 'max-age=0'
-            }
+            timeout=settings.SCRAPER_TIMEOUT,
+            follow_redirects=settings.SCRAPER_FOLLOW_REDIRECTS,
+            headers={'User-Agent': settings.SCRAPER_USER_AGENT}
+        )
+        self._default_config = self._create_default_config()
+
+    def _create_default_config(self) -> ScraperConfig:
+        """Create default scraper configuration from settings"""
+        return ScraperConfig(
+            strategy=ScraperStrategy(settings.SCRAPER_DEFAULT_STRATEGY),
+            timeout=settings.SCRAPER_TIMEOUT,
+            max_retries=settings.SCRAPER_MAX_RETRIES,
+            follow_redirects=settings.SCRAPER_FOLLOW_REDIRECTS,
+            user_agent=settings.SCRAPER_USER_AGENT,
+            include_links=settings.SCRAPER_INCLUDE_LINKS,
+            include_tables=settings.SCRAPER_INCLUDE_TABLES,
+            include_images=settings.SCRAPER_INCLUDE_IMAGES,
+            include_metadata=settings.SCRAPER_INCLUDE_METADATA,
+            remove_nav=settings.SCRAPER_REMOVE_NAV,
+            remove_footer=settings.SCRAPER_REMOVE_FOOTER,
+            remove_header=settings.SCRAPER_REMOVE_HEADER,
+            remove_ads=settings.SCRAPER_REMOVE_ADS,
+            enable_javascript=settings.SCRAPER_ENABLE_JAVASCRIPT,
+            wait_timeout=settings.SCRAPER_WAIT_TIMEOUT,
+            respect_robots_txt=settings.SCRAPER_RESPECT_ROBOTS_TXT,
+            delay_between_requests=settings.SCRAPER_DELAY_BETWEEN_REQUESTS,
+            min_content_length=settings.SCRAPER_MIN_CONTENT_LENGTH,
+            max_content_length=settings.SCRAPER_MAX_CONTENT_LENGTH,
         )
 
     async def close(self):
         """Close HTTP client"""
         await self.http_client.aclose()
 
-    async def _scrape_with_playwright(self, url: str) -> str:
-        """
-        Fallback scraping method using Playwright for bot-protected sites
-
-        Args:
-            url: URL to scrape
-
-        Returns:
-            HTML content as string
-        """
-        try:
-            from playwright.async_api import async_playwright
-            import traceback
-
-            logger.info(f"🎭 Attempting Playwright fallback for {url}")
-
-            async with async_playwright() as p:
-                logger.info("🚀 Launching Chromium browser...")
-                browser = await p.chromium.launch(headless=True)
-
-                logger.info("📱 Creating browser context with user agent...")
-                context = await browser.new_context(
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                )
-                page = await context.new_page()
-
-                try:
-                    logger.info(f"🌐 Navigating to {url}...")
-                    await page.goto(url, wait_until='networkidle', timeout=60000)
-                    logger.info("✅ Page loaded successfully")
-
-                    logger.info("⏳ Waiting 2 seconds for dynamic content...")
-                    await page.wait_for_timeout(2000)
-
-                    logger.info("📄 Extracting page content...")
-                    html_content = await page.content()
-
-                    logger.info(f"✅ Playwright successfully fetched {len(html_content)} bytes")
-                    return html_content
-
-                except Exception as page_error:
-                    logger.error(f"❌ Page navigation/content extraction error: {str(page_error)}")
-                    logger.error(f"📋 Traceback: {traceback.format_exc()}")
-                    raise
-                finally:
-                    logger.info("🔒 Closing browser...")
-                    await browser.close()
-
-        except Exception as e:
-            logger.error(f"❌ Playwright scraping failed for {url}")
-            logger.error(f"❌ Error type: {type(e).__name__}")
-            logger.error(f"❌ Error message: {str(e)}")
-            raise
-
     async def scrape_url(
         self,
         url: str,
         scrape_prompt: Optional[str] = None,
-        db: AsyncSession = None
+        strategy: Optional[str] = None,
+        config: Optional[ScraperConfig] = None,
+        session_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        department: Optional[str] = None,
+        team: Optional[str] = None,
+        user_id: Optional[str] = None,
+        username: Optional[str] = None,
+        db: Optional[AsyncSession] = None
     ) -> Dict:
         """
-        Scrape a URL and extract content
+        Scrape a URL and extract content using the specified strategy.
 
         Args:
             url: URL to scrape
-            scrape_prompt: Optional prompt to guide content extraction
+            scrape_prompt: Optional prompt for AI-guided content filtering
+            strategy: Scraping strategy to use (overrides config)
+            config: Custom scraper configuration (overrides defaults)
+            session_id: Optional session ID for document association
             db: Database session
 
         Returns:
             Dict with scraped content and metadata
         """
-        try:
-            # Create scrape job
+        import time
+        start_time = time.time()
+
+        # Check if web scraping is enabled
+        if not settings.ENABLE_WEB_SCRAPING:
+            raise ValueError("Web scraping is disabled. Enable ENABLE_WEB_SCRAPING in settings.")
+
+        # ============================================================
+        # SCRAPING COMPLIANCE CHECK - Check configured policies
+        # ============================================================
+        compliance_check = None
+        if db:
+            from app.services.scraping_config_service import scraping_config_service
+
+            compliance_check = await scraping_config_service.check_scraping_allowed(db, url)
+
+            # If scraping is not allowed, raise error
+            if not compliance_check.get('allowed', False):
+                error_msg = compliance_check.get('reason', 'Scraping not allowed for this domain')
+                alternative = compliance_check.get('alternative') or compliance_check.get('recommendation')
+
+                if alternative:
+                    error_msg += f"\n\nAlternative: {alternative}"
+
+                # Log the blocked attempt
+                await scraping_config_service.log_scraping_attempt(
+                    db=db,
+                    url=url,
+                    method=strategy or 'auto',
+                    success=False,
+                    error_message=error_msg,
+                    robots_txt_allowed=compliance_check.get('status') != 'robots_blocked',
+                    session_id=session_id
+                )
+
+                raise ValueError(error_msg)
+
+            # If API should be used instead, provide API info
+            if compliance_check.get('use_api'):
+                api_endpoint = compliance_check.get('api_endpoint')
+                logger.info(f"API preferred for this domain: {api_endpoint}")
+                # Note: Actual API integration would be implemented based on specific API
+                # For now, we'll log this but continue with scraping
+                # In production, you'd implement API-specific handlers here
+
+        # Create scrape job
+        job = None
+        if db:
             job = WebScrapeJob(
                 url=url,
                 scrape_prompt=scrape_prompt,
-                status="processing"
+                status="processing",
+                project_id=project_id,
+                scraped_by=user_id,
+                department=department,
+                team=team
+            )
+            db.add(job)
+            await db.commit()
+            await db.refresh(job)
+
+        try:
+            logger.info(f"Starting enhanced scrape job for URL: {url}")
+
+            # Apply rate limiting from compliance check
+            if compliance_check and compliance_check.get('rate_limit'):
+                rate_limit = compliance_check['rate_limit']
+                delay = rate_limit.get('delay_seconds', 0)
+                if delay > 0:
+                    logger.info(f"Applying rate limit delay: {delay}s")
+                    import asyncio
+                    await asyncio.sleep(delay)
+
+            # Use custom config or default
+            scraper_config = config or self._default_config
+
+            # Override strategy if specified
+            if strategy:
+                scraper_config.strategy = ScraperStrategy(strategy)
+
+            # Create scraper strategy
+            scraper_strategy = ScraperStrategyFactory.create(
+                scraper_config.strategy,
+                scraper_config
             )
 
-            if db:
-                db.add(job)
-                await db.commit()
-                await db.refresh(job)
+            # Perform scraping
+            scraped_content: ScrapedContent = await scraper_strategy.scrape(url)
 
-            logger.info(f"Starting scrape job for URL: {url}")
+            if not scraped_content.success:
+                raise Exception(scraped_content.error or "Scraping failed")
 
-            # Fetch the page with retry logic and Playwright fallback
-            max_retries = 3
-            retry_delay = 1  # Start with 1 second
-            use_playwright = False
-            html_content = None
-            response = None  # Initialize response
-
-            try:
-                for attempt in range(max_retries):
-                    try:
-                        logger.info(f"Fetching URL (attempt {attempt + 1}/{max_retries}): {url}")
-                        response = await self.http_client.get(url)
-                        response.raise_for_status()
-                        html_content = response.text
-                        break  # Success, exit retry loop
-                    except httpx.HTTPStatusError as e:
-                        if e.response.status_code == 403:
-                            logger.warning(f"403 Forbidden for {url} on attempt {attempt + 1}")
-                            if attempt < max_retries - 1:
-                                # Add delay before retry
-                                await asyncio.sleep(retry_delay)
-                                retry_delay *= 2  # Exponential backoff
-                            else:
-                                # Last HTTP attempt failed, try Playwright
-                                logger.warning(f"⚠️ HTTP blocked after {max_retries} attempts, attempting Playwright fallback")
-                                use_playwright = True
-                        else:
-                            # Other HTTP errors, don't retry
-                            raise
-                    except httpx.RequestError as e:
-                        logger.error(f"Request error on attempt {attempt + 1}: {e}")
-                        if attempt < max_retries - 1:
-                            await asyncio.sleep(retry_delay)
-                            retry_delay *= 2
-                        else:
-                            # Last HTTP attempt failed, try Playwright
-                            logger.warning(f"⚠️ HTTP requests failed after {max_retries} attempts, attempting Playwright fallback")
-                            use_playwright = True
-            except Exception as http_error:
-                # Any other errors during HTTP attempts, try Playwright
-                logger.warning(f"⚠️ HTTP scraping failed: {str(http_error)}, attempting Playwright fallback")
-                use_playwright = True
-
-            # Use Playwright if HTTP failed
-            if use_playwright or html_content is None:
-                html_content = await self._scrape_with_playwright(url)
-
-            logger.info(f"Fetched {len(html_content)} bytes from {url}")
-
-            # Primary: Use BeautifulSoup for reliable text extraction (works on all sites)
-            soup = BeautifulSoup(html_content, 'lxml')
-
-            # Remove script and style elements
-            for script in soup(["script", "style", "nav", "footer", "header"]):
-                script.decompose()
-
-            # Get text
-            main_content = soup.get_text(separator='\n', strip=True)
-
-            # If BeautifulSoup extraction is too short, try trafilatura as fallback (better for long articles)
-            if len(main_content.strip()) < 100:
-                logger.info("🔄 BeautifulSoup text too short, trying trafilatura fallback...")
-                try:
-                    trafilatura_text = extract(
-                        html_content,
-                        include_comments=False,
-                        include_tables=True,
-                        include_links=True
-                    )
-                    if trafilatura_text and len(trafilatura_text) > len(main_content):
-                        main_content = trafilatura_text
-                        logger.info(f"✅ Using trafilatura text ({len(main_content)} chars)")
-                except Exception as e:
-                    logger.debug(f"Trafilatura extraction failed: {e}")
-
-            logger.info(f"📝 Extracted {len(main_content)} characters of text for LLM")
-
-            # Extract metadata
-            soup = BeautifulSoup(html_content, 'lxml')
-            title = soup.find('title')
-            title_text = title.string if title else urlparse(url).netloc
-
-            meta_description = soup.find('meta', attrs={'name': 'description'})
-            description = meta_description['content'] if meta_description else ""
-
-            # If scrape_prompt is provided, use LLM to extract relevant content
-            if scrape_prompt and main_content:
-                # TODO: Use LLM to filter content based on prompt
-                # For now, we'll just use the full content
-                pass
-
-            # Analyze HTML structure for template generation
-            structure = {
-                'tables': len(soup.find_all('table')),
-                'lists': len(soup.find_all(['ul', 'ol'])),
-                'forms': len(soup.find_all('form')),
-                'divs_with_classes': len([d for d in soup.find_all('div') if d.get('class')]),
-                'common_classes': [],
-                'common_ids': []
-            }
-
-            # Find common class patterns
-            classes = []
-            for elem in soup.find_all(class_=True):
-                classes.extend(elem.get('class', []))
-
-            if classes:
-                from collections import Counter
-                common = Counter(classes).most_common(10)
-                structure['common_classes'] = [c[0] for c in common]
-
-            # If no database session provided, return content directly (for template generation)
-            if db is None:
-                logger.info(f"No DB session provided - returning raw content for {url}")
-                return {
-                    'html': html_content[:10000],  # Limit for LLM analysis
-                    'text': main_content[:5000] if main_content else "",
-                    'structure': structure,
-                    'title': title_text,
-                    'description': description
-                }
-
-            # Below this point, we have a DB session - create and save document
+            # Apply smart scraping if enabled and prompt provided
+            if settings.ENABLE_SMART_SCRAPING and scrape_prompt:
+                scraped_content.content = await self._apply_smart_filtering(
+                    scraped_content.content,
+                    scrape_prompt
+                )
 
             # Create document from scraped content
-            document_data = {
-                'title': title_text,
-                'content': main_content,
-                'description': description,
-                'url': url,
-                'metadata': {
-                    'content_type': response.headers.get('content-type', '') if response and not use_playwright else 'text/html',
-                    'status_code': response.status_code if response and not use_playwright else 200,
-                    'scrape_prompt': scrape_prompt,
-                    'scraping_method': 'playwright' if use_playwright else 'http'
-                }
-            }
-
-            # Save as document
             filename = f"scraped_{urlparse(url).netloc}_{uuid.uuid4().hex[:8]}.txt"
-            content_bytes = f"Title: {title_text}\n\nURL: {url}\n\n{main_content}".encode('utf-8')
+            content_bytes = self._format_document_content(scraped_content).encode('utf-8')
+
+            # Construct hierarchical MinIO path
+            from app.services.document_service import construct_minio_path
+            import re
+
+            # Get project name from project_id
+            project_name = "Global"
+            if db and project_id:
+                try:
+                    from sqlalchemy import select
+                    from app.models.database_enhanced import Project
+                    project_result = await db.execute(
+                        select(Project).where(Project.id == project_id)
+                    )
+                    project_obj = project_result.scalar_one_or_none()
+                    if project_obj:
+                        project_name = project_obj.name
+                except Exception as e:
+                    logger.warning(f"Could not fetch project name: {e}")
+
+            # Extract domain name for folder organization
+            domain = urlparse(url).netloc.replace('www.', '')
+            safe_domain = re.sub(r'[^\w\-]', '_', domain)
+
+            # Construct base path and add domain folder
+            base_path = construct_minio_path(
+                department=department,
+                team=team,
+                username=username or "anonymous",
+                project=project_name,
+                filename="",  # We'll add domain folder + filename manually
+                folder="extractions"
+            )
+            minio_path = f"{base_path}{safe_domain}/{filename}"
+            logger.info(f"📁 Constructed MinIO path: {minio_path}")
 
             document = await document_service.upload_file(
                 file_data=content_bytes,
@@ -273,6 +239,12 @@ class ScraperService:
                 file_type="text/plain",
                 source_type="scrape",
                 source_url=url,
+                session_id=session_id,
+                project_id=project_id,
+                department=department,
+                team=team,
+                user_id=user_id,
+                minio_path=minio_path,  # Pass hierarchical path
                 db=db
             )
 
@@ -287,19 +259,67 @@ class ScraperService:
                 job.completed_at = func.now()
                 await db.commit()
 
-            logger.info(f"Successfully scraped and processed {url}")
+            # Calculate metrics
+            response_time_ms = (time.time() - start_time) * 1000
+            bytes_downloaded = len(content_bytes)
+
+            # ============================================================
+            # LOG SUCCESSFUL SCRAPING ATTEMPT
+            # ============================================================
+            if db:
+                from app.services.scraping_config_service import scraping_config_service
+                await scraping_config_service.log_scraping_attempt(
+                    db=db,
+                    url=url,
+                    method=scraped_content.strategy_used,
+                    success=True,
+                    status_code=200,  # Successful scraping
+                    response_time_ms=response_time_ms,
+                    bytes_downloaded=bytes_downloaded,
+                    robots_txt_allowed=compliance_check.get('status') != 'robots_blocked' if compliance_check else True,
+                    rate_limit_respected=True,
+                    session_id=session_id
+                )
+
+            logger.info(f"Successfully scraped and processed {url} using {scraped_content.strategy_used}")
 
             return {
                 'success': True,
                 'job_id': str(job.id) if job else None,
                 'document_id': str(document.id),
-                'title': title_text,
-                'content_length': len(main_content),
-                'url': url
+                'title': scraped_content.title,
+                'content_length': scraped_content.content_length,
+                'url': url,
+                'strategy_used': scraped_content.strategy_used,
+                'metadata': scraped_content.metadata,
+                'compliance': {
+                    'checked': compliance_check is not None,
+                    'status': compliance_check.get('status') if compliance_check else 'no_config',
+                    'rate_limited': compliance_check.get('rate_limit') is not None if compliance_check else False
+                }
             }
 
         except Exception as e:
             logger.error(f"Error scraping URL {url}: {e}")
+
+            # Calculate metrics
+            response_time_ms = (time.time() - start_time) * 1000
+
+            # ============================================================
+            # LOG FAILED SCRAPING ATTEMPT
+            # ============================================================
+            if db:
+                from app.services.scraping_config_service import scraping_config_service
+                await scraping_config_service.log_scraping_attempt(
+                    db=db,
+                    url=url,
+                    method=strategy or 'auto',
+                    success=False,
+                    error_message=str(e),
+                    response_time_ms=response_time_ms,
+                    robots_txt_allowed=compliance_check.get('status') != 'robots_blocked' if compliance_check else None,
+                    session_id=session_id
+                )
 
             # Update job status
             if db and job:
@@ -311,23 +331,154 @@ class ScraperService:
 
     async def scrape_multiple_urls(
         self,
-        urls: list[str],
+        urls: List[str],
         scrape_prompt: Optional[str] = None,
-        db: AsyncSession = None
-    ) -> list[Dict]:
-        """Scrape multiple URLs"""
-        results = []
-        for url in urls:
-            try:
-                result = await self.scrape_url(url, scrape_prompt, db)
-                results.append(result)
-            except Exception as e:
-                results.append({
-                    'success': False,
-                    'url': url,
-                    'error': str(e)
-                })
-        return results
+        strategy: Optional[str] = None,
+        config: Optional[ScraperConfig] = None,
+        session_id: Optional[str] = None,
+        project_id: Optional[str] = None,
+        department: Optional[str] = None,
+        team: Optional[str] = None,
+        user_id: Optional[str] = None,
+        db: Optional[AsyncSession] = None
+    ) -> List[Dict]:
+        """
+        Scrape multiple URLs with optional concurrency control.
+
+        Args:
+            urls: List of URLs to scrape
+            scrape_prompt: Optional prompt for all URLs
+            strategy: Scraping strategy to use
+            config: Custom scraper configuration
+            session_id: Optional session ID
+            project_id: Optional project/module ID for organization
+            department: Optional department name for organization
+            team: Optional team name for organization
+            user_id: Optional user ID who initiated the scraping
+            db: Database session
+
+        Returns:
+            List of results for each URL
+        """
+        import asyncio
+
+        # Respect concurrency limits
+        semaphore = asyncio.Semaphore(settings.SCRAPER_MAX_CONCURRENT_REQUESTS)
+
+        async def scrape_with_limit(url: str) -> Dict:
+            """Scrape with concurrency limit and delay"""
+            async with semaphore:
+                try:
+                    result = await self.scrape_url(
+                        url=url,
+                        scrape_prompt=scrape_prompt,
+                        strategy=strategy,
+                        config=config,
+                        session_id=session_id,
+                        project_id=project_id,
+                        department=department,
+                        team=team,
+                        user_id=user_id,
+                        db=db
+                    )
+                    # Add delay between requests
+                    await asyncio.sleep(settings.SCRAPER_DELAY_BETWEEN_REQUESTS)
+                    return result
+                except Exception as e:
+                    return {
+                        'success': False,
+                        'url': url,
+                        'error': str(e)
+                    }
+
+        # Execute scraping tasks
+        tasks = [scrape_with_limit(url) for url in urls]
+        results = await asyncio.gather(*tasks, return_exceptions=False)
+
+        return list(results)
+
+    async def _apply_smart_filtering(self, content: str, prompt: str) -> str:
+        """
+        Use AI to filter and extract relevant content based on prompt.
+
+        Args:
+            content: Raw scraped content
+            prompt: User's prompt describing what to extract
+
+        Returns:
+            Filtered content
+        """
+        try:
+            from app.services.llm_service import llm_service
+
+            # Create a filtering prompt
+            system_prompt = """You are a content extraction assistant.
+Given raw web content and a user's specific information need, extract and return
+only the most relevant portions of the content. Preserve important details and context.
+Remove irrelevant sections, ads, navigation, etc."""
+
+            user_prompt = f"""User is looking for: {prompt}
+
+Raw content:
+{content[:settings.SMART_SCRAPE_MAX_TOKENS * 4]}
+
+Extract only the relevant portions:"""
+
+            # Use LLM to filter content
+            response = await llm_service.generate_completion(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                model=settings.SMART_SCRAPE_MODEL,
+                max_tokens=settings.SMART_SCRAPE_MAX_TOKENS
+            )
+
+            filtered_content = response.get('content', content)
+            logger.info(f"Smart filtering reduced content from {len(content)} to {len(filtered_content)} chars")
+
+            return filtered_content
+
+        except Exception as e:
+            logger.warning(f"Smart filtering failed, using raw content: {e}")
+            return content
+
+    def _format_document_content(self, scraped: ScrapedContent) -> str:
+        """Format scraped content as a document"""
+        parts = []
+
+        if scraped.title:
+            parts.append(f"Title: {scraped.title}")
+
+        parts.append(f"URL: {scraped.url}")
+
+        if scraped.description:
+            parts.append(f"Description: {scraped.description}")
+
+        if scraped.metadata:
+            # Add selected metadata
+            if 'keywords' in scraped.metadata:
+                parts.append(f"Keywords: {scraped.metadata['keywords']}")
+
+        parts.append("")  # Blank line
+        parts.append(scraped.content)
+
+        return "\n".join(parts)
+
+    async def get_scraper_capabilities(self) -> Dict:
+        """Get information about available scraper capabilities"""
+        return {
+            'web_scraping_enabled': settings.ENABLE_WEB_SCRAPING,
+            'playwright_enabled': settings.ENABLE_PLAYWRIGHT_SCRAPING,
+            'smart_scraping_enabled': settings.ENABLE_SMART_SCRAPING,
+            'available_strategies': [s.value for s in ScraperStrategy],
+            'default_strategy': settings.SCRAPER_DEFAULT_STRATEGY,
+            'max_concurrent_requests': settings.SCRAPER_MAX_CONCURRENT_REQUESTS,
+            'configuration': {
+                'timeout': settings.SCRAPER_TIMEOUT,
+                'max_retries': settings.SCRAPER_MAX_RETRIES,
+                'min_content_length': settings.SCRAPER_MIN_CONTENT_LENGTH,
+                'javascript_enabled': settings.SCRAPER_ENABLE_JAVASCRIPT,
+            }
+        }
 
 
 # Singleton instance

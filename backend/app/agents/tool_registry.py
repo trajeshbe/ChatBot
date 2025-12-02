@@ -622,13 +622,13 @@ class ToolRegistry:
         FIXED: Now properly passes all threshold and weight parameters from UI.
         🆕 FIXED: Accepts model_id and db parameters for model selection
         """
-        from app.services.rag_service_enhanced import enhanced_rag_service
+        from app.services.rag_service import rag_service
         from app.core.database import AsyncSessionLocal
 
         # Use provided db session or create new one
         if db is None:
             async with AsyncSessionLocal() as db:
-                result = await enhanced_rag_service.query(
+                result = await rag_service.query(
                     query_text=query,
                     session_id=session_id,
                     conversation_history=[],
@@ -644,7 +644,7 @@ class ToolRegistry:
                 )
         else:
             # Reuse provided db session (already in transaction context)
-            result = await enhanced_rag_service.query(
+            result = await rag_service.query(
                 query_text=query,
                 session_id=session_id,
                 conversation_history=[],

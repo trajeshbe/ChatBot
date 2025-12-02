@@ -4,14 +4,14 @@ Tests for enhanced scraper service.
 
 import pytest
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
-from app.services.scraper_service_enhanced import EnhancedScraperService
+from app.services.scraper_service import ScraperService
 from app.services.scraper_strategies import ScraperConfig, ScraperStrategy
 
 
 @pytest.fixture
 def scraper_service():
     """Create enhanced scraper service instance"""
-    return EnhancedScraperService()
+    return ScraperService()
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ def mock_db_session():
     return session
 
 
-class TestEnhancedScraperService:
+class TestScraperService:
     """Test enhanced scraper service"""
 
     def test_create_default_config(self, scraper_service):
@@ -39,7 +39,7 @@ class TestEnhancedScraperService:
     @pytest.mark.asyncio
     async def test_scrape_url_disabled(self, scraper_service, mock_db_session):
         """Test scraping when feature is disabled"""
-        with patch('app.services.scraper_service_enhanced.settings') as mock_settings:
+        with patch('app.services.scraper_service.settings') as mock_settings:
             mock_settings.ENABLE_WEB_SCRAPING = False
 
             with pytest.raises(ValueError, match="Web scraping is disabled"):
@@ -51,7 +51,7 @@ class TestEnhancedScraperService:
     @pytest.mark.asyncio
     async def test_scrape_url_success(self, scraper_service, mock_db_session):
         """Test successful URL scraping"""
-        with patch('app.services.scraper_service_enhanced.settings') as mock_settings:
+        with patch('app.services.scraper_service.settings') as mock_settings:
             mock_settings.ENABLE_WEB_SCRAPING = True
             mock_settings.ENABLE_SMART_SCRAPING = False
 
@@ -70,11 +70,11 @@ class TestEnhancedScraperService:
             mock_strategy.scrape = AsyncMock(return_value=mock_scraped_content)
 
             # Mock the factory
-            with patch('app.services.scraper_service_enhanced.ScraperStrategyFactory') as mock_factory:
+            with patch('app.services.scraper_service.ScraperStrategyFactory') as mock_factory:
                 mock_factory.create = Mock(return_value=mock_strategy)
 
                 # Mock document service
-                with patch('app.services.scraper_service_enhanced.document_service') as mock_doc_service:
+                with patch('app.services.scraper_service.document_service') as mock_doc_service:
                     mock_document = Mock(id="doc_123")
                     mock_doc_service.upload_file = AsyncMock(return_value=mock_document)
                     mock_doc_service.process_document = AsyncMock()
@@ -98,7 +98,7 @@ class TestEnhancedScraperService:
             include_tables=True
         )
 
-        with patch('app.services.scraper_service_enhanced.settings') as mock_settings:
+        with patch('app.services.scraper_service.settings') as mock_settings:
             mock_settings.ENABLE_WEB_SCRAPING = True
 
             # Mock the strategy
@@ -115,10 +115,10 @@ class TestEnhancedScraperService:
             )
             mock_strategy.scrape = AsyncMock(return_value=mock_scraped_content)
 
-            with patch('app.services.scraper_service_enhanced.ScraperStrategyFactory') as mock_factory:
+            with patch('app.services.scraper_service.ScraperStrategyFactory') as mock_factory:
                 mock_factory.create = Mock(return_value=mock_strategy)
 
-                with patch('app.services.scraper_service_enhanced.document_service') as mock_doc_service:
+                with patch('app.services.scraper_service.document_service') as mock_doc_service:
                     mock_document = Mock(id="doc_456")
                     mock_doc_service.upload_file = AsyncMock(return_value=mock_document)
                     mock_doc_service.process_document = AsyncMock()
@@ -136,7 +136,7 @@ class TestEnhancedScraperService:
     @pytest.mark.asyncio
     async def test_scrape_url_failure(self, scraper_service, mock_db_session):
         """Test scraping failure"""
-        with patch('app.services.scraper_service_enhanced.settings') as mock_settings:
+        with patch('app.services.scraper_service.settings') as mock_settings:
             mock_settings.ENABLE_WEB_SCRAPING = True
 
             # Mock the strategy to fail
@@ -154,7 +154,7 @@ class TestEnhancedScraperService:
             )
             mock_strategy.scrape = AsyncMock(return_value=mock_scraped_content)
 
-            with patch('app.services.scraper_service_enhanced.ScraperStrategyFactory') as mock_factory:
+            with patch('app.services.scraper_service.ScraperStrategyFactory') as mock_factory:
                 mock_factory.create = Mock(return_value=mock_strategy)
 
                 with pytest.raises(Exception, match="Scraping failed"):
@@ -168,7 +168,7 @@ class TestEnhancedScraperService:
         """Test scraping multiple URLs"""
         urls = ["https://example.com/1", "https://example.com/2"]
 
-        with patch('app.services.scraper_service_enhanced.settings') as mock_settings:
+        with patch('app.services.scraper_service.settings') as mock_settings:
             mock_settings.ENABLE_WEB_SCRAPING = True
             mock_settings.SCRAPER_MAX_CONCURRENT_REQUESTS = 5
             mock_settings.SCRAPER_DELAY_BETWEEN_REQUESTS = 0  # No delay in tests
@@ -196,7 +196,7 @@ class TestEnhancedScraperService:
         """Test scraping multiple URLs with some failures"""
         urls = ["https://example.com/1", "https://example.com/2"]
 
-        with patch('app.services.scraper_service_enhanced.settings') as mock_settings:
+        with patch('app.services.scraper_service.settings') as mock_settings:
             mock_settings.ENABLE_WEB_SCRAPING = True
             mock_settings.SCRAPER_MAX_CONCURRENT_REQUESTS = 5
             mock_settings.SCRAPER_DELAY_BETWEEN_REQUESTS = 0
@@ -225,7 +225,7 @@ class TestEnhancedScraperService:
         content = "This is a long article about AI and machine learning. " * 100
         prompt = "Extract information about AI"
 
-        with patch('app.services.scraper_service_enhanced.llm_service') as mock_llm:
+        with patch('app.services.scraper_service.llm_service') as mock_llm:
             mock_llm.generate_completion = AsyncMock(return_value={
                 'content': 'Filtered content about AI'
             })
@@ -241,7 +241,7 @@ class TestEnhancedScraperService:
         content = "Original content"
         prompt = "Extract something"
 
-        with patch('app.services.scraper_service_enhanced.llm_service') as mock_llm:
+        with patch('app.services.scraper_service.llm_service') as mock_llm:
             mock_llm.generate_completion = AsyncMock(side_effect=Exception("LLM error"))
 
             filtered = await scraper_service._apply_smart_filtering(content, prompt)
@@ -274,7 +274,7 @@ class TestEnhancedScraperService:
     @pytest.mark.asyncio
     async def test_get_scraper_capabilities(self, scraper_service):
         """Test getting scraper capabilities"""
-        with patch('app.services.scraper_service_enhanced.settings') as mock_settings:
+        with patch('app.services.scraper_service.settings') as mock_settings:
             mock_settings.ENABLE_WEB_SCRAPING = True
             mock_settings.ENABLE_PLAYWRIGHT_SCRAPING = False
             mock_settings.ENABLE_SMART_SCRAPING = True

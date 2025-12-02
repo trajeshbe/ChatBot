@@ -3,6 +3,7 @@ Enhanced RAG Agent with Multi-Tool Support
 
 Extends the basic RAGAgent with intelligent tool selection and execution.
 Phase 3 implementation - LLM-based tool selection with function calling.
+Phase 4 implementation - Intelligent routing with TaskRouter and resource checking.
 """
 
 from typing import Dict, Any, Optional, List
@@ -17,6 +18,8 @@ from app.agents.tool_registry import tool_registry
 from langchain.schema import HumanMessage
 from openai import AsyncOpenAI
 from app.core.config import settings
+from app.services.task_router import task_router
+from app.utils.resource_checker import resource_checker
 
 logger = logging.getLogger(__name__)
 
@@ -267,8 +270,65 @@ class EnhancedRAGAgent(RAGAgent):
                 logger.info("📌 Task is SIMPLE - continuing with normal RAG pipeline")
 
         # 🎯 Default: Use normal tool selection (balanced approach)
-        logger.info("📌 ROUTING: BALANCED (using tool selection based on query analysis)")
+        logger.info("📌 ROUTING: BALANCED (using intelligent TaskRouter)")
         logger.info(f"   Reason: Balanced weights - no single strategy dominates")
+
+        # 🚀 Phase 4: Get documents metadata for intelligent routing
+        documents_metadata = []
+        try:
+            # Get session documents from database if db session available
+            db = user_preferences.get('db') if user_preferences else None
+            if db and session_id:
+                from app.models.database import SessionDocument, Document
+                from sqlalchemy import select
+
+                # Query session documents
+                session_docs = db.execute(
+                    select(SessionDocument, Document)
+                    .join(Document, SessionDocument.document_id == Document.id)
+                    .where(SessionDocument.session_id == session_id)
+                ).all()
+
+                for sd, doc in session_docs:
+                    documents_metadata.append({
+                        'filename': doc.filename,
+                        'file_type': doc.file_type,
+                        'mime_type': doc.file_type,  # Using file_type as mime_type
+                        'file_size': doc.file_size,
+                        'document_id': str(doc.id)
+                    })
+
+                logger.info(f"📄 Found {len(documents_metadata)} documents in session for routing")
+        except Exception as e:
+            logger.warning(f"Failed to fetch session documents for routing: {e}")
+
+        # 🎯 Phase 4: Use TaskRouter for intelligent tool selection
+        routing_decision = None
+        try:
+            # Log resource status for debugging
+            resource_checker.log_resource_status()
+
+            # Call TaskRouter to analyze query and documents
+            routing_decision = await task_router.route(
+                query=query,
+                documents=documents_metadata,
+                session_id=session_id,
+                user_preferences=user_preferences
+            )
+
+            logger.info(
+                f"🎯 TaskRouter Decision:\n"
+                f"   Primary Tool: {routing_decision.primary_tool}\n"
+                f"   Fallback Chain: {' → '.join(routing_decision.fallback_chain)}\n"
+                f"   File Types: {[ft.value for ft in routing_decision.file_types]}\n"
+                f"   Complexity: {routing_decision.complexity.value}\n"
+                f"   Memory Required: {routing_decision.estimated_memory_mb}MB\n"
+                f"   Reasoning: {routing_decision.reasoning}"
+            )
+
+        except Exception as e:
+            logger.warning(f"TaskRouter failed, falling back to standard selection: {e}")
+            routing_decision = None
 
         # Initialize state
         state: EnhancedAgentState = {
@@ -295,13 +355,88 @@ class EnhancedRAGAgent(RAGAgent):
         }
 
         try:
-            # Phase 3: LLM-based tool selection (with fallback to simple selection)
+            # Phase 4: Use TaskRouter decision if available, otherwise fall back to Phase 3
             logger.info(f"Processing query: {query}")
 
-            # Try LLM-based selection if OpenAI is available
-            # Pass database session to enable key retrieval from database
-            db = user_preferences.get('db')
-            if self.use_llm_selection and await self._ensure_openai_client(db=db):
+            if routing_decision:
+                # Use TaskRouter decision
+                primary_tool = routing_decision.primary_tool
+                fallback_chain = routing_decision.fallback_chain
+
+                # Build tool params from routing decision
+                tool_params = routing_decision.tool_params.copy()
+
+                # Merge user preferences (threshold settings, model selection, etc.)
+                if top_k is not None:
+                    tool_params["top_k"] = top_k
+                if similarity_threshold is not None:
+                    tool_params["similarity_threshold"] = similarity_threshold
+                if semantic_weight is not None:
+                    tool_params["semantic_weight"] = semantic_weight
+                if keyword_weight is not None:
+                    tool_params["keyword_weight"] = keyword_weight
+                if user_preferences:
+                    if "model_id" in user_preferences and user_preferences["model_id"]:
+                        tool_params["model_id"] = user_preferences["model_id"]
+                    if "db" in user_preferences:
+                        tool_params["db"] = user_preferences["db"]
+                    if "project_id" in user_preferences:
+                        tool_params["project_id"] = user_preferences["project_id"]
+
+                state["selected_tools"] = [primary_tool]
+                state["tool_params"] = {primary_tool: tool_params}
+                state["detected_intent"] = routing_decision.complexity.value
+                state["confidence"] = 0.95  # High confidence from TaskRouter
+                state["tool_selection_reasoning"] = routing_decision.reasoning
+
+                logger.info(f"✅ Using TaskRouter decision: {primary_tool} (fallback: {fallback_chain})")
+
+                # 🔄 Execute primary tool with fallback chain
+                tool_executed = False
+                last_error = None
+
+                for attempt_num, tool_id in enumerate([primary_tool] + [t for t in fallback_chain if t != primary_tool]):
+                    try:
+                        logger.info(f"🔧 Attempting tool {attempt_num + 1}/{len(fallback_chain)}: {tool_id}")
+
+                        # Update tool params for current tool
+                        current_tool_params = state["tool_params"].get(tool_id, tool_params.copy())
+
+                        # Execute tool
+                        tool_result = await self._execute_tool(tool_id, current_tool_params)
+
+                        if tool_result["success"]:
+                            state["tool_results"][tool_id] = tool_result
+                            state["selected_tools"] = [tool_id]  # Update to successful tool
+                            tool_executed = True
+                            logger.info(f"✅ Tool {tool_id} succeeded in {tool_result['execution_time_ms']:.2f}ms")
+                            break
+                        else:
+                            last_error = tool_result["error"]
+                            logger.warning(f"❌ Tool {tool_id} failed: {last_error}")
+
+                    except Exception as e:
+                        last_error = str(e)
+                        logger.error(f"❌ Tool {tool_id} execution error: {e}", exc_info=True)
+
+                if not tool_executed:
+                    # All tools in fallback chain failed
+                    logger.error(f"❌ All tools in fallback chain failed. Last error: {last_error}")
+                    return {
+                        "answer": f"I apologize, but I couldn't process your request. All available tools failed. Last error: {last_error}",
+                        "sources": [],
+                        "metadata": {
+                            "error": last_error,
+                            "failed_tools": fallback_chain,
+                            "routing_decision": {
+                                "primary_tool": primary_tool,
+                                "fallback_chain": fallback_chain,
+                                "reasoning": routing_decision.reasoning
+                            }
+                        }
+                    }
+
+            elif self.use_llm_selection and await self._ensure_openai_client(db=db):
                 try:
                     # LLM-based intent analysis and tool selection
                     selection_result = await self._select_tools_llm(
@@ -429,13 +564,25 @@ class EnhancedRAGAgent(RAGAgent):
                 "tools_used": state["selected_tools"],
                 "tool_timing": tool_timing,
                 "tool_execution_summary": tool_execution_summary,
-                "tool_selection_method": "llm_based" if (self.use_llm_selection and "confidence" in state) else "keyword_based",
+                "tool_selection_method": "task_router" if routing_decision else ("llm_based" if (self.use_llm_selection and "confidence" in state) else "keyword_based"),
                 "selection_confidence": state.get("confidence", 0.0),
                 "intent_detected": state.get("detected_intent", "unknown"),
                 "tool_selection_reasoning": state.get("tool_selection_reasoning", ""),
                 "total_time_ms": total_time_ms,
                 "multi_tool_used": len(state["selected_tools"]) > 1
             }
+
+            # Add TaskRouter metadata if used
+            if routing_decision:
+                response["metadata"]["routing_decision"] = {
+                    "primary_tool": routing_decision.primary_tool,
+                    "fallback_chain": routing_decision.fallback_chain,
+                    "file_types": [ft.value for ft in routing_decision.file_types],
+                    "complexity": routing_decision.complexity.value,
+                    "estimated_memory_mb": routing_decision.estimated_memory_mb,
+                    "requires_gpu": routing_decision.requires_gpu,
+                    "reasoning": routing_decision.reasoning
+                }
 
             logger.info(f"Query processed successfully in {total_time_ms:.2f}ms using {len(state['selected_tools'])} tool(s)")
 
@@ -942,7 +1089,7 @@ Respond by calling the appropriate tool function(s)."""
         model_id = state["user_preferences"].get("model_id")
 
         # Call enhanced RAG service to generate natural language answer using user's model
-        from app.services.rag_service_enhanced import enhanced_rag_service
+        from app.services.rag_service import rag_service
 
         # ✅ Initialize rag_response before try block so it's accessible in exception handler
         rag_response = {}
@@ -955,7 +1102,7 @@ Context:
 {context}"""
 
             # Call enhanced RAG service with user's chosen model and threshold parameters
-            rag_response = await enhanced_rag_service.query(
+            rag_response = await rag_service.query(
                 query_text=synthesis_query,
                 conversation_history=None,
                 use_cache=False,  # Don't cache synthesis queries
@@ -1184,7 +1331,7 @@ Context:
         Returns:
             Response with answer from documents
         """
-        from app.services.rag_service_enhanced import enhanced_rag_service
+        from app.services.rag_service import rag_service
 
         try:
             tool_params = tool_params or {}
@@ -1195,7 +1342,7 @@ Context:
             logger.info(f"🔍 DEBUG [_execute_tool_document_rag]: project_id from tool_params = {tool_params.get('project_id')}")
 
             # Force RAG search with user's parameters
-            rag_response = await enhanced_rag_service.query(
+            rag_response = await rag_service.query(
                 query_text=query,
                 session_id=session_id,
                 top_k=tool_params.get('top_k'),

@@ -37,7 +37,16 @@ interface MappingResponse {
 // COMPONENT
 // ============================================================================
 
-export const SmartTemplateMapper = () => {
+interface SmartTemplateMapperProps {
+  projectId?: string
+}
+
+interface Project {
+  id: string
+  name: string
+}
+
+export const SmartTemplateMapper = ({ projectId }: SmartTemplateMapperProps = {}) => {
   // State
   const [url, setUrl] = useState('')
   const [columns, setColumns] = useState<string[]>([])
@@ -48,6 +57,7 @@ export const SmartTemplateMapper = () => {
   const [error, setError] = useState<string | null>(null)
   const [availableTemplates, setAvailableTemplates] = useState<any[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+  const [projectName, setProjectName] = useState<string>('')
 
   // Derive llm_provider from model_id
   const getLLMProvider = (modelId: string): LLMProvider => {
@@ -145,6 +155,29 @@ export const SmartTemplateMapper = () => {
     window.addEventListener('storage', handleStorageChange)
     return () => window.removeEventListener('storage', handleStorageChange)
   }, [])
+
+  // Fetch project name if projectId is provided
+  useEffect(() => {
+    const fetchProjectName = async () => {
+      if (projectId) {
+        try {
+          const token = localStorage.getItem('access_token')
+          const response = await axios.get(
+            `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/projects`,
+            { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+          )
+          const projects: Project[] = response.data || []
+          const project = projects.find(p => p.id === projectId)
+          if (project) {
+            setProjectName(project.name)
+          }
+        } catch (error) {
+          console.error('Error fetching project name:', error)
+        }
+      }
+    }
+    fetchProjectName()
+  }, [projectId])
 
   // Load saved templates
   useEffect(() => {
@@ -483,6 +516,21 @@ export const SmartTemplateMapper = () => {
           </p>
         </div>
       </div>
+
+      {/* Project Context Indicator */}
+      {projectId && projectName && (
+        <div className="bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-700 rounded-lg p-3 mb-4">
+          <div className="flex items-center gap-2 text-sm">
+            <Database className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+            <span className="text-primary-700 dark:text-primary-300 font-medium">
+              Project Context:
+            </span>
+            <span className="text-primary-900 dark:text-primary-100 font-semibold">
+              {projectName}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Info Banner */}
       <div className="bg-primary-50 dark:bg-blue-900/20 border border-primary-200 dark:border-primary-800 rounded-lg p-4 mb-6">
