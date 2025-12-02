@@ -759,10 +759,13 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
         const formData = new FormData()
         formData.append('file', file)
         formData.append('session_id', sessionId) // 🎯 Pass session ID!
-        const activeProjectId = selectedProjectId || projectId
-        if (activeProjectId) {
-          formData.append('project_id', activeProjectId) // 🎯 Pass project ID!
-        }
+
+        // 🔧 FIX: Always send project_id, default to Global if not specified
+        const globalProject = availableProjects.find(p => p.name.toLowerCase() === 'global')
+        const activeProjectId = selectedProjectId || projectId || globalProject?.id || ''
+        formData.append('project_id', activeProjectId) // 🎯 Always pass project ID!
+        console.log(`📤 Uploading file with project_id: ${activeProjectId || '(empty - will use Global)'}`)
+
 
         const token = localStorage.getItem('access_token')
         console.log('[ChatInterface] Token from localStorage:', token ? `${token.substring(0, 20)}...` : 'NULL')
@@ -847,10 +850,13 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       const formData = new FormData()
       formData.append('query', input)
       formData.append('session_id', sessionId) // 🎯 Pass session ID!
-      const activeProjectId = selectedProjectId || projectId
-      if (activeProjectId) {
-        formData.append('project_id', activeProjectId) // 🎯 Pass project ID!
-      }
+
+      // 🔧 FIX: Always send project_id, default to Global if not specified
+      const globalProject = availableProjects.find(p => p.name.toLowerCase() === 'global')
+      const activeProjectId = selectedProjectId || projectId || globalProject?.id || ''
+      formData.append('project_id', activeProjectId) // 🎯 Always pass project ID!
+      console.log(`📤 Querying with project_id: ${activeProjectId || '(empty - will use Global)'}`)
+
       formData.append('use_cache', 'true')
 
       // Add selected model if specified

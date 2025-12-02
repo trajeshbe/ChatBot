@@ -766,8 +766,10 @@ class DocumentService:
                 # due to low combined scores with old weights (0.56 * 0.6 = 0.336 < threshold 0.35)
                 # Build WHERE clause with optional project filter
                 project_filter = ""
+                project_filter_keyword = ""  # 🔧 FIX: Add project filter for keyword_search CTE
                 if project_id:
                     project_filter = "AND d.project_id = :project_id"
+                    project_filter_keyword = "AND dc.project_id = :project_id"  # 🔧 Use denormalized project_id
 
                 query = sql_text(f"""
                     WITH semantic_search AS (
@@ -786,12 +788,13 @@ class DocumentService:
                     ),
                     keyword_search AS (
                         SELECT
-                            id,
+                            dc.id,
                             CASE
                                 WHEN ({keyword_conditions}) THEN 1.0
                                 ELSE 0.0
                             END as keyword_score
                         FROM document_chunks dc
+                        WHERE 1=1 {project_filter_keyword}
                     )
                     SELECT
                         ss.id,

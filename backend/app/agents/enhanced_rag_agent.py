@@ -196,8 +196,12 @@ class EnhancedRAGAgent(RAGAgent):
                 "semantic_weight": semantic_weight,
                 "keyword_weight": keyword_weight,
                 "model_id": user_preferences.get('model_id') if user_preferences else None,
+                "project_id": user_preferences.get('project_id') if user_preferences else None,  # 🔧 FIX: Include project_id
                 "db": user_preferences.get('db') if user_preferences else None
             }
+
+            # 🔍 DEBUG: Log project_id being passed to RAG
+            logger.info(f"🔍 DEBUG [FORCE_RAG path]: project_id = {tool_params_rag.get('project_id')}")
 
             # Execute RAG tool
             result = await self._execute_tool_document_rag(
@@ -956,6 +960,7 @@ Context:
                 conversation_history=None,
                 use_cache=False,  # Don't cache synthesis queries
                 model_id=model_id,  # Use user's chosen model
+                project_id=state["user_preferences"].get("project_id"),  # 🔧 FIX: Pass project_id for project-based filtering
                 db=state["user_preferences"].get("db"),
                 # Pass through threshold parameters from UI
                 top_k=state["user_preferences"].get("top_k"),
@@ -1186,6 +1191,9 @@ Context:
 
             logger.info(f"🔍 FORCE_RAG: Searching documents for '{query[:100]}...'")
 
+            # 🔍 DEBUG: Log project_id received in _execute_tool_document_rag
+            logger.info(f"🔍 DEBUG [_execute_tool_document_rag]: project_id from tool_params = {tool_params.get('project_id')}")
+
             # Force RAG search with user's parameters
             rag_response = await enhanced_rag_service.query(
                 query_text=query,
@@ -1195,6 +1203,7 @@ Context:
                 semantic_weight=tool_params.get('semantic_weight'),
                 keyword_weight=tool_params.get('keyword_weight'),
                 model_id=tool_params.get('model_id'),  # 🆕 Pass model_id for model selection
+                project_id=tool_params.get('project_id'),  # 🔧 FIX: Pass project_id for project-based filtering
                 db=tool_params.get('db'),
                 force_rag=True  # 🆕 Force RAG even if classified as ai_personal/general
             )

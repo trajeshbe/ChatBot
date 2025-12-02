@@ -71,6 +71,9 @@ class EnhancedRAGService:
         """
         start_time = time.time()
 
+        # 🔍 DEBUG: Log incoming project_id parameter
+        logger.info(f"🔍 DEBUG [RAG Service query()]: project_id parameter = {project_id}")
+
         # 🆕 Tool Usage Tracking - Record which tools/steps were used and in what order
         tools_used = []
         last_tool_time = start_time  # Track time of last tool for calculating deltas
@@ -156,19 +159,22 @@ class EnhancedRAGService:
 
             logger.info(f"🔧 RAG Config: top_k={_top_k}, sim_threshold={_similarity_threshold:.2f}, min_sim={_min_similarity_threshold:.2f}, no_relevant={_no_relevant_docs_threshold:.2f}, semantic_weight={_semantic_weight:.2f}, keyword_weight={_keyword_weight:.2f}")
 
-            # Ensure session exists and get project_id if session-based
-            project_id = None
+            # Ensure session exists and get project_id if not already provided
+            # 🔧 FIX: Don't overwrite project_id if it was passed as a parameter
             if session_id:
-                await self._ensure_session_exists(session_id, user_id, db)
+                await self._ensure_session_exists(session_id, user_id, db, project_id=project_id)
 
-                # Get project_id from session to scope retrieval
-                from app.models.database_enhanced import ChatSession
-                session_query = select(ChatSession).where(ChatSession.session_id == session_id)
-                session_result = await db.execute(session_query)
-                session = session_result.scalar_one_or_none()
-                if session and session.project_id:
-                    project_id = str(session.project_id)
-                    logger.info(f"📁 Query scoped to project: {project_id}")
+                # Only get project_id from session if not already provided via parameter
+                if project_id is None:
+                    from app.models.database_enhanced import ChatSession
+                    session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+                    session_result = await db.execute(session_query)
+                    session = session_result.scalar_one_or_none()
+                    if session and session.project_id:
+                        project_id = str(session.project_id)
+                        logger.info(f"📁 Query scoped to project from session: {project_id}")
+                else:
+                    logger.info(f"📁 Query scoped to project from parameter: {project_id}")
 
             # STEP 0: Preprocess query for better retrieval and classification
             track_tool("query_preprocessing", "Normalize and extract proper nouns")
@@ -859,12 +865,15 @@ class EnhancedRAGService:
                     ),
                     keyword_search AS (
                         SELECT
-                            id,
+                            dc.id,
                             CASE
                                 WHEN ({keyword_condition}) THEN 1.0
                                 ELSE 0.0
                             END as keyword_score
                         FROM document_chunks dc
+                        JOIN documents d ON dc.document_id = d.id
+                        JOIN session_documents sd ON d.id = sd.document_id
+                        WHERE sd.session_id = :session_id
                     )
                     SELECT
                         ss.id,
@@ -1097,7 +1106,8 @@ class EnhancedRAGService:
         self,
         session_id: str,
         user_id: Optional[uuid.UUID],
-        db: AsyncSession
+        db: AsyncSession,
+        project_id: Optional[str] = None
     ):
         """Ensure chat session exists in database"""
         try:
@@ -1108,13 +1118,32 @@ class EnhancedRAGService:
             session = result.scalar_one_or_none()
 
             if not session:
-                session = ChatSession(
-                    session_id=session_id,
-                    user_id=user_id
-                )
+                # 🔧 FIX: Create session with project_id
+                session_data = {
+                    "session_id": session_id,
+                    "user_id": user_id
+                }
+
+                # Add project_id if provided
+                if project_id:
+                    try:
+                        session_data["project_id"] = uuid.UUID(project_id)
+                        logger.info(f"Creating new session with project_id: {project_id}")
+                    except (ValueError, AttributeError):
+                        logger.warning(f"Invalid project_id format: {project_id}, creating session without project")
+
+                session = ChatSession(**session_data)
                 db.add(session)
                 await db.commit()
-                logger.info(f"Created new session: {session_id}")
+                logger.info(f"Created new session: {session_id}" + (f" (project: {project_id})" if project_id else ""))
+            elif project_id and not session.project_id:
+                # 🔧 FIX: Update existing session with project_id if it doesn't have one
+                try:
+                    session.project_id = uuid.UUID(project_id)
+                    await db.commit()
+                    logger.info(f"Updated session {session_id} with project_id: {project_id}")
+                except (ValueError, AttributeError):
+                    logger.warning(f"Invalid project_id format: {project_id}")
 
         except Exception as e:
             logger.error(f"Error ensuring session exists: {e}")

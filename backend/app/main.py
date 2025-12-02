@@ -638,6 +638,9 @@ async def query_endpoint(
     ip_address, user_agent = get_client_info(request)
     user_id = await get_anonymous_user_id(db)
 
+    # 🔍 DEBUG: Log project_id received from frontend
+    logger.info(f"🔍 DEBUG [API /query endpoint]: project_id from Form = {project_id}")
+
     # Parse conversation history if provided
     parsed_history = None
     if conversation_history:
