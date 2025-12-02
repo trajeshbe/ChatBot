@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
-import { Users, Activity, Database, TrendingUp, Search, Filter, ChevronDown, ChevronUp, Key, Server, Wrench, Globe, Shield, Lock, UserPlus } from 'lucide-react'
+import { Users, Activity, Database, TrendingUp, Search, Filter, ChevronDown, ChevronUp, Key, Server, Wrench, Globe, Shield, Lock, UserPlus, Trash2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import UserHeader from '@/components/UserHeader'
 import APIKeysManager from '../components/APIKeysManager'
@@ -260,6 +260,51 @@ export default function AdminPage() {
       console.error('Error searching documents:', error)
     }
     setLoading(false)
+  }
+
+  const deleteDocument = async (documentId: string, filename: string) => {
+    if (!confirm(
+      `⚠️ Delete document and all embeddings?\n\n` +
+      `Document: ${filename}\n` +
+      `This will permanently delete:\n` +
+      `• The document record\n` +
+      `• All chunks\n` +
+      `• All embeddings\n\n` +
+      `This action cannot be undone.`
+    )) {
+      return
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/documents/${documentId}`, {
+        method: 'DELETE'
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.detail || 'Failed to delete document')
+      }
+
+      const result = await res.json()
+      alert(
+        `✅ Document deleted successfully!\n\n` +
+        `Filename: ${result.filename}\n` +
+        `Chunks deleted: ${result.chunks_deleted}\n` +
+        `Embeddings removed: ${result.embeddings_deleted}`
+      )
+
+      // Refresh the documents list
+      await searchDocuments()
+
+      // Clear selection if deleted document was selected
+      if (selectedDocument?.id === documentId) {
+        setSelectedDocument(null)
+        setDocumentChunks([])
+      }
+    } catch (error: any) {
+      console.error('Error deleting document:', error)
+      alert(`❌ Failed to delete document:\n${error.message}`)
+    }
   }
 
   const loadSessionDetails = async (sessionId: string) => {
@@ -1424,18 +1469,20 @@ export default function AdminPage() {
                         {dbDocuments.map((doc) => (
                           <div
                             key={doc.id}
-                            onClick={() => {
-                              setSelectedDocument(doc)
-                              loadDocumentChunks(doc.id)
-                            }}
-                            className={`px-6 py-4 border-b border-slate-200 dark:border-slate-700 cursor-pointer transition-colors ${
+                            className={`px-6 py-4 border-b border-slate-200 dark:border-slate-700 transition-colors ${
                               selectedDocument?.id === doc.id
                                 ? 'bg-blue-50 dark:bg-blue-900/20'
                                 : 'hover:bg-slate-50 dark:hover:bg-slate-750'
                             }`}
                           >
                             <div className="flex items-start justify-between">
-                              <div className="flex-1 min-w-0">
+                              <div
+                                className="flex-1 min-w-0 cursor-pointer"
+                                onClick={() => {
+                                  setSelectedDocument(doc)
+                                  loadDocumentChunks(doc.id)
+                                }}
+                              >
                                 <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
                                   {doc.filename}
                                 </p>
@@ -1475,14 +1522,26 @@ export default function AdminPage() {
                                   </p>
                                 )}
                               </div>
-                              <div className={`ml-3 px-2 py-1 rounded-full text-xs font-semibold ${
-                                doc.embedding_percentage >= 100
-                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                  : doc.embedding_percentage > 0
-                                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                                  : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                              }`}>
-                                {doc.embedding_percentage.toFixed(0)}%
+                              <div className="flex items-center gap-2 ml-3">
+                                <div className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                                  doc.embedding_percentage >= 100
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                    : doc.embedding_percentage > 0
+                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                                    : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                }`}>
+                                  {doc.embedding_percentage.toFixed(0)}%
+                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    deleteDocument(doc.id, doc.filename)
+                                  }}
+                                  className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                                  title="Delete document and all embeddings"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               </div>
                             </div>
                           </div>

@@ -638,6 +638,61 @@ async def query_endpoint(
             logger.warning("Failed to parse conversation history JSON")
 
     try:
+        # 🔄 Smart Query Waiting: Wait for documents to finish processing
+        if session_id:
+            from sqlalchemy import select
+            from app.models.database import SessionDocument, Document
+            import asyncio
+
+            max_wait_seconds = 30
+            poll_interval_seconds = 2
+            elapsed_seconds = 0
+
+            logger.info(f"⏳ Checking if session documents are ready for query...")
+
+            while elapsed_seconds < max_wait_seconds:
+                # Check if any session documents are still processing
+                processing_docs_query = select(Document).join(
+                    SessionDocument,
+                    Document.id == SessionDocument.document_id
+                ).where(
+                    SessionDocument.session_id == session_id,
+                    Document.processing_status == 'processing'
+                )
+
+                result = await db.execute(processing_docs_query)
+                processing_docs = result.scalars().all()
+
+                if not processing_docs:
+                    logger.info(f"✅ All session documents are ready!")
+                    break
+
+                # Documents still processing
+                doc_names = [doc.filename for doc in processing_docs]
+                logger.info(f"⏳ Waiting for {len(processing_docs)} document(s) to finish processing: {doc_names[:3]}...")
+                logger.info(f"   Elapsed: {elapsed_seconds}s / {max_wait_seconds}s")
+
+                await asyncio.sleep(poll_interval_seconds)
+                elapsed_seconds += poll_interval_seconds
+
+            # Final check after timeout
+            if elapsed_seconds >= max_wait_seconds:
+                result = await db.execute(processing_docs_query)
+                still_processing = result.scalars().all()
+
+                if still_processing:
+                    doc_names = [doc.filename for doc in still_processing]
+                    logger.warning(f"⚠️ Query timeout: {len(still_processing)} document(s) still processing after {max_wait_seconds}s")
+
+                    # Return friendly message instead of error
+                    return {
+                        "answer": f"⏳ Your document(s) are still being processed: {', '.join(doc_names[:3])}{'...' if len(doc_names) > 3 else ''}. This usually takes 1-2 minutes for large documents with technical drawings. Please try your query again in a moment.",
+                        "sources": [],
+                        "model": "system",
+                        "processing_status": "documents_not_ready",
+                        "documents_processing": doc_names
+                    }
+
         # Phase 7: Use EnhancedRAGAgent for multi-tool orchestration
         # The agent will:
         # 1. Classify the query (detect URLs, intents)
@@ -930,6 +985,87 @@ async def get_documents(
     except Exception as e:
         logger.error(f"Error fetching documents: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/v1/documents/{document_id}")
+async def delete_document(
+    document_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete a document and all its associated chunks/embeddings
+
+    This endpoint:
+    1. Deletes all document chunks (embeddings cascade automatically)
+    2. Deletes the document record
+    3. Optionally removes file from MinIO storage
+
+    Note: Document chunks have ON DELETE CASCADE, so deleting the document
+    automatically removes all associated chunks and embeddings.
+    """
+    try:
+        from sqlalchemy import select, delete
+        from app.models.database import Document, DocumentChunk, SessionDocument
+        import uuid
+
+        # Convert to UUID
+        try:
+            doc_uuid = uuid.UUID(document_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid document ID format")
+
+        # Check if document exists
+        result = await db.execute(
+            select(Document).where(Document.id == doc_uuid)
+        )
+        document = result.scalar_one_or_none()
+
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        filename = document.filename
+
+        # Get chunk count before deletion (for logging)
+        chunk_count_result = await db.execute(
+            select(DocumentChunk).where(DocumentChunk.document_id == doc_uuid)
+        )
+        chunks = chunk_count_result.scalars().all()
+        chunk_count = len(chunks)
+
+        # Delete session associations (if they exist)
+        await db.execute(
+            delete(SessionDocument).where(SessionDocument.document_id == doc_uuid)
+        )
+
+        # Delete document (chunks will cascade automatically due to FK constraint)
+        await db.execute(
+            delete(Document).where(Document.id == doc_uuid)
+        )
+
+        await db.commit()
+
+        logger.info(
+            f"🗑️  Document deleted successfully:\n"
+            f"   Document: {filename}\n"
+            f"   ID: {document_id}\n"
+            f"   Chunks deleted: {chunk_count}\n"
+            f"   Embeddings removed: {chunk_count}"
+        )
+
+        return {
+            "message": "Document and all embeddings deleted successfully",
+            "document_id": document_id,
+            "filename": filename,
+            "chunks_deleted": chunk_count,
+            "embeddings_deleted": chunk_count
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error deleting document {document_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete document: {str(e)}")
 
 
 # GraphQL endpoint

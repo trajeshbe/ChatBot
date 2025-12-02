@@ -14,6 +14,8 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text as sql_text, and_, func
 from app.services.embedding_service import embedding_service
+from app.services.intelligent_retrieval_service import intelligent_retrieval_service
+from app.services.intelligent_embedding_service import intelligent_embedding_service
 from app.services.document_service import document_service
 from app.services.query_classifier import query_classifier
 from app.services.quality_metrics import quality_metrics_service
@@ -294,15 +296,43 @@ class RAGService:
                     f"{[q[:50] + '...' if len(q) > 50 else q for q in query_variations]}"
                 )
 
-            # STEP 3: Generate embeddings for ALL query variations
-            track_tool("embedding_generation", f"Generate embeddings for {len(query_variations)} variation(s)")
-            logger.info(f"🔍 Generating embeddings for {len(query_variations)} query variation(s)")
+            # STEP 3: Classify query and generate intelligent embeddings
+            track_tool("query_classification", "Classify query type for optimal embedding strategy")
+            logger.info(f"🔍 Classifying query to determine optimal retrieval strategy...")
+            query_type_result = intelligent_retrieval_service.classify_query(query_text)
+            query_type = query_type_result['query_type']
+            embedding_strategy = query_type_result['strategy']
+            vector_column = query_type_result['vector_column']
+
+            logger.info(f"📊 Query Classification:")
+            logger.info(f"   Query Type: {query_type}")
+            logger.info(f"   Embedding Strategy: {embedding_strategy}")
+            logger.info(f"   Vector Column: {vector_column}")
+            logger.info(f"   Confidence: {query_type_result.get('confidence', 0):.2%}")
+
+            # STEP 3.5: Generate embeddings using intelligent strategy
+            track_tool("embedding_generation", f"Generate {embedding_strategy} embeddings for {len(query_variations)} variation(s)")
+            logger.info(f"🔍 Generating embeddings for {len(query_variations)} query variation(s) using {embedding_strategy} strategy...")
             query_embeddings = []
+
             for variation in query_variations:
-                embedding = await embedding_service.get_embedding(variation)
+                # Use intelligent embedding service for vision/table/code queries
+                if embedding_strategy in ['vision', 'table_structure', 'numerical', 'code', 'hybrid']:
+                    logger.info(f"🧠 Using IntelligentEmbeddingService ({embedding_strategy})")
+                    embedding_result = await intelligent_embedding_service.get_embeddings_batch(
+                        texts=[variation],
+                        strategy=embedding_strategy
+                    )
+                    embedding = embedding_result[0]  # Returns list directly
+                else:
+                    # Use standard embedding service for text queries
+                    logger.info(f"📝 Using standard EmbeddingService (text_semantic)")
+                    embedding = await embedding_service.get_embedding(variation)
+
                 query_embeddings.append({
                     'query': variation,
-                    'embedding': embedding
+                    'embedding': embedding,
+                    'strategy': embedding_strategy
                 })
 
             # Use first (original processed query) as primary

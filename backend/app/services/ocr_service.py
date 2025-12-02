@@ -26,6 +26,8 @@ except ImportError:
 try:
     import pytesseract
     from PIL import Image
+    import numpy as np
+    import cv2
     TESSERACT_AVAILABLE = True
 except ImportError:
     TESSERACT_AVAILABLE = False
@@ -78,15 +80,22 @@ class OCRService:
         file_path: str,
         method: str = "auto",
         language: str = "eng",
+        extract_embedded_images: bool = True,
         **kwargs
     ) -> Dict[str, Any]:
         """
-        Extract text with intelligent method selection.
+        Extract text with intelligent method selection + embedded image OCR.
+
+        Comprehensively extracts text from:
+        - Document text content (via Docling)
+        - PDF pages rendered as images (via Tesseract)
+        - Embedded images in PDFs, DOCX, PPTX, XLSX (via Tesseract)
 
         Args:
             file_path: Path to document/image file
             method: Extraction method ("auto", "docling", "tesseract")
             language: Tesseract language code (default: "eng")
+            extract_embedded_images: Extract and OCR embedded images (default: True)
             **kwargs: Additional method-specific options
 
         Returns:
@@ -97,6 +106,8 @@ class OCRService:
                 "pages": int,                   # Number of pages processed
                 "file_path": str,               # Original file path
                 "file_type": str,               # File extension
+                "embedded_images_text": str,    # Text from embedded images
+                "embedded_images_count": int,   # Number of images processed
                 "metadata": dict                # Additional metadata
             }
 
@@ -304,8 +315,8 @@ class OCRService:
         """
         Extract text from PDF using Tesseract (convert PDF to images first).
 
-        Note: This requires pdf2image package for production use.
-        For now, we'll try to use Pillow directly if possible.
+        Uses PyMuPDF to render PDF pages as high-resolution images,
+        then applies Tesseract OCR with preprocessing optimized for technical drawings.
 
         Args:
             pdf_path: Path to PDF file
@@ -315,16 +326,448 @@ class OCRService:
         Returns:
             Extraction result dictionary
         """
-        logger.warning(
-            "Tesseract PDF extraction requires pdf2image package. "
-            "Consider using Docling for PDFs instead."
+        try:
+            import fitz  # PyMuPDF
+            import cv2
+            import numpy as np
+            from io import BytesIO
+        except ImportError as e:
+            logger.error(f"Required library not available for PDF OCR: {e}")
+            raise RuntimeError(
+                "PDF OCR requires PyMuPDF, cv2, and numpy. "
+                "Please install with: pip install PyMuPDF opencv-python numpy"
+            )
+
+        logger.info(f"Extracting PDF with Tesseract OCR: {pdf_path}")
+
+        try:
+            doc = fitz.open(pdf_path)
+            all_text = []
+            all_confidences = []
+            total_words = 0
+
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+
+                # Render page at high DPI for better OCR (300 DPI)
+                mat = fitz.Matrix(300/72, 300/72)
+                pix = page.get_pixmap(matrix=mat)
+
+                # Convert to PIL Image
+                img_data = pix.tobytes("png")
+                img = Image.open(BytesIO(img_data))
+
+                # Convert to numpy array for preprocessing
+                img_array = np.array(img)
+
+                # Preprocess for technical drawings
+                preprocessed = self._preprocess_for_technical_drawings(img_array)
+
+                # Run Tesseract OCR with confidence data
+                try:
+                    data = pytesseract.image_to_data(
+                        preprocessed,
+                        lang=language,
+                        config=r'--oem 3 --psm 11',  # Sparse text mode (good for drawings)
+                        output_type=pytesseract.Output.DICT
+                    )
+
+                    # Extract text from this page
+                    page_text = []
+                    page_confidences = []
+
+                    for i in range(len(data['text'])):
+                        if data['conf'][i] != '-1' and int(data['conf'][i]) > 0:
+                            word = data['text'][i].strip()
+                            if word:
+                                page_text.append(word)
+                                page_confidences.append(int(data['conf'][i]))
+                                total_words += 1
+
+                    if page_text:
+                        all_text.append(" ".join(page_text))
+                        all_confidences.extend(page_confidences)
+
+                    logger.debug(f"   Page {page_num + 1}: {len(page_text)} words extracted")
+
+                except Exception as e:
+                    logger.warning(f"OCR failed for page {page_num + 1}: {e}")
+                    continue
+
+            doc.close()
+
+            # Combine all pages
+            full_text = "\n\n".join(all_text)
+
+            # Calculate average confidence
+            avg_confidence = sum(all_confidences) / len(all_confidences) / 100.0 if all_confidences else 0.0
+
+            logger.info(f"Tesseract PDF extraction complete: {len(doc)} pages, {total_words} words, {avg_confidence:.1%} confidence")
+
+            return {
+                "text": full_text,
+                "method_used": "tesseract (PDF OCR)",
+                "confidence": avg_confidence,
+                "pages": len(doc),
+                "metadata": {
+                    "language": language,
+                    "words_detected": total_words,
+                    "avg_confidence": avg_confidence,
+                    "dpi": 300,
+                    "preprocessing": "technical_drawings"
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Tesseract PDF extraction failed: {e}", exc_info=True)
+            raise
+
+    def _preprocess_for_technical_drawings(self, img_array: np.ndarray) -> np.ndarray:
+        """
+        Preprocess image for better OCR on technical drawings.
+
+        Technical drawings typically have:
+        - High contrast lines
+        - Small text annotations
+        - Mixed text sizes
+        - Background grid patterns
+
+        Args:
+            img_array: Input image as numpy array (RGB or grayscale)
+
+        Returns:
+            Preprocessed image optimized for OCR
+        """
+        import cv2
+        import numpy as np
+
+        # Convert to grayscale if needed
+        if len(img_array.shape) == 3:
+            gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img_array
+
+        # Apply bilateral filter to reduce noise while preserving edges
+        # (good for technical drawings with fine lines)
+        filtered = cv2.bilateralFilter(gray, 9, 75, 75)
+
+        # Adaptive thresholding (works well for varying lighting/contrast)
+        binary = cv2.adaptiveThreshold(
+            filtered,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            11,  # Block size
+            2    # Constant subtracted from mean
         )
 
-        # For now, raise error and force fallback to Docling
-        raise RuntimeError(
-            "Tesseract PDF extraction not fully implemented. "
-            "Install pdf2image or use Docling for PDFs."
-        )
+        # Optional: Morphological operations to clean up small noise
+        kernel = np.ones((2, 2), np.uint8)
+        cleaned = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+
+        return cleaned
+
+    async def extract_all_embedded_images(
+        self,
+        file_path: str,
+        language: str = "eng"
+    ) -> Dict[str, Any]:
+        """
+        Extract and OCR all embedded images from document.
+
+        Supports: PDF, DOCX, PPTX, XLSX
+
+        Args:
+            file_path: Path to document
+            language: Tesseract language code
+
+        Returns:
+            {
+                "images_extracted": int,
+                "text_from_images": str,
+                "confidence": float,
+                "images_detail": List[Dict]
+            }
+        """
+        file_ext = Path(file_path).suffix.lower()
+
+        logger.info(f"🖼️  Extracting embedded images from {file_ext} document...")
+
+        # Extract images based on file type
+        images = []
+
+        if file_ext == ".pdf":
+            images = await self._extract_images_from_pdf(file_path)
+        elif file_ext == ".docx":
+            images = await self._extract_images_from_docx(file_path)
+        elif file_ext == ".pptx":
+            images = await self._extract_images_from_pptx(file_path)
+        elif file_ext == ".xlsx":
+            images = await self._extract_images_from_xlsx(file_path)
+        else:
+            logger.warning(f"Image extraction not supported for {file_ext}")
+            return {
+                "images_extracted": 0,
+                "text_from_images": "",
+                "confidence": 0.0,
+                "images_detail": []
+            }
+
+        if not images:
+            logger.info("No embedded images found")
+            return {
+                "images_extracted": 0,
+                "text_from_images": "",
+                "confidence": 0.0,
+                "images_detail": []
+            }
+
+        logger.info(f"Found {len(images)} embedded images, running OCR...")
+
+        # OCR each image
+        results = await self._ocr_extracted_images(images, language)
+
+        return results
+
+    async def _extract_images_from_pdf(self, pdf_path: str) -> List[Dict[str, Any]]:
+        """Extract embedded raster images from PDF"""
+        try:
+            import fitz
+            from io import BytesIO
+        except ImportError:
+            logger.error("PyMuPDF required for PDF image extraction")
+            return []
+
+        images = []
+        doc = fitz.open(pdf_path)
+
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+
+            # Get list of images on this page
+            image_list = page.get_images()
+
+            for img_index, img in enumerate(image_list):
+                xref = img[0]  # Image reference number
+
+                # Extract image
+                base_image = doc.extract_image(xref)
+                image_bytes = base_image["image"]
+                image_ext = base_image["ext"]
+
+                # Convert to PIL Image
+                img_pil = Image.open(BytesIO(image_bytes))
+
+                images.append({
+                    "source": "pdf",
+                    "page": page_num + 1,
+                    "index": img_index,
+                    "format": image_ext,
+                    "size": img_pil.size,
+                    "image": img_pil
+                })
+
+        doc.close()
+
+        logger.info(f"   Extracted {len(images)} embedded images from PDF")
+        return images
+
+    async def _extract_images_from_docx(self, docx_path: str) -> List[Dict[str, Any]]:
+        """Extract embedded images from Word document"""
+        try:
+            from docx import Document as DocxDocument
+            from io import BytesIO
+        except ImportError:
+            logger.error("python-docx required for DOCX image extraction")
+            return []
+
+        images = []
+        doc = DocxDocument(docx_path)
+
+        # Images are stored in document relationships
+        for rel in doc.part.rels.values():
+            if "image" in rel.target_ref:
+                try:
+                    image_bytes = rel.target_part.blob
+                    img_pil = Image.open(BytesIO(image_bytes))
+
+                    images.append({
+                        "source": "docx",
+                        "rel_id": rel.rId,
+                        "format": img_pil.format,
+                        "size": img_pil.size,
+                        "image": img_pil
+                    })
+                except Exception as e:
+                    logger.warning(f"Failed to extract image {rel.rId}: {e}")
+                    continue
+
+        logger.info(f"   Extracted {len(images)} embedded images from DOCX")
+        return images
+
+    async def _extract_images_from_pptx(self, pptx_path: str) -> List[Dict[str, Any]]:
+        """Extract embedded images from PowerPoint"""
+        try:
+            from pptx import Presentation
+            from io import BytesIO
+        except ImportError:
+            logger.error("python-pptx required for PPTX image extraction")
+            return []
+
+        images = []
+        prs = Presentation(pptx_path)
+
+        for slide_num, slide in enumerate(prs.slides):
+            for shape in slide.shapes:
+                if hasattr(shape, "image"):
+                    try:
+                        image_bytes = shape.image.blob
+                        img_pil = Image.open(BytesIO(image_bytes))
+
+                        images.append({
+                            "source": "pptx",
+                            "slide": slide_num + 1,
+                            "format": img_pil.format,
+                            "size": img_pil.size,
+                            "image": img_pil
+                        })
+                    except Exception as e:
+                        logger.warning(f"Failed to extract image from slide {slide_num + 1}: {e}")
+                        continue
+
+        logger.info(f"   Extracted {len(images)} embedded images from PPTX")
+        return images
+
+    async def _extract_images_from_xlsx(self, xlsx_path: str) -> List[Dict[str, Any]]:
+        """Extract embedded images from Excel"""
+        try:
+            from openpyxl import load_workbook
+            from openpyxl.drawing.image import Image as XlImage
+            from io import BytesIO
+        except ImportError:
+            logger.error("openpyxl required for XLSX image extraction")
+            return []
+
+        images = []
+        wb = load_workbook(xlsx_path)
+
+        for sheet_name in wb.sheetnames:
+            sheet = wb[sheet_name]
+
+            # Check if sheet has images
+            if hasattr(sheet, '_images'):
+                for img_obj in sheet._images:
+                    try:
+                        # Get image bytes
+                        image_bytes = img_obj._data()
+                        img_pil = Image.open(BytesIO(image_bytes))
+
+                        images.append({
+                            "source": "xlsx",
+                            "sheet": sheet_name,
+                            "format": img_pil.format,
+                            "size": img_pil.size,
+                            "image": img_pil
+                        })
+                    except Exception as e:
+                        logger.warning(f"Failed to extract image from {sheet_name}: {e}")
+                        continue
+
+        wb.close()
+
+        logger.info(f"   Extracted {len(images)} embedded images from XLSX")
+        return images
+
+    async def _ocr_extracted_images(
+        self,
+        images: List[Dict[str, Any]],
+        language: str = "eng"
+    ) -> Dict[str, Any]:
+        """
+        Run OCR on all extracted images
+
+        Args:
+            images: List of extracted images with metadata
+            language: Tesseract language code
+
+        Returns:
+            Combined OCR results
+        """
+        if not self.tesseract_available:
+            logger.warning("Tesseract not available for image OCR")
+            return {
+                "images_extracted": len(images),
+                "text_from_images": "",
+                "confidence": 0.0,
+                "images_detail": []
+            }
+
+        all_text = []
+        all_confidences = []
+        images_detail = []
+
+        for i, img_data in enumerate(images):
+            try:
+                img_pil = img_data["image"]
+
+                # Preprocess image
+                img_array = np.array(img_pil.convert('RGB'))
+                preprocessed = self._preprocess_for_technical_drawings(img_array)
+
+                # Run OCR
+                data = pytesseract.image_to_data(
+                    preprocessed,
+                    lang=language,
+                    config=r'--oem 3 --psm 11',
+                    output_type=pytesseract.Output.DICT
+                )
+
+                # Extract text
+                image_text = []
+                image_confidences = []
+
+                for j in range(len(data['text'])):
+                    if data['conf'][j] != '-1' and int(data['conf'][j]) > 0:
+                        word = data['text'][j].strip()
+                        if word:
+                            image_text.append(word)
+                            image_confidences.append(int(data['conf'][j]))
+
+                if image_text:
+                    text = " ".join(image_text)
+                    confidence = sum(image_confidences) / len(image_confidences) / 100.0
+
+                    all_text.append(f"\n--- Image {i+1} ({img_data['source']}) ---\n{text}")
+                    all_confidences.extend(image_confidences)
+
+                    images_detail.append({
+                        "index": i + 1,
+                        "source": img_data["source"],
+                        "page": img_data.get("page"),
+                        "slide": img_data.get("slide"),
+                        "sheet": img_data.get("sheet"),
+                        "words_extracted": len(image_text),
+                        "confidence": confidence
+                    })
+
+                    logger.debug(f"      Image {i+1}: {len(image_text)} words ({confidence:.1%} confidence)")
+
+            except Exception as e:
+                logger.warning(f"OCR failed for image {i+1}: {e}")
+                continue
+
+        # Combine results
+        combined_text = "\n".join(all_text)
+        avg_confidence = sum(all_confidences) / len(all_confidences) / 100.0 if all_confidences else 0.0
+
+        logger.info(f"✅ OCR complete: {len(images_detail)}/{len(images)} images processed ({avg_confidence:.1%} avg confidence)")
+
+        return {
+            "images_extracted": len(images),
+            "text_from_images": combined_text,
+            "confidence": avg_confidence,
+            "images_detail": images_detail
+        }
 
     def get_available_backends(self) -> List[str]:
         """
@@ -361,3 +804,7 @@ class OCRService:
             },
             "ready": self.docling_available or self.tesseract_available
         }
+
+
+# Global singleton
+ocr_service = OCRService()

@@ -40,7 +40,21 @@ class DocumentChunk(Base):
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     chunk_index = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
-    embedding = Column(Vector(384))  # Dimension matches EMBEDDING_DIMENSION in config
+
+    # Multi-column vector storage for different embedding strategies
+    # Primary embedding column (384-dim, text semantic by default)
+    embedding = Column(Vector(384), nullable=True)  # Text semantic embeddings (all-MiniLM-L6-v2)
+
+    # Additional embedding columns for content-specific strategies
+    table_embedding = Column(Vector(512), nullable=True)      # Table structure embeddings
+    visual_embedding = Column(Vector(512), nullable=True)     # Vision embeddings (CLIP)
+    numerical_embedding = Column(Vector(256), nullable=True)  # Numerical/statistical embeddings
+    code_embedding = Column(Vector(768), nullable=True)       # Code embeddings (CodeBERT)
+
+    # Embedding metadata
+    embedding_strategy = Column(String(50), nullable=True)    # Strategy used (text_semantic, table_structure, etc.)
+    embedding_metadata = Column(JSON, nullable=True)          # ContentAnalyzer results and strategy info
+
     meta_info = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

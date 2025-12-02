@@ -10,6 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.database import Document, DocumentChunk
 from app.services.embedding_service import embedding_service
+from app.services.content_analyzer import content_analyzer
+from app.services.intelligent_embedding_service import intelligent_embedding_service
+from app.services.multi_analyzer_ensemble import multi_analyzer_ensemble
+from app.services.multi_channel_processor import multi_channel_processor
 import io
 import os
 import re
@@ -339,13 +343,39 @@ class DocumentService:
             response.close()
             response.release_conn()
 
+            # Save file temporarily for content analysis
+            temp_path = f"/tmp/{document.file_path}"
+            async with aiofiles.open(temp_path, 'wb') as f:
+                await f.write(file_data)
+
+            # Analyze content with multi-analyzer ensemble
+            logger.info(f"🔍 Running multi-analyzer ensemble for {document.filename}...")
+            content_analysis = await multi_analyzer_ensemble.analyze_document(
+                file_path=temp_path,
+                file_type=document.file_type,
+                file_size=len(file_data),
+                consolidation_strategy="voting"  # Can be: voting, confidence_weighted, llm_judgment
+            )
+
+            logger.info(f"📊 Multi-Analyzer Ensemble Results:")
+            logger.info(f"   Content Type: {content_analysis['content_type'].value if hasattr(content_analysis['content_type'], 'value') else content_analysis['content_type']}")
+            logger.info(f"   Strategy: {content_analysis['strategy']}")
+            logger.info(f"   Confidence: {content_analysis['confidence']:.2%}")
+            logger.info(f"   Reasoning: {content_analysis['reasoning']}")
+
+            # Log individual analyzer results
+            if 'analyzer_results' in content_analysis:
+                logger.info(f"   Individual Analyzers:")
+                for analyzer_result in content_analysis['analyzer_results']:
+                    logger.info(f"      - {analyzer_result['analyzer_name']}: {analyzer_result['content_type']} (confidence: {analyzer_result['confidence']:.2%})")
+
+            # For backward compatibility with existing code
+            content_analysis['embedding_strategy'] = content_analysis['strategy']
+
             # Extract text using Docling or fallback
             if self.doc_converter and DOCLING_AVAILABLE:
                 try:
-                    # Save temporarily for Docling
-                    temp_path = f"/tmp/{document.file_path}"
-                    async with aiofiles.open(temp_path, 'wb') as f:
-                        await f.write(file_data)
+                    # File already saved as temp_path for content analysis, use it
 
                     # Convert with Docling
                     start_time = time.time()
@@ -432,41 +462,165 @@ class DocumentService:
 
             logger.info(f"Extracted {len(text)} characters from {document.filename}")
 
+            # For vector_graphics or image_heavy PDFs, run additional hybrid OCR+Vision extraction
+            content_type_str = content_analysis['content_type'].value if hasattr(content_analysis['content_type'], 'value') else str(content_analysis['content_type'])
+
+            if content_type_str in ['vector_graphics', 'image_heavy'] and 'pdf' in document.file_type.lower():
+                logger.info(f"🔍 Running hybrid OCR+Vision extraction for {content_type_str} document...")
+
+                try:
+                    from app.services.hybrid_extraction_service import hybrid_extraction_service
+
+                    # Run hybrid extraction (auto-selects strategy based on content type)
+                    hybrid_result = await hybrid_extraction_service.extract_from_document(
+                        file_path=temp_path,
+                        content_type=content_type_str,
+                        strategy="auto",  # Auto-select based on content type
+                        vision_model="llama3.2-vision:11b"  # Default to best quality
+                    )
+
+                    if hybrid_result['combined_text']:
+                        # Merge hybrid-extracted text with Docling text
+                        original_text_len = len(text)
+                        text = text + "\n\n" + hybrid_result['combined_text']
+
+                        logger.info(f"✅ Hybrid extraction complete:")
+                        logger.info(f"   Methods used: {hybrid_result['methods_used']}")
+                        logger.info(f"   Confidence: {hybrid_result['confidence']:.2%}")
+                        logger.info(f"   Original text: {original_text_len} chars")
+                        logger.info(f"   Added text: {len(hybrid_result['combined_text'])} chars")
+                        logger.info(f"   Total text: {len(text)} chars")
+                        logger.info(f"   Processing time: {hybrid_result['metadata']['processing_time_ms']:.2f}ms")
+
+                        # Track hybrid extraction usage
+                        if TOOL_TRACKING_ENABLED:
+                            try:
+                                async with AsyncSessionLocal() as track_db:
+                                    await tool_tracker.record_tool_usage(
+                                        category=ToolCategory.DOCUMENT_PROCESSING,
+                                        tool_name="hybrid_extraction",
+                                        operation="extract_text_and_context",
+                                        db=track_db,
+                                        session_id=None,
+                                        success=True,
+                                        latency_ms=hybrid_result['metadata']['processing_time_ms'],
+                                        input_size=len(file_data),
+                                        output_size=len(hybrid_result['combined_text']),
+                                        metadata={
+                                            'methods_used': hybrid_result['methods_used'],
+                                            'strategy': hybrid_result['metadata']['strategy_used'],
+                                            'confidence': hybrid_result['confidence'],
+                                            'content_type': content_type_str
+                                        }
+                                    )
+                                    await track_db.commit()
+                            except Exception as track_err:
+                                logger.warning(f"Failed to track hybrid extraction usage: {track_err}")
+                    else:
+                        logger.warning("⚠️  Hybrid extraction returned empty text")
+
+                except Exception as e:
+                    logger.error(f"❌ Hybrid extraction failed: {str(e)}")
+                    logger.info("   Continuing with Docling-extracted text only")
+
             # Chunk the text
             chunks = self._chunk_text(text)
             logger.info(f"Created {len(chunks)} chunks")
 
-            # Generate embeddings
+            # Process document through multiple channels with full traceability
+            logger.info(f"🔄 Processing document through multiple channels...")
+            traceable_chunks = await multi_channel_processor.process_document(
+                document_id=str(document_id),
+                file_path=temp_path,
+                content_classification=content_analysis,
+                text_chunks=chunks
+            )
+
+            logger.info(f"✅ Multi-channel processing complete:")
+            logger.info(f"   Total chunks: {len(traceable_chunks)}")
+            if traceable_chunks:
+                sample_chunk = traceable_chunks[0]
+                logger.info(f"   Channels processed: {sample_chunk.channels_processed}")
+                logger.info(f"   Primary channel: {sample_chunk.primary_channel}")
+
+            # Generate embeddings using intelligent embedding service
             chunk_texts = [chunk['content'] for chunk in chunks]
-            logger.info(f"Generating embeddings for {len(chunk_texts)} chunks...")
-            embeddings = await embedding_service.get_embeddings_batch(chunk_texts)
-            logger.info(f"Generated {len(embeddings)} embeddings")
+            embedding_strategy = content_analysis['embedding_strategy']
+            vector_column = content_analysis['vector_column']
+
+            logger.info(f"Generating embeddings for {len(chunk_texts)} chunks using strategy: {embedding_strategy}...")
+
+            # Use intelligent embedding service for appropriate content types
+            if embedding_strategy in ['vision', 'table_structure', 'numerical', 'code', 'hybrid']:
+                logger.info(f"🧠 Using IntelligentEmbeddingService with {embedding_strategy} strategy")
+                embeddings = await intelligent_embedding_service.get_embeddings_batch(
+                    texts=chunk_texts,
+                    strategy=embedding_strategy
+                )
+                # Infer dimension from first embedding
+                embedding_dim = len(embeddings[0]) if embeddings else 384
+            else:
+                # Use regular embedding service for text-only content
+                logger.info(f"📝 Using standard EmbeddingService for text content")
+                embeddings = await embedding_service.get_embeddings_batch(chunk_texts)
+                embedding_dim = 384  # Standard text embedding dimension
+
+            logger.info(f"Generated {len(embeddings)} embeddings ({embedding_dim} dimensions)")
 
             # Verify embeddings
             if not embeddings or len(embeddings) != len(chunk_texts):
                 raise ValueError(f"Expected {len(chunk_texts)} embeddings, got {len(embeddings)}")
 
-            # Verify embedding dimensions
-            if embeddings and len(embeddings[0]) != 384:
-                raise ValueError(f"Expected 384-dimensional embeddings, got {len(embeddings[0])}")
+            logger.info(f"✅ All embeddings valid ({embedding_dim} dimensions, strategy: {embedding_strategy})")
 
-            logger.info(f"✅ All embeddings valid (384 dimensions)")
-
-            # Create chunk records
+            # Create chunk records from traceable chunks with multiple embeddings
             document_chunks = []
-            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            logger.info(f"📝 Creating {len(traceable_chunks)} chunk records with full traceability...")
+
+            for i, traceable_chunk in enumerate(traceable_chunks):
+                # Get database format from traceable chunk (includes all embeddings)
+                chunk_data = traceable_chunk.to_database_format()
+
+                # Enhance metadata with content analysis and document info
+                if 'embedding_metadata' not in chunk_data:
+                    chunk_data['embedding_metadata'] = {}
+
+                chunk_data['embedding_metadata'].update({
+                    'content_analysis': {
+                        'content_type': content_analysis['content_type'].value if hasattr(content_analysis['content_type'], 'value') else str(content_analysis['content_type']),
+                        'confidence': content_analysis['confidence'],
+                        'reasoning': content_analysis['reasoning']
+                    },
+                    'dimension': embedding_dim,
+                    'vector_column': vector_column
+                })
+
+                # Add document-specific metadata
+                if 'source_info' not in chunk_data:
+                    chunk_data['source_info'] = {}
+
+                chunk_data['source_info'].update({
+                    'source': document.filename,
+                    'source_type': document.source_type,
+                    'source_url': document.source_url
+                })
+
+                # Create DocumentChunk record
                 chunk_record = DocumentChunk(
                     document_id=document_id,
                     chunk_index=i,
-                    content=chunk['content'],
-                    embedding=embedding,
-                    meta_info={
-                        'source': document.filename,
-                        'source_type': document.source_type,
-                        'source_url': document.source_url,
-                        'char_start': chunk.get('start', 0),
-                        'char_end': chunk.get('end', 0)
-                    },
+                    content=chunk_data['content'],
+                    # Vector columns from traceable chunk (may have multiple embeddings)
+                    embedding=chunk_data.get('embedding'),
+                    visual_embedding=chunk_data.get('visual_embedding'),
+                    table_embedding=chunk_data.get('table_embedding'),
+                    code_embedding=chunk_data.get('code_embedding'),
+                    numerical_embedding=chunk_data.get('numerical_embedding'),
+                    # Strategy and metadata
+                    embedding_strategy=embedding_strategy,
+                    embedding_metadata=chunk_data['embedding_metadata'],
+                    meta_info=chunk_data['source_info'],
+                    # Project/user info
                     project_id=project_id,
                     uploaded_by=user_id,
                     department=department,
@@ -474,6 +628,16 @@ class DocumentService:
                 )
                 db.add(chunk_record)
                 document_chunks.append(chunk_record)
+
+                # Log traceability for first chunk as sample
+                if i == 0:
+                    logger.info(f"   📌 Sample chunk traceability:")
+                    logger.info(f"      Document: {document.filename}")
+                    logger.info(f"      Chunk Index: {i}")
+                    logger.info(f"      Channels: {traceable_chunk.channels_processed}")
+                    logger.info(f"      Primary: {traceable_chunk.primary_channel}")
+                    for channel, emb in traceable_chunk.embeddings.items():
+                        logger.info(f"      - {channel}: {emb.model} (conf: {emb.confidence:.2%})")
 
             # Mark document as processed
             document.processing_status = 'completed'

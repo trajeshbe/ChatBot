@@ -14,9 +14,28 @@ import logging
 from enum import Enum
 from typing import Dict, Any, Optional, List
 from pathlib import Path
-import fitz  # PyMuPDF
-from PIL import Image
-import numpy as np
+
+# Optional: PyMuPDF for advanced PDF analysis (fallback to simple analysis if not available)
+try:
+    import fitz  # PyMuPDF
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
+    logging.warning("PyMuPDF not available - using basic content analysis")
+
+# Optional: PIL for image analysis
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+
+# Optional: numpy for numerical analysis
+try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +137,28 @@ class ContentAnalyzer:
         - Images/diagrams
         - Overall content distribution
         """
+        # If PyMuPDF not available, use basic analysis
+        if not PYMUPDF_AVAILABLE:
+            logger.warning("PyMuPDF not available - using basic text_semantic strategy for PDF")
+            return {
+                "content_type": ContentType.TEXT_HEAVY,
+                "embedding_strategy": "text_semantic",
+                "similarity_metric": SimilarityMetric.COSINE,
+                "vector_column": "embedding",
+                "index_name": "idx_chunks_embedding",
+                "has_tables": False,
+                "table_count": 0,
+                "has_images": False,
+                "image_count": 0,
+                "is_scanned": False,
+                "confidence": 0.7,
+                "reasoning": "Basic analysis (PyMuPDF not available) - using text embeddings",
+                "strategy_details": {
+                    "dimension": 384,
+                    "model": "sentence-transformers/all-MiniLM-L6-v2"
+                }
+            }
+
         try:
             doc = fitz.open(file_path)
 

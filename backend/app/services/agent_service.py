@@ -157,12 +157,24 @@ class AgentOrchestrationService:
                         timeout=task.timeout_seconds
                     )
 
+                    # Decode output
+                    stdout_str = stdout.decode('utf-8')
+                    stderr_str = stderr.decode('utf-8')
+
+                    # DEBUG: Log raw output to diagnose empty stdout issue
+                    logger.info(f"🔍 DEBUG Task {task_id} - stdout length: {len(stdout_str)} chars")
+                    logger.info(f"🔍 DEBUG Task {task_id} - stderr length: {len(stderr_str)} chars")
+                    if stdout_str:
+                        logger.info(f"🔍 DEBUG Task {task_id} - stdout preview: {stdout_str[:500]}")
+                    if stderr_str:
+                        logger.info(f"🔍 DEBUG Task {task_id} - stderr preview: {stderr_str[:500]}")
+
                     # Parse output and update task
                     await self._process_task_output(
                         db=db,
                         task_id=task_id,
-                        stdout=stdout.decode('utf-8'),
-                        stderr=stderr.decode('utf-8'),
+                        stdout=stdout_str,
+                        stderr=stderr_str,
                         return_code=process.returncode
                     )
 
@@ -235,19 +247,36 @@ class AgentOrchestrationService:
         if return_code == 0:
             task.status = TaskStatus.COMPLETED
 
-            # Parse output for results (look for FINAL_ANSWER or results)
-            # This is a simple implementation - can be enhanced with structured parsing
-            if "FINAL_ANSWER:" in stdout:
-                lines = stdout.split('\n')
-                answer_lines = [l for l in lines if 'FINAL_ANSWER:' in l]
-                if answer_lines:
-                    task.result = answer_lines[0].replace('FINAL_ANSWER:', '').strip()
-            else:
-                task.result = "Task completed successfully"
+            # IMPORTANT: Agent writes to stderr (Python logging default), so parse BOTH stdout and stderr
+            combined_output = stdout + "\n" + stderr
+
+            # Parse output for results
+            # Look for completion markers in order of preference:
+            # 1. "✅ Task completed" with result
+            # 2. Last tool execution result
+            # 3. Success message with iteration count
+            task.result = "Task completed successfully"
+
+            if "✅ Task completed" in combined_output:
+                # Extract result after completion marker
+                lines = combined_output.split('\n')
+                for i, line in enumerate(lines):
+                    if '✅ Task completed' in line and i + 1 < len(lines):
+                        # Get next non-empty line as result
+                        for j in range(i + 1, len(lines)):
+                            if lines[j].strip() and not lines[j].strip().startswith('2025-'):
+                                task.result = lines[j].strip()
+                                break
+                        break
+            elif "📊 Iterations:" in combined_output:
+                # Agent completed all iterations - extract summary
+                iteration_count = combined_output.count('📍 Iteration')
+                tool_calls = combined_output.count('TOOL_CALL:')
+                task.result = f"Agent completed {iteration_count} iterations with {tool_calls} tool calls"
 
             # Extract artifacts (look for artifact paths in output)
             artifacts = []
-            for line in stdout.split('\n'):
+            for line in combined_output.split('\n'):
                 if '/artifacts/' in line or '/workspace/' in line:
                     # Simple extraction - can be enhanced
                     if '.txt' in line or '.csv' in line or '.png' in line:
@@ -258,7 +287,7 @@ class AgentOrchestrationService:
 
             # Extract tools used (look for TOOL_CALL mentions)
             tools = []
-            for line in stdout.split('\n'):
+            for line in combined_output.split('\n'):
                 if 'TOOL_CALL:' in line or 'Executing tool:' in line:
                     parts = line.split(':')
                     if len(parts) > 1:
@@ -270,7 +299,7 @@ class AgentOrchestrationService:
                 task.tools_used = tools
 
             # Count LLM calls
-            llm_calls = stdout.count('Calling LLM') or stdout.count('🤖')
+            llm_calls = combined_output.count('Calling LLM') or combined_output.count('🤖')
             if llm_calls > 0:
                 task.llm_calls = llm_calls
 

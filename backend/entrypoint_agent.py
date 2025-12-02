@@ -441,6 +441,14 @@ class AgenticLoop:
             # THINK & PLAN: Call LLM
             response = await self._call_llm()
 
+            # CRITICAL: Add LLM response to conversation BEFORE processing action
+            # This maintains proper conversation structure (user → assistant → user → assistant...)
+            if response and response.strip():
+                self.conversation_history.append({
+                    "role": "assistant",
+                    "content": response
+                })
+
             # Parse response for tool calls or final answer
             action = self._parse_response(response)
 
@@ -497,6 +505,7 @@ class AgenticLoop:
                     })
 
                     # OBSERVE: Add result to conversation
+                    # Tool results should be "user" role (feedback TO the assistant)
                     # Convert tool result to JSON-safe string
                     try:
                         result_str = json.dumps(tool_result, default=str)
@@ -505,8 +514,8 @@ class AgenticLoop:
                         result_str = str(tool_result)
 
                     self.conversation_history.append({
-                        "role": "assistant",
-                        "content": f"Tool: {tool_name}, Result: {result_str}"
+                        "role": "user",  # FIXED: Tool results are user messages (feedback)
+                        "content": f"Tool Result:\nTool: {tool_name}\nResult: {result_str}"
                     })
                 else:
                     logger.error(f"⚠️ Tool call validation failed: {tool_name}")
@@ -516,14 +525,10 @@ class AgenticLoop:
                     })
 
             else:
-                # Thinking/reasoning step
-                logger.info(f"💭 LLM thinking...")
-                # Only add non-empty content to avoid Ollama "messages must contain content" error
+                # Thinking/reasoning step or empty response
                 if action["content"] and action["content"].strip():
-                    self.conversation_history.append({
-                        "role": "assistant",
-                        "content": action["content"]
-                    })
+                    logger.info(f"💭 LLM thinking...")
+                    # Response already added to conversation history above
                 else:
                     logger.warning("⚠️ LLM sent empty content, skipping...")
 
@@ -543,6 +548,43 @@ class AgenticLoop:
 
         return result
 
+    def _compress_history(self, messages: list, max_messages: int = 6) -> list:
+        """
+        Compress conversation history to prevent context overflow.
+        Keeps first message (task) + recent messages + summary of middle messages.
+        """
+        if len(messages) <= max_messages:
+            return messages
+
+        # Strategy: Keep first (task) + summarize middle + keep last 3 (recent context)
+        first_message = messages[0]
+        recent_messages = messages[-3:]
+        middle_messages = messages[1:-3]
+
+        # Create summary of middle messages
+        middle_summary = []
+        tool_calls_summary = []
+        for msg in middle_messages:
+            content = msg.get("content", "")
+            if "Tool:" in content:
+                # Extract tool name
+                tool_name = content.split("Tool:")[1].split(",")[0].strip()
+                tool_calls_summary.append(tool_name)
+
+        # Build compressed history
+        compressed = [first_message]
+
+        if tool_calls_summary:
+            compressed.append({
+                "role": "system",
+                "content": f"[Summary: Used tools: {', '.join(set(tool_calls_summary))}]"
+            })
+
+        compressed.extend(recent_messages)
+
+        logger.info(f"📜 History compressed: {len(messages)} → {len(compressed)} messages")
+        return compressed
+
     async def _call_llm(self) -> str:
         """Call LLM with conversation history"""
         try:
@@ -550,7 +592,14 @@ class AgenticLoop:
 
             # Get Ollama configuration from environment
             ollama_host = os.getenv('OLLAMA_HOST', 'http://rag-ollama:11434')
-            model = os.getenv('AGENT_LLM_MODEL', 'qwen2.5-coder:7b')
+            model = os.getenv('AGENT_LLM_MODEL', 'llama3.2-vision:11b')
+
+            # IMPORTANT: Compress conversation history to prevent context overflow
+            # For small models like qwen2.5:1.5b (context ~32K tokens), keep history manageable
+            compressed_history = self._compress_history(
+                messages=self.conversation_history,
+                max_messages=6  # Keep task + summary + 3 recent messages
+            )
 
             # Build system prompt with available tools
             available_tools_desc = "\n".join([
@@ -621,7 +670,7 @@ FINAL_ANSWER: XGBoost model trained with R² score displayed in output
 
             # Build messages for LLM
             messages = [{"role": "system", "content": system_prompt}]
-            messages.extend(self.conversation_history)
+            messages.extend(compressed_history)  # Use compressed history to prevent context overflow
 
             # Connect to Ollama
             client = ollama.Client(host=ollama_host)
