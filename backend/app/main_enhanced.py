@@ -138,6 +138,14 @@ try:
 except ImportError as e:
     logger.warning(f"⚠ Evaluation routes not available: {e}")
 
+# Add Construction Metrics router
+try:
+    from app.api.routes.construction_metrics_routes import router as construction_metrics_router
+    app.include_router(construction_metrics_router)
+    logger.info("✓ Construction Metrics API routes loaded")
+except Exception as e:
+    logger.warning(f"⚠ Construction Metrics routes not available: {type(e).__name__}: {e}")
+
 
 # === REST API Endpoints ===
 

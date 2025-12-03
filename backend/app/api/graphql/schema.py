@@ -101,6 +101,47 @@ class MultiScrapeInput:
     scrape_prompt: Optional[str] = None
 
 
+# Construction Metrics Types
+@strawberry.type
+class BuildingMetrics:
+    levels_above_ground: Optional[str]  # Can be int or "NA"
+    levels_below_ground: Optional[str]  # Can be int or "NA"
+    gross_floor_area_m2: Optional[str]  # Can be float or "NA"
+    external_area_m2: Optional[str]  # Can be float or "NA"
+    site_area_m2: Optional[str]  # Can be float or "NA"
+    building_height_m: Optional[str]  # Can be float or "NA"
+
+
+@strawberry.type
+class ExtractionDetails:
+    metrics_found: int
+    total_metrics: int
+    documents_processed: int
+    aggregation_method: str
+
+
+@strawberry.type
+class ConstructionMetricsResult:
+    success: bool
+    project_name: str
+    metrics: BuildingMetrics
+    confidence: float
+    sources: List[str]
+    details: ExtractionDetails
+    processing_time_seconds: Optional[float] = None
+    error: Optional[str] = None
+
+
+@strawberry.input
+class ConstructionMetricsInput:
+    # Note: File upload handled via REST API
+    # GraphQL mutation accepts zip_file_path after REST upload
+    zip_file_path: str
+    project_name: Optional[str] = None
+    session_id: Optional[str] = None
+    model_id: str = "llama3.2-vision:11b"
+
+
 # Query resolvers
 @strawberry.type
 class Query:
@@ -264,6 +305,86 @@ class Mutation:
         except Exception as e:
             logger.error(f"Error scraping URLs: {e}")
             raise
+
+    @strawberry.mutation
+    async def extract_construction_metrics(self, input: ConstructionMetricsInput) -> ConstructionMetricsResult:
+        """Extract building metrics from construction project ZIP file via GraphQL"""
+        try:
+            from app.agents.construction_metrics import ConstructionMetricsAgent
+            from app.services.llm_service import LLMService
+            from app.services.hybrid_extraction_service import HybridExtractionService
+
+            logger.info(f"GraphQL: Starting construction metrics extraction for: {input.zip_file_path}")
+
+            # Initialize services
+            async with AsyncSessionLocal() as db:
+                llm_service = LLMService()
+                vision_service = HybridExtractionService()
+
+                # Create agent
+                agent = ConstructionMetricsAgent(
+                    llm_service=llm_service,
+                    vision_service=vision_service,
+                    db=db
+                )
+
+                # Extract metrics
+                result = await agent.extract_metrics(
+                    zip_file_path=input.zip_file_path,
+                    project_name=input.project_name,
+                    session_id=input.session_id or 'default',
+                    model_id=input.model_id
+                )
+
+            # Convert result to GraphQL types
+            metrics_dict = result['metrics']
+            details_dict = result['details']
+
+            return ConstructionMetricsResult(
+                success=True,
+                project_name=result['project_name'],
+                metrics=BuildingMetrics(
+                    levels_above_ground=str(metrics_dict['levels_above_ground']),
+                    levels_below_ground=str(metrics_dict['levels_below_ground']),
+                    gross_floor_area_m2=str(metrics_dict['gross_floor_area_m2']),
+                    external_area_m2=str(metrics_dict['external_area_m2']),
+                    site_area_m2=str(metrics_dict.get('site_area_m2', 'NA')),
+                    building_height_m=str(metrics_dict.get('building_height_m', 'NA'))
+                ),
+                confidence=result['confidence'],
+                sources=result['sources'],
+                details=ExtractionDetails(
+                    metrics_found=details_dict['metrics_found'],
+                    total_metrics=details_dict['total_metrics'],
+                    documents_processed=details_dict['documents_processed'],
+                    aggregation_method=details_dict['aggregation_method']
+                ),
+                processing_time_seconds=result.get('processing_time_seconds')
+            )
+
+        except Exception as e:
+            logger.error(f"GraphQL: Construction metrics extraction failed: {e}", exc_info=True)
+            return ConstructionMetricsResult(
+                success=False,
+                project_name=input.project_name or "Unknown",
+                metrics=BuildingMetrics(
+                    levels_above_ground="NA",
+                    levels_below_ground="NA",
+                    gross_floor_area_m2="NA",
+                    external_area_m2="NA",
+                    site_area_m2="NA",
+                    building_height_m="NA"
+                ),
+                confidence=0.0,
+                sources=[],
+                details=ExtractionDetails(
+                    metrics_found=0,
+                    total_metrics=6,
+                    documents_processed=0,
+                    aggregation_method="error"
+                ),
+                error=str(e)
+            )
 
 
 # Schema

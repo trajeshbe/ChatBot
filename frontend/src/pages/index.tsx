@@ -16,13 +16,14 @@ import ProjectDetail from '@/components/ProjectDetail'
 import Library from '@/components/Library'
 import PromptLibraryManager from '@/components/PromptLibraryManager'
 import AgentTaskMonitor from '@/components/AgentTaskMonitor'
+import ConstructionExtraction from '@/components/ConstructionExtraction'
 import { useAuth } from '@/contexts/AuthContext'
 import type { RAGConfig } from '@/components/RAGSettings'
 
 export default function Home() {
   const router = useRouter()
   const { user, isAuthenticated, isLoading } = useAuth()
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'chat' | 'upload' | 'scrape' | 'history' | 'evaluation' | 'estimator' | 'tools' | 'weights' | 'library' | 'projects' | 'files' | 'explainable' | 'agent'>('chat')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'chat' | 'upload' | 'scrape' | 'history' | 'evaluation' | 'estimator' | 'tools' | 'weights' | 'library' | 'projects' | 'files' | 'explainable' | 'agent' | 'construction'>('chat')
   const [sessionId, setSessionId] = useState<string>('')
   const [currentUser, setCurrentUser] = useState<string>('Anonymous')
   const [ragConfig, setRagConfig] = useState<RAGConfig | null>(null)
@@ -187,6 +188,12 @@ export default function Home() {
           {activeTab === 'estimator' && (
             <div className="flex-1 overflow-y-auto">
               <ProjectEstimator sessionId={sessionId} />
+            </div>
+          )}
+
+          {activeTab === 'construction' && (
+            <div className="flex-1 overflow-y-auto">
+              <ConstructionExtraction />
             </div>
           )}
 

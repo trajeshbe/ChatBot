@@ -32,7 +32,8 @@
       "Bash(docker-compose build:*)",
       "Bash(bash:*)",
       "Bash(source:*)",
-      "Bash(python -m pytest:*)"
+      "Bash(python -m pytest:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
     "ask": []

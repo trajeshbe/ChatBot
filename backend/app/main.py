@@ -1183,6 +1183,16 @@ except ImportError as e:
 except Exception as e:
     logger.warning(f"Could not register Project Estimator router: {e}")
 
+# Construction Metrics Extraction API
+try:
+    from app.api.routes import construction_metrics_routes
+    app.include_router(construction_metrics_routes.router)
+    logger.info("✓ Construction Metrics API router registered (building metrics extraction from ZIP files)")
+except ImportError as e:
+    logger.warning(f"Construction Metrics API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Construction Metrics router: {e}")
+
 # Playwright test routes (for debugging)
 try:
     from app.api.routes import playwright_test_routes

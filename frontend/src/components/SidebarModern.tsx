@@ -21,7 +21,8 @@ import {
   TrendingUp,
   ChevronDown,
   BookOpen,
-  Bot
+  Bot,
+  Building2
 } from 'lucide-react'
 import { ThemeToggle } from '@/theme/ThemeToggle'
 import axios from 'axios'
@@ -38,8 +39,8 @@ interface Project {
 }
 
 interface Props {
-  activeTab: 'dashboard' | 'chat' | 'upload' | 'scrape' | 'history' | 'evaluation' | 'estimator' | 'tools' | 'weights' | 'library' | 'projects' | 'files' | 'explainable' | 'agent'
-  setActiveTab: (tab: 'dashboard' | 'chat' | 'upload' | 'scrape' | 'history' | 'evaluation' | 'estimator' | 'tools' | 'weights' | 'library' | 'projects' | 'files' | 'explainable' | 'agent') => void
+  activeTab: 'dashboard' | 'chat' | 'upload' | 'scrape' | 'history' | 'evaluation' | 'estimator' | 'tools' | 'weights' | 'library' | 'projects' | 'files' | 'explainable' | 'agent' | 'construction'
+  setActiveTab: (tab: 'dashboard' | 'chat' | 'upload' | 'scrape' | 'history' | 'evaluation' | 'estimator' | 'tools' | 'weights' | 'library' | 'projects' | 'files' | 'explainable' | 'agent' | 'construction') => void
   currentUser?: string
   onNewChat?: () => void
   onProjectClick?: (projectId: string) => void
@@ -160,6 +161,7 @@ export default function SidebarModern({ activeTab, setActiveTab, currentUser, on
     { id: 'upload' as const, icon: Upload, label: 'Upload Files' },
     { id: 'scrape' as const, icon: Globe, label: 'Web Scraping' },
     { id: 'estimator' as const, icon: Calculator, label: 'Project Estimator' },
+    { id: 'construction' as const, icon: Building2, label: 'Construction Metrics' },
     { id: 'library' as const, icon: BookOpen, label: 'Prompt Library' },
     { id: 'agent' as const, icon: Bot, label: 'Agent Tasks' },
   ]

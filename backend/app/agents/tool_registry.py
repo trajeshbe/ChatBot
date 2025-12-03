@@ -300,6 +300,46 @@ class ToolRegistry:
             tags=["vision", "image analysis", "construction drawings", "floor plans", "architectural", "pdf analysis"]
         )
 
+        # Construction Metrics Extraction (NEW)
+        self.register(
+            tool_id="construction_extraction",
+            name="Construction Metrics Extraction",
+            description=(
+                "Extract building metrics from construction project ZIP files. "
+                "Analyzes architectural drawings, DA approvals, site photos, and specifications using Vision LLM + CLIP + OCR. "
+                "Extracts: Levels (Above/Below Ground), Gross Floor Area (GFA), External Area, Site Area, Building Height. "
+                "Best for: construction tender analysis, project sizing, building metric extraction, Australian civil projects. "
+                "Input: ZIP file containing construction documents (PDFs, images). "
+                "Output: Structured JSON with metrics, confidence scores, and source attribution. "
+                "Returns 'NA' for metrics that cannot be extracted."
+            ),
+            function=self._wrap_construction_extraction,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "zip_file_path": {
+                        "type": "string",
+                        "description": "Path to uploaded ZIP file containing construction documents"
+                    },
+                    "project_name": {
+                        "type": "string",
+                        "description": "Project name (optional, extracted from ZIP filename if not provided)"
+                    },
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session ID for tracking"
+                    },
+                    "model_id": {
+                        "type": "string",
+                        "description": "Vision LLM model to use (default: llama3.2-vision:11b)",
+                        "default": "llama3.2-vision:11b"
+                    }
+                },
+                "required": ["zip_file_path", "session_id"]
+            },
+            tags=["construction", "metrics", "extraction", "drawings", "tender", "building", "GFA", "levels", "architectural"]
+        )
+
         # Text Compression for Small LLMs
         self.register(
             tool_id="compress_text_for_llm",
@@ -1195,6 +1235,104 @@ class ToolRegistry:
                 "original_tokens": 0,
                 "compressed_tokens": 0,
                 "reduction_percentage": 0
+            }
+
+    async def _wrap_construction_extraction(
+        self,
+        zip_file_path: str,
+        session_id: str,
+        project_name: Optional[str] = None,
+        model_id: Optional[str] = None,
+        db = None
+    ) -> Dict[str, Any]:
+        """
+        Wrapper for Construction Metrics Extraction Agent
+
+        Extracts building metrics from construction project ZIP files using
+        Vision LLM + CLIP + OCR multimodal analysis.
+
+        Args:
+            zip_file_path: Path to uploaded ZIP file
+            session_id: Session ID for tracking
+            project_name: Project name (optional)
+            model_id: Vision LLM model to use (default: llama3.2-vision:11b)
+            db: Database session (optional)
+
+        Returns:
+            Dict with extracted metrics:
+            {
+                "project_name": str,
+                "metrics": {
+                    "levels_above_ground": int or "NA",
+                    "levels_below_ground": int or "NA",
+                    "gross_floor_area_m2": float or "NA",
+                    "external_area_m2": float or "NA",
+                    "site_area_m2": float or "NA",
+                    "building_height_m": float or "NA"
+                },
+                "confidence": float,
+                "sources": [str],
+                "details": {...}
+            }
+        """
+        try:
+            from app.agents.construction_metrics import ConstructionMetricsAgent
+            from app.services.llm_service import LLMService
+            from app.services.hybrid_extraction_service import HybridExtractionService
+
+            logger.info(f"Starting construction metrics extraction for: {zip_file_path}")
+
+            # Initialize services
+            llm_service = LLMService()
+            vision_service = HybridExtractionService()
+
+            # Create agent
+            agent = ConstructionMetricsAgent(
+                llm_service=llm_service,
+                vision_service=vision_service,
+                db=db
+            )
+
+            # Extract project name from ZIP if not provided
+            if not project_name:
+                from pathlib import Path
+                project_name = Path(zip_file_path).stem
+
+            # Run extraction
+            result = await agent.extract_metrics(
+                zip_file_path=zip_file_path,
+                project_name=project_name,
+                session_id=session_id,
+                model_id=model_id
+            )
+
+            logger.info(f"Construction metrics extraction complete: {result['metrics']}")
+
+            return {
+                "success": True,
+                "result": result,
+                **result  # Flatten result to top level
+            }
+
+        except Exception as e:
+            logger.error(f"Construction metrics extraction failed: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "project_name": project_name or "Unknown",
+                "metrics": {
+                    "levels_above_ground": "NA",
+                    "levels_below_ground": "NA",
+                    "gross_floor_area_m2": "NA",
+                    "external_area_m2": "NA",
+                    "site_area_m2": "NA",
+                    "building_height_m": "NA"
+                },
+                "confidence": 0.0,
+                "sources": [],
+                "details": {
+                    "error": str(e)
+                }
             }
 
 
