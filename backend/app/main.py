@@ -1674,21 +1674,48 @@ async def get_user_sessions(
         result = await db.execute(query)
         sessions = result.all()
 
+        # 🆕 Fetch most used model for each session
+        sessions_with_models = []
+        for session in sessions:
+            session_data = {
+                "id": str(session.ChatSession.id),
+                "session_id": session.ChatSession.session_id,
+                "user_id": str(session.ChatSession.user_id) if session.ChatSession.user_id else None,
+                "project_id": str(session.ChatSession.project_id) if session.ChatSession.project_id else None,
+                "title": session.ChatSession.title,
+                "created_at": session.ChatSession.created_at.isoformat(),
+                "last_activity": session.ChatSession.last_activity.isoformat(),
+                "is_active": session.ChatSession.is_active,
+                "message_count": session.message_count
+            }
+
+            # Get most used model from messages
+            try:
+                model_query = select(
+                    ConversationMessage.model_used,
+                    func.count(ConversationMessage.id).label('usage_count')
+                ).where(
+                    and_(
+                        ConversationMessage.session_id == session.ChatSession.id,
+                        ConversationMessage.model_used.isnot(None)
+                    )
+                ).group_by(ConversationMessage.model_used).order_by(func.count(ConversationMessage.id).desc()).limit(1)
+
+                model_result = await db.execute(model_query)
+                most_used = model_result.first()
+
+                if most_used and most_used.model_used:
+                    session_data["most_used_model"] = most_used.model_used
+                else:
+                    session_data["most_used_model"] = None
+            except Exception as model_err:
+                logger.warning(f"Could not fetch model for session {session.ChatSession.session_id}: {model_err}")
+                session_data["most_used_model"] = None
+
+            sessions_with_models.append(session_data)
+
         return {
-            "sessions": [
-                {
-                    "id": str(session.ChatSession.id),
-                    "session_id": session.ChatSession.session_id,
-                    "user_id": str(session.ChatSession.user_id) if session.ChatSession.user_id else None,
-                    "project_id": str(session.ChatSession.project_id) if session.ChatSession.project_id else None,  # 🆕 Include project_id
-                    "title": session.ChatSession.title,
-                    "created_at": session.ChatSession.created_at.isoformat(),
-                    "last_activity": session.ChatSession.last_activity.isoformat(),
-                    "is_active": session.ChatSession.is_active,
-                    "message_count": session.message_count
-                }
-                for session in sessions
-            ]
+            "sessions": sessions_with_models
         }
     except Exception as e:
         logger.error(f"Error getting sessions: {e}")

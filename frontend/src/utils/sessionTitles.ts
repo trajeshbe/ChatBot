@@ -15,6 +15,7 @@ export interface ChatSession {
   last_activity: string
   is_active: boolean
   message_count?: number
+  most_used_model?: string | null
 }
 
 /**

@@ -612,7 +612,12 @@ class ToolRegistry:
         semantic_weight: Optional[float] = None,
         keyword_weight: Optional[float] = None,
         model_id: Optional[str] = None,  # 🆕 Accept model_id for model selection
-        db = None  # 🆕 Accept optional db session (reuse if provided)
+        project_id: Optional[str] = None,  # 🆕 Accept project_id for project-based filtering
+        db = None,  # 🆕 Accept optional db session (reuse if provided)
+        # Accept but ignore other routing metadata that may be passed
+        complexity: Optional[str] = None,  # From TaskRouter
+        available_memory_mb: Optional[int] = None,  # From TaskRouter
+        **kwargs  # Catch any other unexpected parameters
     ) -> Dict[str, Any]:
         """
         Wrapper for Document RAG service
@@ -621,6 +626,9 @@ class ToolRegistry:
 
         FIXED: Now properly passes all threshold and weight parameters from UI.
         🆕 FIXED: Accepts model_id and db parameters for model selection
+        🆕 FIXED: Accepts project_id for project-based document filtering
+        🆕 FIXED: Accepts and ignores routing metadata (complexity, available_memory_mb)
+                 to prevent parameter mismatch errors
         """
         from app.services.rag_service import rag_service
         from app.core.database import AsyncSessionLocal
@@ -634,6 +642,7 @@ class ToolRegistry:
                     conversation_history=[],
                     use_cache=True,
                     model_id=model_id,  # 🆕 Pass model_id for model selection
+                    project_id=project_id,  # 🆕 Pass project_id for project-based filtering
                     top_k=top_k,
                     similarity_threshold=similarity_threshold,
                     min_similarity_threshold=min_similarity_threshold,
@@ -650,6 +659,7 @@ class ToolRegistry:
                 conversation_history=[],
                 use_cache=True,
                 model_id=model_id,  # 🆕 Pass model_id for model selection
+                project_id=project_id,  # 🆕 Pass project_id for project-based filtering
                 top_k=top_k,
                 similarity_threshold=similarity_threshold,
                 min_similarity_threshold=min_similarity_threshold,

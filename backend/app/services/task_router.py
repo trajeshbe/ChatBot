@@ -433,10 +433,11 @@ Respond with ONLY ONE WORD: SIMPLE, MODERATE, COMPLEX, or ANALYTICAL"""
             )
 
         # Build tool parameters
+        # Note: file_types is NOT passed to tool_params as it's not a parameter
+        # accepted by the RAG tool wrapper. It's metadata for routing decision only.
         tool_params = {
             "query": query,
             "session_id": session_id,
-            "file_types": [ft.value for ft in file_types],
             "complexity": complexity.value,
             "available_memory_mb": available_memory
         }

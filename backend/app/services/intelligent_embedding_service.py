@@ -252,9 +252,9 @@ class IntelligentEmbeddingService:
             logger.warning("⚠️  Table structure embeddings not yet implemented, using text semantic")
             embeddings = await self._embed_text_semantic(texts)
         elif strategy == "vision":
-            # Future: Vision embeddings (CLIP)
-            logger.warning("⚠️  Vision embeddings not yet implemented, using text semantic")
-            embeddings = await self._embed_text_semantic(texts)
+            # Vision embeddings using CLIP
+            logger.info("🎨 Generating vision embeddings using CLIP")
+            embeddings = await self._embed_visual(texts)
         elif strategy == "numerical":
             # Future: Numerical embeddings
             logger.warning("⚠️  Numerical embeddings not yet implemented, using text semantic")
@@ -361,6 +361,148 @@ class IntelligentEmbeddingService:
             result[i] = emb
 
         return result
+
+    async def _load_clip_model(self):
+        """Lazy-load CLIP model for vision embeddings"""
+        if "vision" in self.models:
+            return self.models["vision"], self.models["vision_processor"]
+
+        try:
+            logger.info("🎨 Loading CLIP model for vision embeddings...")
+            from transformers import CLIPModel, CLIPProcessor
+
+            model_name = self.model_registry["vision"]["model_name"]
+            model = CLIPModel.from_pretrained(model_name)
+            processor = CLIPProcessor.from_pretrained(model_name)
+
+            self.models["vision"] = model
+            self.models["vision_processor"] = processor
+
+            logger.info(f"✅ CLIP model loaded: {model_name}")
+            return model, processor
+
+        except Exception as e:
+            logger.error(f"Failed to load CLIP model: {e}")
+            raise
+
+    async def _embed_visual(self, image_paths: List[str]) -> List[List[float]]:
+        """
+        Generate visual embeddings using CLIP
+
+        Args:
+            image_paths: List of image file paths to embed
+
+        Returns:
+            List of 512-dimensional CLIP embedding vectors
+        """
+        import torch
+        from PIL import Image
+
+        # Load CLIP model (lazy load)
+        model, processor = await self._load_clip_model()
+
+        # Check cache for each image
+        cached_embeddings = []
+        images_to_embed = []
+        cache_indices = []
+
+        if self.redis_client:
+            for i, img_path in enumerate(image_paths):
+                cache_key = self._get_cache_key(img_path, "vision")
+                cached = await self.redis_client.get(cache_key)
+                if cached:
+                    cached_embeddings.append((i, json.loads(cached)))
+                else:
+                    images_to_embed.append(img_path)
+                    cache_indices.append(i)
+        else:
+            images_to_embed = image_paths
+            cache_indices = list(range(len(image_paths)))
+
+        # Generate embeddings for non-cached images
+        new_embeddings = []
+        if images_to_embed:
+            logger.debug(f"Generating {len(images_to_embed)} CLIP embeddings (cache miss)")
+
+            for img_path in images_to_embed:
+                try:
+                    # Load and preprocess image
+                    image = Image.open(img_path).convert('RGB')
+                    inputs = processor(images=image, return_tensors="pt")
+
+                    # Generate embedding
+                    with torch.no_grad():
+                        image_features = model.get_image_features(**inputs)
+                        # Normalize embedding (CLIP uses cosine similarity)
+                        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+                        embedding = image_features.squeeze().cpu().numpy().tolist()
+
+                    new_embeddings.append(embedding)
+
+                    # Cache embedding
+                    if self.redis_client:
+                        cache_key = self._get_cache_key(img_path, "vision")
+                        await self.redis_client.setex(
+                            cache_key,
+                            3600,  # 1 hour TTL
+                            json.dumps(embedding)
+                        )
+
+                except Exception as e:
+                    logger.error(f"Failed to generate CLIP embedding for {img_path}: {e}")
+                    # Return zero vector as fallback
+                    new_embeddings.append([0.0] * 512)
+        else:
+            logger.debug(f"All {len(image_paths)} CLIP embeddings from cache")
+
+        # Merge cached and new embeddings in correct order
+        result = [None] * len(image_paths)
+        for i, emb in cached_embeddings:
+            result[i] = emb
+        for i, emb in zip(cache_indices, new_embeddings):
+            result[i] = emb
+
+        return result
+
+    async def _embed_text_for_visual_search(self, texts: List[str]) -> List[List[float]]:
+        """
+        Generate text embeddings using CLIP for text-to-image search
+
+        This allows querying images using text prompts.
+        E.g., "show me diagrams with network architecture"
+
+        Args:
+            texts: List of text queries
+
+        Returns:
+            List of 512-dimensional CLIP text embedding vectors
+        """
+        import torch
+
+        # Load CLIP model (lazy load)
+        model, processor = await self._load_clip_model()
+
+        embeddings = []
+        for text in texts:
+            try:
+                # Process text
+                inputs = processor(text=text, return_tensors="pt", padding=True)
+
+                # Generate embedding
+                with torch.no_grad():
+                    text_features = model.get_text_features(**inputs)
+                    # Normalize embedding
+                    text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+                    embedding = text_features.squeeze().cpu().numpy().tolist()
+
+                embeddings.append(embedding)
+
+            except Exception as e:
+                logger.error(f"Failed to generate CLIP text embedding for '{text}': {e}")
+                # Return zero vector as fallback
+                embeddings.append([0.0] * 512)
+
+        return embeddings
 
     async def get_embedding(
         self,

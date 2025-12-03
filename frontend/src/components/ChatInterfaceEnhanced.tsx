@@ -1195,11 +1195,15 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
               </div>
 
               {/* Model used and context info (for assistant messages) */}
-              {message.role === 'assistant' && (message.model_name || message.contextInfo) && (
+              {message.role === 'assistant' && (message.model_name || message.model || message.contextInfo) && (
                 <div className="mt-2 flex items-center gap-2 flex-wrap">
-                  {message.model_name && (
-                    <span className="text-xs px-1.5 py-0.5 rounded-md bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
-                      {message.model_name}
+                  {(message.model_name || message.model) && (
+                    <span className="text-xs px-2 py-1 rounded-md bg-gradient-to-r from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 text-purple-700 dark:text-purple-300 font-medium border border-purple-200 dark:border-purple-800 flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M13 7H7v6h6V7z"/>
+                        <path fillRule="evenodd" d="M7 2a1 1 0 012 0v1h2V2a1 1 0 112 0v1h2a2 2 0 012 2v2h1a1 1 0 110 2h-1v2h1a1 1 0 110 2h-1v2a2 2 0 01-2 2h-2v1a1 1 0 11-2 0v-1H9v1a1 1 0 11-2 0v-1H5a2 2 0 01-2-2v-2H2a1 1 0 110-2h1V9H2a1 1 0 010-2h1V5a2 2 0 012-2h2V2zM5 5h10v10H5V5z" clipRule="evenodd"/>
+                      </svg>
+                      {message.model_name || message.model}
                     </span>
                   )}
                   {message.contextInfo && (

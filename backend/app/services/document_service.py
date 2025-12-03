@@ -461,10 +461,10 @@ class DocumentService:
 
             logger.info(f"Extracted {len(text)} characters from {document.filename}")
 
-            # For vector_graphics or image_heavy PDFs, run additional hybrid OCR+Vision extraction
+            # For vector_graphics, image_heavy, or scanned PDFs, run additional hybrid OCR+Vision extraction
             content_type_str = content_analysis['content_type'].value if hasattr(content_analysis['content_type'], 'value') else str(content_analysis['content_type'])
 
-            if content_type_str in ['vector_graphics', 'image_heavy'] and 'pdf' in document.file_type.lower():
+            if content_type_str in ['vector_graphics', 'image_heavy', 'scanned'] and 'pdf' in document.file_type.lower():
                 logger.info(f"🔍 Running hybrid OCR+Vision extraction for {content_type_str} document...")
 
                 try:

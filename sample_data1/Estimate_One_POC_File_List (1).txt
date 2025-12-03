@@ -1,0 +1,3196 @@
+====================================================================================================
+PROJECT FILE TREE - VISUAL TREE STRUCTURE
+====================================================================================================
+Total Projects: 29
+====================================================================================================
+
+
+====================================================================================================
+PROJECT 1/29: 110126_110126_Bottlebrush_Ave_Apartments,_Noosa_Heads_fullSet
+Files: 23
+====================================================================================================
+
+├── DA Approval
+│   ├── 001 ECM_21694266_v4_Decision Notice - Approved by Delegation of Authority MCU21 0133 & OPW21 0220.pdf
+│   ├── 002 ECM_21694501_v2_Approved Plans - MCU21-0133 & OPW21-0220.pdf
+│   └── 003 ECM_21696347_v1_MCU21-0133_IC N1677_9 Bottlebrush Ave NOOSA HEADS.pdf
+├── Drawings
+│   ├── _Architecturals Combined.pdf
+│   ├── _Civil Combined.pdf
+│   ├── _Electrical Combined Update1.pdf
+│   ├── _Electrical Combined.pdf
+│   ├── _Hydraulics Combined.pdf
+│   ├── _Joinery Plans.pdf
+│   ├── _Mechanical Combined.pdf
+│   ├── _Structural Combined.pdf
+│   └── _Survey Plan.pdf
+├── Finishes
+│   ├── 21012 -BB - Fittings Fixtures and Equipment Schedule.docx
+│   ├── 211215 MarkUp.pdf
+│   ├── Bathroom.jpeg
+│   ├── Carpet.jpeg
+│   ├── Kitchen.jpeg
+│   └── Selection.jpeg
+├── Reports
+│   ├── 2108-100  9 Bottlebrush Noosa Heads PBDB Fire Brief.pdf
+│   └── _Geotechnical Report.pdf
+├── Intercom Information.docx
+├── _FIRE SPRINKLERS COMBINED R1.pdf
+└── _Fire Services Combined.pdf
+
+
+====================================================================================================
+PROJECT 2/29: 110140_110140_96-98_Tenby_Street,_Mt_Gravatt_East_fullSet
+Files: 67
+====================================================================================================
+
+├── 100. Architecture
+│   └── 220127 Zhu Tenby ARCH TENDER.pdf
+├── 105. Material Specification
+│   ├── 220114 SC Tenby ARCH SPEC Rev Tender.pdf
+│   ├── 220114 Zhu Tenby FF&E SCHEDULE Rev A.pdf
+│   └── 220127 Zhu Tenby DOOR HARDWARE schedule.pdf
+├── 110. Structural
+│   └── Structure_Binder.pdf
+├── 115. Civil
+│   └── Combined Civil.pdf
+├── 120. Hydraulics
+│   └── 19081 H01- H12.pdf
+├── 125. Electrical
+│   ├── 21359-E01(A) Legend and Notes.pdf
+│   ├── 21359-E02(A) Ground Level.pdf
+│   ├── 21359-E03(A) Level 1.pdf
+│   ├── 21359-E04(A) Level 2.pdf
+│   ├── 21359-E05(A) Level 3.pdf
+│   ├── 21359-E06(A) Level 4.pdf
+│   ├── 21359-E101(A) Schematic sheet 1.pdf
+│   ├── 21359-E102(A) Schematic sheet 2.pdf
+│   ├── 21359_NBN_E100-(A).pdf
+│   ├── 21359_NBN_E101-(A).pdf
+│   ├── 21359_NBN_E102-(A).pdf
+│   └── 21359_NBN_E103-(A).pdf
+├── 130. Mechanical
+│   ├── Mech Spec Tenby Street Apartments Rev T1 11 01 22.pdf
+│   └── Tenby Street Mechanical Rev T1 11 01 22.pdf
+├── 140. Geotech
+│   └── PG-2584_ 2019-06-04_ GR VER 1.pdf
+├── 141. Energy Report
+│   ├── Charlie Zhu - 96-98 Tenby Street_ Mt Gravatt_ QLD _ Report.pdf
+│   └── Origin Getting Centralised Energy Right - 96-98 Tenby St_ Mt Gravatt.pdf
+├── 145. Survey
+│   ├── 14116-2.pdf
+│   ├── 14116-3.pdf
+│   └── ACAD-19600-Consult-Base.pdf
+├── 150. Landscaping
+│   └── D21054-LP-B (FOR TENDER).pdf
+├── 155. Building Approval
+│   └── Building Approval (Certifier) v1.pdf
+├── 156. DBYD
+│   ├── AAPT DBYD Response   Utility ID 30700 Sequence 81041639 is not affected.msg
+│   ├── DBYD - Request ID  81041640  Utility ID  30705 is affected.msg
+│   ├── DBYD - Request ID  81041646  Utility ID  90073 is affected.msg
+│   ├── DBYD BCC Stormwater and Cable Networks  81041642.msg
+│   ├── DBYD JOB  15897556 SEQ  81041644 - 98 Tenby Street  Mount Gravatt QLD 4122.msg
+│   ├── DBYD JOB 15897556 - 98 Tenby Street  Mount Gravatt QLD 4122.msg
+│   ├── DBYD JOB 15897556 SEQ 81041647 - 98 Tenby Street   Mount Gravatt   QLD   4122 email(1 1).msg
+│   ├── DBYD Referral 81041645 15897556  (1).msg
+│   ├── DBYD Referral 81041645 15897556 .msg
+│   ├── DBYD Response for Job No 15897556  Sequence No 81041641.msg
+│   ├── Energex - DBYD Seq No  81041643 Job No  15897556 - 98 Tenby Street Mount Gravatt.msg
+│   └── Queensland Urban Utilities - DBYD Response - JobNo  15897556  SequenceNo  81041648 - 98 Tenby Street Mount Gravatt.msg
+├── 160. DA Modification
+│   └── Approval
+│       ├── 31169544.pdf
+│       ├── Approved Plans.pdf
+│       ├── BCC ICN.pdf
+│       ├── BCC Letter.pdf
+│       ├── Conditions.pdf
+│       └── SBS Mgt Plan.pdf
+├── 170. RFIs
+│   ├── RFI 1.xlsx
+│   ├── RFI 2.xlsx
+│   ├── RFI 4.xlsx
+│   └── RFI 7.xlsx
+└── Addendum 3 - Electrical
+    ├── NBN
+    │   ├── 21359_NBN_E100-(A).dwg
+    │   ├── 21359_NBN_E100-(A).pdf
+    │   ├── 21359_NBN_E101-(A).dwg
+    │   ├── 21359_NBN_E101-(A).pdf
+    │   ├── 21359_NBN_E102-(A).dwg
+    │   ├── 21359_NBN_E102-(A).pdf
+    │   ├── 21359_NBN_E103-(A).dwg
+    │   └── 21359_NBN_E103-(A).pdf
+    ├── 21359-E01(A) Legend and Notes.pdf
+    ├── 21359-E02(A) Ground Level.pdf
+    ├── 21359-E03(B) Level 1.pdf
+    ├── 21359-E04(B) Level 2.pdf
+    ├── 21359-E05(B) Level 3.pdf
+    ├── 21359-E06(B) Level 4.pdf
+    ├── 21359-E101(A) Schematic sheet 1.pdf
+    └── 21359-E102(A) Schematic sheet 2.pdf
+
+
+====================================================================================================
+PROJECT 3/29: 110150_110150_Powerlink_Guard_Hut_fullSet
+Files: 24
+====================================================================================================
+
+├── Architectural
+│   ├── A0000 - DRAWING SCHEDULE - SITE LOCATION PLAN.pdf
+│   ├── A1100 - SITE PLAN.pdf
+│   ├── A1101 - PROPOSED FLOOR PLAN.pdf
+│   ├── A3000 - ELEVATION SHEET 1.pdf
+│   ├── A6500 - JOINERY DETAILS - SHEET 1.pdf
+│   ├── A6600 - GRAPHICS IMAGES.pdf
+│   ├── I-8400 FINISHES SCHEDULE (D).pdf
+│   └── I-8500 FF&E SCHEDULE (D).pdf
+├── Electrical
+│   ├── 20210520-E01-T2.pdf
+│   ├── 20210520-E02-T3.pdf
+│   ├── 20210520-E03-T1.pdf
+│   └── 20210520-ESPEC-T1.pdf
+├── Hydraulics
+│   ├── 20210520-H01-T1.pdf
+│   ├── 20210520-H02-T2.pdf
+│   └── 20210520-HSPEC-T1.pdf
+├── Mechanical
+│   └── 20210520-M01-T2.pdf
+├── RFPQ's
+│   └── PS-503 Request For Fixed Price Quotation.pdf
+├── Revised Finishes & FF& E Schedules
+│   ├── I-8400 FINISHES SCHEDULE (E).pdf
+│   ├── I-8500 FF&E SCHEDULE (E).pdf
+│   └── PQ211005 Technical Specification (2).pdf
+└── Structural
+    ├── S001_T1.pdf
+    ├── S501_T1.pdf
+    ├── S601_T1.pdf
+    └── S602_T1.pdf
+
+
+====================================================================================================
+PROJECT 4/29: 110189_110189_Cairns_Hospital_Emergency_Department_fullSet
+Files: 687
+====================================================================================================
+
+├── 00 Site Photos
+│   ├── IMG_1052.JPG
+│   ├── IMG_1053.JPG
+│   ├── IMG_1054.JPG
+│   ├── IMG_1055.JPG
+│   ├── IMG_1056.JPG
+│   ├── IMG_1057.JPG
+│   ├── IMG_1058.JPG
+│   ├── IMG_1059.JPG
+│   ├── IMG_1060.JPG
+│   ├── IMG_1061.JPG
+│   ├── IMG_1062.JPG
+│   ├── IMG_1063.JPG
+│   ├── IMG_1064.JPG
+│   ├── IMG_1065.JPG
+│   ├── IMG_1066.JPG
+│   ├── IMG_1067.JPG
+│   ├── IMG_1068.JPG
+│   ├── IMG_1069.JPG
+│   ├── IMG_1070.JPG
+│   ├── IMG_1071.JPG
+│   ├── IMG_1072.JPG
+│   ├── IMG_1073.JPG
+│   ├── IMG_1074.JPG
+│   ├── IMG_1075.JPG
+│   ├── IMG_1076.JPG
+│   ├── IMG_1077.JPG
+│   ├── IMG_1078.JPG
+│   ├── IMG_1079.JPG
+│   ├── IMG_1080.JPG
+│   ├── IMG_1081.JPG
+│   ├── IMG_1082.JPG
+│   ├── IMG_1083.JPG
+│   ├── IMG_1084.JPG
+│   ├── IMG_1085.JPG
+│   ├── IMG_1086.JPG
+│   ├── IMG_1087.JPG
+│   ├── IMG_1088.JPG
+│   ├── IMG_1089.JPG
+│   ├── IMG_1090.JPG
+│   ├── IMG_1091.JPG
+│   ├── IMG_1092.JPG
+│   ├── IMG_1093.JPG
+│   ├── IMG_1094.JPG
+│   ├── IMG_1095.JPG
+│   ├── IMG_1096.JPG
+│   ├── IMG_1097.JPG
+│   ├── IMG_1098.JPG
+│   ├── IMG_1099.JPG
+│   ├── IMG_1100.JPG
+│   ├── IMG_1101.JPG
+│   ├── IMG_1102.JPG
+│   ├── IMG_1103.JPG
+│   ├── IMG_1104.JPG
+│   ├── IMG_1105.JPG
+│   ├── IMG_1106.JPG
+│   ├── IMG_1107.JPG
+│   ├── IMG_1108.JPG
+│   ├── IMG_1109.JPG
+│   ├── IMG_1110.JPG
+│   └── IMG_1111.JPG
+├── 1. CBH ED EXPANSION - VOL 1 - DRAWINGS
+│   ├── Architectural CD FOR TENDER
+│   │   ├── A-000(5).pdf
+│   │   ├── A-001(3).pdf
+│   │   ├── A-011.1(3).pdf
+│   │   ├── A-011.2(3).pdf
+│   │   ├── A-011.3(3).pdf
+│   │   ├── A-011.4(3).pdf
+│   │   ├── A-015(6).pdf
+│   │   ├── A-101(6).pdf
+│   │   ├── A-102(6).pdf
+│   │   ├── A-103(9).pdf
+│   │   ├── A-105(6).pdf
+│   │   ├── A-106(6).pdf
+│   │   ├── A-110(7).pdf
+│   │   ├── A-111(8).pdf
+│   │   ├── A-112(7).pdf
+│   │   ├── A-113(8).pdf
+│   │   ├── A-120(8).pdf
+│   │   ├── A-121(8).pdf
+│   │   ├── A-122(8).pdf
+│   │   ├── A-123(8).pdf
+│   │   ├── A-123.1(6).pdf
+│   │   ├── A-124(3).pdf
+│   │   ├── A-250(7).pdf
+│   │   ├── A-251(7).pdf
+│   │   ├── A-252(6).pdf
+│   │   ├── A-253(6).pdf
+│   │   ├── A-271(8).pdf
+│   │   ├── A-272(9).pdf
+│   │   ├── A-273(8).pdf
+│   │   ├── A-274(8).pdf
+│   │   ├── A-301(7).pdf
+│   │   ├── A-302(9).pdf
+│   │   ├── A-303(10).pdf
+│   │   ├── A-310(6).pdf
+│   │   ├── A-311(8).pdf
+│   │   ├── A-312(6).pdf
+│   │   ├── A-320(10).pdf
+│   │   ├── A-321(9).pdf
+│   │   ├── A-322(7).pdf
+│   │   ├── A-323(7).pdf
+│   │   ├── A-330(3).pdf
+│   │   ├── A-401(6).pdf
+│   │   ├── A-402(7).pdf
+│   │   ├── A-501(7).pdf
+│   │   ├── A-502(3).pdf
+│   │   ├── A-601(7).pdf
+│   │   ├── A-602(8).pdf
+│   │   ├── A-603(7).pdf
+│   │   ├── A-604(7).pdf
+│   │   ├── A-610(7).pdf
+│   │   ├── A-611(8).pdf
+│   │   ├── A-612(7).pdf
+│   │   ├── A-613(9).pdf
+│   │   ├── A-614(3).pdf
+│   │   ├── A-620(7).pdf
+│   │   ├── A-621(7).pdf
+│   │   ├── A-622(8).pdf
+│   │   ├── A-623(7).pdf
+│   │   ├── A-624(3).pdf
+│   │   ├── A-630(8).pdf
+│   │   ├── A-640(7).pdf
+│   │   ├── A-641(7).pdf
+│   │   ├── A-642(3).pdf
+│   │   ├── A-650(8).pdf
+│   │   ├── A-651(7).pdf
+│   │   ├── A-652(6).pdf
+│   │   ├── A-653(7).pdf
+│   │   ├── A-654(7).pdf
+│   │   ├── A-655(5).pdf
+│   │   ├── A-656(3).pdf
+│   │   ├── A-670(3).pdf
+│   │   ├── A-671(3).pdf
+│   │   ├── A-672(3).pdf
+│   │   ├── A-680(3).pdf
+│   │   ├── A-690(3).pdf
+│   │   ├── A-691(3).pdf
+│   │   ├── A-692(3).pdf
+│   │   ├── A-693(3).pdf
+│   │   ├── A-694(3).pdf
+│   │   ├── A-701(5).pdf
+│   │   ├── A-704(5).pdf
+│   │   ├── A-706(5).pdf
+│   │   ├── A-707(5).pdf
+│   │   ├── A-708(6).pdf
+│   │   ├── A-709(2).pdf
+│   │   ├── A-710(5).pdf
+│   │   ├── A-711(3).pdf
+│   │   ├── A-715(3).pdf
+│   │   ├── A-720(4).pdf
+│   │   ├── A-721(4).pdf
+│   │   ├── A-722(3).pdf
+│   │   ├── A-723(3).pdf
+│   │   ├── A-724(3).pdf
+│   │   ├── A-725(1).pdf
+│   │   ├── A-730(3).pdf
+│   │   ├── A-740(3).pdf
+│   │   ├── A-745(2).pdf
+│   │   ├── A-746(2).pdf
+│   │   ├── A-750(3).pdf
+│   │   ├── A-751(3).pdf
+│   │   ├── A-752(3).pdf
+│   │   ├── A-800(4).pdf
+│   │   ├── A-801(4).pdf
+│   │   ├── A-810(5).pdf
+│   │   └── A-820(5).pdf
+│   ├── Electrical CD FOR TENDER
+│   │   ├── 3334-E-FM15.pdf
+│   │   ├── 3334-E01 (T2) - COVER SHEET AND LEGEND.pdf
+│   │   ├── 3334-E02 (T1) - STAGING & DEMOLITION PLAN.pdf
+│   │   ├── 3334-E03 (T1) - DEMOLITION PLAN - ADULT ACUTE D.pdf
+│   │   ├── 3334-E04 (T1) - DEMOLITION PLAN - PAEDIATRIC & BULK STORE.pdf
+│   │   ├── 3334-E05 (T1) - DEMOLITION PLAN - RESUS.pdf
+│   │   ├── 3334-E06 (T1) - DEMOLITION PLAN - XRAY_ WAITING & STORES.pdf
+│   │   ├── 3334-E10 (T1) - CABLE ACCESS LAYOUT - UNDER SLAB.pdf
+│   │   ├── 3334-E11 (T1) - CABLE ACCESS LAYOUT - BLOCK C.pdf
+│   │   ├── 3334-E12 (T1) - CABLE ACCESS LAYOUT - BLOCK D.pdf
+│   │   ├── 3334-E13 (T1) - CABLE ACCESS DETAIL - NEW SUBMAINS.pdf
+│   │   ├── 3334-E14 (T1) - CABLE ACCESS DETAIL - LEVEL P1.pdf
+│   │   ├── 3334-E23 (T2) - POWER & DATA LAYOUT - ADULT ACUTE D.pdf
+│   │   ├── 3334-E24 (T1) - POWER & DATA LAYOUT - PAEDIATRIC & BULK STORE.pdf
+│   │   ├── 3334-E25 (T2) - POWER & DATA LAYOUT - RESUS.pdf
+│   │   ├── 3334-E26 (T1) - POWER & DATA LAYOUT - XRAY_ WAITING & STORES.pdf
+│   │   ├── 3334-E33 (T1) - LIGHTING & FIRE LAYOUT - ADULT ACUTE D.pdf
+│   │   ├── 3334-E34 (T1) - LIGHTING & FIRE LAYOUT - PAEDIATRIC & BULK STORE.pdf
+│   │   ├── 3334-E35 (T1) - LIGHTING & FIRE LAYOUT - RESUS.pdf
+│   │   ├── 3334-E36 (T2) - LIGHTING & FIRE LAYOUT - XRAY_ WAITING & STORES.pdf
+│   │   ├── 3334-E52 (T1) - RESUS NORMAL & ESSENTIAL POWER SUPPLY.pdf
+│   │   ├── 3334-E53 (T1) - X-RAY POWER_ COMMUNICATIONS & CABLE ACCESS DETAILS.pdf
+│   │   ├── 3334-E60 (T1) - EXISTING DISTRIBUTION SWITCHBOARD SCHEDULES (SHEET 1 OF 4).pdf
+│   │   ├── 3334-E61 (T1) - EXISTING DISTRIBUTION SWITCHBOARD SCHEDULES (SHEET 2 OF 4).pdf
+│   │   ├── 3334-E62 (T1) - EXISTING DISTRIBUTION SWITCHBOARD SCHEDULES (SHEET 3 OF 4).pdf
+│   │   ├── 3334-E63 (T1) - EXISTING DISTRIBUTION SWITCHBOARD SCHEDULES (SHEET 4 OF 4).pdf
+│   │   ├── 3334-E64 (T1) - NEW DISTRIBUTION SWITCHBOARD SCHEDULES.pdf
+│   │   └── 3334-E70 (T1) - MISCELLANEOUS DETAILS.pdf
+│   ├── Hydraulic CD FOR TENDER
+│   │   ├── 204352 - Cairns Hospital Emergency Department Upgrade_ 165 The Esplanade_ Cairns GHS Form 15.pdf
+│   │   ├── 204352 - FS-000 (4).pdf
+│   │   ├── 204352 - FS-110 (4).pdf
+│   │   ├── 204352 - FS-120 (4).pdf
+│   │   ├── 204352 - H-000 (4).pdf
+│   │   ├── 204352 - H-100 (4).pdf
+│   │   ├── 204352 - H-101 (4).pdf
+│   │   ├── 204352 - H-110 (4).pdf
+│   │   ├── 204352 - H-111 (4).pdf
+│   │   ├── 204352 - H-112 (4).pdf
+│   │   ├── 204352 - H-113 (4).pdf
+│   │   ├── 204352 - H-120 (4).pdf
+│   │   ├── 204352 - H-121 (4).pdf
+│   │   ├── 204352 - H-122 (4).pdf
+│   │   ├── 204352 - H-123 (4).pdf
+│   │   ├── 204352 - H-130 (4).pdf
+│   │   ├── 204352 - H-131 (4).pdf
+│   │   ├── 204352 - H-132 (4).pdf
+│   │   └── 204352 - H-133 (4).pdf
+│   ├── Mechanical CD FOR TENDER
+│   │   ├── MECH SERVICES
+│   │   │   ├── As-installed Drawings
+│   │   │   │   ├── Block C
+│   │   │   │   │   ├── FNAC SHOP 2009
+│   │   │   │   │   │   ├── Cairns Base Hospital - MSSB-G1A[B].pdf
+│   │   │   │   │   │   ├── Cairns Base Hospital - MSSB-G1B[B].pdf
+│   │   │   │   │   │   ├── Cairns Base Hospital - MSSB-G1C[B].pdf
+│   │   │   │   │   │   ├── FNAC Combined.pdf
+│   │   │   │   │   │   ├── MS-010A.pdf
+│   │   │   │   │   │   ├── MS-01B.pdf
+│   │   │   │   │   │   ├── MS-02A.pdf
+│   │   │   │   │   │   ├── MS-03A.pdf
+│   │   │   │   │   │   ├── MS-04B.pdf
+│   │   │   │   │   │   ├── MS-05C.pdf
+│   │   │   │   │   │   ├── MS-06C.pdf
+│   │   │   │   │   │   ├── MS-07A.pdf
+│   │   │   │   │   │   ├── MS-08A.pdf
+│   │   │   │   │   │   └── MS-09A.pdf
+│   │   │   │   │   ├── HADEN 1998
+│   │   │   │   │   │   ├── 07E.pdf
+│   │   │   │   │   │   ├── 08E.pdf
+│   │   │   │   │   │   ├── 09E.pdf
+│   │   │   │   │   │   ├── 10E.pdf
+│   │   │   │   │   │   ├── 11E.pdf
+│   │   │   │   │   │   ├── 12E.pdf
+│   │   │   │   │   │   ├── 13E.pdf
+│   │   │   │   │   │   ├── 15E.pdf
+│   │   │   │   │   │   └── HADEN 1998 Combined.pdf
+│   │   │   │   │   ├── VAE 2015
+│   │   │   │   │   │   └── DOC9083-53346-VAE-ME-C-SHOP-0001 [AB].pdf
+│   │   │   │   │   └── VAE 2018
+│   │   │   │   │       ├── 300179-VAE-C-MW-03104.pdf
+│   │   │   │   │       ├── 300179-VAE-C-MW-03105.pdf
+│   │   │   │   │       ├── 300179-VAE-C-MW-03106.pdf
+│   │   │   │   │       ├── 300179-VAE-C-MW-SW303.pdf
+│   │   │   │   │       ├── 300179-VAE-C-MW-SW312.pdf
+│   │   │   │   │       ├── 300179-VAE-D-MW-SW310.pdf
+│   │   │   │   │       ├── 300179-VAE-MW-SW001.pdf
+│   │   │   │   │       └── VAE 2018 Combined.pdf
+│   │   │   │   └── Block D (AE Smith 2015)
+│   │   │   │       ├── AES 2014 Combined.pdf
+│   │   │   │       ├── AES-ME-D-FIRE-0002-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-0003-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-0005-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-0006-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-0901-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-0902-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-0904-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-0905-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-0909-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-0911-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-1901-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-1902-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-1903-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-2704-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-2705-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-2905-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-3904-3904 (002).pdf
+│   │   │   │       ├── AES-ME-D-SHOP-3913-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-5901-AB.pdf
+│   │   │   │       ├── AES-ME-D-SHOP-5903-AB.pdf
+│   │   │   │       └── CBHR_Block_D_-_MSSB_LISTING.pdf
+│   │   │   ├── Cause and Effect
+│   │   │   │   ├── Cairns Base Hospital Fire Matrix - Block C - Rev G.pdf
+│   │   │   │   └── Fire Matrix D Block - Rev 3 (VAE Combined Jan 2020).pdf
+│   │   │   ├── 3334-ME-000 (T2) COVER SHEET AND DRAWING LIST.pdf
+│   │   │   ├── 3334-ME-001 (T1) LEGEND_ NOTES AND DETAILS.pdf
+│   │   │   ├── 3334-ME-002 (T2) EQUIPMENT SCHEDULES.pdf
+│   │   │   ├── 3334-ME-101 (T2) SITE LAYOUT AND SCOPE.pdf
+│   │   │   ├── 3334-ME-102 (T2) STAGING PLAN - BLOCK D.pdf
+│   │   │   ├── 3334-ME-103 (T2) STAGING PLAN - BLOCK C.pdf
+│   │   │   ├── 3334-ME-104 (T1) HVAC ZONES.pdf
+│   │   │   ├── 3334-ME-201 (T2) EXISTING_ PROPOSED AND CEILING PLAN - ADULT ACUTE.pdf
+│   │   │   ├── 3334-ME-202 (T1) DEMOLITION - RESUS_ XRAY_ PAEDS AND STORE.pdf
+│   │   │   ├── 3334-ME-203 (T1) PROPOSED - RESUS_ XRAY_ PAEDS AND STORE.pdf
+│   │   │   ├── 3334-ME-204 (T1) CEILING PLAN - RESUS_ XRAY_ PAEDS AND STORE.pdf
+│   │   │   ├── 3334-ME-301 (T2) PLANT ROOM AND CIRCULATION LINK DETAIL LAYOUT.pdf
+│   │   │   ├── 3334-ME-302 (T2) NEW ISOLATION FANS DETAIL LAYOUT_ BLOCK D_ P1 AND ROOF LEVEL.pdf
+│   │   │   ├── 3334-ME-303 (T2) ACUTE 1_ 2 & 3 DETAIL LAYOUT.pdf
+│   │   │   ├── 3334-ME-401 (T1) CHILLED WATER AND CONTROLS SCHEMATICS - BLOCK D.pdf
+│   │   │   ├── 3334-ME-402 (T1) CHILLED WATER SCHEMATICS - BLOCK C.pdf
+│   │   │   ├── 3334-ME-403 (T1) AIRSIDE SCHEMATICS - BLOCK D.pdf
+│   │   │   ├── 3334-ME-404 (T1) AIRSIDE SCHEMATICS - BLOCK C EXISTING.pdf
+│   │   │   ├── 3334-ME-405 (T1) AIRSIDE SCHEMATICS - BLOCK C PROPOSED.pdf
+│   │   │   └── 3334-ME-501 (T1) SECTIONS.pdf
+│   │   ├── MED GAS
+│   │   │   ├── 3334-MG-000 (T2) COVER SHEET AND DRAWING LIST.pdf
+│   │   │   ├── 3334-MG-001 (T2) LEGEND_ NOTES_ AND DETAILS.pdf
+│   │   │   ├── 3334-MG-101 (T1) SITE LAYOUT AND SCOPE.pdf
+│   │   │   ├── 3334-MG-102 (T2) STAGING PLAN - BLOCK D.pdf
+│   │   │   ├── 3334-MG-103 (T2) STAGING PLAN - BLOCK C.pdf
+│   │   │   ├── 3334-MG-201 (T1) EXISTING - ADULT ACUTE.pdf
+│   │   │   ├── 3334-MG-202 (T1) PROPOSED - ADULT ACUTE.pdf
+│   │   │   ├── 3334-MG-203 (T1) DEMOLITION - RESUS_ XRAY_ PAEDS AND STORE.pdf
+│   │   │   └── 3334-MG-204 (T1) PROPOSED - RESUS_ XRAY_ PAEDS AND STORE.pdf
+│   │   ├── PT SYSTEM - LAMSON
+│   │   │   ├── 3334-LM-000 (T2) COVER SHEET_ DRAWING LIST AND SCHEMATIC.pdf
+│   │   │   ├── 3334-LM-001 (T2) STAGING PLAN.pdf
+│   │   │   └── 3334-LM-002 (T2) BLOCK D GROUND ADULT ACUTE.pdf
+│   │   └── 3334-M-FM15.pdf
+│   ├── Structural CD FOR TENDER
+│   │   ├── 210414 Form 15 (TI) Structural.pdf
+│   │   ├── 210414 Transmittal.pdf
+│   │   ├── 210414-S00-T1.pdf
+│   │   ├── 210414-S01-T1.pdf
+│   │   ├── 210414-S02-T1.pdf
+│   │   ├── 210414-S03-T1.pdf
+│   │   ├── 210414-S04-T1.pdf
+│   │   ├── 210414-S05-T1.pdf
+│   │   ├── 210414-S06-T1.pdf
+│   │   ├── 210414-S07-T2.pdf
+│   │   ├── 210414-S08-T1.pdf
+│   │   ├── 210414-S09-T2.pdf
+│   │   ├── 210414-S10-T1.pdf
+│   │   └── 210414-S11-T1.pdf
+│   ├── Survey (Jurrasic Area) CD FOR TENDER
+│   │   └── 401631-DS01-A.pdf
+│   └── Wayfinding Signage CD FOR TENDER
+│       ├── CairnsHospitalED_SignageSchedule_WS-400_2.pdf
+│       ├── CairnsHospitalED_WS-001-2.pdf
+│       ├── CairnsHospitalED_WS-002-2.pdf
+│       ├── CairnsHospitalED_WS-100-2.pdf
+│       ├── CairnsHospitalED_WS-120-2.pdf
+│       ├── CairnsHospitalED_WS-121-2.pdf
+│       ├── CairnsHospitalED_WS-122-2.pdf
+│       ├── CairnsHospitalED_WS-123-2.pdf
+│       ├── CairnsHospitalED_WS-124-2.pdf
+│       ├── CairnsHospitalED_WS-125-2.pdf
+│       ├── CairnsHospitalED_WS-200-2.pdf
+│       ├── CairnsHospitalED_WS-201-2.pdf
+│       ├── CairnsHospitalED_WS-300-2.pdf
+│       ├── CairnsHospitalED_WS-301-2.pdf
+│       ├── CairnsHospitalED_WS-302-2.pdf
+│       ├── CairnsHospitalED_WS-303-2.pdf
+│       ├── CairnsHospitalED_WS-304-2.pdf
+│       ├── CairnsHospitalED_WS-305-2.pdf
+│       ├── CairnsHospitalED_WS-306-2.pdf
+│       ├── CairnsHospitalED_WS-307-2.pdf
+│       ├── CairnsHospitalED_WS-308-2.pdf
+│       ├── CairnsHospitalED_WS-309-2.pdf
+│       └── CairnsHospitalED_WS-310-2.pdf
+├── 2. CBH ED EXPANSION - VOL 2 - INFORMATION
+│   ├── Appendix 1 - Finish & Equipment Schedule.pdf
+│   ├── Appendix 10 - Promaster Keying Schedule.xlsx
+│   ├── Appendix 2 - FFE Schedule and Draegar Pendant drawings.pdf
+│   ├── Appendix 3 - Assa Abloy Hardware Schedule.pdf
+│   ├── Appendix 4 - Dulux Paint Schedule.pdf
+│   ├── Appendix 5 - Radiation Shielding Design Reports.pdf
+│   ├── Appendix 6 - Siemens X-ray drawings and specs.pdf
+│   ├── Appendix 7 - Spacelogic Systems.pdf
+│   ├── Appendix 8 - Tech Memo Service Disruptions and Shutdowns.pdf
+│   └── Appendix 9 - Survey Metadata Report.pdf
+├── 3. CBH ED EXPANSION - VOL 3 - SUB CONSULTANT SPECIFICATIONS
+│   ├── 1 CBH ED EXPANSION - ARCHITECTURAL Specification FOR REVISED TENDER ISSUE.pdf
+│   └── VOL 3 - Sub Consultant Specifications_Combined - CD FOR TENDER.pdf
+├── 4. CONTRACT & PRELIMINARIES
+│   ├── a. Invitation to Tender.pdf
+│   ├── b. AS2124 Notice To Tenderers.pdf
+│   ├── c. AS2124 Conditions of Tender.pdf
+│   ├── d. AS2124 Special Conditions of Contract and Annexure.pdf
+│   └── e. AS2124 Preliminaries CHHHS.pdf
+├── ADDENDUM 7 ARCHITECTURAL Drawings
+│   ├── A-000(7).pdf
+│   ├── A-001(5).pdf
+│   ├── A-011.1(4).pdf
+│   ├── A-011.2(4).pdf
+│   ├── A-011.3(4).pdf
+│   ├── A-011.4(4).pdf
+│   ├── A-015(7).pdf
+│   ├── A-101(7).pdf
+│   ├── A-102(7).pdf
+│   ├── A-103(10).pdf
+│   ├── A-105(7).pdf
+│   ├── A-106(7).pdf
+│   ├── A-110(8).pdf
+│   ├── A-111(9).pdf
+│   ├── A-112(8).pdf
+│   ├── A-113(9).pdf
+│   ├── A-120(9).pdf
+│   ├── A-121(9).pdf
+│   ├── A-122(9).pdf
+│   ├── A-123(9).pdf
+│   ├── A-123.1(7).pdf
+│   ├── A-124(4).pdf
+│   ├── A-250(9).pdf
+│   ├── A-251(9).pdf
+│   ├── A-252(8).pdf
+│   ├── A-253(8).pdf
+│   ├── A-271(9).pdf
+│   ├── A-272(10).pdf
+│   ├── A-273(9).pdf
+│   ├── A-274(9).pdf
+│   ├── A-301(8).pdf
+│   ├── A-302(10).pdf
+│   ├── A-303(11).pdf
+│   ├── A-310(7).pdf
+│   ├── A-311(9).pdf
+│   ├── A-312(7).pdf
+│   ├── A-320(12).pdf
+│   ├── A-321(11).pdf
+│   ├── A-322(9).pdf
+│   ├── A-323(9).pdf
+│   ├── A-330(5).pdf
+│   ├── A-401(7).pdf
+│   ├── A-402(8).pdf
+│   ├── A-501(8).pdf
+│   ├── A-502(4).pdf
+│   ├── A-601(8).pdf
+│   ├── A-602(9).pdf
+│   ├── A-603(8).pdf
+│   ├── A-604(8).pdf
+│   ├── A-610(9).pdf
+│   ├── A-611(10).pdf
+│   ├── A-612(9).pdf
+│   ├── A-613(10).pdf
+│   ├── A-614(5).pdf
+│   ├── A-620(8).pdf
+│   ├── A-621(9).pdf
+│   ├── A-622(9).pdf
+│   ├── A-623(9).pdf
+│   ├── A-624(4).pdf
+│   ├── A-630(10).pdf
+│   ├── A-640(9).pdf
+│   ├── A-641(9).pdf
+│   ├── A-642(5).pdf
+│   ├── A-650(10).pdf
+│   ├── A-651(9).pdf
+│   ├── A-652(8).pdf
+│   ├── A-653(9).pdf
+│   ├── A-654(8).pdf
+│   ├── A-655(7).pdf
+│   ├── A-656(5).pdf
+│   ├── A-670(4).pdf
+│   ├── A-671(4).pdf
+│   ├── A-672(4).pdf
+│   ├── A-680(4).pdf
+│   ├── A-690(4).pdf
+│   ├── A-691(4).pdf
+│   ├── A-692(4).pdf
+│   ├── A-693(4).pdf
+│   ├── A-694(4).pdf
+│   ├── A-701(6).pdf
+│   ├── A-704(6).pdf
+│   ├── A-706(6).pdf
+│   ├── A-707(6).pdf
+│   ├── A-708(7).pdf
+│   ├── A-709(3).pdf
+│   ├── A-710(6).pdf
+│   ├── A-711(4).pdf
+│   ├── A-715(4).pdf
+│   ├── A-720(5).pdf
+│   ├── A-721(5).pdf
+│   ├── A-722(4).pdf
+│   ├── A-723(4).pdf
+│   ├── A-724(4).pdf
+│   ├── A-730(4).pdf
+│   ├── A-740(4).pdf
+│   ├── A-745(3).pdf
+│   ├── A-746(3).pdf
+│   ├── A-750(4).pdf
+│   ├── A-751(4).pdf
+│   ├── A-752(4).pdf
+│   ├── A-800(5).pdf
+│   ├── A-801(5).pdf
+│   ├── A-810(6).pdf
+│   └── A-820(6).pdf
+├── Addendum 11
+│   ├── APPENDIX 1 - FINISH SCHEDULE
+│   │   └── Appendix 1 - Finish & Equipment Schedule REV 5.pdf
+│   ├── APPENDIX 2 - FFE & Draegar drawings
+│   │   ├── 20220216 RP1008E FF&E Master List With Make & Model_Excel_v05.xlsx
+│   │   ├── 20220216 RP1009C FF&E List By Dept By Room_Excel_v05.xlsx
+│   │   └── Appendix 2 - FFE Schedule and Draegar Pendant drawings 17.02.2022.pdf
+│   ├── ARCHITECTURAL
+│   │   ├── A-000(8).pdf
+│   │   ├── A-124(5).pdf
+│   │   ├── A-303(12).pdf
+│   │   ├── A-320(13).pdf
+│   │   └── A-723(5).pdf
+│   ├── ELECTRICAL
+│   │   ├── 3334-E01 (T5) - COVER SHEET AND LEGEND.pdf
+│   │   ├── 3334-E12 (T3) - CABLE ACCESS LAYOUT - BLOCK D.pdf
+│   │   ├── 3334-E14 (T2) - CABLE ACCESS DETAIL - LEVEL P1.pdf
+│   │   ├── 3334-E23 (T5) - POWER & DATA LAYOUT - ADULT ACUTE D.pdf
+│   │   ├── 3334-E25 (T5) - POWER & DATA LAYOUT - RESUS.pdf
+│   │   ├── 3334-E26 (T4) - POWER & DATA LAYOUT - XRAY_ WAITING & STORES.pdf
+│   │   ├── 3334-E33 (T3) - LIGHTING & FIRE LAYOUT - ADULT ACUTE D.pdf
+│   │   ├── 3334-E52 (T3) - RESUS NORMAL & ESSENTIAL POWER SUPPLY.pdf
+│   │   ├── 3334-E53 (T3) - X-RAY POWER_ COMMUNICATIONS & CABLE ACCESS DETAILS.pdf
+│   │   ├── 3334-E60 (T3) - EXISTING DISTRIBUTION SWITCHBOARD SCHEDULES (SHEET 1 OF 4).pdf
+│   │   ├── 3334-E61 (T2) - EXISTING DISTRIBUTION SWITCHBOARD SCHEDULES (SHEET 2 OF 4).pdf
+│   │   ├── 3334-E62 (T2) - EXISTING DISTRIBUTION SWITCHBOARD SCHEDULES (SHEET 3 OF 4).pdf
+│   │   ├── 3334-E63 (T2) - EXISTING DISTRIBUTION SWITCHBOARD SCHEDULES (SHEET 4 OF 4).pdf
+│   │   └── 3334-E70 (T3) - MISCELLANEOUS DETAILS.pdf
+│   ├── HYDRAULIC
+│   │   └── 204352 - FS-120 (5).pdf
+│   ├── MECHANICAL
+│   │   ├── 3334-ME-000 (T4) COVER SHEET AND DRAWING LIST (1).pdf
+│   │   ├── 3334-ME-002 (T3) EQUIPMENT SCHEDULES (1).pdf
+│   │   ├── 3334-ME-201 (T4) EXISTING_ PROPOSED AND CEILING PLAN - ADULT ACUTE.pdf
+│   │   ├── 3334-ME-301 (T3) PLANT ROOM AND CIRCULATION LINK DETAIL LAYOUT (1).pdf
+│   │   ├── 3334-ME-302 (T3) NEW ISOLATION FANS DETAIL LAYOUT_ BLOCK D_ P1 AND ROOF LEVEL (1).pdf
+│   │   └── 3334-ME-501 (T2) SECTIONS (1).pdf
+│   ├── REVIT MODELS - COMBINED
+│   │   ├── 2128_A_MODEL.rvt
+│   │   ├── 2128_A_SITE.rvt
+│   │   ├── 3334-R21-E-MODEL.rvt
+│   │   └── 3334-R21-M-MODEL.rvt
+│   ├── 2128 CBH ED EXPANSION COMBINED Drawing & Document Register 17.02.2022.pdf
+│   └── Addendum to offer no. 11.pdf
+├── Addendum 15
+│   ├── Addendum to offer no. 15.pdf
+│   ├── Appendix 11.1 - CBH ED EXPANSION - SiD Report.pdf
+│   └── Safethrough 0.2S Static box.pdf
+├── Addendum 2
+│   ├── CHHHS BEMS NoSD - Contractor Info Package
+│   │   ├── Evacuations Plans
+│   │   │   ├── C Block
+│   │   │   │   ├── C Block L1 CSD Plans 2015.pdf
+│   │   │   │   ├── C Block Maternity Plans 2016.pdf
+│   │   │   │   ├── Visio-C Block Medical Imaging Plans 2016.pdf
+│   │   │   │   ├── Visio-C Block Theatre Plans 2016.pdf
+│   │   │   │   ├── Visio-CBH Emergency Department Evacuation Signs X1.pdf
+│   │   │   │   └── Visio-ICU Evacuation Sign V.1.pdf
+│   │   │   └── D Block
+│   │   │       └── Visio-Evacuation Signs D V.1 2014.pdf
+│   │   ├── Fire Detector Locations CH
+│   │   │   ├── Fire Detector Block A block
+│   │   │   │   ├── CH_BLK A_GRD West.pdf
+│   │   │   │   ├── CH_BLK A_L02.pdf
+│   │   │   │   ├── CH_BLK A_L04 West.pdf
+│   │   │   │   └── CH_BLK A_L04.pdf
+│   │   │   ├── Fire Detector Block C
+│   │   │   │   ├── CH_BLK C_ GRD ED North.pdf
+│   │   │   │   ├── CH_BLK C_ L01 ICU.pdf
+│   │   │   │   ├── CH_BLK C_L02 Birthing.pdf
+│   │   │   │   ├── CH_BLK C_L03 UPS Rooms.pdf
+│   │   │   │   └── CH_BLK_C GRD ED South.pdf
+│   │   │   └── Fire Detector Block D
+│   │   │       └── END-FR-D-LD-001[E] Location Diagram.pdf
+│   │   ├── Fire Walls Locations CH
+│   │   │   ├── Block A Fire Walls
+│   │   │   │   ├── GRD&L01.pdf
+│   │   │   │   ├── L02&L03.pdf
+│   │   │   │   ├── L02.pdf
+│   │   │   │   └── L03.pdf
+│   │   │   ├── Block B Fire Walls
+│   │   │   │   ├── GRD.pdf
+│   │   │   │   ├── L01.pdf
+│   │   │   │   ├── L02.pdf
+│   │   │   │   ├── L03.pdf
+│   │   │   │   ├── L04.pdf
+│   │   │   │   ├── L05.pdf
+│   │   │   │   └── L06.pdf
+│   │   │   ├── Block C Fire Walls
+│   │   │   │   ├── GRD ED.pdf
+│   │   │   │   ├── GRD.pdf
+│   │   │   │   ├── L01.pdf
+│   │   │   │   ├── L02.pdf
+│   │   │   │   └── L03.pdf
+│   │   │   └── Block E Fire Walls
+│   │   │       ├── CH_BLK E_FR_0251_MARKED UP FIRE COMPARTMENTATION WALLS.pdf
+│   │   │       ├── GRD.pdf
+│   │   │       ├── L01.pdf
+│   │   │       ├── L02.pdf
+│   │   │       ├── L03.pdf
+│   │   │       ├── L04.pdf
+│   │   │       ├── L05.pdf
+│   │   │       ├── L06.pdf
+│   │   │       ├── L07.pdf
+│   │   │       └── L08.pdf
+│   │   ├── Permits & Forms
+│   │   │   ├── Asbestos WAAP Interactive Form (v3.0).pdf
+│   │   │   ├── Asbestos WAAP V1.2.pdf
+│   │   │   ├── Confined Space Permit V1.2.pdf
+│   │   │   ├── Electrical Live Work Permit V1.2.pdf
+│   │   │   ├── Excavation and Ground Penetration Permit V1.2.pdf
+│   │   │   ├── Fire Smoke Wall Penetration Permit V2.0.pdf
+│   │   │   ├── General Work Permit V1.2.pdf
+│   │   │   ├── High Voltage Access Permit V1.2.pdf
+│   │   │   ├── High Voltage Vicinity Permit.docx
+│   │   │   ├── Hot Work Permit V1.2.pdf
+│   │   │   ├── Isolation Permit V1.2.pdf
+│   │   │   ├── LOTO Permit V1.2.pdf
+│   │   │   ├── Medical Gas Work Permit V1.2.pdf
+│   │   │   ├── Planned Interruption to Service V1.2.pdf
+│   │   │   ├── Roof and Catwalk Access Permit V1.2.pdf
+│   │   │   ├── Smoke Detector Isolation V1.2.pdf
+│   │   │   ├── bems-form-disrupt.pdf
+│   │   │   ├── isolation_form.pdf
+│   │   │   ├── security key issue 1.2.pdf
+│   │   │   └── security_proximity Cairns Hospital 1.2.pdf
+│   │   ├── Site induction info
+│   │   │   ├── CHHHS BEMS Induction Handbook.docx
+│   │   │   ├── iLearn-User-Help-Contractors.pdf
+│   │   │   └── information-sheet-contractors.pdf
+│   │   ├── Asset List for Contractors (v.2).xlsx
+│   │   └── CH Block Diagram.pdf
+│   ├── 204352 - Hydraulic Services Specification (CD Issue 3).pdf
+│   └── Addendum to offer no. 2.pdf
+├── Addendum 3
+│   ├── Architectural Issue
+│   │   ├── A-000(6).pdf
+│   │   ├── A-001(4).pdf
+│   │   ├── A-250(8).pdf
+│   │   ├── A-251(8).pdf
+│   │   ├── A-252(7).pdf
+│   │   ├── A-253(7).pdf
+│   │   ├── A-320(11).pdf
+│   │   ├── A-321(10).pdf
+│   │   ├── A-322(8).pdf
+│   │   ├── A-323(8).pdf
+│   │   ├── A-330(4).pdf
+│   │   ├── A-610(8).pdf
+│   │   ├── A-611(9).pdf
+│   │   ├── A-612(8).pdf
+│   │   ├── A-613(10).pdf
+│   │   ├── A-614(4).pdf
+│   │   ├── A-620(8).pdf
+│   │   ├── A-621(8).pdf
+│   │   ├── A-623(8).pdf
+│   │   ├── A-624(4).pdf
+│   │   ├── A-630(9).pdf
+│   │   ├── A-640(8).pdf
+│   │   ├── A-641(8).pdf
+│   │   ├── A-642(4).pdf
+│   │   ├── A-650(9).pdf
+│   │   ├── A-651(8).pdf
+│   │   ├── A-652(7).pdf
+│   │   ├── A-653(8).pdf
+│   │   ├── A-654(8).pdf
+│   │   ├── A-655(6).pdf
+│   │   └── A-656(4).pdf
+│   ├── Electrical Issue
+│   │   ├── 3334-E01 (T3) - COVER SHEET AND LEGEND.pdf
+│   │   ├── 3334-E23 (T3) - POWER & DATA LAYOUT - ADULT ACUTE D.pdf
+│   │   ├── 3334-E24 (T2) - POWER & DATA LAYOUT - PAEDIATRIC & BULK STORE.pdf
+│   │   ├── 3334-E25 (T3) - POWER & DATA LAYOUT - RESUS.pdf
+│   │   ├── 3334-E26 (T2) - POWER & DATA LAYOUT - XRAY_ WAITING & STORES.pdf
+│   │   ├── 3334-E33 (T2) - LIGHTING & FIRE LAYOUT - ADULT ACUTE D.pdf
+│   │   ├── 3334-E34 (T2) - LIGHTING & FIRE LAYOUT - PAEDIATRIC & BULK STORE.pdf
+│   │   ├── 3334-E35 (T2) - LIGHTING & FIRE LAYOUT - RESUS.pdf
+│   │   └── 3334-E36 (T3) - LIGHTING & FIRE LAYOUT - XRAY_ WAITING & STORES.pdf
+│   ├── Hydraulic Issue
+│   │   ├── 204352 - H-120 (5).pdf
+│   │   ├── 204352 - H-121 (5).pdf
+│   │   ├── 204352 - H-122 (5).pdf
+│   │   ├── 204352 - H-130 (5).pdf
+│   │   ├── 204352 - H-131 (5).pdf
+│   │   ├── 204352 - H-132 (5).pdf
+│   │   └── 204352 - Hydraulic Services Specification (CD Issue 4).pdf
+│   ├── Mechanical Issue
+│   │   ├── 3334-LM-000 (T3) COVER SHEET_ DRAWING LIST AND SCHEMATIC.pdf
+│   │   ├── 3334-LM-002 (T3) BLOCK D GROUND ADULT ACUTE.pdf
+│   │   ├── 3334-ME-000 (T3) COVER SHEET AND DRAWING LIST.pdf
+│   │   ├── 3334-ME-001 (T2) LEGEND_ NOTES AND DETAILS.pdf
+│   │   ├── 3334-ME-104 (T2) HVAC ZONES.pdf
+│   │   ├── 3334-ME-201 (T3) EXISTING_ PROPOSED AND CEILING PLAN - ADULT ACUTE.pdf
+│   │   ├── 3334-ME-203 (T2) PROPOSED - RESUS_ XRAY_ PAEDS AND STORE.pdf
+│   │   ├── 3334-ME-303 (T3) ACUTE 1_ 2 & 3 DETAIL LAYOUT.pdf
+│   │   ├── 3334-MG-000 (T3) COVER SHEET AND DRAWING LIST.pdf
+│   │   ├── 3334-MG-001 (T3) LEGEND_ NOTES_ AND DETAILS.pdf
+│   │   └── 3334-MG-202 (T2) PROPOSED - ADULT ACUTE.pdf
+│   ├── Security Issue
+│   │   ├── 3334-E43 (T1) - SECURITY LAYOUT - ADULT ACUTE D.pdf
+│   │   ├── 3334-E44 (T1) - SECURITY LAYOUT - PAEDIATRIC & BULK STORE.pdf
+│   │   ├── 3334-E45 (T1) - SECURITY LAYOUT - RESUS.pdf
+│   │   ├── 3334-E46 (T1) - SECURITY LAYOUT - XRAY_ WAITING & STORES.pdf
+│   │   ├── 3334-E50 (T1) - BLOCK D GROUND FLOOR COMMUNICATIONS ROOM.pdf
+│   │   ├── 3334-E51 (T1) - BLOCK C LEVEL 1 COMMUNICATIONS ROOM.pdf
+│   │   └── 3334-E54 (T1) - COMMUNICATIONS TOPOLOGY.pdf
+│   ├── Addendum to offer no. 3.pdf
+│   └── CBH ED - Draeger Pendant Roadmap FOR ADVICE ONLY - CAA 04.02.2022.pdf
+├── Addendum 7
+│   ├── Appendix 1 - Finish Schedule
+│   │   └── Appendix 1 - Finish & Equipment Schedule.pdf
+│   ├── Appendix 2 - FFE (Revised)
+│   │   ├── 20220209 RP1008E FF&E Master List With Make & Model_Excel_v04.xlsx
+│   │   ├── 20220209 RP1009C FF&E List By Dept By Room_Excel_v04.xlsx
+│   │   └── Appendix 2 - FFE Schedule and Draegar Pendant drawings.pdf
+│   ├── Appendix 3 - Hardware
+│   │   └── Appendix 3 - Assa Abloy Hardware Schedule.pdf
+│   ├── Electrical Drawings
+│   │   ├── 3334-E01 (T4) - COVER SHEET AND LEGEND.pdf
+│   │   ├── 3334-E02 (T1) - STAGING & DEMOLITION PLAN.pdf
+│   │   ├── 3334-E03 (T1) - DEMOLITION PLAN - ADULT ACUTE D.pdf
+│   │   ├── 3334-E04 (T1) - DEMOLITION PLAN - PAEDIATRIC & BULK STORE.pdf
+│   │   ├── 3334-E05 (T1) - DEMOLITION PLAN - RESUS.pdf
+│   │   ├── 3334-E06 (T1) - DEMOLITION PLAN - XRAY_ WAITING & STORES.pdf
+│   │   ├── 3334-E10 (T2) - CABLE ACCESS LAYOUT - UNDER SLAB.pdf
+│   │   ├── 3334-E11 (T2) - CABLE ACCESS LAYOUT - BLOCK C.pdf
+│   │   ├── 3334-E12 (T2) - CABLE ACCESS LAYOUT - BLOCK D.pdf
+│   │   ├── 3334-E13 (T1) - CABLE ACCESS DETAIL - NEW SUBMAINS.pdf
+│   │   ├── 3334-E14 (T1) - CABLE ACCESS DETAIL - LEVEL P1.pdf
+│   │   ├── 3334-E23 (T4) - POWER & DATA LAYOUT - ADULT ACUTE D.pdf
+│   │   ├── 3334-E24 (T3) - POWER & DATA LAYOUT - PAEDIATRIC & BULK STORE.pdf
+│   │   ├── 3334-E25 (T4) - POWER & DATA LAYOUT - RESUS.pdf
+│   │   ├── 3334-E26 (T3) - POWER & DATA LAYOUT - XRAY_ WAITING & STORES.pdf
+│   │   ├── 3334-E33 (T2) - LIGHTING & FIRE LAYOUT - ADULT ACUTE D.pdf
+│   │   ├── 3334-E34 (T2) - LIGHTING & FIRE LAYOUT - PAEDIATRIC & BULK STORE.pdf
+│   │   ├── 3334-E35 (T2) - LIGHTING & FIRE LAYOUT - RESUS.pdf
+│   │   ├── 3334-E36 (T3) - LIGHTING & FIRE LAYOUT - XRAY_ WAITING & STORES.pdf
+│   │   ├── 3334-E43 (T1) - SECURITY LAYOUT - ADULT ACUTE D.pdf
+│   │   ├── 3334-E44 (T1) - SECURITY LAYOUT - PAEDIATRIC & BULK STORE.pdf
+│   │   ├── 3334-E45 (T2) - SECURITY - RESUS.pdf
+│   │   ├── 3334-E46 (T2) - SECURITY LAYOUT - XRAY_ WAITING & STORES.pdf
+│   │   ├── 3334-E50 (T1) - BLOCK D GROUND FLOOR COMMUNICATIONS ROOM.pdf
+│   │   ├── 3334-E51 (T1) - BLOCK C LEVEL 1 COMMUNICATIONS ROOM.pdf
+│   │   ├── 3334-E52 (T2) - RESUS NORMAL & ESSENTIAL POWER SUPPLY.pdf
+│   │   ├── 3334-E53 (T2) - X-RAY POWER_ COMMUNICATIONS & CABLE ACCESS DETAILS.pdf
+│   │   ├── 3334-E54 (T1) - COMMUNICATIONS TOPOLOGY.pdf
+│   │   ├── 3334-E60 (T2) - EXISTING DISTRIBUTION SWITCHBOARD SCHEDULES (SHEET 1 OF 4).pdf
+│   │   ├── 3334-E61 (T1) - EXISTING DISTRIBUTION SWITCHBOARD SCHEDULES (SHEET 2 OF 4).pdf
+│   │   ├── 3334-E62 (T1) - EXISTING DISTRIBUTION SWITCHBOARD SCHEDULES (SHEET 3 OF 4).pdf
+│   │   ├── 3334-E63 (T1) - EXISTING DISTRIBUTION SWITCHBOARD SCHEDULES (SHEET 4 OF 4).pdf
+│   │   ├── 3334-E64 (T2) - NEW DISTRIBUTION SWITCHBOARD SCHEDULES.pdf
+│   │   └── 3334-E70 (T2) - MISCELLANEOUS DETAILS.pdf
+│   ├── IFC Models (FOR INFORMATION)
+│   │   └── 2128_A_SITE.ifc
+│   ├── Addendum to offer no. 7.pdf
+│   └── QH_ICT_Cabling_Stdv3.pdf
+├── 05_Elec Spec Tender Form.docx
+├── 06_Mech and Med Gas Tender Form.docx
+├── 07_Pneumatic Tube Tender Form.docx
+├── 3334-E46 (T2) - SECURITY LAYOUT - XRAY_ WAITING & STORES.pdf
+├── Addendum to offer no. 12.pdf
+├── Addendum to offer no. 13.pdf
+├── Addendum to offer no. 14.pdf
+├── Addendum to offer no. 4.pdf
+└── Addendum to offer no. 8 (1).pdf
+
+
+====================================================================================================
+PROJECT 5/29: 110195_110195_Herston_-_15_Warehouses_fullSet
+Files: 37
+====================================================================================================
+
+├── Civil
+│   ├── 22-033 - BA Issue C000_B.pdf
+│   ├── 22-033 - BA Issue C200_B.pdf
+│   ├── 22-033 - BA Issue C210_C.pdf
+│   ├── 22-033 - BA Issue C300_B.pdf
+│   ├── 22-033 - BA Issue C310_B.pdf
+│   ├── 22-033 - BA Issue C315_B.pdf
+│   ├── 22-033 - BA Issue C316_B.pdf
+│   ├── 22-033 - BA Issue C400_B.pdf
+│   ├── 22-033 - BA Issue C410_D.pdf
+│   ├── 22-033 - BA Issue C600_B.pdf
+│   ├── 22-033 - BA Issue C610_B.pdf
+│   ├── 22-033 - BA Issue C800_B.pdf
+│   ├── 22-033 - BA Issue C810_C.pdf
+│   ├── 22-033 - BA Issue C900_C.pdf
+│   ├── 22-033 - BA Issue C910_C.pdf
+│   ├── 22-033 - BA Issue C911_C.pdf
+│   └── 22-033 - Civil BA Issue.pdf
+├── Electrical
+│   └── Max Demand.pdf
+├── Energy Efficiency
+│   ├── 3470 19-25 Gould Road Herston A.pdf
+│   └── 3470 19-25 Gould Road Herston JV3 Report.pdf
+├── Finishes Schedule
+│   ├── Herston_FFE Schedule_V5 - FFE.pdf
+│   └── Herston_Finishes Schedule_V5.xlsx.pdf
+├── Geo Tech and Acid Sulphate Report
+│   └── Geo Tech & Acid Sulfate Report.Reduced (1).pdf
+├── Hydraulics
+│   ├── 21634_BA H000_02.pdf
+│   ├── 21634_BA H200_04.pdf
+│   ├── 21634_BA H201_04.pdf
+│   ├── 21634_BA H202_04.pdf
+│   ├── 21634_BA H203_04.pdf
+│   ├── 21634_BA H204_04.pdf
+│   ├── 21634_BA H205_04.pdf
+│   ├── 21634_BA H300_04.pdf
+│   ├── 21634_BA H301_04.pdf
+│   ├── 21634_BA H302_04.pdf
+│   ├── 21634_BA H303_04.pdf
+│   └── 21634_BA ISSUE.pdf
+└── Survey
+    ├── 19Gould_PermissibleChangePlans_Final (dragged).pdf
+    └── IS274057.pdf
+
+
+====================================================================================================
+PROJECT 6/29: 110199_110199_Galleon_Gardens_Clubhouse_fullSet
+Files: 17
+====================================================================================================
+
+├── A 0000 [A].pdf
+├── A 0101 [A].pdf
+├── A 1001 [C].pdf
+├── A 1101 [C].pdf
+├── A 1201 [D].pdf
+├── A 1204 [B].pdf
+├── A 1601 [A].pdf
+├── A 1801 [B].pdf
+├── A 3001 [C].pdf
+├── A 3501 [A].pdf
+├── A 3502 [A].pdf
+├── A 4001 [A].pdf
+├── A 4501 [C].pdf
+├── A 4502 [C].pdf
+├── A 4503 [B].pdf
+├── A 6001 [A].pdf
+└── A 6101 [A].pdf
+
+
+====================================================================================================
+PROJECT 7/29: 110207_110207_Robina_Hospital_Second_CT_Scanner_Project_fullSet
+Files: 95
+====================================================================================================
+
+├── 0.0 Complete set of tender documents sharefile link
+│   └── E1449 complete set of documents sharefile link.pdf
+├── 0.2 Project Documents
+│   ├── ARCHITECTURAL SPECIFICATION.pdf
+│   ├── Addendum 2.pdf
+│   ├── Appendix 2 Radiation Shielding Design Report.pdf
+│   ├── Appendix 3 Siemens Documentation.pdf
+│   ├── Part A Invitation to Offer - RH CT.pdf
+│   └── RH CT2 Mandatory Briefing and Site Visit Presentation.pptx
+├── 0.3 Addendum 3
+│   ├── Addendum 3.pdf
+│   ├── Photo 1.jpg
+│   ├── Photo 2.jpg
+│   └── Photo 3.jpg
+├── 0.3 Addendum 5
+│   ├── 1. Addendum 5.pdf
+│   ├── ACA11_IMG20210910084432 (1).jpg
+│   ├── ACA11_IMG20210910084432 (2).jpg
+│   ├── IMG_5037.JPG
+│   ├── IMG_5043.JPG
+│   ├── IMG_5161.JPG
+│   ├── L2_PLANTROOM_AA02-21_X_FLOOR_PLAN.pdf
+│   ├── L2_PLANTROOM_AA02-22_H_FLOOR_PLAN.pdf
+│   ├── L2_PLANTROOM_MA01-22 [0].pdf
+│   └── L2_PLANTROOM_cd-a103_Plantroom Floor Plan.pdf
+├── 0.4 Schedules
+│   ├── A-13.03_SIGN SCHEMATICS_8.pdf
+│   ├── A-13.05_GRAPHIC STANDARDS_6.pdf
+│   ├── A-13.19_ID7A-STATUTORY DOOR IDENTIFICATION SIGN_6.pdf
+│   └── A-13.20_ID7b-SERVICE DOOR IDENTIFICATION SIGN_6.pdf
+├── 1.1 Architectural
+│   ├── 1008-DCPM-AR-00-T1 Cover.pdf
+│   ├── 1008-DCPM-AR-10-T1 Existing Floor Plan.pdf
+│   ├── 1008-DCPM-AR-11-T1 General Arrangement Plan.pdf
+│   ├── 1008-DCPM-AR-12-T1 Demolition Plan.pdf
+│   ├── 1008-DCPM-AR-13-T1 CT General Arrangement Plan.pdf
+│   ├── 1008-DCPM-AR-14-T1 Recovery Holding General Arrangement Plan.pdf
+│   ├── 1008-DCPM-AR-15-T1 Cannulation Bay General Arrangement Plan.pdf
+│   ├── 1008-DCPM-AR-16-T1 Reflected Ceiling Plan.pdf
+│   ├── 1008-DCPM-AR-17-T1 Finishes Plan.pdf
+│   ├── 1008-DCPM-AR-18-T1 Concrete Works Plan.pdf
+│   ├── 1008-DCPM-AR-19-T1 Reflected Ceiling Services Plan .pdf
+│   ├── 1008-DCPM-AR-21-T1 Wall Elevations.pdf
+│   ├── 1008-DCPM-AR-22-T1 Wall Elevations.pdf
+│   ├── 1008-DCPM-AR-23-T1 Wall Elevations.pdf
+│   ├── 1008-DCPM-AR-24-T1 Wall Elevations.pdf
+│   ├── 1008-DCPM-AR-25-T1 Wall Elevations.pdf
+│   ├── 1008-DCPM-AR-26-T1 Door Schedule.pdf
+│   ├── 1008-DCPM-AR-31-T1 Medical Services Panels.pdf
+│   └── 1008-DCPM-AR-41-T1 Signage.pdf
+├── 1.11 GC Hospital Guidelines
+│   ├── 2.1 PRO2211_ WH&S Contractor Management.pdf
+│   ├── 2.10 Risk role checklist.pdf
+│   ├── 2.11 Asset Register template.xlsx
+│   ├── 2.12 Working at Heights Form (gov000328).docx
+│   ├── 2.13 RFI Template.docx
+│   ├── 2.14 WI2306 Working in Clinical Departments and Sterile Areas.pdf
+│   ├── 2.15 PRO0460 Personal Protective Equipment and Theatre Attire.pdf
+│   ├── 2.16 As Built WI Att 1- Legends.xlsx
+│   ├── 2.2 Contractor-handbook.pdf
+│   ├── 2.3 iLearn User Help for Contractors.pdf
+│   ├── 2.4 PRO2067_Notice of Impacting Activity.pdf
+│   ├── 2.5 GOV000253_Notice of Impacting Activity Form.docx
+│   ├── 2.6 WI1616_Working in MH Units.pdf
+│   ├── 2.7 PRO0193_Electrical Safety.pdf
+│   ├── 2.8 D_0900_Construction and Renovation AHFG Infect.Prevent.Control.pdf
+│   └── 2.9 WI1970_Isolation_ Lockout_ Tagout.pdf
+├── 1.2 Structural
+│   └── KBA02517.S01 PLAN LAYOUT AND DETAILS(A).pdf
+├── 1.4 Electrical
+│   ├── E100 LEGEND[C].pdf
+│   ├── E101 LUMINAIRE SCHEDULE[B].pdf
+│   ├── E200 KEY PLAN[C].pdf
+│   ├── E300 DEMO - LIGHTING[C].pdf
+│   ├── E301 DEMO - POWER[C].pdf
+│   ├── E302 DEMO - COMMS[C].pdf
+│   ├── E303 DEMO - FIRE & ALARM[C].pdf
+│   ├── E304 DEMO - NURSE CALL[C].pdf
+│   ├── E305 DEMO - SECURITY & CCTV[C].pdf
+│   ├── E306 PROPOSED LIGHTING LAYOUT[D].pdf
+│   ├── E307 PROPOSED POWER LAYOUT[C].pdf
+│   ├── E308 PROPOSED COMMUNICATIONS LAYOUT[C].pdf
+│   ├── E309 PROPOSED FIRE DETECTION & ALARM LAYOUT[C].pdf
+│   ├── E310 PROPOSED NURSE CALL LAYOUT[C].pdf
+│   ├── E311 PROPOSED SECURITY & CCTV LAYOUT[C].pdf
+│   ├── E312 PATIENT AREAS[C].pdf
+│   ├── E313 SIEMENS EQUIPMENT LAYOUT[B].pdf
+│   ├── E900 SCHEMATICS SHEET 1[B].pdf
+│   ├── E901 SCHEMATICS SHEET 2[B].pdf
+│   ├── E902 SCHEMATICS SHEET 3[B].pdf
+│   ├── E903 SCHEMATICS SHEET 4[B].pdf
+│   ├── E904 MSP DETAILS[C].pdf
+│   └── SPECIFICATION FOR ELECTRICAL SERVICES[B].pdf
+├── 1.5 Hydraulic
+│   ├── 18861-H1-T1-Cover Sheet.pdf
+│   ├── 18861-H2-T2-Ground - Drainage.pdf
+│   ├── 18861-H3-T2-Ground - Water.pdf
+│   └── SPECIFICATION FOR HYDRAULIC AND WET FIRE SERVICES.pdf
+├── 1.6 Mechanical
+│   ├── M100 LEGEND_ FRONT SHEET_ GRILLE SCHEDULE & CHW SCHEMATIC.pdf
+│   ├── M201 GROUND FLOOR AIR CONDITIONING LAYOUT.pdf
+│   ├── M202 PLANT LEVEL NEW CHW PIPES TO GROUND LEVEL.pdf
+│   ├── M300 GROUND FLOOR MEDICAL GAS LAYOUT DEMOLITION PLAN & NEW WORKS.pdf
+│   ├── Part C Supplier Response Forms - MECH.doc
+│   └── SPECIFICATION FOR MECHANICAL SERVICES[B].pdf
+└── 1.8 Wet Fire
+    └── GROUND FLOOR PLAN FIRE SPRINKLER SERVICE.pdf
+
+
+====================================================================================================
+PROJECT 8/29: 110211__PAC_and_Carpark_(Retender)_fullSet
+Files: 20
+====================================================================================================
+
+├── 5 Reports
+│   ├── Asbestos
+│   │   └── SPCC Site asbestos report.pdf
+│   ├── Geotechnical
+│   │   ├── 1-21765_ 2019-09-13_ BR VER 1.pdf
+│   │   ├── 1-22475_ 2020-04-20_ BR VER 2.pdf
+│   │   └── 1-23776_ 2021-04-29_ BR VER 2.pdf
+│   ├── Safe Design
+│   │   ├── Fact Sheet - For Clients.pdf
+│   │   └── Safe Design Report_St Peter Claver College_V2.0.pdf
+│   └── Section J
+│       ├── IAC ESD.pdf
+│       └── PAC ESD.pdf
+├── Electrical.zip
+├── Geotechnical.zip
+├── Hydraulic.zip
+├── Landscape.zip
+├── Mechanical.zip
+├── Revised Architectural IAC C4&C5.zip
+├── Revised Architectural PAC  C4&C5.zip
+├── SPCC IAC Civil Construction Issue.zip
+├── SPCC PAC Civil Construction Issue.zip
+├── Specification Achitectural REV.zip
+├── Structural.zip
+└── Survey.zip
+
+
+====================================================================================================
+PROJECT 9/29: 110225_110225_32_Turbot_St_-_Level_7_Spec_Fitout_fullSet
+Files: 359
+====================================================================================================
+
+├── Architectural
+│   ├── L7 32 Turbot Street - Architectural Binder_Issue for Tender.pdf
+│   ├── L7 32 Turbot Street - Door Schedule_B.pdf
+│   ├── L7 32 Turbot Street - FFE Schedule_B.pdf
+│   ├── L7 32 Turbot Street - Finishes Schedule_A.pdf
+│   ├── RFT_-_Part_B_Section_2_-_Tenancy_Fitout_Guide_Jan_2021_(4).pdf
+│   └── Scope of Works.xlsx
+├── Value engineering
+│   └── VALUE ENGINEERING OPPORTUNITIES_CHARTER HALL.docx
+├── answers to RFI
+│   ├── 35846E22 EXIT REV AB.pdf
+│   ├── 4200110_FA12_LVLT7-T10.pdf
+│   ├── FS.11 LEVEL 7 .C.pdf
+│   ├── Level 7 Floorplan.pdf
+│   ├── Level 7-13 As Built Sensor Locations.pdf
+│   ├── PAC00150-M-0710 [1].pdf
+│   ├── PAC00150-M-0710 [AI].pdf
+│   ├── PAC00150-M-0710 [B].pdf
+│   ├── PAC00150-M-0710 [C].pdf
+│   ├── PAC00150-M-0711 [1].pdf
+│   ├── PAC00150-M-0711 [AI].pdf
+│   ├── PAC00150-M-703 [AI].pdf
+│   ├── RFI - Valmont 16.02.22.xlsx
+│   ├── Typical Level 7-13 Switch Locations.pdf
+│   └── XES011.1 Aurecon Level 7 - 13 rev 1 (1).pdf
+├── services
+│   ├── CS-50-L07-001[A]_COMBINED_SERVICES_COMBINED_SERVICES_RCP_LEVEL_07.pdf
+│   ├── EL-00-COV-001[B]_ELECTRICAL_SERVICES_COVER_SHEET.pdf
+│   ├── EL-00-LEG-001[B]_ELECTRICAL_SERVICES_LEGEND.pdf
+│   ├── EL-00-SPE-001[B]_ELECTRICAL_SERVICES_SPECIFICATION.pdf
+│   ├── EL-50-L07-001[B]_ELECTRICAL_SERVICES_POWER_LAYOUT_LEVEL_07.pdf
+│   ├── EL-60-L07-001[B]_ELECTRICAL_SERVICES_LIGHTING_LAYOUT_LEVEL_07.pdf
+│   ├── FI-00-COV-001[B]_FIRE_PROTECTION_SERVICES_COVER_SHEET.pdf
+│   ├── FI-00-LEG-001[B]_FIRE_PROTECTION_SERVICES_LEGEND_AND_SPECIFICATION.pdf
+│   ├── FI-50-L07-001[B]_FIRE_PROTECTION_SERVICES_FIRE_PROTECTON_LAYOUT_LEVEL_07.pdf
+│   ├── HY-00-COV-001[B]_HYDRAULIC_SERVICES_COVER_SHEET.pdf
+│   ├── HY-00-LEG-001[B]_HYDRAULIC_SERVICES_LEGEND.pdf
+│   ├── HY-00-SPE-001[B]_HYDRAULIC_SERVICES_SPECIFICATION.pdf
+│   ├── HY-50-L07-001[B]_HYDRAULIC_SERVICES_SANITARY_AND_DRAINAGE_LAYOUT_LEVEL_07.pdf
+│   ├── HY-60-L07-001[B]_HYDRAULIC_SERVICES_WATER_RETICULATION_LAYOUT_LEVEL_07.pdf
+│   ├── ME-00-COV-001[B]_MECHANICAL_SERVICES_COVER_SHEET.pdf
+│   ├── ME-00-LEG-001[B]_MECHANICAL_SERVICES_LEGEND__SCHEDULES__NOTES_AND_STANDARD_DETAILS.pdf
+│   ├── ME-00-SPE-001[B]_MECHANICAL_SERVICES_SPECIFICATION_SHEET_1.pdf
+│   ├── ME-00-SPE-002[B]_MECHANICAL_SERVICES_SPECIFICATION_SHEET_2.pdf
+│   ├── ME-50-L07-001[B]_MECHANICAL_SERVICES_MECHANICAL_SERVICES_LAYOUT_LEVEL_07.pdf
+│   └── Transmittal_-_00003.pdf
+└── site photos
+    ├── IMG_1775.JPG
+    ├── IMG_1776.JPG
+    ├── IMG_1777.JPG
+    ├── IMG_1778.JPG
+    ├── IMG_1779.JPG
+    ├── IMG_1780.JPG
+    ├── IMG_1781.JPG
+    ├── IMG_1782.JPG
+    ├── IMG_1783.JPG
+    ├── IMG_1784.JPG
+    ├── IMG_1785.JPG
+    ├── IMG_1786.JPG
+    ├── IMG_1787.JPG
+    ├── IMG_1788.JPG
+    ├── IMG_1789.JPG
+    ├── IMG_1790.JPG
+    ├── IMG_1791.JPG
+    ├── IMG_1792.JPG
+    ├── IMG_1793.JPG
+    ├── IMG_1794.JPG
+    ├── IMG_1795.JPG
+    ├── IMG_1796.JPG
+    ├── IMG_1797.JPG
+    ├── IMG_1798.JPG
+    ├── IMG_1799.JPG
+    ├── IMG_1800.JPG
+    ├── IMG_1801.JPG
+    ├── IMG_1802.JPG
+    ├── IMG_1803.JPG
+    ├── IMG_1804.JPG
+    ├── IMG_1805.JPG
+    ├── IMG_1806.JPG
+    ├── IMG_1807.JPG
+    ├── IMG_1808.JPG
+    ├── IMG_1809.JPG
+    ├── IMG_1810.JPG
+    ├── IMG_1811.JPG
+    ├── IMG_1812.JPG
+    ├── IMG_1813.JPG
+    ├── IMG_1814.JPG
+    ├── IMG_1815.JPG
+    ├── IMG_1816.JPG
+    ├── IMG_1817.JPG
+    ├── IMG_1818.JPG
+    ├── IMG_1819.JPG
+    ├── IMG_1820.JPG
+    ├── IMG_1821.JPG
+    ├── IMG_1822.JPG
+    ├── IMG_1824.JPG
+    ├── IMG_1825.JPG
+    ├── IMG_1826.JPG
+    ├── IMG_1827.JPG
+    ├── IMG_1828.JPG
+    ├── IMG_1829.JPG
+    ├── IMG_1830.JPG
+    ├── IMG_1831.JPG
+    ├── IMG_1832.JPG
+    ├── IMG_1833.JPG
+    ├── IMG_1835.JPG
+    ├── IMG_1836.JPG
+    ├── IMG_1838.JPG
+    ├── IMG_1839.JPG
+    ├── IMG_1840.JPG
+    ├── IMG_1841.JPG
+    ├── IMG_1842.JPG
+    ├── IMG_1843.JPG
+    ├── IMG_1844.JPG
+    ├── IMG_1845.JPG
+    ├── IMG_1846.JPG
+    ├── IMG_1847.JPG
+    ├── IMG_1848.JPG
+    ├── IMG_1849.JPG
+    ├── IMG_1850.JPG
+    ├── IMG_1851.JPG
+    ├── IMG_1852.JPG
+    ├── IMG_1853.JPG
+    ├── IMG_1854.JPG
+    ├── IMG_1855.JPG
+    ├── IMG_1856.JPG
+    ├── IMG_1857.JPG
+    ├── IMG_1858.JPG
+    ├── IMG_1859.JPG
+    ├── IMG_1860.JPG
+    ├── IMG_1861.JPG
+    ├── IMG_1862.JPG
+    ├── IMG_1863.JPG
+    ├── IMG_1864.JPG
+    ├── IMG_1865.JPG
+    ├── IMG_1866.JPG
+    ├── IMG_1867.JPG
+    ├── IMG_1868.JPG
+    ├── IMG_1869.JPG
+    ├── IMG_1870.JPG
+    ├── IMG_1871.JPG
+    ├── IMG_1872.JPG
+    ├── IMG_1873.JPG
+    ├── IMG_1874.JPG
+    ├── IMG_1875.JPG
+    ├── IMG_1876.JPG
+    ├── IMG_1877.JPG
+    ├── IMG_1878.JPG
+    ├── IMG_1879.JPG
+    ├── IMG_1880.JPG
+    ├── IMG_1881.JPG
+    ├── IMG_1882.JPG
+    ├── IMG_1883.JPG
+    ├── IMG_1884.JPG
+    ├── IMG_1885.JPG
+    ├── IMG_1886.JPG
+    ├── IMG_1887.JPG
+    ├── IMG_1888.JPG
+    ├── IMG_1889.JPG
+    ├── IMG_1890.JPG
+    ├── IMG_1891.JPG
+    ├── IMG_1892.JPG
+    ├── IMG_1893.JPG
+    ├── IMG_1894.JPG
+    ├── IMG_1895.JPG
+    ├── IMG_1896.JPG
+    ├── IMG_1897.JPG
+    ├── IMG_1898.JPG
+    ├── IMG_1899.JPG
+    ├── IMG_1900.JPG
+    ├── IMG_1901.JPG
+    ├── IMG_1902.JPG
+    ├── IMG_1903.JPG
+    ├── IMG_1904.JPG
+    ├── IMG_1905.JPG
+    ├── IMG_1906.JPG
+    ├── IMG_1907.JPG
+    ├── IMG_1908.JPG
+    ├── IMG_1909.JPG
+    ├── IMG_1910.JPG
+    ├── IMG_1911.JPG
+    ├── IMG_1912.JPG
+    ├── IMG_1913.JPG
+    ├── IMG_1914.JPG
+    ├── IMG_1915.JPG
+    ├── IMG_1916.JPG
+    ├── IMG_1917.JPG
+    ├── IMG_1918.JPG
+    ├── IMG_1919.JPG
+    ├── IMG_1920.JPG
+    ├── IMG_1921.JPG
+    ├── IMG_1922.JPG
+    ├── IMG_1923.JPG
+    ├── IMG_1924.JPG
+    ├── IMG_1925.JPG
+    ├── IMG_1926.JPG
+    ├── IMG_1927.JPG
+    ├── IMG_1928.JPG
+    ├── IMG_1929.JPG
+    ├── IMG_1930.JPG
+    ├── IMG_1931.JPG
+    ├── IMG_1932.JPG
+    ├── IMG_1933.JPG
+    ├── IMG_1934.JPG
+    ├── IMG_1935.JPG
+    ├── IMG_1936.JPG
+    ├── IMG_1937.JPG
+    ├── IMG_1938.JPG
+    ├── IMG_1939.JPG
+    ├── IMG_1940.JPG
+    ├── IMG_1941.JPG
+    ├── IMG_1942.JPG
+    ├── IMG_1943.JPG
+    ├── IMG_1944.JPG
+    ├── IMG_1945.JPG
+    ├── IMG_1946.JPG
+    ├── IMG_1947.JPG
+    ├── IMG_1948.JPG
+    ├── IMG_1949.JPG
+    ├── IMG_1950.JPG
+    ├── IMG_1951.JPG
+    ├── IMG_1952.JPG
+    ├── IMG_1953.JPG
+    ├── IMG_1954.JPG
+    ├── IMG_1955.JPG
+    ├── IMG_1956.JPG
+    ├── IMG_1957.JPG
+    ├── IMG_1958.JPG
+    ├── IMG_1959.JPG
+    ├── IMG_1960.JPG
+    ├── IMG_1961.JPG
+    ├── IMG_1962.JPG
+    ├── IMG_1963.JPG
+    ├── IMG_1964.JPG
+    ├── IMG_1965.JPG
+    ├── IMG_1966.JPG
+    ├── IMG_1967.JPG
+    ├── IMG_1968.JPG
+    ├── IMG_1969.JPG
+    ├── IMG_1970.JPG
+    ├── IMG_1971.JPG
+    ├── IMG_1972.JPG
+    ├── IMG_1973.JPG
+    ├── IMG_1974.JPG
+    ├── IMG_1975.JPG
+    ├── IMG_1976.JPG
+    ├── IMG_1977.JPG
+    ├── IMG_1978.JPG
+    ├── IMG_1979.JPG
+    ├── IMG_1980.JPG
+    ├── IMG_1981.JPG
+    ├── IMG_1982.JPG
+    ├── IMG_1983.JPG
+    ├── IMG_1984.JPG
+    ├── IMG_1985.JPG
+    ├── IMG_1986.JPG
+    ├── IMG_1987.JPG
+    ├── IMG_1988.JPG
+    ├── IMG_1989.JPG
+    ├── IMG_1990.JPG
+    ├── IMG_1991.JPG
+    ├── IMG_1992.JPG
+    ├── IMG_1993.JPG
+    ├── IMG_1994.JPG
+    ├── IMG_1995.JPG
+    ├── IMG_1996.JPG
+    ├── IMG_1997.JPG
+    ├── IMG_1998.JPG
+    ├── IMG_1999.JPG
+    ├── IMG_2001.JPG
+    ├── IMG_2002.JPG
+    ├── IMG_2003.JPG
+    ├── IMG_2004.JPG
+    ├── IMG_2005.JPG
+    ├── IMG_2006.JPG
+    ├── IMG_2007.JPG
+    ├── IMG_2008.JPG
+    ├── IMG_2009.JPG
+    ├── IMG_2010.JPG
+    ├── IMG_2011.JPG
+    ├── IMG_2012.JPG
+    ├── IMG_2013.JPG
+    ├── IMG_2014.JPG
+    ├── IMG_2015.JPG
+    ├── IMG_2016.JPG
+    ├── IMG_2017.JPG
+    ├── IMG_2018.JPG
+    ├── IMG_2019.JPG
+    ├── IMG_2020.JPG
+    ├── IMG_2021.JPG
+    ├── IMG_2022.JPG
+    ├── IMG_2023.JPG
+    ├── IMG_2024.JPG
+    ├── IMG_2025.JPG
+    ├── IMG_2026.JPG
+    ├── IMG_2027.JPG
+    ├── IMG_2028.JPG
+    ├── IMG_2029.JPG
+    ├── IMG_2030.JPG
+    ├── IMG_2031.JPG
+    ├── IMG_2032.JPG
+    ├── IMG_2033.JPG
+    ├── IMG_2034.JPG
+    ├── IMG_2035.JPG
+    ├── IMG_2036.JPG
+    ├── IMG_2037.JPG
+    ├── IMG_2038.JPG
+    ├── IMG_2039.JPG
+    ├── IMG_2040.JPG
+    ├── IMG_2041.JPG
+    ├── IMG_2042.JPG
+    ├── IMG_2043.JPG
+    ├── IMG_2044.JPG
+    ├── IMG_2045.JPG
+    ├── IMG_2046.JPG
+    ├── IMG_2047.JPG
+    ├── IMG_2048.JPG
+    ├── IMG_2049.JPG
+    ├── IMG_2050.JPG
+    ├── IMG_2051.JPG
+    ├── IMG_2052.JPG
+    ├── IMG_2053.JPG
+    ├── IMG_2054.JPG
+    ├── IMG_2055.JPG
+    ├── IMG_2056.JPG
+    ├── IMG_2057.JPG
+    ├── IMG_2058.JPG
+    ├── IMG_2059.JPG
+    ├── IMG_2060.JPG
+    ├── IMG_2061.JPG
+    ├── IMG_2062.JPG
+    ├── IMG_2063.JPG
+    ├── IMG_2064.JPG
+    ├── IMG_2065.JPG
+    ├── IMG_2066.JPG
+    ├── IMG_2067.JPG
+    ├── IMG_2068.JPG
+    ├── IMG_2069.JPG
+    ├── IMG_2070.JPG
+    ├── IMG_2071.JPG
+    ├── IMG_2072.JPG
+    ├── IMG_2073.JPG
+    ├── IMG_2074.JPG
+    ├── IMG_2075.JPG
+    ├── IMG_2076.JPG
+    ├── IMG_2077.JPG
+    ├── IMG_2078.JPG
+    ├── IMG_2079.JPG
+    ├── IMG_2080.JPG
+    ├── IMG_2081.JPG
+    ├── IMG_2082.JPG
+    ├── IMG_2083.JPG
+    ├── IMG_2084.JPG
+    ├── IMG_2085.JPG
+    ├── IMG_2086.JPG
+    ├── IMG_2087.JPG
+    ├── IMG_2088.JPG
+    ├── IMG_2089.JPG
+    ├── IMG_2090.JPG
+    ├── IMG_2091.JPG
+    ├── IMG_2092.JPG
+    ├── IMG_2093.JPG
+    ├── IMG_2094.JPG
+    └── IMG_2095.JPG
+
+
+====================================================================================================
+PROJECT 10/29: 110225_32_Turbot_St_-_Level_7_Spec_Fitout_fullSet
+Files: 0
+====================================================================================================
+
+
+
+====================================================================================================
+PROJECT 11/29: 110232_110232_Sippy_Creek_Collections_Depot_Building_fullSet
+Files: 14
+====================================================================================================
+
+├── Apprndix 03 Hydraulic drawings.pdf
+├── CIV01417 - Fixtures_ Fittings _ Equipment Schedule.pdf
+├── CIV01417 - Interior and Exterior Finishes Schedule.pdf
+├── CIV01417 03 - Scope of Works and Specifications 2021 12 21.pdf
+├── CIV01417 A 03 For Tender 20 12 2021_2.pdf
+├── CIV1417 - SiD Assessment - Sippy Downs Depot (Building Refurbishment).pdf
+├── E001-[2].pdf
+├── E002-[2].pdf
+├── E003-[2].pdf
+├── E010-[2].pdf
+├── E020-[2].pdf
+├── E021-[2].pdf
+├── Q403A TRANSMITTAL.pdf
+└── Sippy Downs Depot - Pricing Schedule (Final).xlsx
+
+
+====================================================================================================
+PROJECT 12/29: 110260_110260_Boondall_State_School_-_Refurbishment_fullSet
+Files: 18
+====================================================================================================
+
+├── Architectural Drawings
+│   ├── 0.01 - Cover Sheet - T1.pdf
+│   ├── 08. APP H - 1249_211027_Transmittal.pdf
+│   ├── 1.01 - Demolition Site Plan - T1.pdf
+│   ├── 1.02 - Proposed Site Plan - T1.pdf
+│   ├── 10.01 - Internal Details 01 - T1.pdf
+│   ├── 2.01 - OSHC Demolition Plan - T1.pdf
+│   ├── 2.02 - OSHC Staff - Proposed Refurbishment Plan - T1.pdf
+│   ├── 2.03 - OLA 1 - Demolition - T1.pdf
+│   ├── 2.04 - OLA 1 - Proposed - T1.pdf
+│   ├── 2.05 - OSHC OLA 2 OLA 3 - Proposed - T1.pdf
+│   ├── 2.06 - Seating Platform - Proposed - T1.pdf
+│   ├── 2.07 - Concrete Path and Storage Shed - Proposed - T1.pdf
+│   ├── 5.01 - OSHC Staff - Sections - T1.pdf
+│   ├── 5.02 - External Works Seating - Sections - T1.pdf
+│   └── 5.03 - Seating Platform - Sections - T1.pdf
+└── Specifications
+    ├── 08. APP H - 1249_Boondall SS_OHSC_Specification_T1.pdf
+    ├── 12. APP L - Electrical MinorWorks_October 2019 - Part 1 - Standard Document SFS.pdf
+    └── 12. APP L - Electrical MinorWorks_October 2019 - Part 2 - Conditions of Use.pdf
+
+
+====================================================================================================
+PROJECT 13/29: 110279_110279_Construction_of_an_Amenities_Building_at_Paradise_Point_Parklands_fullSet
+Files: 13
+====================================================================================================
+
+├── attachment_a-site_plan.pdf
+├── attachment_b-survey_plan.pdf
+├── attachment_c-design_drawings.pdf
+├── attachment_d-landscape_design_drawings.pdf
+├── attachment_e-irrigation_design_drawings.pdf
+├── attachment_f-existing_amenity_plans.pdf
+├── attachment_g-technical_specifications.pdf
+├── attachment_h-ipwea_design_drawings.pdf
+├── attachment_i-butler_partners_geotechnical_investigations_report.pdf
+├── attachment_j-changing_places_design_specification.pdf
+├── attachment_k-electrical_commissioning_forms_and_checklists.pdf
+├── attachment_l-electrical_testing_and_commissioning_technical_specification.pdf
+└── specification_major_construction_as2124_.pdf
+
+
+====================================================================================================
+PROJECT 14/29: 110288_110288_DTMR_Buderim_Fitout_fullSet
+Files: 466
+====================================================================================================
+
+├── Architectural
+│   ├── PDFs
+│   │   ├── 40338_I_0000[7] - COVER SHEET & DRAWING LIST.pdf
+│   │   ├── 40338_I_0001[6] - LEGENDS & NOTES.pdf
+│   │   ├── 40338_I_1000[6] - EXISTING PLAN GROUND.pdf
+│   │   ├── 40338_I_1001[6] - EXISTING PLAN LEVEL 1.pdf
+│   │   ├── 40338_I_1002[3] - EXISTING PLAN LEVEL 1- CAR PARK.pdf
+│   │   ├── 40338_I_1200[6] - DEMOLITION PLAN GROUND NORTH.pdf
+│   │   ├── 40338_I_1201[6] - DEMOLITION PLAN GROUND SOUTH.pdf
+│   │   ├── 40338_I_1202[5] - DEMOLITION PLAN LEVEL 1 NORTH.pdf
+│   │   ├── 40338_I_1203[6] - DEMOLITION PLAN LEVEL 1 SOUTH.pdf
+│   │   ├── 40338_I_1300[6] - DEMOLITION RCP GROUND NORTH.pdf
+│   │   ├── 40338_I_1301[6] - DEMOLITION RCP GROUND SOUTH.pdf
+│   │   ├── 40338_I_1302[7] - DEMOLITION RCP LEVEL 1 NORTH.pdf
+│   │   ├── 40338_I_1303[6] - DEMOLITION RCP LEVEL 1 SOUTH.pdf
+│   │   ├── 40338_I_1500[6] - IN SLAB WORKS GROUND NORTH.pdf
+│   │   ├── 40338_I_1501[6] - IN SLAB WORKS GROUND SOUTH.pdf
+│   │   ├── 40338_I_1502[6] - IN SLAB WORKS LEVEL 1  NORTH.pdf
+│   │   ├── 40338_I_1503[6] - IN SLAB WORKS LEVEL 1  SOUTH.pdf
+│   │   ├── 40338_I_2000[8] - GENERAL ARRANGEMENT GROUND OVERALL.pdf
+│   │   ├── 40338_I_2001[9] - GENERAL ARRANGEMENT LEVEL 1 OVERALL.pdf
+│   │   ├── 40338_I_2002[3] - GENERAL ARRANGEMENT LEVEL 1 CAR PARK.pdf
+│   │   ├── 40338_I_2010[11] - GENERAL ARRANGEMENT GROUND NORTH.pdf
+│   │   ├── 40338_I_2011[11] - GENERAL ARRANGEMENT GROUND SOUTH.pdf
+│   │   ├── 40338_I_2012[11] - GENERAL ARRANGEMENT LEVEL 1 NORTH.pdf
+│   │   ├── 40338_I_2013[11] - GENERAL ARRANGEMENT LEVEL 1 SOUTH.pdf
+│   │   ├── 40338_I_2100[8] - PARTITION & JOINERY PLAN GROUND - NORTH.pdf
+│   │   ├── 40338_I_2101[7] - PARTITION & JOINERY PLAN GROUND - SOUTH.pdf
+│   │   ├── 40338_I_2102[8] - PARTITION & JOINERY PLAN LEVEL 1 - NORTH.pdf
+│   │   ├── 40338_I_2103[8] - PARTITION & JOINERY PLAN LEVEL 1 - SOUTH.pdf
+│   │   ├── 40338_I_2104[3] - PARTITION & JOINERY PLAN LEVEL 1 - CAR PARK.pdf
+│   │   ├── 40338_I_2200[12] - REFLECTED CEILING PLAN GROUND - NORTH.pdf
+│   │   ├── 40338_I_2201[10] - REFLECTED CEILING PLAN GROUND - SOUTH.pdf
+│   │   ├── 40338_I_2202[10] - REFLECTED CEILING PLAN LEVEL 1 - NORTH.pdf
+│   │   ├── 40338_I_2203[10] - REFLECTED CEILING PLAN LEVEL 1 - SOUTH.pdf
+│   │   ├── 40338_I_2300[7] - FINISHES PLAN GROUND - NORTH.pdf
+│   │   ├── 40338_I_2301[7] - FINISHES PLAN GROUND - SOUTH.pdf
+│   │   ├── 40338_I_2302[7] - FINISHES PLAN LEVEL 1 - NORTH.pdf
+│   │   ├── 40338_I_2303[7] - FINISHES PLAN LEVEL 1 - SOUTH.pdf
+│   │   ├── 40338_I_2400[6] - FURNITURE PLAN GROUND - NORTH.pdf
+│   │   ├── 40338_I_2401[6] - FURNITURE PLAN GROUND - SOUTH.pdf
+│   │   ├── 40338_I_2402[6] - FURNITURE PLAN LEVEL 1 - NORTH.pdf
+│   │   ├── 40338_I_2403[6] - FURNITURE PLAN LEVEL 1 - SOUTH.pdf
+│   │   ├── 40338_I_2500[6] - WORKSTATION PLAN GROUND - NORTH.pdf
+│   │   ├── 40338_I_2501[6] - WORKSTATION PLAN GROUND - SOUTH.pdf
+│   │   ├── 40338_I_2502[6] - WORKSTATION PLAN LEVEL 1 - NORTH.pdf
+│   │   ├── 40338_I_2503[6] - WORKSTATION PLAN LEVEL 1 - SOUTH.pdf
+│   │   ├── 40338_I_2600[4] - SIGNAGE PLAN GROUND - NORTH.pdf
+│   │   ├── 40338_I_2601[4] - SIGNAGE PLAN GROUND - SOUTH.pdf
+│   │   ├── 40338_I_2602[4] - SIGNAGE PLAN LEVEL 1 - NORTH.pdf
+│   │   ├── 40338_I_2603[4] - SIGNAGE PLAN LEVEL 1 - SOUTH.pdf
+│   │   ├── 40338_I_3000[5] - INTERNAL ELEVATIONS - SHEET 1.pdf
+│   │   ├── 40338_I_3001[5] - INTERNAL ELEVATIONS - SHEET 2.pdf
+│   │   ├── 40338_I_3002[5] - INTERNAL ELEVATIONS - SHEET 3.pdf
+│   │   ├── 40338_I_3003[5] - INTERNAL ELEVATIONS - SHEET 4.pdf
+│   │   ├── 40338_I_3004[5] - INTERNAL ELEVATIONS - SHEET 5.pdf
+│   │   ├── 40338_I_3005[4] - INTERNAL ELEVATIONS - SHEET 6.pdf
+│   │   ├── 40338_I_3006[4] - INTERNAL ELEVATIONS - SHEET 7.pdf
+│   │   ├── 40338_I_4000[6] - END OF TRIP -  DETAIL PLAN.pdf
+│   │   ├── 40338_I_4001[6] - END OF TRIP - DETAIL RCP.pdf
+│   │   ├── 40338_I_4002[6] - END OF TRIP - ENTRY - ELEVATIONS SHEET 01.pdf
+│   │   ├── 40338_I_4003[6] - END OF TRIP - FEMALE - ELEVATIONS SHEET 02.pdf
+│   │   ├── 40338_I_4004[6] - END OF TRIP - MALE - ELEVATIONS SHEET 03.pdf
+│   │   ├── 40338_I_4050[2] - FITOUT DETAILS - LARGE & MEDIUM MEETING ROOM.pdf
+│   │   ├── 40338_I_4051[2] - FITOUT DETAILS - SMALL MEETING & QUIET ROOM.pdf
+│   │   ├── 40338_I_4052[2] - FITOUT DETAILS - FIRST AID ROOM & PARENT'S ROOM.pdf
+│   │   ├── 40338_I_4053[2] - FITOUT DETAILS - CONFERENCE ROOM 1.pdf
+│   │   ├── 40338_I_4054[2] - FITOUT DETAILS - CONFERENCE ROOM 2.pdf
+│   │   ├── 40338_I_4055[2] - FITOUT DETAILS - CONFERENCE ROOM 3.pdf
+│   │   ├── 40338_I_4056[2] - FITOUT DETAILS - TMC SHEET 1.pdf
+│   │   ├── 40338_I_4057[2] - FITOUT DETAILS - TMC ELEVATIONS SHEET 1.pdf
+│   │   ├── 40338_I_4058[2] - FITOUT DETAILS - TMC ELEVATIONS SHEET 1.pdf
+│   │   ├── 40338_I_4059[1] - COMMS ROOM LAYOUT.pdf
+│   │   ├── 40338_I_4300[5] - PARTITION TYPES - SHEET 1.pdf
+│   │   ├── 40338_I_4301[6] - PARTITION TYPES - SHEET 2.pdf
+│   │   ├── 40338_I_4302[6] - PARTITION TYPES - SHEET 3.pdf
+│   │   ├── 40338_I_4310[2] - CONSTRUCTION DETAILS - SHEET 1.pdf
+│   │   ├── 40338_I_4311[2] - CONSTRUCTION DETAILS - SHEET 2.pdf
+│   │   ├── 40338_I_4380[4] - OPERABLE WALL DETAILS - SHEET 1.pdf
+│   │   ├── 40338_I_4381[5] - OPERABLE WALL ELEVATIONS.pdf
+│   │   ├── 40338_I_4382[4] - OPERABLE WALL DETAILS - SHEET 3.pdf
+│   │   ├── 40338_I_4400[4] - DOOR DETAILS - SHEET 1.pdf
+│   │   ├── 40338_I_4401[4] - DOOR DETAILS - SHEET 2.pdf
+│   │   ├── 40338_I_4402[5] - DOOR DETAILS - SHEET 3.pdf
+│   │   ├── 40338_I_4403[4] - DOOR DETAILS - SHEET 4.pdf
+│   │   ├── 40338_I_4404[4] - DOOR DETAILS - SHEET 5.pdf
+│   │   ├── 40338_I_4405[5] - DOOR DETAILS - SHEET 6.pdf
+│   │   ├── 40338_I_4406[4] - DOOR DETAILS - SHEET 7.pdf
+│   │   ├── 40338_I_4500[4] - DOOR SCHEDULE.pdf
+│   │   ├── 40338_I_4700[2] - CEILING DETAILS -   SHEET 1.pdf
+│   │   ├── 40338_I_4800[5] - FLOOR DETAILS.pdf
+│   │   ├── 40338_I_5000[4] - WORKSTATION DETAILS - SHEET 1.pdf
+│   │   ├── 40338_I_5001[4] - WORKSTATION DETAILS - SHEET 2.pdf
+│   │   ├── 40338_I_5002[4] - WORKSTATION DETAILS - SHEET 3.pdf
+│   │   ├── 40338_I_5500[2] - SIGNAGE DETAILS - SHEET 1.pdf
+│   │   ├── 40338_I_6000[4] - JOINERY DETAIL - J01 - SECURITY DESK.pdf
+│   │   ├── 40338_I_6001[4] - JOINERY DETAIL - J02 - QUIET ROOM BENCH.pdf
+│   │   ├── 40338_I_6002[5] - JOINERY DETAIL - J03 - FIRST AID BENCH.pdf
+│   │   ├── 40338_I_6003[6] - JOINERY DETAIL - J05 & J06 - UTILITIES BENCH.pdf
+│   │   ├── 40338_I_6004[5] - JOINERY DETAIL - J07 BANQUETTE.pdf
+│   │   ├── 40338_I_6005[5] - JOINERY DETAIL - J04 & J04A GR KITCHEN.pdf
+│   │   ├── 40338_I_6006[5] - JOINERY DETAIL - J04 & J04A GR KITCHEN.pdf
+│   │   ├── 40338_I_6007[5] - JOINERY DETAIL - J08 COLLAB HIGH TABLE.pdf
+│   │   ├── 40338_I_6008[5] - JOINERY DETAIL - J09 IT BENCH.pdf
+│   │   ├── 40338_I_6009[2] - JOINERY DETAIL - J24 TMC CREDENZA.pdf
+│   │   ├── 40338_I_6010[6] - JOINERY DETAIL - J10 EOT VANITY.pdf
+│   │   ├── 40338_I_6011[5] - JOINERY DETAIL - J11 GR SMALL KITCHEN.pdf
+│   │   ├── 40338_I_6012[5] - JOINERY DETAIL - J12 & J12A WORKSTATION SCREEN.pdf
+│   │   ├── 40338_I_6013[5] - JOINERY DETAIL - J13 BANQUETTE.pdf
+│   │   ├── 40338_I_6014[5] - JOINERY DETAIL - J14 CONCIERGE DESK.pdf
+│   │   ├── 40338_I_6015[5] - JOINERY DETAIL - J15 BANQUETTE.pdf
+│   │   ├── 40338_I_6016[5] - JOINERY DETAIL - J16 CREDENZA.pdf
+│   │   ├── 40338_I_6017[5] - JOINERY DETAIL - J17 & J17A BENCH SEAT & STORAGE NOOK.pdf
+│   │   ├── 40338_I_6018[5] - JOINERY DETAIL - J18 PARENT'S ROOM.pdf
+│   │   ├── 40338_I_6019[5] - JOINERY DETAIL - J19 UTILITY BENCH LARGE.pdf
+│   │   ├── 40338_I_6020[5] - JOINERY DETAIL - J20 BANQUETTE.pdf
+│   │   ├── 40338_I_6021[5] - JOINERY DETAIL - J21 BANQUETTE.pdf
+│   │   ├── 40338_I_6022[5] - JOINERY DETAIL - J22 & J22A L01 MAIN KITCHEN.pdf
+│   │   ├── 40338_I_6023[5] - JOINERY DETAIL -  J22 L01 MAIN KITCHEN.pdf
+│   │   ├── 40338_I_6024[5] - JOINERY DETAIL - J22A L01 MAIN KITCHEN.pdf
+│   │   ├── 40338_I_6025[5] - JOINERY DETAIL - J22A L01 MAIN KITCHEN.pdf
+│   │   ├── 40338_I_6026[5] - JOINERY DETAIL - J23 IT STAFF STORAGE.pdf
+│   │   ├── 40338_I_6050[4] - JOINERY DETAIL - TYPICAL DETAILS.pdf
+│   │   └── COMBINED.pdf
+│   └── SCHEDULES
+│       ├── 40338 PLUS Document Transmittal & Disclaimer.pdf
+│       ├── 40338_SC01[6] - FINISHED SCHEDULE.pdf
+│       ├── 40338_SC02[5] - FF+E Schedule.pdf
+│       ├── 40338_SCH05[4] - SIGNAGE SCHEDULE.pdf
+│       └── 40338_SPC001[4] - SPECIFICATION.pdf
+├── Base Building Structural Drawings
+│   └── S2995-15-Building-For Construction-07.07.2016.pdf
+├── Clafications 3 & 4
+│   ├── Base Building - Electrical Services - General Detail Legend.JPG
+│   ├── Clarification No. 4.pdf
+│   └── Clarification No.3 with attachment.pdf
+├── Clarification  21
+│   ├── Clarification No . 21_attachment 1_FF+E Schedule _ draft.pdf
+│   ├── Clarification No. 21.pdf
+│   └── Clarification No. 21_attachment 2_Ceilings package_CURTAIN EXTENT.pdf
+├── Clarification 11
+│   ├── Clarification No. 11.pdf
+│   └── Clarification No. 11_attachement_star-led-panel.pdf
+├── Clarification 13
+│   ├── Clarification No.13.pdf
+│   ├── Clarifications No. 13_attachment 2.pdf
+│   └── Clarifications No. 13_attachment_1.pdf
+├── Clarification 14
+│   ├── Clari. No.14 Attachment_Combined ProAV Tender Drawings.pdf
+│   └── Clarification No.14.pdf
+├── Clarification 15
+│   ├── Clari. No. 15_RG 4883 DRAWING - DTMR Buderim.pdf
+│   └── Clarification No.15.pdf
+├── Clarification 16
+│   ├── Clarification No. 16_atatchement 1_Finshes & Elev..pdf
+│   ├── Clarification No. 16_atatchment 3_FINISHES PLANS existing tile extent.pdf
+│   ├── Clarification No. 16_attachment 2_Door H.pdf
+│   └── Clarification no.16.pdf
+├── Clarification 17
+│   ├── Clarification No. 17-Attachment - Revised Sched. & RCP.pdf
+│   └── Clarification no.17.pdf
+├── Clarification 18
+│   └── Clarification no.18.pdf
+├── Clarification 19
+│   ├── Clarification No. 19_attachment_Joinery mark up plans.pdf
+│   └── Clarification no. 19.pdf
+├── Clarification 6
+│   └── Clarification No. 6.pdf
+├── Clarification 8
+│   ├── Clarification No. 8.pdf
+│   └── Clarifications No.8_attahment_finishes.pdf
+├── Clarifications 10 & 12
+│   ├── 40338_GATE CARPET CLARIFICATIONS.pdf
+│   ├── Clarification no. 10.pdf
+│   ├── Clarification no. 12.pdf
+│   └── DTMR BUDERIM PARITTION MARKUPS.pdf
+├── Electrical
+│   ├── 200474 Electrical Specification Rev2.pdf
+│   ├── 24067_87032_CD_E01.01-3.pdf
+│   ├── 24067_87032_CD_E02.01-4.pdf
+│   ├── 24067_87032_CD_E03.02-3.pdf
+│   ├── 24067_87032_CD_E03.03-4.pdf
+│   ├── 24067_87032_CD_E03.04-4.pdf
+│   ├── 24067_87032_CD_E03.05-4.pdf
+│   ├── 24067_87032_CD_E04.01-4.pdf
+│   ├── 24067_87032_CD_E04.02-4.pdf
+│   ├── 24067_87032_CD_E04.03-3.pdf
+│   ├── 24067_87032_CD_E04.04-3.pdf
+│   ├── 24067_87032_CD_E04.05-3.pdf
+│   ├── 24067_87032_CD_E05.01-3.pdf
+│   ├── 24067_87032_CD_E05.03-0.pdf
+│   ├── 24067_87032_CD_E05.04-0.pdf
+│   ├── 24067_87032_CD_E05.05-0.pdf
+│   ├── 24067_87032_CD_E05.06-0.pdf
+│   ├── Att. B_ ICT Cabling Standard v3.0.pdf
+│   ├── Att. F_TTAS ICT Cabling - Detailed Scope of Works V1.6.pdf
+│   ├── Binder1.pdf
+│   └── plot.log
+├── Fire
+│   ├── 24067_87032_CD_F01.01-2.pdf
+│   ├── 24067_87032_CD_F03.01-4.pdf
+│   ├── 24067_87032_CD_F03.02-3.pdf
+│   ├── 24067_87032_CD_F03.03-2.pdf
+│   ├── 24067_87032_CD_F03.04-4.pdf
+│   └── plot.log
+├── Hydraulic
+│   ├── 200474 Hydraulics Specification Rev 02.pdf
+│   ├── 24067_87032_CD_H02.01-1.pdf
+│   ├── 24067_87032_CD_H03.01-3.pdf
+│   ├── 24067_87032_CD_H03.02-4.pdf
+│   ├── 24067_87032_CD_H03.03-1.pdf
+│   ├── 24067_87032_CD_H03.04-2.pdf
+│   ├── 24067_87032_CD_H04.01-2.pdf
+│   ├── 24067_87032_CD_H04.02-4.pdf
+│   ├── 24067_87032_CD_H04.03-1.pdf
+│   └── 24067_87032_CD_H04.04-1.pdf
+├── Mechanical
+│   ├── 200474 Mechanical Specification Rev 02.pdf
+│   ├── 24067_87032_CD_M01.01-2.pdf
+│   ├── 24067_87032_CD_M02.01-2.pdf
+│   ├── 24067_87032_CD_M03.01-2.pdf
+│   ├── 24067_87032_CD_M03.02-1.pdf
+│   ├── 24067_87032_CD_M03.03-1.pdf
+│   ├── 24067_87032_CD_M03.04-1.pdf
+│   ├── 24067_87032_CD_M03.05-2.pdf
+│   ├── 24067_87032_CD_M03.06-4.pdf
+│   ├── 24067_87032_CD_M03.07-3.pdf
+│   ├── 24067_87032_CD_M03.08-3.pdf
+│   ├── 24067_87032_CD_M03.09-3.pdf
+│   └── 24067_87032_CD_M04.01-4.pdf
+├── Photo's
+│   ├── IMG_6754.JPG
+│   ├── IMG_6755.JPG
+│   ├── IMG_6756.JPG
+│   ├── IMG_6757.JPG
+│   ├── IMG_6758.JPG
+│   ├── IMG_6759.JPG
+│   ├── IMG_6760.JPG
+│   ├── IMG_6761.JPG
+│   ├── IMG_6762.JPG
+│   ├── IMG_6763.JPG
+│   ├── IMG_6764.JPG
+│   ├── IMG_6765.JPG
+│   ├── IMG_6766.JPG
+│   ├── IMG_6767.JPG
+│   ├── IMG_6768.JPG
+│   ├── IMG_6769.JPG
+│   ├── IMG_6770.JPG
+│   ├── IMG_6771.JPG
+│   ├── IMG_6772.JPG
+│   ├── IMG_6773.JPG
+│   ├── IMG_6774.JPG
+│   ├── IMG_6775.JPG
+│   ├── IMG_6776.JPG
+│   ├── IMG_6777.JPG
+│   ├── IMG_6778.JPG
+│   ├── IMG_6779.JPG
+│   ├── IMG_6780.JPG
+│   ├── IMG_6781.JPG
+│   ├── IMG_6782.JPG
+│   ├── IMG_6783.JPG
+│   ├── IMG_6784.JPG
+│   ├── IMG_6785.JPG
+│   ├── IMG_6786.JPG
+│   ├── IMG_6787.JPG
+│   ├── IMG_6788.JPG
+│   ├── IMG_6789.JPG
+│   ├── IMG_6790.JPG
+│   ├── IMG_6791.JPG
+│   ├── IMG_6792.JPG
+│   ├── IMG_6793.JPG
+│   ├── IMG_6794.JPG
+│   ├── IMG_6795.JPG
+│   ├── IMG_6796.JPG
+│   ├── IMG_6797.JPG
+│   ├── IMG_6798.JPG
+│   ├── IMG_6799.JPG
+│   ├── IMG_6802.JPG
+│   ├── IMG_6803.JPG
+│   ├── IMG_6804.JPG
+│   ├── IMG_6805.JPG
+│   ├── IMG_6806.JPG
+│   ├── IMG_6807.JPG
+│   ├── IMG_6808.JPG
+│   ├── IMG_6809.JPG
+│   ├── IMG_6810.JPG
+│   ├── IMG_6811.JPG
+│   ├── IMG_6812.JPG
+│   ├── IMG_6813.JPG
+│   ├── IMG_6814.JPG
+│   ├── IMG_6816.JPG
+│   ├── IMG_6817.JPG
+│   ├── IMG_6818.JPG
+│   ├── IMG_6819.JPG
+│   ├── IMG_6820.JPG
+│   ├── IMG_6821.JPG
+│   ├── IMG_6822.JPG
+│   ├── IMG_6823.JPG
+│   ├── IMG_6824.JPG
+│   ├── IMG_6825.JPG
+│   ├── IMG_6826.JPG
+│   ├── IMG_6827.JPG
+│   ├── IMG_6828.JPG
+│   ├── IMG_6829.JPG
+│   ├── IMG_6830.JPG
+│   ├── IMG_6831.JPG
+│   ├── IMG_6832.JPG
+│   ├── IMG_6833.JPG
+│   ├── IMG_6834.JPG
+│   ├── IMG_6835.JPG
+│   ├── IMG_6836.JPG
+│   ├── IMG_6837.JPG
+│   ├── IMG_6838.JPG
+│   ├── IMG_6839.JPG
+│   ├── IMG_6840.JPG
+│   ├── IMG_6841.JPG
+│   ├── IMG_6842.JPG
+│   ├── IMG_6843.JPG
+│   ├── IMG_6844.JPG
+│   ├── IMG_6845.JPG
+│   ├── IMG_6846.JPG
+│   ├── IMG_6847.JPG
+│   ├── IMG_6848.JPG
+│   ├── IMG_6849.JPG
+│   ├── IMG_6850.JPG
+│   ├── IMG_6851.JPG
+│   ├── IMG_6852.JPG
+│   ├── IMG_6853.JPG
+│   ├── IMG_6854.JPG
+│   ├── IMG_6855.JPG
+│   ├── IMG_6856.JPG
+│   ├── IMG_6857.JPG
+│   ├── IMG_6858.JPG
+│   ├── IMG_6859.JPG
+│   ├── IMG_6860.JPG
+│   ├── IMG_6861.JPG
+│   ├── IMG_6862.JPG
+│   ├── IMG_6863.JPG
+│   ├── IMG_6864.JPG
+│   ├── IMG_6865.JPG
+│   ├── IMG_6866.JPG
+│   ├── IMG_6867.JPG
+│   ├── IMG_6868.JPG
+│   ├── IMG_6869.JPG
+│   ├── IMG_6870.JPG
+│   ├── IMG_6871.JPG
+│   ├── IMG_6872.JPG
+│   ├── IMG_6873.JPG
+│   ├── IMG_6874.JPG
+│   ├── IMG_6875.JPG
+│   ├── IMG_6876.JPG
+│   ├── IMG_6877.JPG
+│   ├── IMG_6878.JPG
+│   ├── IMG_6879.JPG
+│   ├── IMG_6880.JPG
+│   ├── IMG_6881.JPG
+│   ├── IMG_6882.JPG
+│   ├── IMG_6883.JPG
+│   ├── IMG_6884.JPG
+│   ├── IMG_6885.JPG
+│   ├── IMG_6886.JPG
+│   ├── IMG_6887.JPG
+│   ├── IMG_6888.JPG
+│   ├── IMG_6889.JPG
+│   ├── IMG_6890.JPG
+│   ├── IMG_6891.JPG
+│   ├── IMG_6892.JPG
+│   ├── IMG_6893.JPG
+│   ├── IMG_6894.JPG
+│   ├── IMG_6895.JPG
+│   ├── IMG_6896.JPG
+│   ├── IMG_6897.JPG
+│   ├── IMG_6898.JPG
+│   ├── IMG_6899.JPG
+│   ├── IMG_6900.JPG
+│   ├── IMG_6901.JPG
+│   ├── IMG_6902.JPG
+│   ├── IMG_6903.JPG
+│   ├── IMG_6904.JPG
+│   ├── IMG_6905.JPG
+│   ├── IMG_6906.JPG
+│   ├── IMG_6907.JPG
+│   ├── IMG_6908.JPG
+│   ├── IMG_6909.JPG
+│   ├── IMG_6910.JPG
+│   ├── IMG_6911.JPG
+│   ├── IMG_6912.JPG
+│   ├── IMG_6913.JPG
+│   ├── IMG_6922.JPG
+│   ├── IMG_6923.JPG
+│   ├── IMG_6924.JPG
+│   ├── IMG_6929.JPG
+│   ├── IMG_6930.JPG
+│   ├── IMG_6931.JPG
+│   ├── IMG_6932.JPG
+│   ├── IMG_6933.JPG
+│   ├── IMG_6934.JPG
+│   ├── IMG_6935.JPG
+│   ├── IMG_6936.JPG
+│   ├── IMG_6937.JPG
+│   ├── IMG_6938.JPG
+│   ├── IMG_6939.JPG
+│   ├── IMG_6940.JPG
+│   ├── IMG_6941.JPG
+│   ├── IMG_6942.JPG
+│   ├── IMG_6943.JPG
+│   ├── IMG_6944.JPG
+│   ├── IMG_6945.JPG
+│   ├── IMG_6946.JPG
+│   ├── IMG_6947.JPG
+│   ├── IMG_6948.JPG
+│   ├── IMG_6949.JPG
+│   ├── IMG_6950.JPG
+│   ├── IMG_6951.JPG
+│   ├── IMG_6952.JPG
+│   ├── IMG_6953.JPG
+│   ├── IMG_6954.JPG
+│   ├── IMG_6955.JPG
+│   ├── IMG_6956.JPG
+│   ├── IMG_6957.JPG
+│   ├── IMG_6959.JPG
+│   ├── IMG_6960.JPG
+│   ├── IMG_6961.JPG
+│   ├── IMG_6962.JPG
+│   ├── IMG_6963.JPG
+│   ├── IMG_6964.JPG
+│   ├── IMG_6965.JPG
+│   ├── IMG_6966.JPG
+│   ├── IMG_6967.JPG
+│   ├── IMG_6968.JPG
+│   ├── IMG_6969.JPG
+│   ├── IMG_6970.JPG
+│   ├── IMG_6971.JPG
+│   ├── IMG_6972.JPG
+│   ├── IMG_6973.JPG
+│   ├── IMG_6974.JPG
+│   ├── IMG_6975.JPG
+│   ├── IMG_6976.JPG
+│   ├── IMG_6977.JPG
+│   ├── IMG_6978.JPG
+│   ├── IMG_6979.JPG
+│   ├── IMG_6980.JPG
+│   ├── IMG_6981.JPG
+│   ├── IMG_6982.JPG
+│   ├── IMG_6983.JPG
+│   ├── IMG_6984.JPG
+│   ├── IMG_6985.JPG
+│   ├── IMG_6986.JPG
+│   ├── IMG_6987.JPG
+│   ├── IMG_6988.JPG
+│   ├── IMG_6989.JPG
+│   ├── IMG_6990.JPG
+│   ├── IMG_6991.JPG
+│   ├── IMG_6992.JPG
+│   ├── IMG_6993.JPG
+│   ├── IMG_6994.JPG
+│   ├── IMG_6995.JPG
+│   ├── IMG_6996.JPG
+│   ├── IMG_6997.JPG
+│   ├── IMG_6998.JPG
+│   ├── IMG_6999.JPG
+│   ├── IMG_7001.JPG
+│   ├── IMG_7002.JPG
+│   ├── IMG_7003.JPG
+│   ├── IMG_7004.JPG
+│   ├── IMG_7005.JPG
+│   ├── IMG_7006.JPG
+│   ├── IMG_7007.JPG
+│   ├── IMG_7008.JPG
+│   ├── IMG_7009.JPG
+│   ├── IMG_7010.JPG
+│   ├── IMG_7011.JPG
+│   ├── IMG_7012.JPG
+│   ├── IMG_7013.JPG
+│   ├── IMG_7014.JPG
+│   ├── IMG_7018.JPG
+│   ├── IMG_7020.JPG
+│   ├── IMG_7021.JPG
+│   ├── IMG_7022.JPG
+│   ├── IMG_7023.JPG
+│   ├── IMG_7024.JPG
+│   ├── IMG_7025.JPG
+│   ├── IMG_7026.JPG
+│   ├── IMG_7027.JPG
+│   ├── IMG_7028.JPG
+│   ├── IMG_7029.JPG
+│   └── IMG_7030.JPG
+└── RFPQ's
+    └── PS-503 Request For Fixed Price Quotation.pdf
+
+
+====================================================================================================
+PROJECT 15/29: 110301_110301_WW_Eli_Waters_fullSet
+Files: 46
+====================================================================================================
+
+├── 01 Scope of Works
+│   └── 220201 Woolworths QLD Eli Waters - R2.2725 - Project Specific Scope of Works.pdf
+├── 02 Architectural
+│   ├── 21J64_-_S01_Eli_Waters.pdf
+│   ├── Eli Waters BWIC markup.RFE 28.01.2022.pdf
+│   ├── Eli Waters ceiling plan markup.RFE 28.01.2022.pdf
+│   ├── WA102-Existing-Site-Plan-Rev.A.pdf
+│   ├── WA200-Control-Plan-Rev.B.pdf
+│   ├── WA201-Architectural-Plan-Rev.A.pdf
+│   ├── WA202-Reflected-Ceiling-Plan-Rev.A.pdf
+│   ├── WA203-Decor-Floor-Plan-Rev.A.pdf
+│   ├── WA204-Decor-Elevations-Rev.A.pdf
+│   ├── WA205-Area-Plan-Rev.A.pdf
+│   ├── WA206-Equipment-Ordering-Plan-Rev.A.pdf
+│   ├── WA207-Emergency-Evacuation-Plan-Rev.A.pdf
+│   ├── WA250-Existing-Conditions-Rev.B.pdf
+│   ├── WA251-Demolition-Plan-Rev.A.pdf
+│   ├── WA253-Existing-Decor-Floor-Plan-Rev.A.pdf
+│   ├── WA254-Existing-Reflected-Ceiling-Plan-Rev.A.pdf
+│   └── WA256-Existing-New-Overlay-Plan-Rev.C.pdf
+├── 03 Mechanical
+│   ├── 220204 Woolworths Eli Waters - R2.2725 - Tender Addendum 1.pdf
+│   ├── DDIM000788.pdf
+│   ├── HVACQLD_R2.2725_Eli Waters_SOW.xlsx
+│   └── ZETA REV HP 14.4 LN.pdf
+├── Addendum 1
+│   ├── 220204 Woolworths Eli Waters - R2.2725 - Tender Addendum 1.pdf
+│   ├── DDIM000788.pdf
+│   ├── HVACQLD_R2.2725_Eli Waters_SOW.xlsx
+│   └── ZETA REV HP 14.4 LN.pdf
+├── Addendum 2
+│   ├── 220214 Woolworths Eli Waters - R2.2725 - Tender Addendum 2.pdf
+│   └── Woolworths Renewal - R2.2725 Eli Waters Staging Plan.pdf
+├── Addendum 3
+│   ├── 220215 Woolworths Eli Waters - R2.2725 - Tender Addendum 3.pdf
+│   ├── Eli Waters BWIC markup.RFE.Revised 15.02.2022.pdf
+│   ├── Shopfit SOW - Eli Waters R2.2725.xlsx
+│   ├── WA300-Bakery-Preparation-Department-Rev.A.pdf
+│   ├── WA320-Deli-&-Seafood-Preparation-Department-Rev.A.pdf
+│   ├── WA340-Produce-Preparation-Department-Rev.A.pdf
+│   ├── WA360-Amenities-&-Team-Room-Department-Rev.A.pdf
+│   ├── WA361-Office-Area-Department-Rev.A.pdf
+│   ├── WA370-Front-End-Department-Rev.A.pdf
+│   ├── WA390-Loading-Dock-Plan-Rev.A.pdf
+│   └── WP397-Direct-to-Boot-Plan-Rev.A.pdf
+└── Addendum 4
+    ├── 21GCT0401 LT01_A.pdf
+    ├── 22-0056_H-101 - Cover Sheet [01].pdf
+    ├── 22-0056_H-201 - Floor Plans Drainage [01].pdf
+    ├── 22-0056_H-301 - Floor Plans Water [01].pdf
+    ├── 220218 Woolworths Eli Waters - R2.2725 - Tender Addendum 4.pdf
+    ├── 22C30 - S2.00.pdf
+    └── Woolworths Eli Waters - E01 - LIGHTING-E01(0).pdf
+
+
+====================================================================================================
+PROJECT 16/29: 110336_110336_WW_Mountview_OHS_fullSet
+Files: 2
+====================================================================================================
+
+├── 220202 Woolworths QLD Redbank Plains Mountview - N1.2867 - Project Specific Scope of Works.pdf
+└── Arch BINDER.pdf
+
+
+====================================================================================================
+PROJECT 17/29: 110337_110337_Australia_Post_-_Kingaroy_fullSet
+Files: 43
+====================================================================================================
+
+├── Architectural
+│   ├── A000 - COVER PAGE [2].pdf
+│   ├── A001 - LOCATION PLAN [2].pdf
+│   ├── A003 - GENERAL NOTES & SPECIFICATIONS [2].pdf
+│   ├── A051 - EXISTING PLAN [2].pdf
+│   ├── A052 - EXISTING CEILING PLAN [2].pdf
+│   ├── A053 - DEMOLITION PLAN [2].pdf
+│   ├── A054 - DEMOLITION REFLECTED CEILING PLAN [2].pdf
+│   ├── A055 - EXISTING DEMOLITION FACADE ELEVATION [2].pdf
+│   ├── A101 - HIGH WALL PLAN [1].pdf
+│   ├── A102 - PARTITION SET OUT PLAN [1].pdf
+│   ├── A103 - FF&E PLAN [2].pdf
+│   ├── A103.1 - DDA PLAN [1].pdf
+│   ├── A105 - REFLECTED CEILING PLAN [2].pdf
+│   ├── A107 - FLOOR FINISHES PLAN [2].pdf
+│   ├── A108 - POWER & DATA PLAN [1].pdf
+│   ├── A201 - FACADE ELEVATIONS [2].pdf
+│   ├── A202 - POB & RETAIL ELEVATIONS [1].pdf
+│   ├── A204 - BOH ELEVATIONS [1].pdf
+│   ├── A301 - POB BUMBER RAIL DETAILS [1].pdf
+│   ├── A402 - TYPICAL PARTITION TYPE DETAILS [1].pdf
+│   ├── A403 - SHOPFRONT DETAILS [1].pdf
+│   ├── A404 - TYPICAL FLOOR JUNCTION DETAILS [1].pdf
+│   ├── A406 - RAMP STAIR DETAILS [1].pdf
+│   ├── A406.1 - RAMP STAIR DETAILS [1].pdf
+│   ├── A408 - DOOR DETAILS [1].pdf
+│   ├── A409 - POSTPAK & PARCEL PICK UP COUNTER [1].pdf
+│   ├── A501 - DOOR + FF&E SCHEDULE [1].pdf
+│   ├── A601 - EXTERNAL PERSPECTIVES [1].pdf
+│   └── A602 - INTERNAL PERSPECTIVES [1].pdf
+├── Electrical
+│   ├── E01 - COVER SHEET_ LOCALITY PLAN & DRAWING SCHEDULE [A].pdf
+│   ├── E02 - LEGEND_ SCOPE OF WORKS AND TECHNICAL NOTES [A].pdf
+│   ├── E03 - DEMOLITION PLAN [A].pdf
+│   ├── E04 - PROPOSED LIGHTING LAYOUT [A].pdf
+│   ├── E05 - PROPOSED POWER AND COMMS LAYOUT [A].pdf
+│   └── E06 - SINGLE LINE DIAGRAM AND SCHEMATIC SHEET [A].pdf
+├── Mechanical
+│   ├── M01 - SITE PLAN_ LEGEND_ NOTES_ SPECIFICATION AND SCHEDULE [A].PDF
+│   ├── M02 -EXISTING AIR CONDITIONING & MECHANICAL VENTILATION LAYOUT [A].PDF
+│   └── M03 -PROPOSED AIR CONDITIONING & MECHANICAL VENTILATION LAYOUT [A].PDF
+├── Others
+│   └── Kingaroy_DCBC_Asbestos_Risk_Assessment_2018-12-11.pdf
+├── Specifications
+│   ├── 140117_AP_CRDS_S2012_Edition1.1_BOH Joinery.pdf
+│   ├── 140117_AP_CRDS_S2012_Edition1.1_FOH Joinery.pdf
+│   └── 140117_AP_CRDS_S2012_Edition1.1_Standard Details (1).pdf
+└── Structural
+    └── S01 - DEMOLITION PLAN_ PROPOSED PLAN AND SECTION [A].pdf
+
+
+====================================================================================================
+PROJECT 18/29: 110347_110347_Priceline_Pharmacy_Eli_Waters_fullSet
+Files: 28
+====================================================================================================
+
+├── Photos
+│   ├── IMG_4884.JPG.cloud
+│   ├── IMG_4885.JPG.cloud
+│   ├── IMG_4886.JPG.cloud
+│   ├── IMG_4887.JPG.cloud
+│   ├── IMG_4888.JPG.cloud
+│   ├── IMG_4889.JPG.cloud
+│   ├── IMG_4890.JPG.cloud
+│   ├── IMG_4891.JPG.cloud
+│   ├── IMG_4892.JPG.cloud
+│   ├── IMG_4893.JPG.cloud
+│   ├── IMG_4894.JPG.cloud
+│   ├── IMG_4895.JPG.cloud
+│   ├── IMG_4896.JPG.cloud
+│   ├── IMG_4897.JPG.cloud
+│   ├── IMG_4898.JPG.cloud
+│   ├── IMG_4899.JPG.cloud
+│   ├── IMG_4900.JPG.cloud
+│   ├── IMG_4901.JPG.cloud
+│   ├── IMG_4902.JPG.cloud
+│   ├── IMG_4903.JPG.cloud
+│   ├── IMG_4904.JPG.cloud
+│   ├── IMG_4905.JPG.cloud
+│   ├── IMG_4906.CR2.cloud
+│   ├── IMG_4906.JPG.cloud
+│   ├── IMG_4907.CR2.cloud
+│   └── IMG_4907.JPG.cloud
+├── 21155 Priceline_Eli Waters-PL_REV A_210421.pdf
+└── Priceline Pharmacy Eli Waters QLD - PL01 - DRAWING SET.pdf
+
+
+====================================================================================================
+PROJECT 19/29: 110348_110348_Woolworths_Carindale_Ecomm_fullSet
+Files: 201
+====================================================================================================
+
+├── Attachment A - Project Ref Doc-Tender Drawings
+│   ├── 2560 - CARINDALE - WA200.1 - B - CONTROL PLAN - STORE LEVEL (ECOMM).pdf
+│   ├── 2560 - CARINDALE - WA256 - B - EXISTING NEW OVERLAY PLAN.pdf
+│   ├── 2560 - CARINDALE - WA397 - B - DIRECT TO BOOT DEPARTMENT.pdf
+│   ├── 2560 - CARINDALE - WA398 - B - DIRECT TO BOOT DRIVE LAYOUT.pdf
+│   ├── WA200.2-CONTROL-PLAN---FIRST-LEVEL-(ECOMM)-Rev.A.pdf
+│   ├── WA250.1-Existing-Conditions-(Store-Plan)-Rev.A.pdf
+│   ├── WA250.2-Existing-Conditions-(Store-Level-Car-Park---Sheet-1)-Rev.A.pdf
+│   ├── WA250.3-Existing-Conditions-(Store-Level-Car-Park---Sheet-2)-Rev.A.pdf
+│   ├── WA250.4-Existing-Conditions-(Roof-Top-Car-Park---Sheet-1)-Rev.A.pdf
+│   ├── WA250.5-Existing-Conditions-(Roof-Top-Car-Park---Sheet-2)-Rev.A.pdf
+│   ├── WA252-Existing-Area-Plan-Rev.A.pdf
+│   ├── WA253-Existing-Decor-Floor-Plan-Rev.A.pdf
+│   └── WA254-Existing-Reflected-Ceiling-Plan-Rev.A.pdf
+├── Attachment E - Hazardous Material Report
+│   ├── 2560 Hazardous Material Report.pdf
+│   └── 2560 Site Asbestos Report.pdf
+├── Attachment H - Project Scopes
+│   ├── 200918 Woolworths Supermarkets - Conditions of Tendering & Standard SOW.pdf
+│   ├── 220204 Woolworths Carindale - E6.2560 - Project Specific SOW & Pricing Doc.pdf
+│   ├── 220204 Woolworths Carindale - E6.2560 - Project Specific SOW & Pricing Doc.xlsm
+│   ├── ~_ample - General Conditions (Upload only PDF).docm
+│   └── ~_ample - General Conditions of Tendering (Upload only PDF).docm
+├── Attachment T - Blueprint Reference Pack
+│   └── Supermarket Guidelines
+│       ├── Back of House
+│       │   └── BOH _ Coolrooms
+│       │       └── Back of House Guidelines_RevD.pdf
+│       ├── Design Clarifications
+│       │   └── Supermarket Design Clarifications Guideline_RevA.pdf
+│       ├── Online Formats
+│       │   ├── Reference Link
+│       │   │   ├── TCA 07 - KERBS STRAIGHT-LAYOUT1.pdf
+│       │   │   ├── TCA 11 - TRAFFIC ISLAND BULLNOSE-LAYOUT1.pdf
+│       │   │   ├── TCA Rubber  Kerb Bullnose- Specifications.pdf
+│       │   │   ├── TCA Rubber Kerb Semi Mountable Specifications.pdf
+│       │   │   └── TCA Traffic Calming Australia-Brochure.pdf
+│       │   └── eCom Guidelines_RevF.pdf
+│       └── Safety
+│           ├── Safety in Design Guideline_RevA.pdf
+│           └── Store Site _ External Building Guidelines.pdf
+├── BOQ
+│   ├── WW Carindale - Ecomm_Blockworks BOQ.xlsx
+│   ├── WW Carindale - Ecomm_Ceiling and partitions BOQ.xlsx
+│   ├── WW Carindale - Ecomm_Concrete BOQ.xlsx
+│   ├── WW Carindale - Ecomm_Demolition BOQ.xlsx
+│   ├── WW Carindale - Ecomm_Linemarking & carpark supplies BOQ.xlsx
+│   ├── WW Carindale - Ecomm_Metalworks BOQ.xlsx
+│   └── WW Carindale - Ecomm_Painting BOQ.xlsx
+├── Site Photos
+│   ├── IMG_6076.JPG
+│   ├── IMG_6077.JPG
+│   ├── IMG_6078.JPG
+│   ├── IMG_6079.JPG
+│   ├── IMG_6080.JPG
+│   ├── IMG_6081.JPG
+│   ├── IMG_6082.JPG
+│   ├── IMG_6083.JPG
+│   ├── IMG_6084.JPG
+│   ├── IMG_6085.JPG
+│   ├── IMG_6086.JPG
+│   ├── IMG_6087.JPG
+│   ├── IMG_6088.JPG
+│   ├── IMG_6089.JPG
+│   ├── IMG_6090.JPG
+│   ├── IMG_6091.JPG
+│   ├── IMG_6092.JPG
+│   ├── IMG_6093.JPG
+│   ├── IMG_6094.JPG
+│   ├── IMG_6095.JPG
+│   ├── IMG_6096.JPG
+│   ├── IMG_6097.JPG
+│   ├── IMG_6098.JPG
+│   ├── IMG_6099.JPG
+│   ├── IMG_6100.JPG
+│   ├── IMG_6101.JPG
+│   ├── IMG_6102.JPG
+│   ├── IMG_6103.JPG
+│   ├── IMG_6104.JPG
+│   ├── IMG_6105.JPG
+│   ├── IMG_6106.JPG
+│   ├── IMG_6107.JPG
+│   ├── IMG_6108.JPG
+│   ├── IMG_6109.JPG
+│   ├── IMG_6110.JPG
+│   ├── IMG_6111.JPG
+│   ├── IMG_6112.JPG
+│   ├── IMG_6113.JPG
+│   ├── IMG_6114.JPG
+│   ├── IMG_6115.JPG
+│   ├── IMG_6116.JPG
+│   ├── IMG_6117.JPG
+│   ├── IMG_6118.JPG
+│   ├── IMG_6119.JPG
+│   ├── IMG_6120.JPG
+│   ├── IMG_6121.JPG
+│   ├── IMG_6122.JPG
+│   ├── IMG_6123.JPG
+│   ├── IMG_6124.JPG
+│   ├── IMG_6125.JPG
+│   ├── IMG_6126.JPG
+│   ├── IMG_6127.JPG
+│   ├── IMG_6128.JPG
+│   ├── IMG_6129.JPG
+│   ├── IMG_6130.JPG
+│   ├── IMG_6131.JPG
+│   ├── IMG_6132.JPG
+│   ├── IMG_6133.JPG
+│   ├── IMG_6134.JPG
+│   ├── IMG_6135.JPG
+│   ├── IMG_6136.JPG
+│   ├── IMG_6137.JPG
+│   ├── IMG_6138.JPG
+│   ├── IMG_6139.JPG
+│   ├── IMG_6140.JPG
+│   ├── IMG_6141.JPG
+│   ├── IMG_6142.JPG
+│   ├── IMG_6143.JPG
+│   ├── IMG_6144.JPG
+│   ├── IMG_6145.JPG
+│   ├── IMG_6146.JPG
+│   ├── IMG_6147.JPG
+│   ├── IMG_6148.JPG
+│   ├── IMG_6149.JPG
+│   ├── IMG_6150.JPG
+│   ├── IMG_6151.JPG
+│   ├── IMG_6152.JPG
+│   ├── IMG_6153.JPG
+│   ├── IMG_6154.JPG
+│   ├── IMG_6155.JPG
+│   ├── IMG_6156.JPG
+│   ├── IMG_6157.JPG
+│   ├── IMG_6158.JPG
+│   ├── IMG_6159.JPG
+│   ├── IMG_6160.JPG
+│   ├── IMG_6161.JPG
+│   ├── IMG_6162.JPG
+│   ├── IMG_6163.JPG
+│   ├── IMG_6164.JPG
+│   ├── IMG_6165.JPG
+│   ├── IMG_6166.JPG
+│   ├── IMG_6167.JPG
+│   ├── IMG_6168.JPG
+│   ├── IMG_6169.JPG
+│   ├── IMG_6170.JPG
+│   ├── IMG_6171.JPG
+│   ├── IMG_6172.JPG
+│   ├── IMG_6173.JPG
+│   ├── IMG_6174.JPG
+│   ├── IMG_6175.JPG
+│   ├── IMG_6176.JPG
+│   ├── IMG_6177.JPG
+│   ├── IMG_6178.JPG
+│   ├── IMG_6179.JPG
+│   ├── IMG_6180.JPG
+│   ├── IMG_6181.JPG
+│   ├── IMG_6182.JPG
+│   ├── IMG_6183.JPG
+│   ├── IMG_6184.JPG
+│   ├── IMG_6185.JPG
+│   ├── IMG_6186.JPG
+│   ├── IMG_6187.JPG
+│   ├── IMG_6188.JPG
+│   ├── IMG_6189.JPG
+│   ├── IMG_6190.JPG
+│   ├── IMG_6191.JPG
+│   ├── IMG_6192.JPG
+│   ├── IMG_6193.JPG
+│   ├── IMG_6194.JPG
+│   ├── IMG_6195.JPG
+│   ├── IMG_6196.JPG
+│   ├── IMG_6197.JPG
+│   ├── IMG_6198.JPG
+│   ├── IMG_6199.JPG
+│   ├── IMG_6200.JPG
+│   ├── IMG_6201.JPG
+│   ├── IMG_6202.JPG
+│   ├── IMG_6203.JPG
+│   ├── IMG_6204.JPG
+│   ├── IMG_6205.JPG
+│   ├── IMG_6206.JPG
+│   ├── IMG_6207.JPG
+│   ├── IMG_6208.JPG
+│   ├── IMG_6209.JPG
+│   ├── IMG_6210.JPG
+│   ├── IMG_6211.JPG
+│   ├── IMG_6212.JPG
+│   ├── IMG_6213.JPG
+│   ├── IMG_6214.JPG
+│   ├── IMG_6215.JPG
+│   ├── IMG_6216.JPG
+│   ├── IMG_6217.JPG
+│   ├── IMG_6218.JPG
+│   ├── IMG_6219.JPG
+│   ├── IMG_6220.JPG
+│   ├── IMG_6221.JPG
+│   ├── IMG_6222.JPG
+│   ├── IMG_6223.JPG
+│   ├── IMG_6224.JPG
+│   ├── IMG_6225.JPG
+│   ├── IMG_6226.JPG
+│   ├── IMG_6227.JPG
+│   ├── IMG_6228.JPG
+│   ├── IMG_6229.JPG
+│   ├── IMG_6230.JPG
+│   └── IMG_6231.JPG
+├── Structural drawing
+│   ├── MPN-S0.00[A].PDF
+│   ├── MPN-S0.01[A].PDF
+│   ├── MPN-S1.00[A].PDF
+│   ├── MPN-S1.10[A].PDF
+│   ├── MPN-S1.20[A].PDF
+│   ├── MPN-S2.00[A].PDF
+│   └── MPN-S2.10[A].PDF
+└── 220217 Woolworths Carindale E6.2560 - Tender Addendum No 1.pdf
+
+
+====================================================================================================
+PROJECT 20/29: 110371_110371_Ipswich_Grammar_School_fullSet
+Files: 112
+====================================================================================================
+
+├── 01 Landscape
+│   ├── 2594 IGS Civic - LA-000 Coversheet [T1].pdf
+│   ├── 2594 IGS Civic - LA-100 Series Demolition Plans [Issued For Tender T1].pdf
+│   ├── 2594 IGS Civic - LA-200 Series Landscape Plans [Issued For Tender T1].pdf
+│   ├── 2594 IGS Civic - LA-300 Series Planting Plans [Issued For Tender T1].pdf
+│   ├── 2594 IGS Civic - LA-500 Series Levels Grading & Drainage Plans [Issued For Tender T1].pdf
+│   ├── 2594 IGS Civic - LA-600 Series Irrigation Plans [Issued For Tender T1].pdf
+│   ├── 2594 IGS Civic - LA-900 Series Landscape Details [Issued For Tender T1].pdf
+│   └── 2594_Project_Landscape Dwg Doc Transmittal 211028.pdf
+├── 02 Architectural
+│   ├── 200118_A-01-01_D.dwg
+│   ├── 200118_A-01-01_D.pdf
+│   ├── 200118_A-02-01_B.dwg
+│   ├── 200118_A-02-01_B.pdf
+│   ├── 200118_A-02-02_C.dwg
+│   ├── 200118_A-02-02_C.pdf
+│   ├── 200118_A-02-03_B.dwg
+│   ├── 200118_A-02-03_B.pdf
+│   ├── 200118_A-11-01_B.pdf
+│   ├── 200118_A-11-02_B.pdf
+│   ├── 2594_IGS_Materials & Finishes [C].pdf
+│   ├── TRANSMITTAL - 211028.pdf
+│   └── Termstop Reticulation System Manual.pdf
+├── 03 Civil
+│   └── 221002 IGS Civil TENDER SET REV B 20DEC21.pdf
+├── 04 Electrical
+│   ├── 13151 - Transmittal.pdf
+│   ├── 13151 CO1 B.pdf
+│   ├── 13151 E001 D.pdf
+│   ├── 13151 E201 E.pdf
+│   ├── 13151 E202 E.pdf
+│   ├── 13151 E203 E.pdf
+│   ├── 13151 E204 E.pdf
+│   ├── 13151 E205 E.pdf
+│   ├── 13151 E206 E.pdf
+│   ├── 13151 E207 E.pdf
+│   ├── 13151 E208 A.pdf
+│   ├── 13151 E209 A.pdf
+│   ├── 13151 E301 E.pdf
+│   ├── 13151 E302 E.pdf
+│   ├── 13151 E303 E.pdf
+│   ├── 13151 E304 E.pdf
+│   ├── 13151 E305 E.pdf
+│   ├── 13151 E306 E.pdf
+│   ├── 13151 E307 E.pdf
+│   └── 13151_Specification_Electrical_A.pdf
+├── 05 Hydraulic
+│   ├── 13151 H001 B.pdf
+│   ├── 13151 H201 F.pdf
+│   ├── 13151 H202 E.pdf
+│   ├── 13151 H203 E.pdf
+│   ├── 13151 H204 E.pdf
+│   ├── 13151 H205 F.pdf
+│   ├── 13151 H206 E.pdf
+│   └── 13151_Specification_Hydraulic_A.pdf
+├── 06 Surveyor
+│   ├── 200228 Site Position
+│   │   ├── 04-1251-001 (B) IGS 220418.dwg
+│   │   ├── 04-1251-001 (B) IGS 220418.pdf
+│   │   └── Ipswich Grammar School Survey.pdf
+│   ├── PlotCfgs
+│   │   ├── A3-A0 PLOT.ctb
+│   │   └── DWG To PDF.pc3
+│   ├── RA Photos
+│   │   ├── Photo (1).jpeg
+│   │   ├── Photo (10).jpeg
+│   │   ├── Photo (11).jpeg
+│   │   ├── Photo (12).jpeg
+│   │   ├── Photo (13).jpeg
+│   │   ├── Photo (14).jpeg
+│   │   ├── Photo (15).jpeg
+│   │   ├── Photo (16).jpeg
+│   │   ├── Photo (2).jpeg
+│   │   ├── Photo (3).jpeg
+│   │   ├── Photo (4).jpeg
+│   │   ├── Photo (5).jpeg
+│   │   ├── Photo (6).jpeg
+│   │   ├── Photo (7).jpeg
+│   │   ├── Photo (8).jpeg
+│   │   └── Photo (9).jpeg
+│   ├── 19698-CD-01 RevD.dwg
+│   ├── 19698-CD-01 RevD.pdf
+│   ├── 19698-CD-01 RevD.txt
+│   └── 8457-19 Grammar School Area 2-Darling Street.pdf
+├── 07 Service Location
+│   └── WOODEND RD.pdf
+├── 08 Heritage Exemption Certificate
+│   ├── 202109-15503_EC_QHR600601_s74_Landscaping.pdf
+│   ├── DES1_HIS_Rev00_06092021.pdf
+│   └── DES2_Appendices_06092021.pdf
+├── 09 Fly Through
+│   └── 2554 IGS Great Hall Enhancement project extended flythrough 210913.mp4
+├── 10 Photos
+│   └── Vacuum Excavation Photos 210707
+│       ├── 20210707_073150_resized.jpg
+│       ├── 20210707_080940_resized.jpg
+│       ├── 20210707_090839_resized.jpg
+│       ├── 20210707_090851_resized.jpg
+│       ├── 20210707_090858_resized.jpg
+│       ├── 20210707_090902_resized.jpg
+│       ├── 20210707_094038_resized.jpg
+│       ├── 20210707_110607_resized.jpg
+│       ├── 20210707_110623_resized.jpg
+│       ├── 20210707_110839_resized.jpg
+│       ├── 20210707_110848_resized.jpg
+│       ├── IMG_6761 (Large).JPG
+│       ├── IMG_6762 (Large).JPG
+│       ├── IMG_6764 (Large).JPG
+│       ├── IMG_6798 (Large).JPG
+│       ├── IMG_6799 (Large).JPG
+│       ├── IMG_6801 (Large).JPG
+│       ├── IMG_6825 (Large).JPG
+│       ├── IMG_6826 (Large).JPG
+│       ├── IMG_6828 (Large).JPG
+│       ├── IMG_6829 (Large).JPG
+│       └── IMG_6830 (Large).JPG
+├── 11 Sliptest Australia
+│   └── 2. Client Sliptest Standard Information.pdf
+├── 12 Traffic
+│   └── 20 12 16_P4291_Ipswich Grammar School_Swept Paths.pdf
+├── 13 Geotechnical
+│   ├── B01089-1AO Rev1.pdf
+│   └── Geotech Report.pdf
+├── 2594_Landscape Specification [B]_inclCPMPrelim.pdf
+├── IGS GHEP Conditions of Tendering 20220128.pdf
+├── IGS GHEP Principals Project Requirements Rev3 20220128.pdf
+├── IGS GHEP Tender Forms 20220128.docx
+├── IGS GHEP Tender Forms 20220128.pdf
+└── Ipswich Grammar - AS4000 - Landscaping (25 Jan 2022).pdf
+
+
+====================================================================================================
+PROJECT 21/29: 110385_110385_Virginia_SS_-_Prep_Refurbishment_fullSet
+Files: 52
+====================================================================================================
+
+├── 03 - Support Files
+│   ├── 3.1 - Working On Department of Education (DoE) Facilities - 2020.pdf
+│   ├── 3.10 - School-electronic-security.pdf
+│   ├── 3.11 - DoE facilities - cooling heating ventilation standard.pdf
+│   ├── 3.12 - Hearing Augmentation for DET Facilities - Version B.pdf
+│   ├── 3.13 - AMU - Plant and Equipment Registration Template (June 2021).XLSM
+│   ├── 3.2 - Design-standards-dete-facilities 2014.pdf
+│   ├── 3.3 - CWD - Telecommunication Works Instruction - V1.23.PDF
+│   ├── 3.4 - DNIPS ICT Part B.pdf
+│   ├── 3.5 - DNIPS - Labels.pdf
+│   ├── 3.6 - DNIPS - TCA 1 Form.pdf
+│   ├── 3.7 - Asbestos-management-plan-dete-facilities 2016.pdf
+│   ├── 3.8 - Security-design-requirements.pdf
+│   └── 3.9 - Specification for CCTV in State Schools.pdf
+├── 2.1 - Architectural Drawings
+│   ├── 2111-17 - Project Schedule [REV A].pdf
+│   ├── 2111-17 - Project Schedule [REV B].pdf
+│   ├── 2111-17 - WD-01 - OVERALL SITE PLAN & PART SITE PLANS [REV A].pdf
+│   ├── 2111-17 - WD-01 - OVERALL SITE PLAN & PART SITE PLANS [REV B].pdf
+│   ├── 2111-17 - WD-02 - EXISTING - DEMOLITION FLOOR PLAN [REV A].pdf
+│   ├── 2111-17 - WD-02 - EXISTING - DEMOLITION FLOOR PLAN [REV B].pdf
+│   ├── 2111-17 - WD-03 - EXISTING PHOTOS [REV A].pdf
+│   ├── 2111-17 - WD-03 - EXISTING PHOTOS [REV B].pdf
+│   ├── 2111-17 - WD-04 - EXISTING PHOTOS [REV A].pdf
+│   ├── 2111-17 - WD-04 - EXISTING PHOTOS [REV B].pdf
+│   ├── 2111-17 - WD-05 - PROPOSED FLOOR PLAN [REV A].pdf
+│   ├── 2111-17 - WD-05 - PROPOSED FLOOR PLAN [REV B].pdf
+│   ├── 2111-17 - WD-06 - EXISTING & PROPOSED REFLECTED CEILING PLAN [REV B].pdf
+│   ├── 2111-17 - WD-06 - EXISTING & PROPOSED REFLECTED CEILING PLAN_.pdf
+│   ├── 2111-17 - WD-07 - PROPOSED JOINERY ELEVATIONS & DETAILS [REV B].pdf
+│   ├── 2111-17 - WD-07 - PROPOSED JOINERY PLANS & 3D VIEWS.pdf
+│   ├── 2111-17 - WD-08 - PROPOSED JOINERY ELEVATIONS & DETAILS [REV B].pdf
+│   ├── 2111-17 - WD-08 - PROPOSED JOINERY ELEVATIONS & DETAILS.pdf
+│   ├── 2111-17 - WD-09 - PROPOSED JOINERY ELEVATIONS 3D VIEWS & DETAILS [REV B].pdf
+│   ├── 2111-17 - WD-09 - PROPOSED JOINERY ELEVATIONS 3D VIEWS.pdf
+│   ├── 2111-17 - WD-10 - PROPOSED JOINERY ELEVATIONS & 3D VIEWS [REV B].pdf
+│   ├── 2111-17 - WD-10 - PROPOSED JOINERY ELEVATIONS & 3D VIEWS.pdf
+│   ├── 2111-17 - WD-11 - PROPOSED JOINERY ELEVATIONS & 3D VIEWS [REV B].pdf
+│   └── 2111-17 - WD-11 - PROPOSED JOINERY ELEVATIONS & 3D VIEWS.pdf
+├── 2.2 - Eplan Drawings (information only)
+│   ├── 10655766.tif
+│   ├── 22560230.tif
+│   └── 22560241.tif
+├── 2.3 - Existing Photos
+│   └── 111.449 - Virginia SS - Existing Photos.pdf
+├── 2.4 - School Asbestos Register
+│   └── Virginia State School Register.pdf
+├── 2.5 - Document Transmittal
+│   └── 111.449 - Virginia SS - Prep Refurb - Document Transmittal.xlsx
+└── Addenda 1
+    ├── 111.449 (34-702036) - Virginia SS - Prep Refurb - Tender Breakdown.xlsx
+    ├── 111.449 - Virginia SS - Prep Refurb - RFI.pdf
+    ├── 11770121.tif
+    ├── 11770132.tif
+    ├── 16021995.tif
+    ├── 16022006.tif
+    ├── 16022028.tif
+    ├── 16022039.tif
+    └── 16375964.tif
+
+
+====================================================================================================
+PROJECT 22/29: 110425_110425_Rockville_Park_Amenities_Building_fullSet
+Files: 64
+====================================================================================================
+
+├── Architecutural - Construction
+│   ├── 190302 Appendix A Sched Fixts Fitgs_Rockville Park Amenities Rev E.pdf
+│   ├── 190302 CD0-01-G LOCATION PLAN.pdf
+│   ├── 190302 CD0-02-D DEMOLITION PLAN.pdf
+│   ├── 190302 CD0-03-H SITE PLAN.pdf
+│   ├── 190302 CD0-04-G SITE WORKS PLAN.pdf
+│   ├── 190302 CD1-01-G PROPOSED FLOOR PLAN.pdf
+│   ├── 190302 CD1-02-F FLOOR SET-OUT PLAN.pdf
+│   ├── 190302 CD1-03-F FLOOR SET DOWN & WALL TYPES PLAN.pdf
+│   ├── 190302 CD1-04-F ROOF PLAN.pdf
+│   ├── 190302 CD1-05-F REFLECTED CEILING PLAN.pdf
+│   ├── 190302 CD2-01-F SECTIONS.pdf
+│   ├── 190302 CD2-02-F SECTIONS.pdf
+│   ├── 190302 CD2-03-F SECTIONS.pdf
+│   ├── 190302 CD3-01-F ELEVATIONS.pdf
+│   ├── 190302 CD5-01-E DOOR & WINDOW SCHEDULE.pdf
+│   ├── 190302 CD6-01-E INTERNAL ELEVATIONS.pdf
+│   ├── 190302 CD6-02-D INTERNAL ELEVATIONS.pdf
+│   ├── 190302 CD6-03-E INTERNAL ELEVATIONS.pdf
+│   ├── 190302 CD6-04-C INTERNAL ELEVATIONS.pdf
+│   ├── 190302 CD7-01-E CONSTRUCTION DETAILS.pdf
+│   ├── 190302 CD7-02-C CONSTRUCTION DETAILS.pdf
+│   ├── 190302 CD7-03-C CONSTRUCTION DETAILS.pdf
+│   ├── 190302 CD8-01-E JOINERY DETAILS.pdf
+│   ├── 190302 Ext Finishes Schedules Rockville Park Rev A.pdf
+│   ├── 190302 Int Finishes Schedules Rockville Park Rev B.pdf
+│   └── 190302 Rockville Park Amenities Spec.pdf
+├── Civ Str Hydr - Construction
+│   ├── 19011-C01-F-11 Nov 2021.pdf
+│   ├── 19011-C02-F-11 Nov 2021.pdf
+│   ├── 19011-C03-F-11 Nov 2021.pdf
+│   ├── 19011-C04-F-11 Nov 2021.pdf
+│   ├── 19011-C05-F-11 Nov 2021.pdf
+│   ├── 19011-C06-C-11 Nov 2021.pdf
+│   ├── 19011-C07-C-11 Nov 2021.pdf
+│   ├── 19011-H01-G-11 Nov 2021.pdf
+│   ├── 19011-H02-G-11 Nov 2021.pdf
+│   ├── 19011-H03-H-11 Nov 2021.pdf
+│   ├── 19011-H04-G-11 Nov 2021.pdf
+│   ├── 19011-H05-G-11 Nov 2021.pdf
+│   ├── 19011-H06-G-11 Nov 2021.pdf
+│   ├── 19011-S01-F-11 Nov 2021.pdf
+│   ├── 19011-S02-F-11 Nov 2021.pdf
+│   ├── 19011-S03-G-11 Nov 2021.pdf
+│   ├── 19011-S04-G-11 Nov 2021.pdf
+│   ├── 19011-S05-G-11 Nov 2021.pdf
+│   └── 19011-S06-F-11 Nov 2021.pdf
+├── Elec & Mech - Construction
+│   ├── 19-0188 E01-0-Legends.pdf
+│   ├── 19-0188 E02-0-Site Works.pdf
+│   ├── 19-0188 E03-0-Lighting Layout.pdf
+│   ├── 19-0188 E04-0-Power_ Communications & Security Layout.pdf
+│   ├── 19-0188 E05-0-Schematics.pdf
+│   ├── 19-0188 E06-0-Security Layout.pdf
+│   ├── 19-0188 E07-0-Security Schematic & Details.pdf
+│   ├── 19-0188 E08-0-Communications Details.pdf
+│   ├── 19-0188 Electrical Specification Rev 0-1.0-.pdf
+│   ├── 19-0188 M01-LEGEND NOTES & SCHEDULE-0-LEGEND NOTES & SCHEDULE.pdf
+│   ├── 19-0188 M02-MECHANICAL SERVICES LAYOUT-0-MECHANICAL SERVICES LAY.pdf
+│   ├── 19-0188 M03-SECTIONS & DETAILS-0-SECTIONS & DETAILS.pdf
+│   └── M19-0188 Mechanical Specification-C-Mechanical Specification.pdf
+├── Landscape - Construction
+│   ├── LandscapeNotes 2140-00Rev2.pdf
+│   ├── LandscapePlan2140-01Rev2.pdf
+│   └── LandscapePlan2140-02Rev2.pdf
+├── 190302 Document List Rev E.pdf
+├── RFX Summary Report.pdf
+└── ST40418 - Soil report (2).pdf
+
+
+====================================================================================================
+PROJECT 23/29: 110452_110452_DP_World_-_Port_of_Brisbane_fullSet
+Files: 2
+====================================================================================================
+
+├── NS048 DP World Logistics Refurb -  FINISHES - Rev. A.pdf
+└── NS048 J1.02 JOINERY 2 (2).pdf
+
+
+====================================================================================================
+PROJECT 24/29: 110453_110453_New_Engineering_Centre_Chinchilla__S.S_fullSet
+Files: 70
+====================================================================================================
+
+├── Addendum No 3 - CAD DWG files
+│   ├── Architectural
+│   │   └── CAD
+│   │       ├── 21319-0100(K) LOCATION PLAN.dwg
+│   │       ├── 21319-0101(E) SITE PLAN.dwg
+│   │       ├── 21319-1000(M) FLOOR PLAN.dwg
+│   │       ├── 21319-1010(G) ROOF PLAN.dwg
+│   │       ├── 21319-1100(D) REFLECTED CEILING PLAN.dwg
+│   │       ├── 21319-2000(K) ELEVATIONS.dwg
+│   │       ├── 21319-2100(G) SECTIONS.dwg
+│   │       ├── 21319-2101(G) SECTIONS.dwg
+│   │       ├── 21319-3100(I) ROOM LAYOUTS - WORKSHOP.dwg
+│   │       ├── 21319-3101(C) ROOM LAYOUTS - WORKSHOP.dwg
+│   │       ├── 21319-3102(C) ROOM LAYOUTS - AMENITIES.dwg
+│   │       ├── 21319-3300(C) JOINERY - TEACHING WALL.dwg
+│   │       ├── 21319-3301(C) JOINERY - KITCHEN.dwg
+│   │       ├── 21319-3302(C) JOINERY - WORKSHOP.dwg
+│   │       └── 21319-3400(C) ACOUSTIC PANEL EXTENT.dwg
+│   ├── Electrical
+│   │   ├── 7373-E200-GROUND FLOOR LIGHTING AND DRY FIRE LAYOUT.dwg
+│   │   ├── 7373-E300-GROUND FLOOR POWER AND COMMUNICATIONS LAYOUT.dwg
+│   │   ├── 7373-E400-SCHEMATICS SHEET 1.dwg
+│   │   └── 7373-E401-SCHEMATICS SHEET 2.dwg
+│   └── Hydraulic
+│       ├── H101 SITE PLAN HYDRAULIC SERVICES.dwg
+│       ├── H201 GROUND FLOOR PLAN DRAINAGE.dwg
+│       ├── H202 ROOF PLAN DRAINAGE.dwg
+│       └── H301 GROUND FLOOR PLAN WATER SERVICES.dwg
+├── Vol 2.1 Architectural Specification & Dulux Specification
+│   ├── 21319_MP_AR_SPEC(A).pdf
+│   └── Dulux Paint Specification MODE_Chinchilla State High School ENGINEERING BUILDING_64511_13.12.2021.pdf
+├── Vol 2.2 Structural Specification
+│   └── _STRUCTURE_TENDER BINDER.pdf
+├── Vol 2.3 Electrical Specification
+│   └── 7373 ELEC SPE01 [A].pdf
+├── Vol 2.4 Mechanical Specification
+│   └── 7373 MECH SPM01 [P2].pdf
+├── Vol 2.5 Hydraulic Specification
+│   └── 7373 SPH01[A].pdf
+├── Vol 2.6 Landscape Specification
+│   └── 21319-T-LD-0000(B) COVER SHEET.pdf
+├── Vol 3.1 Architectural Drawings
+│   └── 21319_ARCH_TENDER BINDER.pdf
+├── Vol 3.2 Structural Drawings
+│   └── _STRUCTURE_TENDER BINDER.pdf
+├── Vol 3.3 Hydraulic Drawings
+│   └── _HYDRAULIC_TENDER BINDER.pdf
+├── Vol 3.4 Electrical Drawings
+│   └── _ELECTRICAL_TENDER BINDER.pdf
+├── Vol 3.5 Mechanical Drawings
+│   └── 7373 M001 HVAC LAYOUT .pdf
+├── Vol 3.6 Landscape Drawings
+│   └── Landscape Binder Set.pdf
+├── Vol 3.7 Acoustic Drawings
+│   └── 0510 Chinchilla SHS_Engineering_ANV_NT Rpt 01 & Dwg.pdf
+├── Vol 4.0 - DET Specific Documentation
+│   ├── Vol 4.01 Working on DoE Facilities.pdf
+│   ├── Vol 4.02 Design Standards DET Facilities.pdf
+│   ├── Vol 4.03 DoE Standard Air-Conditioning Specification.pdf
+│   ├── Vol 4.04 DoE_ISB signage guidelines.pdf
+│   ├── Vol 4.05 Asbestos Management Plan DoE Facilities.pdf
+│   ├── Vol 4.06 Service Maintenance Plant and Equipment Registration - Template.xlsx
+│   ├── Vol 4.07 DoE Hearing Augmentation.pdf
+│   ├── Vol 4.08 DoE Hearing Augmentation (Part B).pdf
+│   ├── Vol 4.09 Project Facilities Brief - Chinchilla SHS.PDF
+│   ├── Vol 4.10 Telecommunication Works V1.23 - Instruction.pdf
+│   ├── Vol 4.11 Plant and Equipment Registration Template.XLSM
+│   ├── Vol 4.12 RFQ (ICT) - Request for Quotation V2.21 - Form.DOCX
+│   ├── Vol 4.13 WHSQ - Form 8 - Application for registration of registrable plant (2019).pdf
+│   └── Vol 4.14 Wireless Device Installations for Lift Phone V1.10 - Instruction.pdf
+├── Vol 5.01 Architectural Schedule
+│   ├── 21319-4100(A) DOOR SCHEDULE.pdf
+│   ├── 21319-4200(A) WINDOW SCHEDULE.pdf
+│   ├── 21319-4300(I) EXTERNAL FINISHES.pdf
+│   ├── 21319-4301(H) INTERNAL FINISHES.pdf
+│   └── 21319-4400(C) FF&E SCHEDULE.pdf
+├── Vol 5.01 Landscape Schedule
+│   └── 21319-T-LD-0010(A) MATERIALS FINISHES AND FF&E.pdf
+├── Vol 5.02 Town Planning Report
+│   └── PTPR - Chinchilla State High School_160821A.pdf
+├── Vol 5.03 Building Certifier Report
+│   └── Chinchilla SHS Part A Non-Traditional BCA Report 16.12.2021.pdf
+├── Vol 5.04 Geotechnical Report
+│   └── PTP_07796 - 0001 - Rev1 - Geotechnical Investigation Report.pdf
+├── Vol 5.05 Site Survey
+│   └── 14197 DTM 01.pdf
+├── Vol 5.06 Acoustic Report
+│   ├── 0510 Chinchilla SHS Engineering AIA_Rpt 02.pdf
+│   └── 0510 Chinchilla SHS_Engineering_ANV_NT Rpt 01 & Dwg.pdf
+├── Vol 5.07 Energy Efficiency Report
+│   └── 211114 - Energy Efficency Report - CHINCHILLA.pdf
+├── Vol 5.08 Room Data Sheets
+│   └── 21319 Chinchilla SHS RDS_Rev E_TENDER.pdf
+├── Vol 5.09 Substitution Request Form
+│   └── 50 Substitution Request Form.docx
+├── Vol 5.10 ISB - Signage Guidelines Attachments
+│   └── ISB Signage Guidelines.pdf
+├── Addendum No 8.docx
+├── CIVIL - RPT_SWMP(B).pdf
+└── Transmittal - 00011.pdf
+
+
+====================================================================================================
+PROJECT 25/29: 110457_110457_MLC_Advice_Tenancy_Fitouts_fullSet
+Files: 91
+====================================================================================================
+
+├── 558-12 MLC Upr Mt Gravatt Tender Documents
+│   ├── 558-21 Electrical Services Tender breakdown 04-02-2022.pdf
+│   ├── 558-21 FF&E SCHEDULE-T1.pdf
+│   ├── 558-21 Fire Services Tender breakdown 04-02-2022.pdf
+│   ├── 558-21 Mechanical Services Tender breakdown 04-02-2022.pdf
+│   ├── 558-21 Tender Breakdown 03-02-2021.pdf
+│   ├── 558-21_A000-T1.pdf
+│   ├── 558-21_A100_T1.pdf
+│   ├── 558-21_A101-T1.pdf
+│   ├── 558-21_A102-T1.pdf
+│   ├── 558-21_A200-T1.pdf
+│   ├── 558-21_A201-T1.pdf
+│   ├── 558-21_A202-T1.pdf
+│   ├── 558-21_A203-T1.pdf
+│   ├── 558-21_A204-T1.pdf
+│   ├── 558-21_A301-T1.pdf
+│   ├── 558-21_A302-T1.pdf
+│   ├── 558-21_A303-T12.pdf
+│   ├── E-100T1.pdf
+│   ├── E-101T1.pdf
+│   ├── E-200T1.pdf
+│   ├── Electrical Services Specification T1.pdf
+│   ├── F-100T1.pdf
+│   ├── F-101T1.pdf
+│   ├── F-200T1.pdf
+│   ├── Fire Services Specification T1.pdf
+│   ├── M-100T1.pdf
+│   ├── M-101T1.pdf
+│   ├── M-200T1.pdf
+│   ├── Mechanical Services Specification T1.pdf
+│   ├── Nexus - Fitout Manual August 2021.pdf
+│   ├── Occupational Health & Safety Guidelines 2019.pdf
+│   └── Site Guidelines 2019.pdf
+├── 560-12 MLC Bundall Tender Documents
+│   ├── 560-21 Electrical Services Tender breakdown 04-02-2022.pdf
+│   ├── 560-21 FF&E SCHEDULE-T1.pdf
+│   ├── 560-21 Fire Servies Tender breakdown 04-02-2022.pdf
+│   ├── 560-21 Mechanical Services Tender breakdown 04-02-2022.pdf
+│   ├── 560-21 Tender Breakdown 03-02-2021.pdf
+│   ├── 560-21_A000_COVER SHT_T1.pdf
+│   ├── 560-21_A100_DEMO PL_T1.pdf
+│   ├── 560-21_A101_PART PL_T1.pdf
+│   ├── 560-21_A102_FURN PL_T1.pdf
+│   ├── 560-21_A103_FF PL_T1.pdf
+│   ├── 560-21_A200_PART SECT SHT 1_T1.pdf
+│   ├── 560-21_A201_PART SECT-SHT 2_T1.pdf
+│   ├── 560-21_A202_PART DETAILS_T1.pdf
+│   ├── 560-21_A203_PART DETAILS_T1.pdf
+│   ├── 560-21_A204_PART DETAILS_T1.pdf
+│   ├── 560-21_A205_DOOR_WIN_ELEVS_T1.pdf
+│   ├── 560-21_A301_J04-J05_T1.pdf
+│   ├── 560-21_A302_J01_T1.pdf
+│   ├── 560-21_A303_J02_T1.pdf
+│   ├── 560-21_A304_J2_T1.pdf
+│   ├── CC1 JLL Fitout Guide v7 May 21.pdf
+│   ├── E-100T1.pdf
+│   ├── E-101T1.pdf
+│   ├── E-200T1.pdf
+│   ├── Electrical Services Specification T1.pdf
+│   ├── F-100T1.pdf
+│   ├── F-101T1.pdf
+│   ├── F-200T1.pdf
+│   ├── Fire Services Specification T1.pdf
+│   ├── H-100T1.pdf
+│   ├── M-100T1.pdf
+│   ├── M-101T1.pdf
+│   ├── M-200T1.pdf
+│   ├── Mechanical Services Specification T1.pdf
+│   ├── Occupational Health & Safety Guidelines 2019.pdf
+│   └── Site Guidelines 2019.pdf
+├── Bundall Extg Photos
+│   ├── Bundall #1.pdf
+│   ├── Bundall #2.pdf
+│   ├── Bundall #3.pdf
+│   ├── Bundall #4.pdf
+│   ├── Bundall #5.pdf
+│   ├── Bundall #6.pdf
+│   ├── Bundall #7.pdf
+│   ├── Bundall #8.pdf
+│   └── Bundall #9.pdf
+├── UMG Extg Photos
+│   ├── UMG #1.pdf
+│   ├── UMG #10.pdf
+│   ├── UMG #11.pdf
+│   ├── UMG #2.pdf
+│   ├── UMG #3.pdf
+│   ├── UMG #4.pdf
+│   ├── UMG #5.pdf
+│   ├── UMG #6.pdf
+│   ├── UMG #7.pdf
+│   ├── UMG #8.pdf
+│   └── UMG #9.pdf
+├── 1.SCH NOTICE TO TENDERERS.pdf
+├── 558-21 MLC Advice - UMG Addendum No.1.pdf
+└── 560-21 MLC Advice - Bundall Addendum No.1.pdf
+
+
+====================================================================================================
+PROJECT 26/29: 110464_Willawong_-_Drive_Thru_Burrito_Bar_&_Retail_fullSet
+Files: 71
+====================================================================================================
+
+├── Architectural Drawings
+│   ├── 2020-570_A000_Cover Sheet_D.pdf
+│   ├── 2020-570_A001_Documentation Standards_A.pdf
+│   ├── 2020-570_A010_Finishes Schedule_A.pdf
+│   ├── 2020-570_A100_Existing Site Plan_B.pdf
+│   ├── 2020-570_A110_Site Plan_F.pdf
+│   ├── 2020-570_A111_Site Details_B.pdf
+│   ├── 2020-570_A200_Floor Plan_F.pdf
+│   ├── 2020-570_A210_Slab  Structure Setout_D.pdf
+│   ├── 2020-570_A230_Wall Setout_D.pdf
+│   ├── 2020-570_A240_Floor Finishes_D.pdf
+│   ├── 2020-570_A250_Roof Plan_E.pdf
+│   ├── 2020-570_A300_Rcp_E.pdf
+│   ├── 2020-570_A400_Elevations_D.pdf
+│   ├── 2020-570_A500_Building Sections_E.pdf
+│   ├── 2020-570_A600_Refuse Plans_C.pdf
+│   ├── 2020-570_A610_Amenity Plans_D.pdf
+│   ├── 2020-570_A900_Door  Window Schedule_C.pdf
+│   ├── 2020-570_S001_Signage Plan_A.pdf
+│   ├── 2020-570_S002_Signage Elevations_A.pdf
+│   └── Arch Binder1.pdf
+├── Civil Drawings
+│   ├── BR210513_C0.01-A.pdf
+│   ├── BR210513_C0.02-A.pdf
+│   ├── BR210513_C1.01-A.pdf
+│   ├── BR210513_C1.11-B.pdf
+│   ├── BR210513_C2.01-B.pdf
+│   ├── BR210513_C3.01-B.pdf
+│   ├── BR210513_C4.01-B.pdf
+│   ├── BR210513_C5.01-A.pdf
+│   ├── BR210513_C5.11-A.pdf
+│   ├── BR210513_C6.01-A.pdf
+│   ├── BR210513_C6.02-A.pdf
+│   ├── BR210513_C7.01-A.pdf
+│   ├── BR210513_C7.02-A.pdf
+│   ├── BR210513_C8.01-A.pdf
+│   ├── BR210513_C8.02-A.pdf
+│   └── Civil Binder1.pdf
+├── Electrical Drawings
+│   ├── 257-60_E01-A.pdf
+│   ├── 257-60_E02-A.pdf
+│   ├── 257-60_E03-1.pdf
+│   └── Elect Binder1.pdf
+├── Hydraulic Drawings
+│   ├── BR210513-H1.01-A.pdf
+│   ├── BR210513-H1.02-A.pdf
+│   ├── BR210513-H1.03-A.pdf
+│   ├── BR210513-H2.01-A.pdf
+│   ├── BR210513-H2.02-A.pdf
+│   ├── BR210513-H3.01-A.pdf
+│   ├── BR210513-H5.01-A.pdf
+│   └── Hydraulic Binder 1.pdf
+├── Landscaping Drawings
+│   └── 1605800 Schematic Design [L].pdf
+├── Mechanical Drawings
+│   ├── 257-60_M01-B.PDF
+│   ├── 257-60_M02-B.PDF
+│   └── Mech Binder1.pdf
+├── Principal Project Requirements
+│   └── PPR Willawong 06.02.2022.pdf
+├── Reports
+│   ├── 1-24272_ 2021-09-14_ BR VER 1.pdf
+│   ├── 2122170 Assessment Memo R0.pdf
+│   └── 257-60 JV3 Energy Efficiency Report - Copy.pdf
+├── Structural Drawings
+│   ├── BR210513-S0.00(1).pdf
+│   ├── BR210513-S1.01(1).pdf
+│   ├── BR210513-S1.02(1).pdf
+│   ├── BR210513-S1.10(1).pdf
+│   ├── BR210513-S1.20(1).pdf
+│   ├── BR210513-S1.40(1).pdf
+│   ├── BR210513-S1.50(1).pdf
+│   ├── BR210513-S1.80(1).pdf
+│   ├── BR210513-S1.81(1).pdf
+│   ├── BR210513-S2.01(1).pdf
+│   ├── BR210513-S3.01(1).pdf
+│   ├── BR210513-S4.01(1).pdf
+│   ├── BR210513-S5.01(1).pdf
+│   └── Structutal Binder.pdf
+└── Survey Drawings
+    └── 001531_detail_RevB_A3.pdf
+
+
+====================================================================================================
+PROJECT 27/29: 110485_Sunshine_Coast_Airport_-_Site_3_Refurbishment_fullSet
+Files: 2
+====================================================================================================
+
+├── Builders Works Scope.xlsx
+└── Site 3 Scope Drawing 2022 01 13.pdf
+
+
+====================================================================================================
+PROJECT 28/29: 110492_110492_New_Farm_SS_Covered_Links_fullSet
+Files: 106
+====================================================================================================
+
+├── 02 - Drawings and Specifications
+│   ├── 2.1 Scope of Works
+│   │   ├── 2105-05 - SK-01 - SITE PLANS & GENERAL NOTES [REV A].pdf
+│   │   ├── 2105-05 - SK-02 - EXISTING - DEMOLITION SITE PHOTOS [REV A].pdf
+│   │   ├── 2105-05 - SK-03 - PROPOSED FLOOR PLAN_ RCP & ROOF PLAN [REV A].pdf
+│   │   ├── 2105-05 - SK-04 - PROPOSED SECTIONS [REV A].pdf
+│   │   ├── 2105-05 - SK-05 - PROPOSED DETAILS [REV A].pdf
+│   │   └── 2105-05 - SK-06 - PROPOSED 3D VIEWS [REV A].pdf
+│   ├── 2.2 Survey
+│   │   └── 21456-D1-(A0).pdf
+│   ├── 2.3 Site Photos
+│   │   ├── PHOTOS
+│   │   │   ├── IMG_1458.JPG
+│   │   │   ├── IMG_1459.JPG
+│   │   │   ├── IMG_1460.JPG
+│   │   │   ├── IMG_1461.JPG
+│   │   │   ├── IMG_1462.JPG
+│   │   │   ├── IMG_1463.JPG
+│   │   │   ├── IMG_1464.JPG
+│   │   │   ├── IMG_1465.JPG
+│   │   │   ├── IMG_1466.JPG
+│   │   │   ├── IMG_1467.JPG
+│   │   │   ├── IMG_1468.JPG
+│   │   │   ├── IMG_1469.JPG
+│   │   │   ├── IMG_1470.JPG
+│   │   │   ├── IMG_1471.JPG
+│   │   │   ├── IMG_1472.JPG
+│   │   │   ├── IMG_1473.JPG
+│   │   │   ├── IMG_1474.JPG
+│   │   │   ├── IMG_1475.JPG
+│   │   │   ├── IMG_1476.JPG
+│   │   │   ├── IMG_1477.JPG
+│   │   │   ├── IMG_3412.JPG
+│   │   │   ├── IMG_3413.JPG
+│   │   │   ├── IMG_3414.JPG
+│   │   │   ├── IMG_3415.JPG
+│   │   │   ├── IMG_3416.JPG
+│   │   │   ├── IMG_3417.JPG
+│   │   │   ├── IMG_3418.JPG
+│   │   │   ├── IMG_3419.JPG
+│   │   │   ├── IMG_3420.JPG
+│   │   │   ├── IMG_3421.JPG
+│   │   │   ├── IMG_3422.JPG
+│   │   │   ├── IMG_3423.JPG
+│   │   │   ├── IMG_3424.JPG
+│   │   │   ├── IMG_3425.JPG
+│   │   │   ├── IMG_3426.JPG
+│   │   │   ├── IMG_3427.JPG
+│   │   │   ├── IMG_3428.JPG
+│   │   │   ├── IMG_3429.JPG
+│   │   │   ├── IMG_3430.JPG
+│   │   │   └── IMG_3431.JPG
+│   │   ├── IMG_8510.JPEG
+│   │   ├── IMG_8511.JPEG
+│   │   ├── IMG_8512.JPEG
+│   │   ├── IMG_8513.JPEG
+│   │   ├── IMG_8514.JPEG
+│   │   ├── IMG_8515.JPEG
+│   │   ├── IMG_8516.JPEG
+│   │   ├── IMG_8517.JPEG
+│   │   ├── IMG_8518.JPEG
+│   │   ├── IMG_8519.JPEG
+│   │   ├── IMG_8520.JPEG
+│   │   ├── IMG_8521.JPEG
+│   │   ├── IMG_8522.JPEG
+│   │   ├── IMG_8523.JPEG
+│   │   ├── IMG_8524.JPEG
+│   │   ├── IMG_8525.JPEG
+│   │   ├── IMG_8526.JPEG
+│   │   ├── IMG_8527.JPEG
+│   │   ├── IMG_8528.JPEG
+│   │   ├── IMG_8529.JPEG
+│   │   ├── IMG_8530.JPEG
+│   │   ├── IMG_8531.JPEG
+│   │   ├── IMG_8532.JPEG
+│   │   ├── IMG_8533.JPEG
+│   │   ├── IMG_8534.JPEG
+│   │   ├── IMG_8535.JPEG
+│   │   ├── IMG_8536.JPEG
+│   │   ├── IMG_8537.JPEG
+│   │   ├── IMG_8538.JPEG
+│   │   ├── IMG_8539.JPEG
+│   │   ├── IMG_8540.JPEG
+│   │   ├── IMG_8541.JPEG
+│   │   ├── IMG_8542.JPEG
+│   │   ├── IMG_8543.JPEG
+│   │   ├── IMG_8544.JPEG
+│   │   ├── IMG_8545.JPEG
+│   │   ├── IMG_8546.JPEG
+│   │   ├── IMG_8547.JPEG
+│   │   ├── IMG_8548.JPEG
+│   │   ├── IMG_8549.JPEG
+│   │   ├── IMG_8550.JPEG
+│   │   ├── IMG_8551.JPEG
+│   │   ├── IMG_8552.JPEG
+│   │   ├── IMG_8553.JPEG
+│   │   ├── IMG_8554.JPEG
+│   │   ├── IMG_8555.JPEG
+│   │   ├── IMG_8556.JPEG
+│   │   ├── IMG_8557.JPEG
+│   │   ├── IMG_8558.JPEG
+│   │   ├── IMG_8559.JPEG
+│   │   ├── IMG_8560.JPEG
+│   │   ├── IMG_8561.JPEG
+│   │   ├── IMG_8562.JPEG
+│   │   └── IMG_8563.JPEG
+│   └── 2.4 Heritage Exemption
+│       └── EDOCS - 16229960 - 202111-15855 EC (650043)_S74 APPROVAL NOTICE_Covered Walkway - 1.pdf
+└── 03 - Support Files
+    ├── 3.1 - Working On Department of Education (DoE) Facilities - 2020.pdf
+    ├── 3.2 - Design-standards-dete-facilities 2014.pdf
+    ├── 3.3 - Asbestos-management-plan-dete-facilities 2016.pdf
+    └── 3.4 - AMU - Plant and Equipment Registration Template (June 2021).XLSM
+
+
+====================================================================================================
+PROJECT 29/29: 110494_Edmonton_Storage_Facilty-_B_Block_refit_fullSet
+Files: 6
+====================================================================================================
+
+├── MC077V RC spec 7m dimming motion sensor.pdf
+├── National Storage Edmonton - Ground Floor Plan 5-1-2022 Vers A.pdf
+├── National Storage Edmonton - Mezzanine Floor Plan 5-1-2022 Vers A.pdf
+├── PHOTOS.pdf
+├── S1 and S1 EMG Industralight_VTND.pdf
+└── SENT CONTRACTOR SCOPE National Storage Edmonton - Internal SOW Building B.pdf
+

@@ -203,13 +203,18 @@ export default function ChatHistory({ onSessionSelect }: ChatHistoryProps = {}) 
                   </p>
                 )}
 
-                <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500 mt-1 ml-6">
+                <div className="flex items-center gap-3 text-xs text-slate-400 dark:text-slate-500 mt-1 ml-6 flex-wrap">
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     {formatTime(session.last_activity)}
                   </span>
                   {session.message_count !== undefined && (
                     <span>{session.message_count} messages</span>
+                  )}
+                  {session.most_used_model && (
+                    <span className="px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium text-[10px]">
+                      🤖 {session.most_used_model}
+                    </span>
                   )}
                 </div>
               </div>
