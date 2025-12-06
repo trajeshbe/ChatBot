@@ -9,25 +9,33 @@
 # Higher weight = strategy is preferred when confidence is equal
 
 strategy_weights:
+  # Conversation-only mode (uses ONLY conversation history, no document RAG)
+  conversation_only: 1.0
+
   # Short-term memory (session documents only) - highest priority
-  rag_short_term: 1.0
+  rag_short_term: 0.95
 
   # Hybrid strategy (combines short + long term)
-  rag_hybrid: 0.95
+  rag_hybrid: 0.90
 
   # Tool-based strategies (navigation, OCR, scraping, etc.)
-  tool_navigation: 0.90
-  tool_ocr: 0.90
-  tool_docling: 0.90
+  tool_navigation: 0.85
+  tool_ocr: 0.85
+  tool_docling: 0.85
 
   # Web scraping
-  tool_web_scraping: 0.85
+  tool_web_scraping: 0.80
 
   # Long-term memory (all documents)
-  rag_long_term: 0.85
+  rag_long_term: 0.80
 
   # Direct LLM (no RAG, uses general knowledge)
   direct_llm: 0.75
+
+  # Brain View toggle (enable/disable debug context collection)
+  # Set to true to collect document processing tools and debug context
+  # Set to false to improve performance by skipping debug context assembly
+  enable_brain_view: false
 
 
 # ==========================================

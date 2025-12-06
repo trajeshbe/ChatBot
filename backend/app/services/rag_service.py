@@ -296,10 +296,10 @@ class RAGService:
                     f"{[q[:50] + '...' if len(q) > 50 else q for q in query_variations]}"
                 )
 
-            # STEP 3: Classify query and generate intelligent embeddings
+            # STEP 3: Classify query and generate intelligent embeddings (hybrid: keywords + LLM)
             track_tool("query_classification", "Classify query type for optimal embedding strategy")
             logger.info(f"🔍 Classifying query to determine optimal retrieval strategy...")
-            query_type_result = intelligent_retrieval_service.classify_query(query_text)
+            query_type_result = await intelligent_retrieval_service.classify_query(query_text)
             query_type = query_type_result['query_type']
             embedding_strategy = query_type_result['strategy']
             vector_column = query_type_result['vector_column']
@@ -352,6 +352,7 @@ class RAGService:
                     use_cascading_fallback=True,  # Enable cascading fallback
                     semantic_weight=_semantic_weight,  # UI-provided or config default
                     keyword_weight=_keyword_weight,    # UI-provided or config default
+                    vector_column=vector_column,  # 🆕 Use intelligent embedding strategy column
                     db=db
                 )
                 if short_term_chunks:
@@ -374,6 +375,7 @@ class RAGService:
                 semantic_weight=_semantic_weight,  # UI-provided or config default
                 keyword_weight=_keyword_weight,    # UI-provided or config default
                 project_id=project_id,  # Scope to project if provided
+                vector_column=vector_column,  # 🆕 Use intelligent embedding strategy column
                 db=db
             )
             logger.info(f"Found {len(long_term_chunks)} chunks in long-term memory - hybrid search with fallback")
@@ -534,7 +536,7 @@ class RAGService:
                     logger.warning(f"   Even after preprocessing: '{processed_query[:100]}...'")
 
                 # Check if there are ANY documents in the database
-                count_query = sql_text("SELECT COUNT(*) FROM documents WHERE processed = true")
+                count_query = sql_text("SELECT COUNT(*) FROM documents WHERE processing_status = 'completed'")
                 count_result = await db.execute(count_query)
                 doc_count = count_result.scalar()
 
@@ -674,6 +676,111 @@ class RAGService:
                     db=db
                 )
 
+            # 🧠 Step 8.5: Assemble Brain View debug context (if enabled)
+            # Extract Brain View toggle from strategy_weights (passed from frontend)
+            enable_brain_view = strategy_weights.get('enable_brain_view', False)
+
+            if enable_brain_view:
+                logger.info("🧠 Brain View enabled - assembling debug context")
+
+                # Query document processing tools used for retrieved documents
+                document_processing_tools = []
+                if sources and db:
+                    try:
+                        from sqlalchemy import text as sql_text
+
+                        # Get document IDs from sources
+                        document_ids = [src.get('id') for src in sources if src.get('id')]
+
+                        if document_ids:
+                            # Query tool_usage_stats for document processing tools
+                            tool_query = sql_text("""
+                                SELECT
+                                    tool_category,
+                                    tool_name,
+                                    operation,
+                                    latency_ms,
+                                    success,
+                                    quality_score,
+                                    error_message,
+                                    metadata,
+                                    created_at
+                                FROM tool_usage_stats
+                                WHERE tool_category IN ('document_processing', 'vision_service', 'ocr_service')
+                                  AND (metadata->>'document_id')::text = ANY(:doc_ids)
+                                ORDER BY created_at DESC
+                                LIMIT 50
+                            """)
+
+                            tool_result = await db.execute(
+                                tool_query,
+                                {'doc_ids': [str(doc_id) for doc_id in document_ids]}
+                            )
+
+                            for row in tool_result:
+                                metadata_json = row.metadata if hasattr(row, 'metadata') and row.metadata else {}
+                                document_processing_tools.append({
+                                    'tool_id': f"{row.tool_name}_{hash(str(row.created_at))}",
+                                    'tool_name': row.tool_name.replace('_', ' ').title() if row.tool_name else 'Unknown',
+                                    'category': row.tool_category,
+                                    'operation': row.operation,
+                                    'status': 'success' if row.success else 'failure',
+                                    'latency_ms': round(row.latency_ms, 1) if row.latency_ms else 0,
+                                    'document_id': metadata_json.get('document_id') if isinstance(metadata_json, dict) else None,
+                                    'created_at': row.created_at.isoformat() if hasattr(row.created_at, 'isoformat') else str(row.created_at),
+                                    'quality_score': row.quality_score,
+                                    'error_message': row.error_message
+                                })
+
+                            logger.debug(f"🧠 Brain View: Found {len(document_processing_tools)} document processing tools")
+
+                    except Exception as e:
+                        logger.warning(f"Could not fetch document processing tools for Brain View: {e}")
+
+                # Assemble complete debug context for Brain View
+                result['debug_context'] = {
+                    "routing_decision": {
+                        "strategy": classification.get('query_type', 'unknown') if classification else 'unknown',
+                        "reason": f"Query classified as {classification.get('query_type')} with {classification.get('confidence', 0):.0%} confidence" if classification else 'N/A',
+                        "strategy_weights": result.get('rag_settings', {}).get('weights', {}),
+                        "classification_confidence": classification.get('confidence', 0) if classification else 0
+                    },
+                    "conversation_history": {
+                        "messages_used": 0,  # Frontend manages conversation history
+                        "note": "Conversation history managed by frontend (sent with each request)"
+                    },
+                    "tools_executed": {
+                        "query_time_tools": tools_used,  # Query execution tools (already tracked)
+                        "document_processing_tools": document_processing_tools  # Tools used during document upload
+                    },
+                    "documents_retrieved": {
+                        "total_chunks": len(sources),
+                        "chunks": [
+                            {
+                                "document_id": src.get('id', 'unknown'),
+                                "filename": src.get('filename', 'unknown'),
+                                "similarity_score": src.get('relevance', 0.0),
+                                "memory_type": src.get('memory_type', 'unknown'),
+                                "content_preview": src.get('excerpt', '')[:200] + '...' if len(src.get('excerpt', '')) > 200 else src.get('excerpt', '')
+                            }
+                            for src in sources[:10]  # Limit to top 10 for performance
+                        ]
+                    },
+                    "performance_metrics": {
+                        "total_latency_ms": result.get('latency_ms', 0),
+                        "breakdown": {
+                            "security_check": tools_used[0]['latency_ms'] if len(tools_used) > 0 and 'Security' in tools_used[0].get('tool_name', '') else 0,
+                            "embedding_generation": next((t['latency_ms'] for t in tools_used if 'Embedding' in t.get('tool_name', '')), 0),
+                            "vector_search": next((t['latency_ms'] for t in tools_used if 'Search' in t.get('tool_name', '')), 0),
+                            "llm_generation": next((t['latency_ms'] for t in tools_used if 'LLM' in t.get('tool_name', '') or 'Generate' in t.get('tool_name', '')), 0)
+                        },
+                        "model_used": result.get('model_name', result.get('model', 'unknown')),
+                        "tokens_used": result.get('tokens_used', 0)
+                    }
+                }
+            else:
+                logger.debug("🧠 Brain View disabled - skipping debug context assembly")
+
             # Step 9: Cache the result
             if use_cache and settings.USE_SEMANTIC_CACHE:
                 await self._cache_result(query_text, query_embedding, result, db)
@@ -744,6 +851,7 @@ class RAGService:
         use_cascading_fallback: bool = True,
         semantic_weight: Optional[float] = None,
         keyword_weight: Optional[float] = None,
+        vector_column: str = "embedding",  # 🆕 Which vector column to search
         db: AsyncSession = None
     ) -> List[Dict]:
         """
@@ -773,12 +881,12 @@ class RAGService:
                 logger.info(f"No documents associated with session {session_id}")
                 return []
 
-            # Check chunks with embeddings for session documents
+            # Check chunks with embeddings for session documents (use dynamic vector_column)
             embedding_count_query = sql_text(f"""
                 SELECT COUNT(*)
                 FROM document_chunks dc
                 JOIN session_documents sd ON dc.document_id = sd.document_id
-                WHERE sd.session_id = :session_id AND dc.embedding IS NOT NULL
+                WHERE sd.session_id = :session_id AND dc.{vector_column} IS NOT NULL
             """)
             embedding_count_result = await db.execute(
                 embedding_count_query,
@@ -786,7 +894,7 @@ class RAGService:
             )
             embedding_count = embedding_count_result.scalar()
 
-            logger.info(f"📊 Session {session_id}: {session_doc_count} documents, {embedding_count} chunks with embeddings")
+            logger.info(f"📊 Session {session_id}: {session_doc_count} documents, {embedding_count} chunks with {vector_column} embeddings")
 
             if embedding_count == 0:
                 logger.warning(f"No embeddings found for session {session_id} documents")
@@ -821,6 +929,7 @@ class RAGService:
                     use_hybrid=use_hybrid,
                     semantic_weight=_semantic_weight,
                     keyword_weight=_keyword_weight,
+                    vector_column=vector_column,  # 🆕 Pass vector column
                     db=db
                 )
 
@@ -859,6 +968,7 @@ class RAGService:
         use_hybrid: bool,
         semantic_weight: float,
         keyword_weight: float,
+        vector_column: str,  # 🆕 Which vector column to search
         db: AsyncSession
     ) -> List[Dict]:
         """Execute session document search with given parameters"""
@@ -870,11 +980,12 @@ class RAGService:
                 keywords = document_service._extract_keywords(query_text)
                 if not keywords:
                     return await self._execute_session_search(
-                        session_id, query_embedding, None, threshold, top_k, False, semantic_weight, keyword_weight, db
+                        session_id, query_embedding, None, threshold, top_k, False, semantic_weight, keyword_weight, vector_column, db
                     )
 
                 keyword_condition = " OR ".join([f"dc.content ILIKE '%{kw}%'" for kw in keywords])
 
+                # 🆕 Use dynamic vector column (visual_embedding, table_embedding, etc.)
                 query = sql_text(f"""
                     WITH semantic_search AS (
                         SELECT
@@ -886,12 +997,12 @@ class RAGService:
                             d.source_type,
                             d.source_url,
                             sd.priority,
-                            1 - (dc.embedding <=> '{embedding_str}'::vector) as semantic_score
+                            1 - (dc.{vector_column} <=> '{embedding_str}'::vector) as semantic_score
                         FROM document_chunks dc
                         JOIN documents d ON dc.document_id = d.id
                         JOIN session_documents sd ON d.id = sd.document_id
                         WHERE sd.session_id = :session_id
-                            AND dc.embedding IS NOT NULL
+                            AND dc.{vector_column} IS NOT NULL
                     ),
                     keyword_search AS (
                         SELECT
@@ -925,6 +1036,7 @@ class RAGService:
                 """)
             else:
                 # Standard semantic search only
+                # 🆕 Use dynamic vector column (visual_embedding, table_embedding, etc.)
                 query = sql_text(f"""
                     SELECT
                         dc.id,
@@ -935,16 +1047,16 @@ class RAGService:
                         d.source_type,
                         d.source_url,
                         sd.priority,
-                        1 - (dc.embedding <=> '{embedding_str}'::vector) as semantic_score,
+                        1 - (dc.{vector_column} <=> '{embedding_str}'::vector) as semantic_score,
                         0.0 as keyword_score,
-                        1 - (dc.embedding <=> '{embedding_str}'::vector) as combined_score
+                        1 - (dc.{vector_column} <=> '{embedding_str}'::vector) as combined_score
                     FROM document_chunks dc
                     JOIN documents d ON dc.document_id = d.id
                     JOIN session_documents sd ON d.id = sd.document_id
                     WHERE sd.session_id = :session_id
-                        AND dc.embedding IS NOT NULL
-                        AND 1 - (dc.embedding <=> '{embedding_str}'::vector) > :threshold
-                    ORDER BY sd.priority DESC, dc.embedding <=> '{embedding_str}'::vector
+                        AND dc.{vector_column} IS NOT NULL
+                        AND 1 - (dc.{vector_column} <=> '{embedding_str}'::vector) > :threshold
+                    ORDER BY sd.priority DESC, dc.{vector_column} <=> '{embedding_str}'::vector
                     LIMIT :limit
                 """)
 

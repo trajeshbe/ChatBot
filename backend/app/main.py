@@ -615,6 +615,9 @@ async def query_endpoint(
     keyword_weight: Optional[float] = Form(None),   # Hybrid search keyword weight
     # Metrics and evaluation control
     enable_evaluation: bool = Form(False),  # Control whether to run RAG evaluation metrics
+    # 🆕 Tool & Agent Selection
+    enabled_tools: Optional[str] = Form(None),  # JSON array of enabled tool IDs
+    selected_agent: Optional[str] = Form('auto'),  # Selected agent: 'auto', 'rag_agent', 'enhanced_rag_agent', etc.
     db: AsyncSession = Depends(get_db)
 ):
     """Query the RAG system with memory hierarchy and conversation context"""
@@ -714,6 +717,17 @@ async def query_endpoint(
             except json.JSONDecodeError as e:
                 logger.warning(f"⚠️ Failed to parse unified_config JSON: {e}")
 
+        # 🆕 Parse enabled tools and selected agent
+        enabled_tools_list = []
+        if enabled_tools:
+            try:
+                enabled_tools_list = json.loads(enabled_tools)
+                logger.info(f"🔧 Enabled tools ({len(enabled_tools_list)}): {enabled_tools_list}")
+            except json.JSONDecodeError as e:
+                logger.warning(f"⚠️ Failed to parse enabled_tools JSON: {e}")
+
+        logger.info(f"🤖 Selected agent: {selected_agent}")
+
         # Build user preferences - merge unified_config with individual parameters
         # Unified config takes precedence, individual parameters are fallback
         user_preferences = {
@@ -734,7 +748,10 @@ async def query_endpoint(
             "enable_evaluation": enable_evaluation,  # Pass evaluation flag to agent
             "user_id": user_id,
             "project_id": project_id,  # Link to project for scoped retrieval
-            "db": db
+            "db": db,
+            # 🆕 Tool & Agent Selection
+            "enabled_tools": enabled_tools_list,  # List of enabled tool IDs
+            "selected_agent": selected_agent  # Agent orchestration type
         }
 
         # Call enhanced agent
@@ -1066,6 +1083,53 @@ async def delete_document(
         await db.rollback()
         logger.error(f"Error deleting document {document_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete document: {str(e)}")
+
+
+@app.get("/api/v1/documents/{document_id}/status")
+async def get_document_status(
+    document_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get processing status of a document
+
+    Returns:
+        - processing_status: "processing", "completed", "failed"
+        - filename: str
+        - error_message: str (if failed)
+    """
+    try:
+        from app.models.database import Document
+        from sqlalchemy import select
+        import uuid
+
+        # Convert to UUID
+        try:
+            doc_uuid = uuid.UUID(document_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid document ID format")
+
+        # Query document
+        result = await db.execute(
+            select(Document).where(Document.id == doc_uuid)
+        )
+        document = result.scalar_one_or_none()
+
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        return {
+            "document_id": str(document.id),
+            "filename": document.filename,
+            "processing_status": document.processing_status if hasattr(document, 'processing_status') else 'completed',
+            "error_message": document.processing_error if hasattr(document, 'processing_error') else None
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting document status {document_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get document status: {str(e)}")
 
 
 # GraphQL endpoint

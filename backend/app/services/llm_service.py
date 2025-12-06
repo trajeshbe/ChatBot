@@ -16,7 +16,7 @@ Features:
 import httpx
 from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import logging
 from app.core.config import settings
 from app.core.database import get_db
@@ -189,24 +189,29 @@ class LLMService:
         )
 
         # Filter models that fit in memory (with 20% buffer)
+        # 🆕 CRITICAL FIX: Exclude coder-specific models from fallback (coder, code-, -code)
+        excluded_keywords = ['coder', 'code-', '-code']
         fitting_models = [
             m for m in available_models
-            if (m["size_mb"] * 1.2) <= available_mb
+            if (m["size_mb"] * 1.2) <= available_mb and
+            not any(keyword in m["name"].lower() for keyword in excluded_keywords)
         ]
 
         if not fitting_models:
-            logger.error("❌ No Ollama models fit in available memory!")
+            logger.error("❌ No chat-appropriate Ollama models fit in available memory!")
+            logger.error(f"   (Coder models excluded: {excluded_keywords})")
             return {
                 "model_id": model_id,
                 "fallback": False,
-                "reason": "No models fit in available memory",
+                "reason": "No chat-appropriate models fit in available memory",
                 "original_model": model_id,
                 "available_memory_mb": available_mb,
                 "required_memory_mb": required_mb
             }
 
-        # Select LARGEST model that fits (best quality within constraints)
+        # Select LARGEST chat model that fits (best quality within constraints)
         best_fit = max(fitting_models, key=lambda m: m["size_mb"])
+        logger.info(f"🔍 Filtered out coder models, selected best chat model: {best_fit['name']}")
 
         logger.info(
             f"✅ Falling back to best available model: {best_fit['name']} "
@@ -485,6 +490,21 @@ class LLMService:
             logger.warning("No models available!")
             return
 
+        # CRITICAL: Filter out coder-specific models from default selection
+        # Coder models (deepseek-coder, codellama, etc.) should ONLY be used in agent tasks, NOT in chat UI
+        excluded_keywords = ['coder', 'code-', '-code']
+        chat_models = [
+            m for m in available_models
+            if not any(keyword in m.id.lower() for keyword in excluded_keywords)
+        ]
+
+        if not chat_models:
+            logger.warning("⚠️  All models are coder-specific! Falling back to proprietary models.")
+            available_models = available_models  # Use all models as last resort
+        else:
+            available_models = chat_models
+            logger.info(f"📋 Filtered to {len(chat_models)} chat-appropriate models (excluded coder-specific models)")
+
         # Priority: GPU models > CPU models, larger parameter count > smaller
         # Rank models by desirability
         def rank_model(model):
@@ -606,6 +626,66 @@ class LLMService:
             }
         except Exception as e:
             logger.error(f"OpenAI call failed: {e}")
+            raise
+
+    async def call_openai_vision(
+        self,
+        model: str,
+        prompt: str,
+        image_base64: str,
+        max_tokens: int = 1000
+    ) -> Dict[str, Any]:
+        """
+        Call OpenAI vision models (gpt-4o, gpt-4o-mini, gpt-4-vision-preview)
+
+        Args:
+            model: Model ID (e.g., "gpt-4o-mini")
+            prompt: Text prompt for vision analysis
+            image_base64: Base64 encoded image string
+            max_tokens: Maximum tokens for completion
+
+        Returns:
+            Dict with content, usage, and model info
+        """
+        if not self.openai_client:
+            raise ValueError("OpenAI client not initialized")
+
+        try:
+            logger.info(f"🎨 Calling OpenAI vision model: {model}")
+
+            response = await self.openai_client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_base64}"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=max_tokens
+            )
+
+            logger.info(f"✅ OpenAI vision call successful - {response.usage.total_tokens} tokens")
+
+            return {
+                "content": response.choices[0].message.content,
+                "usage": {
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens
+                },
+                "model": response.model
+            }
+
+        except Exception as e:
+            logger.error(f"❌ OpenAI vision call failed: {e}")
             raise
 
     @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4))
@@ -795,7 +875,8 @@ class LLMService:
         messages: Optional[List[Dict]] = None,
         max_tokens: int = 512,
         temperature: float = 0.7,
-        model_id: Optional[str] = None
+        model_id: Optional[str] = None,
+        allow_fallback: bool = False  # 🆕 Control automatic model fallback
     ) -> Dict:
         """
         Generate response using specified or default model
@@ -806,6 +887,7 @@ class LLMService:
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature
             model_id: Optional model ID (uses default if not specified)
+            allow_fallback: Allow automatic model fallback for memory constraints (default: False for chat UI)
 
         Returns:
             Dict with content, model, tokens, cost
@@ -843,9 +925,10 @@ class LLMService:
         logger.info(f"✅ Routing to: {model_info.name} via {model_info.provider.value} provider")
 
         # MEMORY CHECK: For Ollama models, check if model fits in available memory
-        # If not, fallback to best available lighter model (follows resource-constrained best practices)
+        # 🆕 CRITICAL FIX: Only fallback if allow_fallback=True (agent tasks)
+        # For chat UI (allow_fallback=False), raise error instead of silently switching models
         memory_check_result = None
-        if model_info.provider == ModelProvider.OLLAMA:
+        if model_info.provider == ModelProvider.OLLAMA and allow_fallback:
             original_model_id = model_id
             memory_check_result = await self._select_model_with_memory_check(model_id)
             model_id = memory_check_result["model_id"]
@@ -853,13 +936,13 @@ class LLMService:
             # If model changed due to memory constraints, update model_info and log audit trail
             if memory_check_result["fallback"]:
                 logger.warning(
-                    f"🔄 MODEL FALLBACK: Memory constraints detected\n"
+                    f"🔄 MODEL FALLBACK (AGENT TASK ONLY): Memory constraints detected\n"
                     f"   Requested: {original_model_id} (requires {memory_check_result.get('required_memory_mb', 0):.0f}MB)\n"
                     f"   Available memory: {memory_check_result['available_memory_mb']:.0f}MB\n"
                     f"   Fallback: {model_id} (requires {memory_check_result.get('fallback_model_size_mb', 0):.0f}MB)\n"
                     f"   Reason: {memory_check_result['reason']}\n"
-                    f"   Strategy: Selected LARGEST model that fits in available memory\n"
-                    f"   Audit: User selected {original_model_id}, system used {model_id} for this request only"
+                    f"   Strategy: Selected LARGEST chat model that fits in available memory\n"
+                    f"   Audit: User selected {original_model_id}, system used {model_id} for this agent task only"
                 )
 
                 model_info = self.model_registry.get_model(model_id)
@@ -868,6 +951,9 @@ class LLMService:
                     raise ValueError(f"Fallback model not found: {model_id}")
             else:
                 logger.info(f"✅ Using user-selected model: {model_id} (no fallback needed)")
+        elif model_info.provider == ModelProvider.OLLAMA and not allow_fallback:
+            # 🆕 For chat UI: Just use the selected model as-is (no fallback)
+            logger.info(f"✅ Using user-selected model: {model_id} (fallback disabled for chat UI)")
 
         # Convert prompt to messages if needed
         if not messages:
@@ -989,7 +1075,8 @@ class LLMService:
         conversation_history: Optional[List[Dict]] = None,
         max_tokens: int = 1024,
         temperature: float = 0.7,
-        model_id: Optional[str] = None
+        model_id: Optional[str] = None,
+        allow_fallback: bool = False  # 🆕 Control automatic model fallback
     ) -> Dict:
         """Generate response with RAG context"""
         # Build context from chunks
@@ -1046,9 +1133,15 @@ Based on the documents provided above, please give a detailed and accurate answe
             messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
-            model_id=model_id
+            model_id=model_id,
+            allow_fallback=allow_fallback  # 🆕 Pass through fallback control
         )
 
 
 # Global singleton
 llm_service = LLMService()
+
+
+def get_llm_service() -> LLMService:
+    """Get the global LLM service instance"""
+    return llm_service

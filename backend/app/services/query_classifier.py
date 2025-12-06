@@ -43,33 +43,53 @@ class QueryClassifier:
 
     CLASSIFICATION_PROMPT = """You are a query classification system. Analyze the user's query and classify it into one of these categories:
 
-1. **ai_personal**: Questions about the AI assistant itself (identity, capabilities, how it works, greetings, asking the AI to introduce itself)
-   Examples: "Who are you?", "What can you do?", "Hello!", "How do you work?", "Tell me about yourself", "Introduce yourself", "What are your capabilities?"
+1. **ai_personal**: Questions about the AI assistant itself
+   - Identity questions: "Who are you?", "What are you?"
+   - Capability questions: "What can you do?", "What are your capabilities?"
+   - Self-description: "Tell me about yourself", "Introduce yourself"
+   - Greetings: "Hello!", "Hi", "Hey", "Good morning"
+   - How the AI works: "How do you work?", "How are you built?"
 
-2. **document_specific**: Questions that explicitly reference documents or uploaded files
-   Examples: "What does the document say?", "Summarize this PDF", "According to the uploaded file..."
+2. **document_specific**: Questions explicitly referencing documents or uploaded content
+   - Direct references: "What does the document say?", "Summarize this PDF", "According to the file"
+   - Document queries: "What's in the uploaded document?", "Show me from the document"
+   - File references: "In the file", "From the PDF", "The document mentions"
 
-3. **general**: General knowledge questions about the world (science, history, math, facts)
-   Examples: "What is the capital of France?", "How does photosynthesis work?", "When was World War 2?"
+3. **general**: General knowledge questions answerable without documents
+   - World facts: "What is the capital of France?", "Who is the president?"
+   - Science: "How does photosynthesis work?", "What causes gravity?"
+   - History: "When was World War 2?", "Who invented the telephone?"
+   - Math: "What is pi?", "How to calculate area?"
+   - Common knowledge: "What is DNA?", "What language do they speak in Brazil?"
 
-4. **ambiguous**: Questions that could require documents but don't explicitly reference them
-   Examples: "Tell me about machine learning", "What are the key findings?", "Explain the methodology"
+4. **ambiguous**: Questions that COULD need documents but don't explicitly ask for them
+   - Domain-specific without context: "Tell me about machine learning", "Explain the methodology"
+   - Requests for findings: "What are the key findings?", "What are the results?"
+   - Technical queries: "Explain the architecture", "What is the implementation?"
+   - Specific named entities that might be in documents: "Tell me about Aadhan", "Who is John Smith?"
 
 User Query: "{query}"
 
-Respond with ONLY a JSON object in this exact format (no markdown, no code blocks):
+IMPORTANT CLASSIFICATION RULES:
+- Focus on INTENT, not just keywords
+- "architecture" in "Give me the number of floors in the Architecture Diagram" is document_specific (asking about a specific diagram)
+- "this" in "What is this document about?" is document_specific (clearly asking about a document)
+- "hi there, what can you do?" is ai_personal (greeting + capability question)
+- When uncertain, classify as "ambiguous" to ensure document search happens
+
+Respond with ONLY a JSON object (no markdown, no code blocks, no explanation):
 {{
     "query_type": "ai_personal" | "document_specific" | "general" | "ambiguous",
     "confidence": 0.0 to 1.0,
     "use_documents": true | false,
-    "reason": "brief explanation of classification"
+    "reason": "brief explanation"
 }}
 
-Rules:
-- ai_personal: use_documents = false
-- document_specific: use_documents = true
-- general: use_documents = false
-- ambiguous: use_documents = true (default to checking documents when uncertain)
+REQUIRED LOGIC:
+- ai_personal → use_documents = false
+- document_specific → use_documents = true
+- general → use_documents = false
+- ambiguous → use_documents = true
 """
 
     def __init__(self, llm_service: 'LLMService' = None):
@@ -89,99 +109,38 @@ Rules:
             self._llm_service = llm_service
         return self._llm_service
 
-    def _rule_based_classify(self, query: str) -> Dict[str, any]:
+    def _edge_case_classify(self, query: str) -> Dict[str, any]:
         """
-        Simple rule-based classification for common patterns (fallback)
+        Minimal edge case classification for invalid queries (fallback only)
 
-        Returns classification or None if no rule matches
+        Returns classification or None if query is valid
         """
-        query_lower = query.lower().strip()
+        query_stripped = query.strip()
 
-        # AI-personal patterns
-        ai_patterns = [
-            'who are you', 'what are you', 'tell me about yourself', 'introduce yourself',
-            'what can you do', 'what are your capabilities', 'how do you work',
-            'hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening'
-        ]
+        # Edge case 1: Empty or very short queries (likely invalid)
+        if len(query_stripped) == 0:
+            return {
+                'query_type': 'ambiguous',
+                'confidence': 0.3,
+                'use_documents': True,
+                'reason': 'Empty query - defaulting to document search'
+            }
 
-        for pattern in ai_patterns:
-            if pattern in query_lower:
-                return {
-                    'query_type': 'ai_personal',
-                    'confidence': 0.9,
-                    'use_documents': False,
-                    'reason': f'Matched AI-personal pattern: "{pattern}"'
-                }
+        # Edge case 2: Single character (likely invalid)
+        if len(query_stripped) == 1:
+            return {
+                'query_type': 'ambiguous',
+                'confidence': 0.4,
+                'use_documents': True,
+                'reason': 'Single character query - defaulting to document search'
+            }
 
-        # Document-specific patterns
-        doc_patterns = [
-            'according to the document', 'in the file', 'the pdf says',
-            'what does the document', 'summarize the', 'from the uploaded'
-        ]
-
-        for pattern in doc_patterns:
-            if pattern in query_lower:
-                return {
-                    'query_type': 'document_specific',
-                    'confidence': 0.95,
-                    'use_documents': True,
-                    'reason': f'Matched document-specific pattern: "{pattern}"'
-                }
-
-        # General knowledge patterns (NEW - Fix for Bug #1)
-        # These are common factual questions that should use direct LLM, not documents
-        general_knowledge_starters = [
-            'what is the capital of',
-            'what is the population of',
-            'when was',
-            'when did',
-            'who invented',
-            'who discovered',
-            'how many',
-            'how much',
-            'where is',
-            'what year',
-            'what language',
-            'what currency',
-            'what continent',
-            'what ocean',
-            'what mountain',
-            'what river',
-            'define ',
-            'what does ',
-            'how does photosynthesis',
-            'how does gravity',
-            'what causes',
-            'what is dna',
-            'what is rna',
-            'what is the speed of light',
-            'what is the distance',
-            'what is the formula',
-            'how to calculate',
-            'what is pi',
-            'who is the president',
-            'who is the prime minister',
-            'what is the largest',
-            'what is the smallest',
-            'what is the tallest',
-            'what is the longest',
-            'what is the fastest'
-        ]
-
-        for pattern in general_knowledge_starters:
-            if query_lower.startswith(pattern):
-                return {
-                    'query_type': 'general',
-                    'confidence': 0.85,
-                    'use_documents': False,
-                    'reason': f'Matched general knowledge pattern: "{pattern}"'
-                }
-
-        return None  # No rule matched, use LLM
+        # All other queries go to LLM classification
+        return None
 
     async def classify(self, query: str) -> Dict[str, any]:
         """
-        Classify a query using LLM with rule-based fallback
+        Classify a query using LLM (primary) with minimal edge case checks
 
         Returns:
             Dict with:
@@ -192,23 +151,42 @@ Rules:
         """
         query = query.strip()
 
-        # Try rule-based classification first (fast and deterministic)
-        rule_result = self._rule_based_classify(query)
-        if rule_result:
-            logger.info(f"🎯 Rule-based classification: {rule_result['query_type']} - {rule_result['reason']}")
-            return rule_result
+        # Check for edge cases only (empty queries, etc.)
+        edge_case_result = self._edge_case_classify(query)
+        if edge_case_result:
+            logger.info(f"⚠️  Edge case classification: {edge_case_result['query_type']} - {edge_case_result['reason']}")
+            return edge_case_result
+
+        # 🛡️ SAFETY NET: Keyword-based document query detection (before LLM)
+        # Catches obvious document queries that LLM might misclassify
+        query_lower = query.lower()
+        document_keywords = [
+            'attached', 'attachment', 'upload', 'file', 'document', 'pdf', 'image',
+            'diagram', 'chart', 'graph', 'table', 'floor plan', 'blueprint',
+            'screenshot', 'photo', 'picture', 'scan', 'page',
+            'in the document', 'in this file', 'from the pdf', 'from the attachment'
+        ]
+
+        if any(keyword in query_lower for keyword in document_keywords):
+            logger.info(f"🛡️ Keyword override: Query contains document reference → forcing document_specific")
+            return {
+                'query_type': 'document_specific',
+                'confidence': 0.95,
+                'use_documents': True,
+                'reason': f'Query contains document-related keywords (keyword override before LLM classification)'
+            }
 
         try:
-            # Use LLM to classify the query
+            # Use LLM to classify the query (PRIMARY METHOD)
             prompt = self.CLASSIFICATION_PROMPT.format(query=query)
 
-            # Use a fast model for classification (prefer cheaper/faster models)
-            # Note: Using the correct generate() method with proper parameters
+            # Use ultra-fast, lightweight model for classification
+            # qwen2.5:1.5b is 5x smaller/faster than 7b models, perfect for classification
             result = await self.llm_service.generate(
                 prompt=prompt,
                 max_tokens=200,  # Short response expected
                 temperature=0.0,  # Deterministic classification
-                model_id=None  # Use default model
+                model_id="qwen2.5:1.5b"  # Ultra-fast 1.5B model for instant classification
             )
 
             # Extract the response content
@@ -234,7 +212,7 @@ Rules:
             # Ensure confidence is a float between 0 and 1
             classification['confidence'] = max(0.0, min(1.0, float(classification['confidence'])))
 
-            # Log classification
+            # Log classification with LLM indicator
             emoji_map = {
                 'ai_personal': '🤖',
                 'document_specific': '📄',
@@ -243,7 +221,7 @@ Rules:
             }
             emoji = emoji_map.get(classification['query_type'], '❓')
             logger.info(
-                f"{emoji} Classified as {classification['query_type']} "
+                f"{emoji} LLM-classified as {classification['query_type']} "
                 f"(confidence: {classification['confidence']:.2f}): {query[:50]}... - {classification['reason']}"
             )
 
@@ -251,12 +229,12 @@ Rules:
 
         except Exception as e:
             # Fallback to ambiguous classification on error
-            logger.error(f"Error classifying query: {e}. Falling back to ambiguous classification.")
+            logger.error(f"❌ Error classifying query: {e}. Falling back to ambiguous classification.")
             return {
                 'query_type': 'ambiguous',
                 'confidence': 0.5,
                 'use_documents': True,
-                'reason': f'Classification error - defaulting to document retrieval. Error: {str(e)[:100]}'
+                'reason': f'LLM classification error - defaulting to document retrieval. Error: {str(e)[:100]}'
             }
 
     async def should_skip_rag(self, query: str) -> bool:

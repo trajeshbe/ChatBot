@@ -522,9 +522,9 @@ class DocumentService:
                     logger.error(f"❌ Hybrid extraction failed: {str(e)}")
                     logger.info("   Continuing with Docling-extracted text only")
 
-            # Chunk the text
-            chunks = self._chunk_text(text)
-            logger.info(f"Created {len(chunks)} chunks")
+            # Chunk the text (include filename for better retrieval)
+            chunks = self._chunk_text(text, filename=document.filename)
+            logger.info(f"Created {len(chunks)} chunks with filename metadata")
 
             # Process document through multiple channels with full traceability
             logger.info(f"🔄 Processing document through multiple channels...")
@@ -566,8 +566,8 @@ class DocumentService:
 
             logger.info(f"Generated {len(embeddings)} embeddings ({embedding_dim} dimensions)")
 
-            # Verify embeddings
-            if not embeddings or len(embeddings) != len(chunk_texts):
+            # Verify embeddings (allow 0 chunks for visual-only documents)
+            if len(chunk_texts) > 0 and (not embeddings or len(embeddings) != len(chunk_texts)):
                 raise ValueError(f"Expected {len(chunk_texts)} embeddings, got {len(embeddings)}")
 
             logger.info(f"✅ All embeddings valid ({embedding_dim} dimensions, strategy: {embedding_strategy})")
@@ -670,10 +670,14 @@ class DocumentService:
 
             raise
 
-    def _chunk_text(self, text: str) -> List[Dict]:
+    def _chunk_text(self, text: str, filename: Optional[str] = None) -> List[Dict]:
         """
         Split text into overlapping chunks with semantic boundaries.
         Uses LangChain's RecursiveCharacterTextSplitter for better semantic chunking.
+
+        Args:
+            text: Text content to chunk
+            filename: Optional filename to prepend to each chunk for better retrieval
         """
         # Clean the text first
         text = self._clean_text(text)
@@ -712,8 +716,14 @@ class DocumentService:
                 start_pos = char_position
             end_pos = start_pos + len(chunk_text)
 
+            # Prepend filename to chunk content for better retrieval
+            # Format: [Document: filename.pdf]\n\n{content}
+            chunk_content = chunk_text.strip()
+            if filename:
+                chunk_content = f"[Document: {filename}]\n\n{chunk_content}"
+
             chunks.append({
-                'content': chunk_text.strip(),
+                'content': chunk_content,
                 'start': start_pos,
                 'end': end_pos,
                 'chunk_index': i
@@ -721,7 +731,11 @@ class DocumentService:
 
             char_position = end_pos
 
-        logger.info(f"Created {len(chunks)} semantic chunks (avg size: {sum(len(c['content']) for c in chunks) / len(chunks):.0f} chars)")
+        if chunks:
+            avg_size = sum(len(c['content']) for c in chunks) / len(chunks)
+            logger.info(f"Created {len(chunks)} semantic chunks (avg size: {avg_size:.0f} chars)")
+        else:
+            logger.warning(f"Created 0 chunks - document may be empty or text extraction failed")
         return chunks
 
     def _clean_text(self, text: str) -> str:
@@ -754,7 +768,8 @@ class DocumentService:
         use_cascading_fallback: bool = True,
         semantic_weight: Optional[float] = None,
         keyword_weight: Optional[float] = None,
-        project_id: Optional[str] = None  # Filter by project
+        project_id: Optional[str] = None,  # Filter by project
+        vector_column: str = "embedding"  # 🆕 Which vector column to search (embedding, visual_embedding, table_embedding, etc.)
     ) -> List[Dict]:
         """
         Search for similar document chunks using robust hybrid search with cascading fallback:
@@ -801,18 +816,18 @@ class DocumentService:
                 logger.warning("❌ No document chunks found in database")
                 return []
 
-            # Check chunks with embeddings
+            # Check chunks with embeddings in the specified column
             embedding_count_query = select(func.count()).select_from(DocumentChunk).where(
-                DocumentChunk.embedding.isnot(None)
+                getattr(DocumentChunk, vector_column).isnot(None)
             )
             embedding_count_result = await db.execute(embedding_count_query)
             embedding_count = embedding_count_result.scalar()
 
             if embedding_count == 0:
-                logger.error(f"❌ No embeddings found! {chunk_count} chunks exist but none have embeddings")
+                logger.error(f"❌ No {vector_column} embeddings found! {chunk_count} chunks exist but none have {vector_column}")
                 return []
 
-            logger.info(f"📊 Database status: {chunk_count} total chunks, {embedding_count} with embeddings")
+            logger.info(f"📊 Database status: {chunk_count} total chunks, {embedding_count} with {vector_column} embeddings")
 
             # Cascading fallback strategy: try multiple thresholds
             # Conservative approach to avoid irrelevant results
@@ -844,6 +859,7 @@ class DocumentService:
                     semantic_weight=_semantic_weight,
                     keyword_weight=_keyword_weight,
                     project_id=project_id,
+                    vector_column=vector_column,  # 🆕 Pass vector column
                     db=db
                 )
 
@@ -892,6 +908,7 @@ class DocumentService:
         semantic_weight: float,
         keyword_weight: float,
         project_id: Optional[str],
+        vector_column: str,  # 🆕 Which vector column to search
         db: AsyncSession
     ) -> List[Dict]:
         """
@@ -919,7 +936,7 @@ class DocumentService:
                     # If no keywords extracted, fall back to semantic only
                     return await self._execute_search(
                         query_embedding, None, threshold, top_k, False,
-                        semantic_weight, keyword_weight, project_id, db
+                        semantic_weight, keyword_weight, project_id, vector_column, db
                     )
 
                 # SECURITY FIX: Sanitize keywords to prevent SQL injection
@@ -931,7 +948,7 @@ class DocumentService:
                     logger.warning("All keywords filtered out during sanitization, using semantic search only")
                     return await self._execute_search(
                         query_embedding, None, threshold, top_k, False,
-                        semantic_weight, keyword_weight, project_id, db
+                        semantic_weight, keyword_weight, project_id, vector_column, db
                     )
 
                 # Build parameterized keyword conditions (SAFE from SQL injection)
@@ -951,6 +968,7 @@ class DocumentService:
                     project_filter = "AND d.project_id = :project_id"
                     project_filter_keyword = "AND dc.project_id = :project_id"  # 🔧 Use denormalized project_id
 
+                # 🆕 Use dynamic vector column (visual_embedding, table_embedding, etc.)
                 query = sql_text(f"""
                     WITH semantic_search AS (
                         SELECT
@@ -961,10 +979,10 @@ class DocumentService:
                             d.filename,
                             d.source_type,
                             d.source_url,
-                            1 - (dc.embedding <=> '{embedding_str}'::vector) as semantic_score
+                            1 - (dc.{vector_column} <=> '{embedding_str}'::vector) as semantic_score
                         FROM document_chunks dc
                         JOIN documents d ON dc.document_id = d.id
-                        WHERE dc.embedding IS NOT NULL {project_filter}
+                        WHERE dc.{vector_column} IS NOT NULL {project_filter}
                     ),
                     keyword_search AS (
                         SELECT
@@ -1000,6 +1018,7 @@ class DocumentService:
                 if project_id:
                     project_filter = "AND d.project_id = :project_id"
 
+                # 🆕 Use dynamic vector column (visual_embedding, table_embedding, etc.)
                 query = sql_text(f"""
                     SELECT
                         dc.id,
@@ -1009,15 +1028,15 @@ class DocumentService:
                         d.filename,
                         d.source_type,
                         d.source_url,
-                        1 - (dc.embedding <=> '{embedding_str}'::vector) as semantic_score,
+                        1 - (dc.{vector_column} <=> '{embedding_str}'::vector) as semantic_score,
                         0.0 as keyword_score,
-                        1 - (dc.embedding <=> '{embedding_str}'::vector) as combined_score
+                        1 - (dc.{vector_column} <=> '{embedding_str}'::vector) as combined_score
                     FROM document_chunks dc
                     JOIN documents d ON dc.document_id = d.id
-                    WHERE dc.embedding IS NOT NULL
+                    WHERE dc.{vector_column} IS NOT NULL
                         {project_filter}
-                        AND 1 - (dc.embedding <=> '{embedding_str}'::vector) > :threshold
-                    ORDER BY dc.embedding <=> '{embedding_str}'::vector
+                        AND 1 - (dc.{vector_column} <=> '{embedding_str}'::vector) > :threshold
+                    ORDER BY dc.{vector_column} <=> '{embedding_str}'::vector
                     LIMIT :limit
                 """)
 

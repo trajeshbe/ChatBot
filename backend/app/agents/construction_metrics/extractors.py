@@ -23,37 +23,98 @@ logger = logging.getLogger(__name__)
 
 ARCHITECTURAL_DRAWING_PROMPT = """You are analyzing an architectural drawing to extract building metrics.
 
-Look for the following information in this drawing:
+IMPORTANT: Many metrics are NOT explicitly labeled. You must CALCULATE them when necessary.
 
-1. **Levels (Above Ground)**: Count of floors above ground level
-   - Look for: "Number of Levels", floor plan drawings (Ground, Level 1, Level 2, etc.)
-   - Note: Roof is NOT counted as a level
+═══════════════════════════════════════════════════════════════════════
+STEP 1: IDENTIFY SCALE BAR
+═══════════════════════════════════════════════════════════════════════
+Look for scale indicators:
+- "1:50" means 1cm on drawing = 0.5m in reality
+- "1:100" means 1cm on drawing = 1m in reality
+- "1:200" means 1cm on drawing = 2m in reality
 
-2. **Levels (Below Ground)**: Count of basement/underground levels
-   - Look for: "Basement", "Car park", "B1", "B2", etc.
+If found, record the scale ratio.
 
-3. **Gross Floor Area (GFA)**: Total building floor area in square meters
-   - Look for: "Gross Floor Area", "GFA", "Total Floor Area"
-   - Unit: m² or sqm
+═══════════════════════════════════════════════════════════════════════
+STEP 2: GROSS FLOOR AREA (GFA) EXTRACTION
+═══════════════════════════════════════════════════════════════════════
 
-4. **External Area**: External terrace/balcony area in square meters
-   - Look for: "External Area", "Terrace Area", "Balcony Area"
-   - Unit: m² or sqm
+METHOD 1: Look for Explicit GFA
+- Search for: "Gross Floor Area", "GFA", "Total Floor Area"
+- If found: Extract the value and mark as "explicit"
 
-5. **Site Area**: Total site/land area (if visible)
-   - Look for: "Site Area", "Land Area"
+METHOD 2: Calculate if NOT Explicitly Stated
+- Identify each floor level in the drawings:
+  * Ground Floor
+  * Level 1 (First Floor)
+  * Level 2 (Second Floor)
+  * ... etc.
 
-6. **Building Height**: Total building height in meters
-   - Look for: "Building Height", RL (Reduced Level) markers
-   - Unit: meters (m)
+- For EACH floor:
+  a) If dimensions are labeled:
+     - Length × Width = Floor Area
 
-**IMPORTANT INSTRUCTIONS**:
-- Extract ONLY information that is clearly visible and readable
-- If a metric is not visible or unclear, return null for that field
-- Pay attention to units (convert to m² if needed)
-- Look in drawing title blocks, schedules, and annotations
+  b) If dimensions NOT labeled:
+     - Use scale bar to measure
+     - Estimate dimensions based on:
+       * Grid lines (if present)
+       * Typical room sizes (bedroom ~12-15m², living ~25-35m²)
+       * Visible furniture scale
 
-Return ONLY a JSON object with this exact structure:
+  c) For irregular shapes:
+     - Break into rectangles
+     - Sum individual areas
+
+- Sum all floor areas:
+  GFA = Ground + Level 1 + Level 2 + ... + Top Floor
+
+═══════════════════════════════════════════════════════════════════════
+STEP 3: EXTERNAL AREA CALCULATION
+═══════════════════════════════════════════════════════════════════════
+
+METHOD 1: Explicit Statement
+- Look for: "External Area", "Terrace Area", "Balcony Area"
+
+METHOD 2: Derivation
+- If Site Area is known:
+  External Area = Site Area - GFA
+
+METHOD 3: Individual Measurement
+- Identify balconies, terraces, outdoor areas
+- Measure each individually
+- Sum total external area
+
+═══════════════════════════════════════════════════════════════════════
+STEP 4: LEVELS COUNTING
+═══════════════════════════════════════════════════════════════════════
+
+Levels Above Ground:
+- Count floors: Ground Floor = 1, Level 1 = 2, Level 2 = 3, etc.
+- Do NOT count roof as a level
+- Do NOT count mezzanines as full levels
+
+Levels Below Ground:
+- Count: Basement = 1, B1 = 1, B2 = 2, Car Park = 1
+
+═══════════════════════════════════════════════════════════════════════
+STEP 5: SITE AREA AND BUILDING HEIGHT
+═══════════════════════════════════════════════════════════════════════
+
+Site Area:
+- Look for: "Site Area", "Land Area", "Lot Size"
+- Check site plan drawings
+
+Building Height:
+- Look for: "Building Height", RL (Reduced Level) markers
+- Calculate from floor-to-floor heights if shown
+- Unit: meters (m)
+
+═══════════════════════════════════════════════════════════════════════
+OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════════════
+
+Return ONLY a JSON object with this EXACT structure:
+
 {
   "levels_above_ground": <integer or null>,
   "levels_below_ground": <integer or null>,
@@ -61,9 +122,73 @@ Return ONLY a JSON object with this exact structure:
   "external_area_m2": <float or null>,
   "site_area_m2": <float or null>,
   "building_height_m": <float or null>,
+
+  "calculation_method": "explicit" | "calculated_per_floor" | "estimated",
   "confidence": <float 0.0-1.0>,
-  "notes": "<brief explanation of what you found>"
+
+  "floor_areas": [
+    {"floor": "Ground", "area_m2": 850.5, "method": "measured"},
+    {"floor": "Level 1", "area_m2": 850.5, "method": "measured"}
+  ],
+
+  "scale_used": "1:100" | null,
+  "notes": "Brief explanation of calculations performed"
 }
+
+EXAMPLE OUTPUT (Calculated GFA):
+
+{
+  "levels_above_ground": 3,
+  "levels_below_ground": 0,
+  "gross_floor_area_m2": 2551.5,
+  "external_area_m2": 120.0,
+  "site_area_m2": null,
+  "building_height_m": 10.5,
+
+  "calculation_method": "calculated_per_floor",
+  "confidence": 0.75,
+
+  "floor_areas": [
+    {"floor": "Ground", "area_m2": 850.5, "method": "dimensions_labeled"},
+    {"floor": "Level 1", "area_m2": 850.5, "method": "same_as_ground"},
+    {"floor": "Level 2", "area_m2": 850.5, "method": "same_as_ground"}
+  ],
+
+  "scale_used": "1:100",
+  "notes": "GFA calculated by summing 3 identical floor plates. Scale 1:100 used for verification. External area measured from roof terrace."
+}
+
+EXAMPLE OUTPUT (Explicit GFA):
+
+{
+  "levels_above_ground": 4,
+  "levels_below_ground": 1,
+  "gross_floor_area_m2": 3200.0,
+  "external_area_m2": 150.0,
+  "site_area_m2": 1500.0,
+  "building_height_m": 14.5,
+
+  "calculation_method": "explicit",
+  "confidence": 0.95,
+
+  "floor_areas": [],
+
+  "scale_used": null,
+  "notes": "All metrics explicitly labeled in drawing title block."
+}
+
+═══════════════════════════════════════════════════════════════════════
+CONFIDENCE GUIDELINES
+═══════════════════════════════════════════════════════════════════════
+
+Confidence Levels:
+- 0.9-1.0: Explicitly labeled in drawing with clear values
+- 0.7-0.9: Calculated from labeled dimensions
+- 0.5-0.7: Calculated using scale bar measurements
+- 0.3-0.5: Estimated based on typical sizes
+- 0.0-0.3: Uncertain or incomplete data
+
+Always err on the side of lower confidence if uncertain.
 """
 
 DA_APPROVAL_PROMPT = """You are analyzing a Development Application (DA) approval document to extract building metrics.
@@ -193,7 +318,10 @@ def _get_default_metrics() -> Dict[str, Any]:
         "external_area_m2": None,
         "site_area_m2": None,
         "building_height_m": None,
+        "calculation_method": "unknown",
         "confidence": 0.0,
+        "floor_areas": [],
+        "scale_used": None,
         "notes": "No metrics extracted"
     }
 
@@ -311,12 +439,14 @@ async def extract_metrics_from_document(
             # - Docling: Advanced document structure understanding
             # - Table extraction: Get numerical data from tables
             # - Vision LLM: Visual understanding of drawings
+            # 🆕 CRITICAL FIX: Enable fallback for memory constraints (agent task)
             extraction_result = await vision_service.extract_from_document(
                 file_path=file_path,
                 content_type="construction_document",  # Content type for strategy selection
                 strategy="both_parallel",  # Use ALL extraction methods in parallel for best results
                 vision_model=model_id or "llama3.2-vision:11b",
-                custom_prompt=prompt  # Pass our construction metrics prompt
+                custom_prompt=prompt,  # Pass our construction metrics prompt
+                allow_fallback=True  # 🆕 Enable fallback to smaller model if needed (agent task)
             )
 
             # Extract the combined text (includes OCR + Docling + Vision analysis)

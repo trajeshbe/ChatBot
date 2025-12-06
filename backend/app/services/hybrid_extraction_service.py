@@ -123,7 +123,8 @@ class HybridExtractionService:
         content_type: str,
         strategy: str = "auto",
         vision_model: str = "llama3.2-vision:11b",
-        custom_prompt: Optional[str] = None
+        custom_prompt: Optional[str] = None,
+        allow_fallback: bool = False
     ) -> Dict[str, Any]:
         """
         Extract text and context from document using hybrid approach
@@ -134,6 +135,8 @@ class HybridExtractionService:
             strategy: Extraction strategy (auto, ocr_only, vision_only, both)
             vision_model: Vision model to use (llama3.2-vision:11b, etc.)
             custom_prompt: Custom prompt for vision model (overrides default)
+            allow_fallback: Allow automatic model fallback for memory constraints (default: False)
+                           Set to True for agent tasks (e.g., construction metrics)
 
         Returns:
             {
@@ -146,7 +149,8 @@ class HybridExtractionService:
                     "strategy_used": str,
                     "ocr_confidence": float,
                     "vision_model": str,
-                    "processing_time_ms": float
+                    "processing_time_ms": float,
+                    "fallback_occurred": bool  # 🆕 Track if model fallback happened
                 }
             }
         """
@@ -166,6 +170,7 @@ class HybridExtractionService:
 
         try:
             # Execute extraction based on strategy
+            # 🆕 CRITICAL FIX: Pass allow_fallback to all vision-based strategies
             if strategy == ExtractionStrategy.OCR_ONLY:
                 results = await self._ocr_only(file_path)
 
@@ -174,7 +179,8 @@ class HybridExtractionService:
                     file_path,
                     content_type,
                     vision_model,
-                    custom_prompt
+                    custom_prompt,
+                    allow_fallback  # 🆕 Enable fallback for agent tasks
                 )
 
             elif strategy == ExtractionStrategy.OCR_FIRST:
@@ -182,7 +188,8 @@ class HybridExtractionService:
                     file_path,
                     content_type,
                     vision_model,
-                    custom_prompt
+                    custom_prompt,
+                    allow_fallback  # 🆕 Enable fallback for agent tasks
                 )
 
             elif strategy == ExtractionStrategy.VISION_FIRST:
@@ -190,7 +197,8 @@ class HybridExtractionService:
                     file_path,
                     content_type,
                     vision_model,
-                    custom_prompt
+                    custom_prompt,
+                    allow_fallback  # 🆕 Enable fallback for agent tasks
                 )
 
             elif strategy == ExtractionStrategy.BOTH_PARALLEL:
@@ -198,7 +206,8 @@ class HybridExtractionService:
                     file_path,
                     content_type,
                     vision_model,
-                    custom_prompt
+                    custom_prompt,
+                    allow_fallback  # 🆕 Enable fallback for agent tasks
                 )
 
             elif strategy == ExtractionStrategy.BOTH_SEQUENTIAL:
@@ -206,7 +215,8 @@ class HybridExtractionService:
                     file_path,
                     content_type,
                     vision_model,
-                    custom_prompt
+                    custom_prompt,
+                    allow_fallback  # 🆕 Enable fallback for agent tasks
                 )
 
             else:
@@ -291,10 +301,13 @@ class HybridExtractionService:
         file_path: str,
         content_type: str,
         vision_model: str,
-        custom_prompt: Optional[str]
+        custom_prompt: Optional[str],
+        allow_fallback: bool = False
     ) -> Dict[str, Any]:
         """Vision-only extraction (context understanding)"""
         logger.info(f"   Running: Vision-only extraction with {vision_model}")
+        if allow_fallback:
+            logger.info("   ✅ Fallback enabled for memory constraints")
 
         # Convert PDF to images if needed
         import os
@@ -311,14 +324,24 @@ class HybridExtractionService:
 
         # Process all images and combine results
         all_vision_text = []
+        fallback_occurred = False
+        model_used = vision_model
+
         for image_path in image_paths:
+            # 🆕 CRITICAL FIX: Pass allow_fallback to vision service
             vision_result = await vision_service.process_image(
                 image_path=image_path,
-                prompt=prompt
+                prompt=prompt,
+                allow_fallback=allow_fallback
             )
             vision_text = vision_result.get("text", "")
             if vision_text:
                 all_vision_text.append(vision_text)
+
+            # Track fallback metadata
+            if vision_result.get("metadata", {}).get("fallback_occurred"):
+                fallback_occurred = True
+                model_used = vision_result.get("model", vision_model)
 
         # Cleanup temporary images
         if file_path.lower().endswith('.pdf'):
@@ -337,9 +360,10 @@ class HybridExtractionService:
             "confidence": 0.85,  # Default vision confidence
             "methods_used": ["vision"],
             "metadata": {
-                "vision_model": vision_model,
+                "vision_model": model_used,  # 🆕 Track actual model used
                 "pages_processed": len(image_paths),
-                "total_images": len(image_paths)
+                "total_images": len(image_paths),
+                "fallback_occurred": fallback_occurred  # 🆕 Track fallback
             }
         }
 
@@ -348,7 +372,8 @@ class HybridExtractionService:
         file_path: str,
         content_type: str,
         vision_model: str,
-        custom_prompt: Optional[str]
+        custom_prompt: Optional[str],
+        allow_fallback: bool = False
     ) -> Dict[str, Any]:
         """OCR first, fallback to vision if confidence low"""
         logger.info("   Running: OCR-first strategy")
@@ -365,11 +390,13 @@ class HybridExtractionService:
         else:
             logger.info(f"   ⚠️  OCR confidence low: {ocr_confidence:.2%}, falling back to vision")
             # Fallback to vision
+            # 🆕 CRITICAL FIX: Pass allow_fallback to vision
             vision_result = await self._vision_only(
                 file_path,
                 content_type,
                 vision_model,
-                custom_prompt
+                custom_prompt,
+                allow_fallback
             )
             return vision_result
 
@@ -378,18 +405,21 @@ class HybridExtractionService:
         file_path: str,
         content_type: str,
         vision_model: str,
-        custom_prompt: Optional[str]
+        custom_prompt: Optional[str],
+        allow_fallback: bool = False
     ) -> Dict[str, Any]:
         """Vision first, fallback to OCR if vision fails"""
         logger.info("   Running: Vision-first strategy")
 
         try:
             # Try vision first
+            # 🆕 CRITICAL FIX: Pass allow_fallback to vision
             vision_result = await self._vision_only(
                 file_path,
                 content_type,
                 vision_model,
-                custom_prompt
+                custom_prompt,
+                allow_fallback
             )
 
             if vision_result["vision_context"]:
@@ -409,15 +439,17 @@ class HybridExtractionService:
         file_path: str,
         content_type: str,
         vision_model: str,
-        custom_prompt: Optional[str]
+        custom_prompt: Optional[str],
+        allow_fallback: bool = False
     ) -> Dict[str, Any]:
         """Run OCR and Vision in parallel (fastest hybrid)"""
         logger.info("   Running: Both parallel extraction")
 
         # Run both simultaneously
         ocr_task = asyncio.create_task(self._ocr_only(file_path))
+        # 🆕 CRITICAL FIX: Pass allow_fallback to vision
         vision_task = asyncio.create_task(
-            self._vision_only(file_path, content_type, vision_model, custom_prompt)
+            self._vision_only(file_path, content_type, vision_model, custom_prompt, allow_fallback)
         )
 
         # Wait for both
@@ -431,7 +463,8 @@ class HybridExtractionService:
         file_path: str,
         content_type: str,
         vision_model: str,
-        custom_prompt: Optional[str]
+        custom_prompt: Optional[str],
+        allow_fallback: bool = False
     ) -> Dict[str, Any]:
         """Run OCR then Vision sequentially (best quality)"""
         logger.info("   Running: Both sequential extraction")
@@ -440,11 +473,13 @@ class HybridExtractionService:
         ocr_result = await self._ocr_only(file_path)
 
         # Then run vision
+        # 🆕 CRITICAL FIX: Pass allow_fallback to vision
         vision_result = await self._vision_only(
             file_path,
             content_type,
             vision_model,
-            custom_prompt
+            custom_prompt,
+            allow_fallback
         )
 
         # Merge results

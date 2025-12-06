@@ -105,6 +105,20 @@ class ModelRegistry:
         ))
 
         self.register(ModelInfo(
+            id="gpt-4o-mini",
+            name="GPT-4o Mini",
+            provider=ModelProvider.OPENAI,
+            model_type=ModelType.PROPRIETARY,
+            model_path="gpt-4o-mini",
+            context_length=128000,
+            cost_per_1k_tokens=0.00015,  # $0.000150 input + $0.000600 output average
+            requires_gpu=False,
+            min_gpu_memory_gb=0,
+            description="Fast, affordable, and multimodal (vision + text). Best for vision tasks and cost-effective queries.",
+            recommended=True
+        ))
+
+        self.register(ModelInfo(
             id="gpt-3.5-turbo",
             name="GPT-3.5 Turbo",
             provider=ModelProvider.OPENAI,

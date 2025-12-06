@@ -63,10 +63,19 @@ class ConstructionMetricsState(TypedDict):
     extracted_metrics: List[ExtractedMetrics]   # Per-document extraction results
     extraction_errors_list: List[str]           # Errors during metric extraction
 
-    # Step 4: Aggregation
+    # PHASE 2: OpenCV Results
+    scale_bars_detected: Dict[str, float]       # {filename: scale_ratio}
+    opencv_measurements: List[Dict[str, Any]]   # OpenCV calculation results
+    geometric_confidence: Dict[str, float]      # Confidence per metric (OpenCV)
+
+    # Step 4: Aggregation (Enhanced with Phase 3)
     aggregated_metrics: AggregatedMetrics       # Final aggregated metrics
     aggregation_confidence: float               # Overall confidence score
     aggregation_method: str                     # How metrics were aggregated
+
+    # PHASE 3: Hybrid Decision & Cross-Validation
+    cross_validation_results: Dict[str, Any]    # Cross-validation between Vision LLM and OpenCV
+    discrepancies_flagged: List[Dict[str, Any]] # Metrics with >15% difference between methods
 
     # ========== OUTPUT ==========
     final_result: Dict[str, Any]                # Final JSON output

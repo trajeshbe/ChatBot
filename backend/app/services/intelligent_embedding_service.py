@@ -252,9 +252,11 @@ class IntelligentEmbeddingService:
             logger.warning("⚠️  Table structure embeddings not yet implemented, using text semantic")
             embeddings = await self._embed_text_semantic(texts)
         elif strategy == "vision":
-            # Vision embeddings using CLIP
-            logger.info("🎨 Generating vision embeddings using CLIP")
-            embeddings = await self._embed_visual(texts)
+            # Vision embeddings using CLIP (text-to-image for queries)
+            logger.info("🎨 Generating vision embeddings using CLIP (text-to-image)")
+            # For queries: Use text-to-image CLIP embeddings
+            # This allows searching for images using text prompts like "show me diagrams"
+            embeddings = await self._embed_text_for_visual_search(texts)
         elif strategy == "numerical":
             # Future: Numerical embeddings
             logger.warning("⚠️  Numerical embeddings not yet implemented, using text semantic")

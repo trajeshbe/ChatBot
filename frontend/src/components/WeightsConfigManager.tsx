@@ -21,6 +21,7 @@ import CountUp from 'react-countup';
 
 interface WeightsConfig {
   strategy_weights: {
+    conversation_only: number;  // 🆕 Conversation-only mode (uses ONLY conversation history)
     rag_short_term: number;
     rag_hybrid: number;
     tool_navigation: number;
@@ -29,6 +30,7 @@ interface WeightsConfig {
     tool_web_scraping: number;
     rag_long_term: number;
     direct_llm: number;
+    enable_brain_view: boolean;  // 🧠 Brain View toggle for debug context
   };
   scoring_formula_weights: {
     strategy_weight: number;
@@ -277,7 +279,8 @@ export const WeightsConfigManager: React.FC = () => {
   ) => {
     if (!config) return null;
 
-    const value = (config[section] as any)[key];
+    // 🔧 FIX: Provide default value if key doesn't exist (for backward compatibility with old localStorage configs)
+    const value = (config[section] as any)[key] ?? 0;
     const percentage = ((value - min) / (max - min)) * 100;
 
     return (
@@ -372,6 +375,12 @@ export const WeightsConfigManager: React.FC = () => {
                 <strong>⚠️ Important:</strong> If rag_short_term OR rag_long_term &gt; 0.8, system will force RAG mode and bypass tool selection.
               </p>
             </div>
+            {renderSlider('strategy_weights', 'conversation_only', 'Conversation Only (Context Summarization)', 0, 1, 0.05)}
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md mb-3 mt-2">
+              <p className="text-xs text-blue-800">
+                <strong>💬 Conversation Only:</strong> When &gt; 0.8, uses ONLY conversation history (no document RAG). Perfect for multi-model comparisons and context summarization.
+              </p>
+            </div>
             {renderSlider('strategy_weights', 'rag_short_term', 'RAG Short-term (Session Docs)', 0, 1, 0.05)}
             {renderSlider('strategy_weights', 'rag_hybrid', 'RAG Hybrid', 0, 1, 0.05)}
             {renderSlider('strategy_weights', 'tool_navigation', 'Tool: Navigation', 0, 1, 0.05)}
@@ -380,6 +389,49 @@ export const WeightsConfigManager: React.FC = () => {
             {renderSlider('strategy_weights', 'tool_web_scraping', 'Tool: Web Scraping', 0, 1, 0.05)}
             {renderSlider('strategy_weights', 'rag_long_term', 'RAG Long-term (All Docs)', 0, 1, 0.05)}
             {renderSlider('strategy_weights', 'direct_llm', 'Direct LLM (No RAG)', 0, 1, 0.05)}
+
+            {/* 🧠 Brain View Toggle */}
+            <div className="mt-6 p-4 bg-purple-50 border border-purple-200 rounded-md">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <label className="text-sm font-semibold text-purple-900 flex items-center gap-2">
+                    🧠 Brain View (Debug Context)
+                  </label>
+                  <p className="text-xs text-purple-700 mt-1">
+                    Enable real-time context visualization showing tools, documents, and performance metrics.
+                    Disable to improve performance by skipping debug context assembly.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (config) {
+                      setConfig({
+                        ...config,
+                        strategy_weights: {
+                          ...config.strategy_weights,
+                          enable_brain_view: !config.strategy_weights.enable_brain_view
+                        }
+                      });
+                    }
+                  }}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ml-4 ${
+                    config?.strategy_weights.enable_brain_view ? 'bg-purple-600' : 'bg-gray-200'
+                  }`}
+                  role="switch"
+                  aria-checked={config?.strategy_weights.enable_brain_view}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      config?.strategy_weights.enable_brain_view ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="mt-2 text-xs text-purple-600">
+                Status: {config?.strategy_weights.enable_brain_view ? '✅ Enabled - Full debug context will be collected' : '❌ Disabled - Skipping debug context for better performance'}
+              </div>
+            </div>
           </div>
         );
 

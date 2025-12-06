@@ -891,21 +891,57 @@ class ToolRegistry:
             "metadata": data.get("metadata", {})
         }
 
-    async def _wrap_docling_pdf(
-        self,
-        file_path: str,
-        extract_tables: bool = True
-    ) -> Dict[str, Any]:
+    async def _wrap_docling_pdf(self, **kwargs) -> Dict[str, Any]:
         """
         Wrapper for Docling PDF Processing
 
         Extracts text and structure from PDFs using Docling.
+
+        Flexible parameter handling - accepts:
+        - query/question: User's question (optional)
+        - file_path: Direct path to PDF
+        - session_id + db: To auto-discover PDF in session
+        - extract_tables: Whether to extract tables (default: True)
         """
         try:
             from docling.document_converter import DocumentConverter
             import requests
             import tempfile
             import os
+            from app.models.database import SessionDocument, Document
+            from sqlalchemy import select
+
+            # Extract parameters flexibly
+            query = kwargs.get('query') or kwargs.get('question', '')
+            session_id = kwargs.get('session_id')
+            db = kwargs.get('db')
+            file_path = kwargs.get('file_path')
+            extract_tables = kwargs.get('extract_tables', True)
+
+            # If no direct file_path, try to find PDF in session
+            if not file_path and session_id and db:
+                result = await db.execute(
+                    select(Document)
+                    .join(SessionDocument, SessionDocument.document_id == Document.id)
+                    .where(SessionDocument.session_id == session_id)
+                    .where(Document.file_type == 'pdf')
+                    .order_by(Document.upload_date.desc())
+                    .limit(1)
+                )
+                pdf_doc = result.scalar_one_or_none()
+
+                if pdf_doc:
+                    file_path = pdf_doc.file_path
+                    logger.info(f"📄 Auto-discovered PDF: {pdf_doc.filename}")
+
+            if not file_path:
+                return {
+                    "success": False,
+                    "error": "No PDF file specified or found in session",
+                    "text": "",
+                    "markdown": "",
+                    "tables": []
+                }
 
             converter = DocumentConverter()
 
@@ -931,35 +967,46 @@ class ToolRegistry:
             if file_path.startswith("http"):
                 os.unlink(temp_path)
 
+            # If query provided, extract relevant answer
+            response_text = markdown_text
+            if query and markdown_text:
+                # Use the extracted content as context for answering
+                response_text = f"Extracted content:\n{markdown_text}"
+
             return {
                 "success": True,
+                "text": response_text,
                 "markdown": markdown_text,
                 "tables": tables,
                 "text_length": len(markdown_text),
                 "metadata": {
                     "source": file_path,
-                    "extraction_method": "docling"
+                    "extraction_method": "docling",
+                    "query": query if query else None
                 }
             }
 
         except Exception as e:
-            logger.error(f"Docling PDF extraction failed: {e}")
+            logger.error(f"Docling PDF extraction failed: {e}", exc_info=True)
             return {
                 "success": False,
                 "error": str(e),
+                "text": "",
                 "markdown": "",
                 "tables": []
             }
 
-    async def _wrap_ocr(
-        self,
-        image_path: str,
-        language: str = "eng"
-    ) -> Dict[str, Any]:
+    async def _wrap_ocr(self, **kwargs) -> Dict[str, Any]:
         """
         Wrapper for OCR (Optical Character Recognition)
 
         Extracts text from images using Tesseract.
+
+        Flexible parameter handling - accepts:
+        - query/question: User's question (optional)
+        - image_path/file_path: Direct path to image/PDF
+        - session_id + db: To auto-discover image/PDF in session
+        - language: OCR language (default: 'eng')
         """
         try:
             import pytesseract
@@ -967,6 +1014,38 @@ class ToolRegistry:
             import requests
             import tempfile
             import os
+            from app.models.database import SessionDocument, Document
+            from sqlalchemy import select
+
+            # Extract parameters flexibly
+            query = kwargs.get('query') or kwargs.get('question', '')
+            session_id = kwargs.get('session_id')
+            db = kwargs.get('db')
+            image_path = kwargs.get('image_path') or kwargs.get('file_path')
+            language = kwargs.get('language', 'eng')
+
+            # If no direct image_path, try to find image/PDF in session
+            if not image_path and session_id and db:
+                result = await db.execute(
+                    select(Document)
+                    .join(SessionDocument, SessionDocument.document_id == Document.id)
+                    .where(SessionDocument.session_id == session_id)
+                    .where(Document.file_type.in_(['pdf', 'png', 'jpg', 'jpeg', 'tiff']))
+                    .order_by(Document.upload_date.desc())
+                    .limit(1)
+                )
+                doc = result.scalar_one_or_none()
+
+                if doc:
+                    image_path = doc.file_path
+                    logger.info(f"🖼️ Auto-discovered file for OCR: {doc.filename}")
+
+            if not image_path:
+                return {
+                    "success": False,
+                    "error": "No image/PDF file specified or found in session",
+                    "text": ""
+                }
 
             # Download if URL
             if image_path.startswith("http"):
@@ -977,27 +1056,47 @@ class ToolRegistry:
             else:
                 temp_path = image_path
 
-            # Open image and run OCR
-            image = Image.open(temp_path)
+            # If PDF, convert first page to image for OCR
+            if temp_path.lower().endswith('.pdf'):
+                try:
+                    from pdf2image import convert_from_path
+                    images = convert_from_path(temp_path, first_page=1, last_page=1)
+                    if images:
+                        image = images[0]
+                    else:
+                        raise Exception("Failed to convert PDF to image")
+                except ImportError:
+                    # Fallback: try to open directly with PIL (works for some PDFs)
+                    image = Image.open(temp_path)
+            else:
+                # Open image and run OCR
+                image = Image.open(temp_path)
+
             text = pytesseract.image_to_string(image, lang=language)
 
             # Cleanup
             if image_path.startswith("http"):
                 os.unlink(temp_path)
 
+            # If query provided, include it in response
+            response_text = text
+            if query and text:
+                response_text = f"OCR extracted text:\n{text}"
+
             return {
                 "success": True,
-                "text": text,
+                "text": response_text,
                 "text_length": len(text),
                 "metadata": {
                     "source": image_path,
                     "language": language,
-                    "extraction_method": "tesseract_ocr"
+                    "extraction_method": "tesseract_ocr",
+                    "query": query if query else None
                 }
             }
 
         except Exception as e:
-            logger.error(f"OCR extraction failed: {e}")
+            logger.error(f"OCR extraction failed: {e}", exc_info=True)
             return {
                 "success": False,
                 "error": str(e),
@@ -1114,8 +1213,12 @@ class ToolRegistry:
 
     async def _wrap_vision_analysis(
         self,
-        image_path: str,
-        question: Optional[str] = None
+        image_path: Optional[str] = None,
+        question: Optional[str] = None,
+        query: Optional[str] = None,
+        session_id: Optional[str] = None,
+        db: Optional[Any] = None,
+        **kwargs  # Accept all extra parameters from TaskRouter
     ) -> Dict[str, Any]:
         """
         Wrapper for Vision Language Model Analysis
@@ -1129,43 +1232,264 @@ class ToolRegistry:
         - Counting objects (floors, windows, etc.)
         - Understanding technical drawings
         - Handwritten text
+
+        Args:
+            image_path: Path to specific image (optional)
+            question: Question about the image (optional)
+            query: Alternative to question (for TaskRouter compatibility)
+            session_id: Session ID to find documents (optional)
+            db: Database session (optional)
+            **kwargs: Accept extra parameters from TaskRouter
         """
         try:
             from app.services.vision_service import get_vision_service
             import os
 
+            # Map query to question if question not provided
+            if not question and query:
+                question = query
+
+            # If no image_path provided, try to find documents with images in session
+            if not image_path and session_id and db:
+                logger.info(f"🔍 No image_path provided, searching for image/PDF documents in session {session_id}")
+
+                try:
+                    from app.models.database import SessionDocument, Document
+                    from sqlalchemy import select
+                    from app.core.config import settings
+
+                    # Query for documents with visual content in session
+                    # Includes: PDFs, images, Word docs (with diagrams), PowerPoint (with slides/charts)
+                    # Note: file_type can be short form ('pdf') or MIME type ('application/pdf')
+                    result = await db.execute(
+                        select(Document)
+                        .join(SessionDocument, SessionDocument.document_id == Document.id)
+                        .where(SessionDocument.session_id == session_id)
+                        .where(
+                            # Short forms
+                            (Document.file_type.in_(['pdf', 'image', 'png', 'jpg', 'jpeg', 'docx', 'doc', 'pptx', 'ppt'])) |
+                            # MIME types and partial matches
+                            (Document.file_type.like('%pdf%')) |
+                            (Document.file_type.like('%image%')) |
+                            (Document.file_type.like('%png%')) |
+                            (Document.file_type.like('%jpg%')) |
+                            (Document.file_type.like('%jpeg%')) |
+                            (Document.file_type.like('%word%')) |          # application/msword, wordprocessing
+                            (Document.file_type.like('%docx%')) |
+                            (Document.file_type.like('%doc%')) |
+                            (Document.file_type.like('%powerpoint%')) |    # application/vnd.ms-powerpoint
+                            (Document.file_type.like('%presentation%')) |  # presentationml
+                            (Document.file_type.like('%pptx%')) |
+                            (Document.file_type.like('%ppt%'))
+                        )
+                    )
+                    documents = result.scalars().all()
+
+                    if documents:
+                        # Use first document with visual content
+                        doc = documents[0]
+
+                        # Use minio_path if available, fallback to file_path
+                        minio_path = doc.minio_path or doc.file_path
+                        image_path = minio_path
+                        logger.info(f"📄 Found visual document: {doc.filename} ({doc.file_type}) at {minio_path}")
+                    else:
+                        logger.warning("No image/PDF documents found in session")
+                        return {
+                            "success": False,
+                            "error": "No image or PDF documents found in session to analyze",
+                            "text": "",
+                            "analysis": ""
+                        }
+                except Exception as e:
+                    logger.error(f"Error finding documents: {e}")
+                    return {
+                        "success": False,
+                        "error": f"Could not find documents to analyze: {str(e)}",
+                        "text": "",
+                        "analysis": ""
+                    }
+
+            if not image_path:
+                return {
+                    "success": False,
+                    "error": "No image_path provided and could not find documents in session",
+                    "text": "",
+                    "analysis": ""
+                }
+
             vision_service = await get_vision_service()
+
+            # Download from MinIO if needed (before PDF conversion)
+            if image_path and not image_path.startswith('/') and not image_path.startswith('http'):
+                logger.info(f"🔍 Detected MinIO path: {image_path}, downloading before processing...")
+                local_path = await self._download_from_minio(image_path)
+                if not local_path:
+                    logger.error(f"❌ Failed to download from MinIO: {image_path}")
+                    return {
+                        "success": False,
+                        "error": f"Failed to download file from MinIO: {image_path}",
+                        "text": "",
+                        "analysis": ""
+                    }
+                image_path = local_path
+                logger.info(f"✅ Using downloaded file: {image_path}")
 
             # Handle PDF files - need to convert first page to image
             if image_path.lower().endswith('.pdf'):
                 logger.info(f"📄 PDF detected: {image_path}, converting to image for vision analysis")
 
-                # Use PyPDF2 to convert first page to image
+                # Use PyMuPDF (fitz) - already in our stack!
                 try:
-                    from pdf2image import convert_from_path
-                    import tempfile
+                    import fitz  # PyMuPDF
 
-                    # Convert first page only (construction drawings are typically single-page or page-by-page)
-                    images = convert_from_path(image_path, first_page=1, last_page=1, dpi=150)
+                    # Open PDF and convert first page only (construction drawings are typically single-page or page-by-page)
+                    doc = fitz.open(image_path)
+                    if len(doc) == 0:
+                        raise Exception("PDF has no pages")
 
-                    if images:
-                        # Save to temp file
-                        temp_image_path = f"/tmp/vision_pdf_{os.path.basename(image_path)}.png"
-                        images[0].save(temp_image_path, 'PNG')
-                        image_path = temp_image_path
-                        logger.info(f"✅ PDF converted to image: {temp_image_path}")
-                    else:
-                        raise Exception("Failed to convert PDF to image")
+                    page = doc[0]  # First page
+
+                    # Render page at 150 DPI (balanced quality/performance)
+                    mat = fitz.Matrix(150/72, 150/72)
+                    pix = page.get_pixmap(matrix=mat)
+
+                    # Save as PNG
+                    temp_image_path = f"/tmp/vision_pdf_{os.path.basename(image_path)}.png"
+                    pix.save(temp_image_path)
+                    doc.close()
+
+                    image_path = temp_image_path
+                    logger.info(f"✅ PDF converted to image using PyMuPDF: {temp_image_path}")
 
                 except ImportError:
-                    # Fallback: Try to use docling first, then analyze resulting text
-                    logger.warning("pdf2image not available, using docling fallback")
-                    return {
-                        "success": False,
-                        "error": "PDF vision analysis requires pdf2image. Please use docling_pdf tool instead.",
-                        "text": "",
-                        "analysis": ""
+                    # PyMuPDF not available, try pdf2image as fallback
+                    try:
+                        from pdf2image import convert_from_path
+
+                        images = convert_from_path(image_path, first_page=1, last_page=1, dpi=150)
+                        if images:
+                            temp_image_path = f"/tmp/vision_pdf_{os.path.basename(image_path)}.png"
+                            images[0].save(temp_image_path, 'PNG')
+                            image_path = temp_image_path
+                            logger.info(f"✅ PDF converted to image using pdf2image: {temp_image_path}")
+                        else:
+                            raise Exception("pdf2image failed to convert PDF")
+                    except ImportError:
+                        raise Exception("Neither PyMuPDF nor pdf2image available")
+
+                except (ImportError, Exception) as e:
+                    # 🎯 PARALLEL MULTI-METHOD EXTRACTION with Consolidated Context
+                    logger.warning(f"⚠️  PDF vision conversion failed: {e}")
+                    logger.info("🚀 Using PARALLEL multi-method extraction for comprehensive PDF analysis")
+
+                    import asyncio
+                    import time
+
+                    start_time = time.time()
+
+                    # 🎯 Use TaskRouter's fallback chain if provided (respects user's weights config)
+                    fallback_chain = kwargs.get('fallback_chain', ['docling_pdf', 'ocr', 'document_rag'])
+
+                    # Map tool names to extraction methods
+                    tool_method_map = {
+                        'docling_pdf': lambda: self._extract_with_docling(image_path, question or query, session_id, db),
+                        'ocr': lambda: self._extract_with_ocr(image_path, question or query, session_id, db),
+                        'document_rag': lambda: self._extract_with_rag(
+                            question or query or "Extract all information from this document",
+                            session_id,
+                            db,
+                            top_k=10
+                        ),
+                        'vision_analysis': None,  # Avoid recursion
                     }
+
+                    # Build extraction tasks from fallback chain (exclude vision_analysis to avoid recursion)
+                    extraction_tasks = []
+                    tools_used = []
+                    for tool in fallback_chain:
+                        if tool == 'vision_analysis':
+                            continue  # Skip to avoid infinite recursion
+                        method = tool_method_map.get(tool)
+                        if method:
+                            extraction_tasks.append(method())
+                            tools_used.append(tool)
+
+                    # Ensure we have at least 1 task
+                    if not extraction_tasks:
+                        # Fallback to default if fallback_chain is invalid
+                        logger.warning("⚠️  Invalid fallback_chain, using defaults")
+                        extraction_tasks = [
+                            self._extract_with_docling(image_path, question or query, session_id, db),
+                            self._extract_with_ocr(image_path, question or query, session_id, db),
+                            self._extract_with_rag(
+                                question or query or "Extract all information from this document",
+                                session_id,
+                                db,
+                                top_k=10
+                            ),
+                        ]
+                        tools_used = ['docling_pdf', 'ocr', 'document_rag']
+
+                    logger.info(f"🚀 Running {len(extraction_tasks)} extraction methods in PARALLEL: {tools_used}")
+
+                    # ✨ Run ALL methods concurrently using asyncio.gather()
+                    results = await asyncio.gather(*extraction_tasks, return_exceptions=True)
+
+                    elapsed = time.time() - start_time
+                    logger.info(f"⚡ Parallel extraction completed in {elapsed:.2f}s")
+
+                    # Collect all successful results
+                    consolidated_context = []
+                    method_names = ["docling_pdf", "ocr", "document_rag"]
+
+                    for i, result in enumerate(results):
+                        method_name = method_names[i]
+
+                        if isinstance(result, Exception):
+                            logger.warning(f"❌ {method_name} failed: {result}")
+                        elif result and result.get('success'):
+                            logger.info(f"✅ {method_name} succeeded")
+                            consolidated_context.append({
+                                "method": method_name,
+                                "content": result.get('text') or result.get('answer', ''),
+                                "confidence": result.get('confidence', 0.8)
+                            })
+
+                    # Build rich consolidated context from all successful extractions
+                    if consolidated_context:
+                        # Combine all extracted information
+                        context_text = "\n\n".join([
+                            f"=== {ctx['method'].upper()} EXTRACTION (confidence: {ctx['confidence']}) ===\n{ctx['content']}"
+                            for ctx in consolidated_context
+                        ])
+
+                        logger.info(f"✅ Parallel extraction successful using {len(consolidated_context)} methods: {[ctx['method'] for ctx in consolidated_context]}")
+
+                        return {
+                            "success": True,
+                            "text": context_text,
+                            "analysis": context_text,
+                            "methods_used": [ctx['method'] for ctx in consolidated_context],
+                            "num_sources": len(consolidated_context),
+                            "parallel_execution_time": elapsed,
+                            "metadata": {
+                                "extraction_methods": consolidated_context,
+                                "approach": "parallel_multi_method_with_consolidated_context"
+                            }
+                        }
+                    else:
+                        # All extraction methods failed
+                        return {
+                            "success": False,
+                            "error": f"PDF analysis failed: pdf2image not available and all parallel extraction methods failed (tried: {', '.join(method_names)})",
+                            "text": "",
+                            "analysis": "",
+                            "methods_attempted": len(method_names)
+                        }
+
+            # Extract UI-selected model_id from kwargs (passed from TaskRouter)
+            model_id = kwargs.get('model_id')
 
             # Analyze with vision model
             if question:
@@ -1174,7 +1498,13 @@ class ToolRegistry:
                 text_content = result
             else:
                 # General analysis + text extraction mode
-                result_dict = await vision_service.process_image(image_path, prompt=None)
+                logger.info(f"🎯 Calling vision analysis with model_id: {model_id}")
+                result_dict = await vision_service.process_image(
+                    image_path,
+                    prompt=None,
+                    model_id=model_id,  # Pass UI-selected model
+                    allow_fallback=True  # Enable Ollama fallback
+                )
                 text_content = result_dict.get("text", "")
 
             return {
@@ -1197,6 +1527,117 @@ class ToolRegistry:
                 "text": "",
                 "analysis": ""
             }
+
+    # ============================================================================
+    # Helper Methods for Parallel Extraction and MinIO File Access
+    # ============================================================================
+
+    async def _download_from_minio(self, minio_path: str) -> Optional[str]:
+        """
+        Download file from MinIO to temporary local path
+
+        Args:
+            minio_path: MinIO object path (e.g., 'Technology/Backend-Development/.../file.pdf')
+
+        Returns:
+            Local temp file path if successful, None if failed
+        """
+        try:
+            from minio import Minio
+            from app.core.config import settings
+            import tempfile
+            import os
+
+            # Initialize MinIO client
+            minio_client = Minio(
+                settings.MINIO_ENDPOINT,
+                access_key=settings.MINIO_ACCESS_KEY,
+                secret_key=settings.MINIO_SECRET_KEY,
+                secure=settings.MINIO_SECURE
+            )
+
+            # Extract filename from minio_path
+            filename = os.path.basename(minio_path)
+            file_ext = os.path.splitext(filename)[1]
+
+            # Create temp file with same extension
+            temp_fd, temp_path = tempfile.mkstemp(suffix=file_ext)
+            os.close(temp_fd)  # Close fd, MinIO will write to path
+
+            # Download from MinIO
+            bucket_name = settings.MINIO_BUCKET_NAME
+            logger.info(f"📥 Downloading from MinIO: bucket={bucket_name}, path={minio_path}")
+
+            minio_client.fget_object(
+                bucket_name=bucket_name,
+                object_name=minio_path,
+                file_path=temp_path
+            )
+
+            logger.info(f"✅ Downloaded to temp path: {temp_path}")
+            return temp_path
+
+        except Exception as e:
+            logger.error(f"❌ Failed to download from MinIO: {minio_path} - {e}")
+            return None
+
+    async def _extract_with_docling(self, file_path, query, session_id, db):
+        """Extract with Docling PDF - handles structured documents"""
+        try:
+            # Check if file_path is a MinIO path (no leading slash)
+            if file_path and not file_path.startswith('/') and not file_path.startswith('http'):
+                logger.info(f"🔍 Detected MinIO path for Docling: {file_path}")
+                local_path = await self._download_from_minio(file_path)
+                if not local_path:
+                    return {"success": False, "error": f"Failed to download file from MinIO: {file_path}"}
+                file_path = local_path
+
+            result = await self._wrap_docling_pdf(
+                file_path=file_path,
+                query=query,
+                session_id=session_id,
+                db=db
+            )
+            return result
+        except Exception as e:
+            logger.error(f"Docling extraction error: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
+    async def _extract_with_ocr(self, file_path, query, session_id, db):
+        """Extract with OCR - handles scanned documents"""
+        try:
+            # Check if file_path is a MinIO path (no leading slash)
+            if file_path and not file_path.startswith('/') and not file_path.startswith('http'):
+                logger.info(f"🔍 Detected MinIO path for OCR: {file_path}")
+                local_path = await self._download_from_minio(file_path)
+                if not local_path:
+                    return {"success": False, "error": f"Failed to download file from MinIO: {file_path}"}
+                file_path = local_path
+
+            result = await self._wrap_ocr(
+                file_path=file_path,
+                query=query,
+                session_id=session_id,
+                db=db
+            )
+            return result
+        except Exception as e:
+            logger.error(f"OCR extraction error: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
+    async def _extract_with_rag(self, query, session_id, db, top_k=10):
+        """Extract with Document RAG - semantic search across chunks"""
+        try:
+            result = await self._wrap_document_rag(
+                query=query,
+                session_id=session_id,
+                db=db,
+                top_k=top_k
+            )
+            return result
+        except Exception as e:
+            logger.error(f"RAG extraction error: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
 
     async def _wrap_text_compression(
         self,

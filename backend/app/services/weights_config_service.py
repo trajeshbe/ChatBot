@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 class StrategyWeights(BaseModel):
     """Strategy base weights"""
+    conversation_only: float = Field(1.0, ge=0.0, le=2.0)  # 🆕 Conversation-only mode (highest priority)
     rag_short_term: float = Field(0.30, ge=0.0, le=2.0)
     rag_hybrid: float = Field(0.25, ge=0.0, le=2.0)
     tool_navigation: float = Field(0.15, ge=0.0, le=2.0)

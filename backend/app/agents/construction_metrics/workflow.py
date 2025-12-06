@@ -78,6 +78,13 @@ class ConstructionMetricsAgent:
         """
         Build the LangGraph workflow DAG.
 
+        PHASE 2: Enhanced with OpenCV scale detection and measurement nodes.
+
+        Workflow:
+        1. Initialize → 2. Extract ZIP → 3. Classify Documents
+        4. Extract Metrics (Vision LLM) → 5. Scale Detection (OpenCV)
+        6. OpenCV Measurement → 7. Aggregate Results → 8. Format Output
+
         Returns:
             Compiled StateGraph
         """
@@ -88,6 +95,11 @@ class ConstructionMetricsAgent:
         workflow.add_node("extract_zip", self._extract_zip_node)
         workflow.add_node("classify_documents", self._classify_documents_node)
         workflow.add_node("extract_metrics", self._extract_metrics_node)
+
+        # PHASE 2: OpenCV nodes
+        workflow.add_node("scale_detection", self._scale_detection_node)
+        workflow.add_node("opencv_measurement", self._opencv_measurement_node)
+
         workflow.add_node("aggregate_results", self._aggregate_results_node)
         workflow.add_node("format_output", self._format_output_node)
 
@@ -96,7 +108,12 @@ class ConstructionMetricsAgent:
         workflow.add_edge("initialize", "extract_zip")
         workflow.add_edge("extract_zip", "classify_documents")
         workflow.add_edge("classify_documents", "extract_metrics")
-        workflow.add_edge("extract_metrics", "aggregate_results")
+
+        # PHASE 2: Run OpenCV analysis after Vision LLM extraction
+        workflow.add_edge("extract_metrics", "scale_detection")
+        workflow.add_edge("scale_detection", "opencv_measurement")
+        workflow.add_edge("opencv_measurement", "aggregate_results")
+
         workflow.add_edge("aggregate_results", "format_output")
         workflow.add_edge("format_output", END)
 
@@ -306,36 +323,185 @@ class ConstructionMetricsAgent:
 
         return state
 
-    async def _aggregate_results_node(self, state: ConstructionMetricsState) -> ConstructionMetricsState:
+    async def _scale_detection_node(self, state: ConstructionMetricsState) -> ConstructionMetricsState:
         """
-        Aggregate metrics from multiple documents with confidence weighting.
+        PHASE 2: Detect scale bars in architectural drawings using OpenCV.
 
         Args:
             state: Current workflow state
 
         Returns:
-            Updated state with aggregated_metrics
+            Updated state with scale_bars_detected
         """
-        state['current_step'] = 'aggregate_results'
-        logger.info(f"Aggregating results from {len(state['extracted_metrics'])} extractions")
+        state['current_step'] = 'scale_detection'
+        logger.info("Detecting scale bars in architectural drawings")
 
         try:
-            # Aggregate metrics
-            aggregation_result = aggregate_metrics(
-                extracted_metrics=state['extracted_metrics'],
-                confidence_threshold=0.5
-            )
+            from app.services.opencv_measurement_service import OpenCVMeasurementService
+
+            opencv_service = OpenCVMeasurementService()
+            scale_bars = {}
+
+            # Process only architectural drawings
+            for doc in state.get('document_classifications', []):
+                if doc.get('document_type') == 'architectural_drawing':
+                    try:
+                        scale_result = opencv_service.detect_scale_bar(doc['file_path'])
+                        if scale_result:
+                            scale_bars[doc['filename']] = scale_result['scale_ratio']
+                            logger.info(f"✓ Scale detected for {doc['filename']}: {scale_result['scale_text']} (ratio: {scale_result['scale_ratio']})")
+                        else:
+                            logger.debug(f"No scale bar found in {doc['filename']}")
+                    except Exception as e:
+                        logger.error(f"Error detecting scale in {doc['filename']}: {e}")
+
+            logger.info(f"Scale bars detected in {len(scale_bars)} documents")
+            state['scale_bars_detected'] = scale_bars
+
+        except ImportError as e:
+            logger.warning(f"OpenCV service not available: {e}")
+            state['scale_bars_detected'] = {}
+        except Exception as e:
+            logger.error(f"Error in scale detection node: {e}")
+            state['scale_bars_detected'] = {}
+
+        return state
+
+    async def _opencv_measurement_node(self, state: ConstructionMetricsState) -> ConstructionMetricsState:
+        """
+        PHASE 2: Measure floor plan areas using OpenCV contour detection.
+
+        Args:
+            state: Current workflow state
+
+        Returns:
+            Updated state with opencv_measurements
+        """
+        state['current_step'] = 'opencv_measurement'
+        logger.info("Measuring floor plan areas with OpenCV")
+
+        try:
+            from app.services.opencv_measurement_service import OpenCVMeasurementService
+
+            opencv_service = OpenCVMeasurementService()
+            measurements = []
+            geometric_confidence = {}
+
+            # Process architectural drawings with detected scales
+            for doc in state.get('document_classifications', []):
+                if doc.get('document_type') == 'architectural_drawing':
+                    try:
+                        scale_ratio = state.get('scale_bars_detected', {}).get(doc['filename'])
+
+                        measurement_result = opencv_service.measure_floor_plan_area(
+                            doc['file_path'],
+                            scale_ratio=scale_ratio
+                        )
+
+                        measurements.append({
+                            "filename": doc['filename'],
+                            "measurements": measurement_result,
+                            "scale_ratio": scale_ratio
+                        })
+
+                        # Track geometric confidence
+                        if measurement_result.get('total_area_m2'):
+                            geometric_confidence[doc['filename']] = measurement_result['confidence']
+                            logger.info(f"✓ Measured {doc['filename']}: {measurement_result['total_area_m2']:.2f} m² (confidence: {measurement_result['confidence']:.2f})")
+
+                    except Exception as e:
+                        logger.error(f"Error measuring {doc['filename']}: {e}")
+
+            logger.info(f"OpenCV measurements completed for {len(measurements)} documents")
+            state['opencv_measurements'] = measurements
+            state['geometric_confidence'] = geometric_confidence
+
+        except ImportError as e:
+            logger.warning(f"OpenCV service not available: {e}")
+            state['opencv_measurements'] = []
+            state['geometric_confidence'] = {}
+        except Exception as e:
+            logger.error(f"Error in OpenCV measurement node: {e}")
+            state['opencv_measurements'] = []
+            state['geometric_confidence'] = {}
+
+        return state
+
+    async def _aggregate_results_node(self, state: ConstructionMetricsState) -> ConstructionMetricsState:
+        """
+        PHASE 3: Aggregate metrics using hybrid decision logic with cross-validation.
+
+        This node combines:
+        - Vision LLM results (OCR + Docling + Vision - Phase 1)
+        - OpenCV measurements (Scale detection + Geometry - Phase 2)
+
+        Using intelligent decision logic:
+        1. Always prefer explicit values
+        2. Cross-validate when both methods available
+        3. Use higher confidence method
+        4. Flag discrepancies > 15%
+
+        Args:
+            state: Current workflow state
+
+        Returns:
+            Updated state with aggregated_metrics and cross_validation_results
+        """
+        from .aggregator import aggregate_with_hybrid_decision
+
+        state['current_step'] = 'aggregate_results'
+        logger.info(f"PHASE 3: Hybrid aggregation - Vision LLM + OpenCV cross-validation")
+
+        try:
+            # Check if we have OpenCV results (Phase 2)
+            has_opencv_results = len(state.get('opencv_measurements', [])) > 0
+
+            if has_opencv_results:
+                # PHASE 3: Use hybrid aggregation with cross-validation
+                logger.info("Using hybrid aggregation (Vision LLM + OpenCV)")
+                aggregation_result = aggregate_with_hybrid_decision(
+                    vision_llm_results=state['extracted_metrics'],
+                    opencv_results=state['opencv_measurements'],
+                    confidence_threshold=0.5
+                )
+
+                # Log cross-validation summary
+                if aggregation_result.get('discrepancies_flagged'):
+                    logger.warning(f"⚠️  {len(aggregation_result['discrepancies_flagged'])} discrepancies flagged for review")
+                    for disc in aggregation_result['discrepancies_flagged']:
+                        logger.warning(f"  - {disc['metric']}: {disc['difference_pct']:.1f}% difference "
+                                     f"(Vision={disc['vision_llm_value']:.1f}, OpenCV={disc['opencv_value']:.1f})")
+
+                # Store cross-validation results in state
+                state['cross_validation_results'] = aggregation_result.get('cross_validation_results', {})
+                state['discrepancies_flagged'] = aggregation_result.get('discrepancies_flagged', [])
+
+            else:
+                # Fallback: Use Vision LLM only (Phase 1)
+                logger.info("Using Vision LLM only aggregation (no OpenCV results)")
+                from .aggregator import aggregate_metrics
+                aggregation_result = aggregate_metrics(
+                    extracted_metrics=state['extracted_metrics'],
+                    confidence_threshold=0.5
+                )
+
+                state['cross_validation_results'] = {}
+                state['discrepancies_flagged'] = []
 
             state['aggregated_metrics'] = aggregation_result['aggregated_metrics']
             state['aggregation_confidence'] = aggregation_result['confidence_score']
             state['sources'] = aggregation_result['sources']
             state['aggregation_method'] = aggregation_result['aggregation_details']['aggregation_method']
 
-            logger.info(f"Aggregation complete: confidence {aggregation_result['confidence_score']:.2f}")
+            logger.info(f"✓ Aggregation complete: confidence {aggregation_result['confidence_score']:.2f}")
+            logger.info(f"  Method: {state['aggregation_method']}")
+            logger.info(f"  Metrics found: {aggregation_result['aggregation_details']['metrics_found']}/{aggregation_result['aggregation_details']['total_metrics']}")
 
         except Exception as e:
             error_msg = f"Aggregation failed: {e}"
             logger.error(error_msg)
+            import traceback
+            logger.error(traceback.format_exc())
             state['errors'].append(error_msg)
             state['aggregated_metrics'] = {
                 'levels_above_ground': 'NA',
@@ -347,12 +513,16 @@ class ConstructionMetricsAgent:
             }
             state['aggregation_confidence'] = 0.0
             state['sources'] = []
+            state['cross_validation_results'] = {}
+            state['discrepancies_flagged'] = []
 
         return state
 
     async def _format_output_node(self, state: ConstructionMetricsState) -> ConstructionMetricsState:
         """
         Format final JSON output.
+
+        PHASE 3: Enhanced to include cross-validation results and discrepancy flags.
 
         Args:
             state: Current workflow state
@@ -361,13 +531,13 @@ class ConstructionMetricsAgent:
             Updated state with final_result
         """
         state['current_step'] = 'format_output'
-        logger.info("Formatting final output")
+        logger.info("Formatting final output with cross-validation details")
 
         # Calculate processing time
         started_at = datetime.fromisoformat(state['started_at'])
         processing_time = (datetime.utcnow() - started_at).total_seconds()
 
-        # Format output
+        # Prepare aggregation result with Phase 3 enhancements
         aggregation_result = {
             'aggregated_metrics': state['aggregated_metrics'],
             'confidence_score': state['aggregation_confidence'],
@@ -379,6 +549,14 @@ class ConstructionMetricsAgent:
                 'aggregation_method': state.get('aggregation_method', 'confidence_weighted')
             }
         }
+
+        # PHASE 3: Include cross-validation results if available
+        if state.get('cross_validation_results'):
+            aggregation_result['cross_validation_results'] = state['cross_validation_results']
+
+        # PHASE 3: Include discrepancy flags if any
+        if state.get('discrepancies_flagged'):
+            aggregation_result['discrepancies_flagged'] = state['discrepancies_flagged']
 
         final_output = format_final_output(
             aggregated_result=aggregation_result,
@@ -392,7 +570,9 @@ class ConstructionMetricsAgent:
         state['completed_at'] = datetime.utcnow().isoformat()
         state['workflow_status'] = 'completed'
 
-        logger.info(f"Workflow completed in {processing_time:.2f}s")
+        logger.info(f"✓ Workflow completed in {processing_time:.2f}s")
+        if final_output.get('has_discrepancies'):
+            logger.warning(f"  ⚠️  {len(final_output.get('discrepancies', []))} discrepancies flagged")
 
         return state
 

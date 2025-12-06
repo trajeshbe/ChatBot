@@ -33,7 +33,8 @@
       "Bash(bash:*)",
       "Bash(source:*)",
       "Bash(python -m pytest:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(docker logs:*)"
     ],
     "deny": [],
     "ask": []

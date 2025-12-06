@@ -12,12 +12,14 @@ WORKDIR /app
 # - docker.io: Docker CLI for executing agent tasks in agent-runtime container
 # - tesseract-ocr: OCR engine for text extraction from images
 # - tesseract-ocr-eng: English language data for Tesseract
+# - poppler-utils: PDF utilities (required for pdf2image to convert PDFs to images)
 # Note: Playwright image is based on Ubuntu, so we can use apt-get
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     docker.io \
     tesseract-ocr \
     tesseract-ocr-eng \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip to latest version

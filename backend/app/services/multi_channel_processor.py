@@ -258,7 +258,7 @@ class MultiChannelProcessor:
         """Initialize multi-channel processor"""
         self.channels_enabled = {
             ChannelType.TEXT: True,      # Always enabled
-            ChannelType.VISUAL: False,   # Enable when CLIP available
+            ChannelType.VISUAL: True,    # ✅ ENABLED! CLIP processing for image-heavy PDFs
             ChannelType.TABLE: False,    # Enable when table model available
             ChannelType.CODE: False,     # Enable when CodeBERT available
             ChannelType.NUMERICAL: False # Enable when numerical model available
@@ -297,21 +297,50 @@ class MultiChannelProcessor:
         # Create traceable chunks
         traceable_chunks = []
 
-        for i, text_chunk in enumerate(text_chunks):
-            chunk = TraceableChunk(
-                document_id=document_id,
-                chunk_index=i,
-                content=text_chunk['content'],
-                source_info={
-                    "page": text_chunk.get('page', None),
-                    "start": text_chunk.get('start', 0),
-                    "end": text_chunk.get('end', 0)
-                }
-            )
-            traceable_chunks.append(chunk)
+        if text_chunks:
+            # Text-based chunks
+            for i, text_chunk in enumerate(text_chunks):
+                chunk = TraceableChunk(
+                    document_id=document_id,
+                    chunk_index=i,
+                    content=text_chunk['content'],
+                    source_info={
+                        "page": text_chunk.get('page', None),
+                        "start": text_chunk.get('start', 0),
+                        "end": text_chunk.get('end', 0)
+                    }
+                )
+                traceable_chunks.append(chunk)
+        elif ChannelType.VISUAL in channels_to_process:
+            # Visual-only document (no text extracted)
+            # Create synthetic chunks for visual content
+            logger.info(f"📄 Visual-only document detected - creating synthetic chunks for visual content")
+            import fitz  # PyMuPDF
+            try:
+                doc = fitz.open(file_path)
+                num_pages = len(doc)
+                doc.close()
+
+                for page_num in range(num_pages):
+                    chunk = TraceableChunk(
+                        document_id=document_id,
+                        chunk_index=page_num,
+                        content=f"[Visual content from page {page_num + 1}]",
+                        source_info={
+                            "page": page_num + 1,
+                            "start": 0,
+                            "end": 0,
+                            "synthetic": True
+                        }
+                    )
+                    traceable_chunks.append(chunk)
+                logger.info(f"✅ Created {len(traceable_chunks)} synthetic chunks for visual-only document")
+            except Exception as e:
+                logger.warning(f"Failed to create synthetic chunks: {e}")
 
         # Process each channel
-        if ChannelType.TEXT in channels_to_process:
+        # Always process text channel if enabled (even for synthetic chunks in visual-only documents)
+        if ChannelType.TEXT in channels_to_process and traceable_chunks:
             await self._process_text_channel(traceable_chunks, text_chunks)
 
         if ChannelType.VISUAL in channels_to_process:
@@ -326,22 +355,28 @@ class MultiChannelProcessor:
 
     def _determine_channels(self, content_classification: Dict[str, Any]) -> List[str]:
         """Determine which channels to process based on content type"""
+        from app.services.multi_analyzer_ensemble import ContentType as ContentTypeEnum
+
         content_type = content_classification.get("content_type")
+
+        # Convert to string for comparison if it's an enum
+        content_type_str = content_type.value if hasattr(content_type, 'value') else str(content_type)
 
         channels = [ChannelType.TEXT]  # Always process text
 
-        # Add visual channel for image-heavy or vector graphics
-        if content_type in ["image_heavy", "vector_graphics", "mixed"]:
+        # Add visual channel for image-heavy, scanned, or vector graphics
+        # SCANNED documents often have visual content (diagrams, photos) that needs CLIP indexing
+        if content_type_str in ["image_heavy", "vector_graphics", "mixed", "scanned"]:
             if self.channels_enabled[ChannelType.VISUAL]:
                 channels.append(ChannelType.VISUAL)
 
         # Add table channel for table-heavy
-        if content_type in ["table_heavy", "numerical", "mixed"]:
+        if content_type_str in ["table_heavy", "numerical", "mixed"]:
             if self.channels_enabled[ChannelType.TABLE]:
                 channels.append(ChannelType.TABLE)
 
         # Add code channel for code
-        if content_type == "code":
+        if content_type_str == "code":
             if self.channels_enabled[ChannelType.CODE]:
                 channels.append(ChannelType.CODE)
 
@@ -384,10 +419,120 @@ class MultiChannelProcessor:
         chunks: List[TraceableChunk],
         file_path: str
     ):
-        """Process visual channel (generate CLIP embeddings from page screenshots)"""
-        logger.info(f"🎨 Visual channel processing not yet implemented (CLIP)")
-        # Future: Render PDF pages, extract visual embeddings with CLIP
-        # For now, skip
+        """
+        Process visual channel (generate CLIP embeddings from page screenshots)
+
+        Extracts images from PDF pages and generates CLIP embeddings for visual content.
+        This enables text-to-image search (e.g., "show me photos of construction site")
+        """
+        import os
+        from pathlib import Path
+
+        logger.info(f"🎨 Processing visual channel for {file_path}...")
+
+        # Only process PDFs for now
+        if not file_path.lower().endswith('.pdf'):
+            logger.info(f"   Skipping visual channel: Only PDF files supported (got: {Path(file_path).suffix})")
+            return
+
+        try:
+            # Import services
+            from app.services.intelligent_embedding_service import intelligent_embedding_service
+            import fitz  # PyMuPDF
+
+            # Initialize intelligent embedding service if needed
+            if not intelligent_embedding_service._initialized:
+                await intelligent_embedding_service.initialize()
+
+            # Convert PDF pages to images
+            logger.info(f"   📄 Converting PDF to images...")
+            doc = fitz.open(file_path)
+            image_paths = []
+
+            output_dir = "/tmp"
+            pdf_name = Path(file_path).stem
+
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+
+                # Render page at 150 DPI (balanced quality/performance)
+                mat = fitz.Matrix(150/72, 150/72)
+                pix = page.get_pixmap(matrix=mat)
+
+                # Save as PNG
+                image_path = f"{output_dir}/{pdf_name}_clip_page_{page_num + 1}.png"
+                pix.save(image_path)
+                image_paths.append(image_path)
+
+            doc.close()
+            logger.info(f"   ✅ Converted {len(image_paths)} pages to images")
+
+            if not image_paths:
+                logger.warning(f"   ⚠️  No images extracted from PDF")
+                return
+
+            # Generate CLIP embeddings for all pages
+            logger.info(f"   🧠 Generating CLIP embeddings for {len(image_paths)} pages...")
+            visual_embeddings = await intelligent_embedding_service._embed_visual(image_paths)
+
+            logger.info(f"   ✅ Generated {len(visual_embeddings)} visual embeddings (512-dim)")
+
+            # Distribute visual embeddings across chunks
+            # Strategy: Assign page embeddings to chunks based on page distribution
+            if len(chunks) <= len(visual_embeddings):
+                # More pages than chunks: Assign each chunk the embedding of its corresponding page
+                # Assumes chunks are roughly evenly distributed across pages
+                for i, chunk in enumerate(chunks):
+                    # Map chunk index to page number (proportional distribution)
+                    page_index = int((i / len(chunks)) * len(visual_embeddings))
+                    page_index = min(page_index, len(visual_embeddings) - 1)
+
+                    chunk.add_embedding(
+                        channel=ChannelType.VISUAL,
+                        vector=np.array(visual_embeddings[page_index]),
+                        model="openai/clip-vit-base-patch32",
+                        confidence=0.85,
+                        source="page_screenshot",
+                        metadata={
+                            "page_num": page_index + 1,
+                            "total_pages": len(visual_embeddings),
+                            "image_path": image_paths[page_index]
+                        }
+                    )
+            else:
+                # More chunks than pages: Assign page embeddings to multiple chunks
+                chunks_per_page = len(chunks) // len(visual_embeddings)
+
+                for i, chunk in enumerate(chunks):
+                    page_index = min(i // max(chunks_per_page, 1), len(visual_embeddings) - 1)
+
+                    chunk.add_embedding(
+                        channel=ChannelType.VISUAL,
+                        vector=np.array(visual_embeddings[page_index]),
+                        model="openai/clip-vit-base-patch32",
+                        confidence=0.85,
+                        source="page_screenshot",
+                        metadata={
+                            "page_num": page_index + 1,
+                            "total_pages": len(visual_embeddings),
+                            "image_path": image_paths[page_index]
+                        }
+                    )
+
+            # Clean up temporary image files
+            for img_path in image_paths:
+                try:
+                    if os.path.exists(img_path):
+                        os.remove(img_path)
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temp image {img_path}: {e}")
+
+            logger.info(f"   ✅ Visual channel complete: {len(chunks)} chunks with CLIP embeddings")
+
+        except Exception as e:
+            logger.error(f"❌ Visual channel processing failed: {e}", exc_info=True)
+            logger.info("   Continuing without visual embeddings")
+            # Don't raise - allow document processing to continue with text-only
 
     async def _process_table_channel(
         self,

@@ -52,8 +52,10 @@ class IntelligentRetrievalService:
                 "csv", "numbers", "values", "entries", "records", "fields"
             ],
             QueryType.VISUAL: [
-                "image", "diagram", "chart", "graph", "picture", "figure",
-                "illustration", "visual", "screenshot", "photo", "drawing"
+                "image", "images", "diagram", "diagrams", "chart", "charts",
+                "graph", "graphs", "picture", "pictures", "figure", "figures",
+                "illustration", "illustrations", "visual", "visuals",
+                "screenshot", "screenshots", "photo", "photos", "drawing", "drawings"
             ],
             QueryType.CODE: [
                 "code", "function", "class", "method", "algorithm", "implementation",
@@ -84,9 +86,17 @@ class IntelligentRetrievalService:
             "numerical": SimilarityMetric.STATISTICAL
         }
 
-    def classify_query(self, query: str) -> Dict[str, Any]:
+        # Hybrid classification configuration
+        self.keyword_confidence_threshold = 0.8  # Use LLM if keyword confidence < 0.8
+        self.llm_fallback_enabled = True  # Enable LLM fallback for ambiguous queries
+
+    async def classify_query(self, query: str) -> Dict[str, Any]:
         """
-        Classify query to determine optimal retrieval strategy
+        🔀 HYBRID Query Classification: Keywords (fast) + LLM (smart)
+
+        Flow:
+        1. Try keyword matching (0ms) - Fast path for obvious queries
+        2. If confidence < threshold, use LLM (~500ms) - Smart path for ambiguous queries
 
         Args:
             query: User query text
@@ -98,8 +108,57 @@ class IntelligentRetrievalService:
                 "vector_column": str,       # Database column to search
                 "similarity_metric": str,   # Similarity metric to use
                 "confidence": float,        # Classification confidence
-                "reasoning": str            # Why this classification
+                "reasoning": str,           # Why this classification
+                "method": str               # "keyword" or "llm"
             }
+        """
+        # STEP 1: Try keyword matching (FAST PATH - 0ms)
+        keyword_result = self._keyword_classify(query)
+
+        # STEP 2: If confidence is high, use keyword result
+        if keyword_result["confidence"] >= self.keyword_confidence_threshold:
+            logger.info(
+                f"⚡ FAST PATH - Keyword Classification:\n"
+                f"   Query: {query[:100]}...\n"
+                f"   Strategy: {keyword_result['strategy']}\n"
+                f"   Confidence: {keyword_result['confidence']:.2f}\n"
+                f"   Reasoning: {keyword_result['reasoning']}"
+            )
+            return keyword_result
+
+        # STEP 3: Low confidence - fallback to LLM (SMART PATH - ~500ms)
+        if self.llm_fallback_enabled:
+            logger.info(
+                f"🧠 SMART PATH - LLM Classification (keyword confidence {keyword_result['confidence']:.2f} < {self.keyword_confidence_threshold}):\n"
+                f"   Query: {query[:100]}..."
+            )
+
+            try:
+                llm_result = await self._llm_classify_embedding_strategy(query)
+                logger.info(
+                    f"✅ LLM Classification:\n"
+                    f"   Strategy: {llm_result['strategy']}\n"
+                    f"   Confidence: {llm_result['confidence']:.2f}\n"
+                    f"   Reasoning: {llm_result['reasoning']}"
+                )
+                return llm_result
+            except Exception as e:
+                logger.warning(f"⚠️  LLM classification failed: {e}, using keyword result")
+                return keyword_result
+        else:
+            # LLM fallback disabled - use keyword result
+            logger.info(
+                f"⚡ Using keyword result (LLM fallback disabled):\n"
+                f"   Strategy: {keyword_result['strategy']}\n"
+                f"   Confidence: {keyword_result['confidence']:.2f}"
+            )
+            return keyword_result
+
+    def _keyword_classify(self, query: str) -> Dict[str, Any]:
+        """
+        Keyword-based query classification (FAST - 0ms)
+
+        Returns classification dict with method="keyword"
         """
         query_lower = query.lower()
 
@@ -115,17 +174,17 @@ class IntelligentRetrievalService:
             # Default to text semantic
             query_type = QueryType.TEXT
             confidence = 0.5
-            reasoning = "No specific query type detected, using text semantic search"
+            reasoning = "No keywords detected (keyword matching)"
         elif len(type_scores) > 1:
             # Multi-modal query
             query_type = QueryType.MULTI_MODAL
             confidence = 0.7
-            reasoning = f"Query matches multiple types: {', '.join(type_scores.keys())}"
+            reasoning = f"Multiple keywords matched: {', '.join(type_scores.keys())}"
         else:
             # Single type detected
             query_type = list(type_scores.keys())[0]
             confidence = min(0.95, 0.6 + (type_scores[query_type] * 0.1))
-            reasoning = f"Query type detected: {query_type} ({type_scores[query_type]} keyword matches)"
+            reasoning = f"Keyword matched: {query_type} ({type_scores[query_type]} matches)"
 
         # Map query type to strategy
         if query_type == QueryType.TEXT:
@@ -139,9 +198,7 @@ class IntelligentRetrievalService:
         elif query_type == QueryType.NUMERICAL:
             strategy = "numerical"
         elif query_type == QueryType.MULTI_MODAL:
-            # For multi-modal, use text semantic as default
-            # (future: search multiple columns and merge results)
-            strategy = "text_semantic"
+            strategy = "text_semantic"  # Default for multi-modal
         else:
             strategy = "text_semantic"
 
@@ -151,25 +208,101 @@ class IntelligentRetrievalService:
             SimilarityMetric.COSINE
         )
 
-        logger.info(
-            f"🔍 Query Classification:\n"
-            f"   Query: {query[:100]}...\n"
-            f"   Type: {query_type}\n"
-            f"   Strategy: {strategy}\n"
-            f"   Vector Column: {vector_column}\n"
-            f"   Similarity Metric: {similarity_metric.value}\n"
-            f"   Confidence: {confidence:.2f}\n"
-            f"   Reasoning: {reasoning}"
-        )
-
         return {
             "query_type": query_type,
             "strategy": strategy,
             "vector_column": vector_column,
             "similarity_metric": similarity_metric.value,
             "confidence": confidence,
-            "reasoning": reasoning
+            "reasoning": reasoning,
+            "method": "keyword"  # Classification method
         }
+
+    async def _llm_classify_embedding_strategy(self, query: str) -> Dict[str, Any]:
+        """
+        LLM-based embedding strategy classification (SMART - ~500ms)
+
+        Uses LLM to intelligently determine retrieval strategy for ambiguous queries
+        like "describe what's illustrated" or "explain the visual concepts".
+
+        Returns classification dict with method="llm"
+        """
+        import json
+        from app.services.llm_service import llm_service
+
+        prompt = f"""Analyze this query and determine the best retrieval strategy for a document search system.
+
+Query: "{query}"
+
+Available Strategies:
+- **text_semantic**: Standard text search (e.g., "explain the process", "what is X", "summarize")
+- **vision**: Visual content search (e.g., "show diagrams", "describe images", "what's illustrated", "visual concepts", "pictures showing")
+- **table**: Structured data search (e.g., "data in table", "show values", "spreadsheet content")
+- **code**: Code search (e.g., "find function", "show implementation", "code snippet")
+
+Respond with ONLY a JSON object (no markdown, no code blocks):
+{{
+    "strategy": "text_semantic|vision|table|code",
+    "confidence": 0.0-1.0,
+    "reasoning": "brief explanation of why this strategy"
+}}
+"""
+
+        try:
+            # Call LLM service
+            response = await llm_service.generate(
+                prompt=prompt,
+                temperature=0.1,  # Low temperature for consistent classification
+                max_tokens=150
+            )
+
+            # Parse JSON response
+            response_text = response.get("response", "").strip()
+
+            # Remove markdown code blocks if present
+            if response_text.startswith("```"):
+                response_text = response_text.split("```")[1]
+                if response_text.startswith("json"):
+                    response_text = response_text[4:].strip()
+
+            result = json.loads(response_text)
+
+            strategy = result.get("strategy", "text_semantic")
+            confidence = float(result.get("confidence", 0.8))
+            reasoning = result.get("reasoning", "LLM classification")
+
+            # Map to query type
+            if strategy == "vision":
+                query_type = QueryType.VISUAL
+            elif strategy == "table":
+                query_type = QueryType.TABLE
+            elif strategy == "code":
+                query_type = QueryType.CODE
+            else:
+                query_type = QueryType.TEXT
+
+            vector_column = self.strategy_to_column.get(strategy, "embedding")
+            similarity_metric = self.strategy_to_metric.get(
+                strategy,
+                SimilarityMetric.COSINE
+            )
+
+            return {
+                "query_type": query_type,
+                "strategy": strategy,
+                "vector_column": vector_column,
+                "similarity_metric": similarity_metric.value,
+                "confidence": confidence,
+                "reasoning": f"LLM: {reasoning}",
+                "method": "llm"  # Classification method
+            }
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse LLM response as JSON: {e}")
+            raise ValueError(f"LLM returned invalid JSON: {response_text}")
+        except Exception as e:
+            logger.error(f"LLM classification error: {e}")
+            raise
 
     async def retrieve(
         self,
@@ -202,8 +335,8 @@ class IntelligentRetrievalService:
                 "total_returned": int         # Total results returned
             }
         """
-        # Step 1: Classify query
-        classification = self.classify_query(query)
+        # Step 1: Classify query (hybrid: keywords + LLM)
+        classification = await self.classify_query(query)
         strategy = classification["strategy"]
         vector_column = classification["vector_column"]
         similarity_metric = classification["similarity_metric"]
@@ -236,8 +369,8 @@ class IntelligentRetrievalService:
                 f"falling back to text_semantic"
             )
 
-            # Fallback to text semantic
-            classification = self.classify_query(query)
+            # Fallback to text semantic (force keyword classification to avoid extra LLM call)
+            classification = self._keyword_classify(query)
             classification["strategy"] = "text_semantic"
             classification["vector_column"] = "embedding"
             classification["similarity_metric"] = SimilarityMetric.COSINE.value

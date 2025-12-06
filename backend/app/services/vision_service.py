@@ -29,14 +29,21 @@ class VisionService:
     async def process_image(
         self,
         image_path: str,
-        prompt: Optional[str] = None
+        prompt: Optional[str] = None,
+        model_id: Optional[str] = None,
+        allow_fallback: bool = True
     ) -> Dict[str, Any]:
         """
         Process an image using a vision-language model.
 
+        Tries UI-selected model first (OpenAI/Anthropic), then falls back to Ollama if needed.
+
         Args:
             image_path: Path to the image file
             prompt: Optional custom prompt (defaults to text extraction)
+            model_id: UI-selected model ID (e.g., "gpt-4o-mini", "claude-3.5-sonnet")
+                     If None, uses Ollama vision models directly
+            allow_fallback: Allow automatic fallback to Ollama if API model fails (default: True)
 
         Returns:
             Dict with extracted text and metadata
@@ -54,24 +61,45 @@ class VisionService:
                     "If the text is handwritten, do your best to decipher it accurately."
                 )
 
-            # Call Ollama vision API
+            # Try UI-selected model first (OpenAI/Anthropic) if provided
+            if model_id and ("gpt" in model_id.lower() or "claude" in model_id.lower()):
+                try:
+                    logger.info(f"🎯 Attempting vision analysis with UI-selected model: {model_id}")
+                    response = await self._call_api_vision(model_id, image_data, prompt)
+
+                    if response.get("success"):
+                        logger.info(f"✅ Vision analysis succeeded with {model_id}")
+                        return response
+
+                except Exception as e:
+                    logger.warning(f"⚠️ API vision model {model_id} failed: {e}")
+
+                    if not allow_fallback:
+                        raise
+
+                    logger.info(f"🔄 Falling back to Ollama vision models...")
+
+            # Fallback to Ollama vision API (or primary if no model_id provided)
+            # 🆕 CRITICAL FIX: Pass allow_fallback to enable memory-aware model selection
             response = await self._call_ollama_vision(
                 model=self.vision_model,
                 prompt=prompt,
-                image_data=image_data
+                image_data=image_data,
+                allow_fallback=allow_fallback
             )
 
             extracted_text = response.get("response", "")
 
             return {
                 "text": extracted_text,
-                "model": self.vision_model,
+                "model": response.get("model_used", self.vision_model),  # 🆕 Track actual model used
                 "method": "vision_language_model",
                 "success": True,
                 "metadata": {
                     "prompt_tokens": response.get("prompt_eval_count", 0),
                     "response_tokens": response.get("eval_count", 0),
-                    "total_duration_ms": response.get("total_duration", 0) / 1_000_000
+                    "total_duration_ms": response.get("total_duration", 0) / 1_000_000,
+                    "fallback_occurred": response.get("fallback_occurred", False)  # 🆕 Track fallback
                 }
             }
 
@@ -113,22 +141,75 @@ class VisionService:
             encoded = base64.b64encode(image_bytes).decode('utf-8')
             return encoded
 
+    async def _call_api_vision(
+        self,
+        model_id: str,
+        image_data: str,
+        prompt: str
+    ) -> Dict[str, Any]:
+        """
+        Call OpenAI/Anthropic vision APIs.
+
+        Args:
+            model_id: Model ID (e.g., "gpt-4o-mini", "claude-3.5-sonnet")
+            image_data: Base64 encoded image
+            prompt: Text prompt for analysis
+
+        Returns:
+            Dict with text, model, method, success, and metadata
+        """
+        from app.services.llm_service import get_llm_service
+
+        llm_service = get_llm_service()
+
+        if "gpt" in model_id.lower():
+            # OpenAI Vision API
+            logger.info(f"🎨 Calling OpenAI vision: {model_id}")
+
+            response = await llm_service.call_openai_vision(
+                model=model_id,
+                prompt=prompt,
+                image_base64=image_data
+            )
+
+            return {
+                "text": response.get("content", ""),
+                "model": model_id,
+                "method": "openai_vision",
+                "success": True,
+                "metadata": {
+                    "prompt_tokens": response.get("usage", {}).get("prompt_tokens", 0),
+                    "completion_tokens": response.get("usage", {}).get("completion_tokens", 0),
+                    "total_tokens": response.get("usage", {}).get("total_tokens", 0)
+                }
+            }
+
+        elif "claude" in model_id.lower():
+            # Anthropic Vision API (future implementation)
+            logger.warning(f"⚠️ Anthropic vision not yet implemented for {model_id}")
+            raise NotImplementedError(f"Anthropic vision support coming soon")
+
+        else:
+            raise ValueError(f"Unknown vision model provider for: {model_id}")
+
     async def _call_ollama_vision(
         self,
         model: str,
         prompt: str,
-        image_data: str
+        image_data: str,
+        allow_fallback: bool = False
     ) -> Dict[str, Any]:
         """
-        Call Ollama vision API.
+        Call Ollama vision API with memory-aware fallback.
 
         Args:
             model: Vision model name
             prompt: Text prompt
             image_data: Base64 encoded image
+            allow_fallback: Allow automatic model fallback for memory constraints
 
         Returns:
-            API response dict
+            API response dict with fallback metadata
         """
         url = f"{self.ollama_base_url}/api/generate"
 
@@ -139,10 +220,72 @@ class VisionService:
             "stream": False
         }
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            return response.json()
+        model_used = model
+        fallback_occurred = False
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                result["model_used"] = model_used
+                result["fallback_occurred"] = fallback_occurred
+                return result
+
+        except httpx.HTTPStatusError as e:
+            # 🆕 CRITICAL FIX: Check for memory error and fallback if allowed
+            if e.response.status_code == 500 and allow_fallback:
+                error_text = e.response.text
+
+                # Check if error is memory-related
+                if "memory" in error_text.lower() or "system memory" in error_text.lower():
+                    logger.warning(
+                        f"⚠️  Vision model {model} failed due to memory constraints\n"
+                        f"   Error: {error_text[:200]}\n"
+                        f"   Attempting fallback to smaller model..."
+                    )
+
+                    # Fallback chain for vision models
+                    fallback_models = ["llama3.2-vision:3b", "qwen2.5:1.5b"]
+
+                    for fallback_model in fallback_models:
+                        try:
+                            logger.info(f"🔄 Trying fallback model: {fallback_model}")
+
+                            fallback_payload = {
+                                "model": fallback_model,
+                                "prompt": prompt,
+                                "images": [image_data],
+                                "stream": False
+                            }
+
+                            async with httpx.AsyncClient(timeout=self.timeout) as fallback_client:
+                                fallback_response = await fallback_client.post(url, json=fallback_payload)
+                                fallback_response.raise_for_status()
+
+                                result = fallback_response.json()
+                                result["model_used"] = fallback_model
+                                result["fallback_occurred"] = True
+                                result["original_model"] = model
+
+                                logger.info(
+                                    f"✅ Fallback successful: {fallback_model}\n"
+                                    f"   Original model: {model}\n"
+                                    f"   Fallback model: {fallback_model}"
+                                )
+
+                                return result
+
+                        except Exception as fallback_error:
+                            logger.warning(f"Fallback to {fallback_model} failed: {fallback_error}")
+                            continue
+
+                    # All fallbacks failed
+                    logger.error("❌ All vision model fallbacks failed")
+                    raise ValueError(f"Vision processing failed: All models exhausted (original: {model}, tried: {fallback_models})")
+
+            # Re-raise if not a memory error or fallback not allowed
+            raise
 
     async def describe_image(
         self,

@@ -66,7 +66,7 @@ langchain-openai==0.1.22      # OpenAI integration for LangChain
 langgraph==0.2.16             # Agent workflow graphs - DAG orchestration
 #
 # Used by: local LLM inference (if not using OpenAI)
-# transformers==4.37.2        # Hugging Face transformers - model loading
+# transformers==4.37.2        # Hugging Face transformers - model loading (already included via sentence-transformers)
 # torch==2.1.2                # PyTorch - ML framework (large download ~2GB)
 # vllm==0.2.7                 # GPU-accelerated LLM inference (requires CUDA)
 
@@ -111,10 +111,12 @@ pyarrow>=14.0.0                  # Parquet support - analytics output format
 
 # ----------------------------------------------------------------------------
 # OCR & IMAGE PROCESSING (Advanced document processing)
-# Used by: app/services/ocr_service.py
+# Used by: app/services/ocr_service.py, app/services/opencv_measurement_service.py
 # ----------------------------------------------------------------------------
 pytesseract==0.3.13           # OCR for scanned documents - fallback for Docling
 Pillow==10.2.0                # Image processing - required by pytesseract and OpenCV
+pdf2image==1.16.3             # PDF to image conversion - used by vision_analysis for PDF processing
+shapely==2.0.2                # Geometric calculations - polygon area, irregular shapes (PHASE 2: Construction metrics)
 
 # ----------------------------------------------------------------------------
 # TRANSLATION (Multilingual content support)

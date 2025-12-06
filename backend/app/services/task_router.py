@@ -14,6 +14,7 @@ from enum import Enum
 import logging
 import re
 import mimetypes
+import json
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -230,13 +231,12 @@ Respond with ONLY ONE WORD: SIMPLE, MODERATE, COMPLEX, or ANALYTICAL"""
             # Call LLM (using local Ollama for speed)
             result = await llm_service.generate(
                 prompt=classification_prompt,
-                llm_provider="ollama",
                 model_id="qwen2.5:1.5b",  # Fast, lightweight model
                 temperature=0.1,  # Low temperature for consistent classification
                 max_tokens=10
             )
 
-            classification = result.get("text", "").strip().upper()
+            classification = result.get("content", "").strip().upper()
 
             # Map to enum
             complexity_map = {
@@ -292,6 +292,101 @@ Respond with ONLY ONE WORD: SIMPLE, MODERATE, COMPLEX, or ANALYTICAL"""
 
         # Default to SIMPLE if no patterns match
         return QueryComplexity.SIMPLE
+
+    async def analyze_query_content_llm(self, query: str) -> Dict[str, Any]:
+        """
+        Analyze query content using LLM to detect visual keywords and tool requirements
+
+        Uses local Ollama (qwen2.5:1.5b) to intelligently detect when queries
+        mention visual content like diagrams, charts, images, etc.
+
+        Args:
+            query: User's query text
+
+        Returns:
+            Dict with:
+                - requires_vision: bool - whether vision tools are needed
+                - suggested_tools: List[str] - recommended tools
+                - confidence: float - confidence score
+                - reasoning: str - explanation
+        """
+        try:
+            from app.services.llm_service import llm_service
+
+            # Structured prompt for content analysis
+            analysis_prompt = f"""Analyze this query and determine if it requires visual content analysis tools.
+
+Query: "{query}"
+
+Visual content indicators:
+- Mentions of: diagram, chart, figure, image, graph, table, drawing, illustration
+- Mentions of: blueprint, schematic, floor plan, map, screenshot, photo, picture
+- Mentions of: scanned document, scan, visual, shown in image
+
+Respond with ONLY a JSON object (no markdown, no code blocks):
+{{
+    "requires_vision": true/false,
+    "suggested_tools": ["tool_name"],
+    "confidence": 0.0 to 1.0,
+    "reasoning": "brief explanation"
+}}
+
+Tool options:
+- vision_analysis: For analyzing diagrams, charts, images, visual content
+- ocr: For extracting text from scanned documents or images
+- document_rag: For searching uploaded text documents
+- docling_pdf: For advanced PDF processing
+
+If query mentions visual content → requires_vision=true, suggest vision_analysis or ocr
+Otherwise → requires_vision=false, suggest document_rag"""
+
+            # Use ultra-fast Qwen 1.5B model
+            result = await llm_service.generate(
+                prompt=analysis_prompt,
+                max_tokens=200,
+                temperature=0.1,  # Low temperature for consistent analysis
+                model_id="qwen2.5:1.5b"  # Same model as query classification
+            )
+
+            # Extract and parse response
+            response_text = result.get('content', '').strip()
+            if response_text.startswith('```'):
+                lines = response_text.split('\n')
+                response_text = '\n'.join(lines[1:-1]) if len(lines) > 2 else response_text
+                response_text = response_text.replace('```json', '').replace('```', '').strip()
+
+            analysis = json.loads(response_text)
+
+            # Validate response
+            required_fields = {'requires_vision', 'suggested_tools', 'confidence', 'reasoning'}
+            if not all(field in analysis for field in required_fields):
+                raise ValueError(f"Missing required fields in analysis response")
+
+            logger.info(
+                f"🤖 LLM content analysis: requires_vision={analysis['requires_vision']}, "
+                f"tools={analysis['suggested_tools']}, confidence={analysis['confidence']:.2f}"
+            )
+
+            return analysis
+
+        except Exception as e:
+            logger.warning(f"LLM content analysis failed: {e}. Using fallback.")
+            # Fallback to simple keyword detection
+            query_lower = query.lower()
+            visual_keywords = [
+                'diagram', 'chart', 'figure', 'image', 'graph', 'table',
+                'drawing', 'illustration', 'blueprint', 'schematic', 'floor plan',
+                'map', 'screenshot', 'photo', 'picture', 'scanned', 'scan', 'visual'
+            ]
+
+            requires_vision = any(keyword in query_lower for keyword in visual_keywords)
+
+            return {
+                "requires_vision": requires_vision,
+                "suggested_tools": ["vision_analysis", "document_rag"] if requires_vision else ["document_rag"],
+                "confidence": 0.7 if requires_vision else 0.8,
+                "reasoning": f"Fallback keyword detection - found visual keywords" if requires_vision else "No visual keywords detected"
+            }
 
     def check_system_resources(self) -> Dict[str, Any]:
         """
@@ -396,41 +491,91 @@ Respond with ONLY ONE WORD: SIMPLE, MODERATE, COMPLEX, or ANALYTICAL"""
         available_memory = resources["available_memory_mb"]
         logger.info(f"💾 Available memory: {available_memory:.0f} MB ({resources['memory_percent_used']:.1f}% used)")
 
-        # Determine primary tool and fallback chain
-        if not file_types or file_types == [FileType.UNKNOWN]:
-            # No documents or unknown type → use document_rag
-            primary_tool = "document_rag"
-            fallback_chain = ["document_rag"]
-            reasoning = "No documents attached or unknown file type - using document RAG for knowledge base search"
+        # 🎯 QUERY-INTENT-FIRST ROUTING (regardless of attachments)
+        # Step 1: Analyze query content with LLM to detect intent
+        logger.info("🔍 Analyzing query intent with LLM (regardless of attachments)")
+        content_analysis = await self.analyze_query_content_llm(query)
 
-        elif len(file_types) == 1:
-            # Single file type → optimize for that type
-            file_type = file_types[0]
-            primary_tool, fallback_chain = self.select_tools_for_file_type(
-                file_type, available_memory, complexity
-            )
-            reasoning = (
-                f"Single {file_type.value} file detected. "
-                f"Using {primary_tool} (memory required: {self.tool_memory_requirements.get(primary_tool, 0)}MB, "
-                f"available: {available_memory:.0f}MB)"
-            )
+        # Determine primary tool and fallback chain based on QUERY INTENT FIRST
+        if content_analysis["requires_vision"]:
+            # 👁️ VISUAL QUERY DETECTED - prioritize vision_analysis
+            logger.info(f"👁️ Visual query detected: {content_analysis['reasoning']} (confidence: {content_analysis['confidence']:.2f})")
+
+            primary_tool = "vision_analysis"
+
+            # Build fallback chain: vision first, then document-specific tools
+            if file_types and file_types != [FileType.UNKNOWN]:
+                # Documents attached - add document-specific tools to fallback
+                doc_tools = []
+                for file_type in file_types:
+                    _, file_tools = self.select_tools_for_file_type(file_type, available_memory, complexity)
+                    # Add all tools from the fallback chain (not just primary)
+                    for tool in file_tools:
+                        if tool not in doc_tools and tool != "vision_analysis":
+                            doc_tools.append(tool)
+
+                # Vision first, then document tools, then general RAG
+                fallback_chain = ["vision_analysis"] + doc_tools + ["document_rag"]
+                # Remove duplicates while preserving order
+                seen = set()
+                fallback_chain = [x for x in fallback_chain if not (x in seen or seen.add(x))]
+
+                reasoning = (
+                    f"Visual query detected: {content_analysis['reasoning']}. "
+                    f"Files: {[ft.value for ft in file_types]}. "
+                    f"Using vision_analysis → {' → '.join(doc_tools)} → document_rag"
+                )
+            else:
+                # No documents - vision analysis with RAG fallback
+                fallback_chain = ["vision_analysis", "document_rag"]
+                reasoning = (
+                    f"Visual query detected: {content_analysis['reasoning']}. "
+                    f"No attachments. Using vision_analysis → document_rag"
+                )
 
         else:
-            # Multiple file types → use most comprehensive tool
-            primary_tool = "document_rag"
+            # 📚 TEXT-BASED QUERY - use document-specific tools or RAG
+            logger.info(f"📚 Text-based query detected (confidence: {content_analysis['confidence']:.2f})")
 
-            # Build combined fallback chain
-            all_tools = []
-            for ft in file_types:
-                tools, _ = self.select_tools_for_file_type(ft, available_memory, complexity)
-                if tools not in all_tools:
-                    all_tools.append(tools)
+            if not file_types or file_types == [FileType.UNKNOWN]:
+                # No documents - use general RAG
+                primary_tool = "document_rag"
+                fallback_chain = ["document_rag"]
+                reasoning = (
+                    f"Text-based query, no attachments. "
+                    f"Using document_rag (confidence: {content_analysis['confidence']:.2f})"
+                )
+                logger.info(f"📚 No files - using document_rag")
 
-            fallback_chain = all_tools if all_tools else ["document_rag"]
-            reasoning = (
-                f"Multiple file types detected: {[ft.value for ft in file_types]}. "
-                f"Using document_rag to search across all documents"
-            )
+            elif len(file_types) == 1:
+                # Single file type - optimize for that type
+                file_type = file_types[0]
+                primary_tool, fallback_chain = self.select_tools_for_file_type(
+                    file_type, available_memory, complexity
+                )
+                reasoning = (
+                    f"Text-based query with {file_type.value} file. "
+                    f"Using {primary_tool} (memory: {self.tool_memory_requirements.get(primary_tool, 0)}MB)"
+                )
+                logger.info(f"📄 Single {file_type.value} - using {primary_tool}")
+
+            else:
+                # Multiple file types - use comprehensive tool
+                primary_tool = "document_rag"
+
+                # Build combined fallback chain
+                all_tools = []
+                for ft in file_types:
+                    tools, _ = self.select_tools_for_file_type(ft, available_memory, complexity)
+                    if tools not in all_tools:
+                        all_tools.append(tools)
+
+                fallback_chain = all_tools if all_tools else ["document_rag"]
+                reasoning = (
+                    f"Text-based query with multiple file types: {[ft.value for ft in file_types]}. "
+                    f"Using document_rag → {' → '.join(all_tools)}"
+                )
+                logger.info(f"📚 Multiple files - using document_rag with fallbacks")
 
         # Build tool parameters
         # Note: file_types is NOT passed to tool_params as it's not a parameter

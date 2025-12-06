@@ -11,6 +11,8 @@ import EvaluationMetrics from './EvaluationMetrics'
 import SettingsPanel, { MetricsSettings } from './SettingsPanel'
 import PromptCommandPalette from './PromptCommandPalette'
 import OutputExport from './OutputExport'
+import ToolAgentSelector, { AVAILABLE_TOOLS } from './ToolAgentSelector'
+import { BrainView } from './BrainView'
 // import ToolUsageDisplay from './ToolUsageDisplay'  // Disabled - duplicate display
 import axios from 'axios'
 
@@ -244,6 +246,12 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId || null)
   // Export functionality state
   const [exportingMessageIndex, setExportingMessageIndex] = useState<number | null>(null)
+  // 🆕 Tool & Agent Selection State
+  const [enabledTools, setEnabledTools] = useState<string[]>(AVAILABLE_TOOLS.map(t => t.id)) // All tools enabled by default
+  const [selectedAgent, setSelectedAgent] = useState<string>('auto') // Default to auto (multi-strategy)
+  // 🧠 Brain View State
+  const [brainViewOpen, setBrainViewOpen] = useState(false)
+  const [currentDebugContext, setCurrentDebugContext] = useState<any>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const previousProjectIdRef = useRef<string | null>(null)  // 🐛 FIX: Track previous project to detect switches
@@ -746,12 +754,70 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
     }
   }
 
+  // Poll document status until processing is complete
+  const waitForDocumentProcessing = async (
+    documentIds: string[],
+    maxWaitSeconds = 30
+  ): Promise<boolean> => {
+    const startTime = Date.now()
+    const pollIntervalMs = 1000 // Check every 1 second
+
+    console.log(`⏳ Waiting for ${documentIds.length} documents to finish processing...`)
+
+    while ((Date.now() - startTime) / 1000 < maxWaitSeconds) {
+      try {
+        // Check status of all uploaded documents
+        const statusChecks = await Promise.all(
+          documentIds.map(docId =>
+            axios.get(`${API_URL}/api/v1/documents/${docId}/status`)
+          )
+        )
+
+        const allCompleted = statusChecks.every(response =>
+          response.data.processing_status === 'completed'
+        )
+
+        if (allCompleted) {
+          console.log(`✅ All ${documentIds.length} documents processing complete!`)
+          return true
+        }
+
+        // Check if any failed
+        const anyFailed = statusChecks.some(response =>
+          response.data.processing_status === 'failed'
+        )
+
+        if (anyFailed) {
+          console.error(`❌ Some documents failed to process`)
+          return false
+        }
+
+        // Still processing, wait and try again
+        console.log(`⏳ Still processing... (${Math.floor((Date.now() - startTime) / 1000)}s elapsed)`)
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
+
+      } catch (error) {
+        console.error('Error checking document status:', error)
+        // Continue polling even if status check fails
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs))
+      }
+    }
+
+    console.warn(`⚠️  Timeout waiting for document processing after ${maxWaitSeconds}s`)
+    return false
+  }
+
   // Upload files to backend with session ID
-  const uploadAttachedFiles = async (): Promise<{ success: boolean; duplicates: string[] }> => {
-    if (attachedFiles.length === 0) return { success: true, duplicates: [] }
+  const uploadAttachedFiles = async (): Promise<{
+    success: boolean
+    duplicates: string[]
+    documentIds: string[]  // 🆕 Return document IDs
+  }> => {
+    if (attachedFiles.length === 0) return { success: true, duplicates: [], documentIds: [] }
 
     setUploadingFiles(true)
     const duplicates: string[] = []
+    const documentIds: string[] = []  // 🆕 Track uploaded document IDs
     let hasErrors = false
 
     try {
@@ -782,16 +848,20 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
           duplicates.push(file.name)
           console.log(`⚠️ Duplicate file skipped: ${file.name}`)
         } else {
+          // 🆕 Collect document ID for status polling
+          if (response.data.document_id) {
+            documentIds.push(response.data.document_id)
+          }
           console.log(`✅ Uploaded ${file.name} to session ${sessionId}`)
         }
       }
       setAttachedFiles([]) // Clear after processing all files
       setFilesJustUploaded(true) // Signal that files were just uploaded
-      return { success: !hasErrors, duplicates }
+      return { success: !hasErrors, duplicates, documentIds }  // 🆕 Return IDs
     } catch (error) {
       console.error('Error uploading files:', error)
       hasErrors = true
-      return { success: false, duplicates }
+      return { success: false, duplicates, documentIds }
     } finally {
       setUploadingFiles(false)
     }
@@ -800,7 +870,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   const handleSendMessage = async () => {
     if ((!input.trim() && attachedFiles.length === 0) || isLoading) return
 
-    // Upload attached files first
+    // 🎯 SMART UPLOAD SYNC: Upload files AND wait for processing
     if (attachedFiles.length > 0) {
       const uploadResult = await uploadAttachedFiles()
 
@@ -814,9 +884,34 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
         return
       }
 
+      // 🆕 WAIT FOR PROCESSING TO COMPLETE before sending query
+      if (uploadResult.documentIds.length > 0 && input.trim()) {
+        // Show "processing" indicator to user
+        setIsLoading(true)
+
+        const processingComplete = await waitForDocumentProcessing(
+          uploadResult.documentIds,
+          30 // Wait up to 30 seconds
+        )
+
+        setIsLoading(false)
+
+        if (!processingComplete) {
+          const warningMessage: Message = {
+            role: 'assistant',
+            content: 'Warning: Document processing is taking longer than expected. Your query may not have access to all document content yet. You can try asking again in a few moments.',
+            timestamp: new Date()
+          }
+          setMessages(prev => [...prev, warningMessage])
+          // Continue with query anyway - backend has its own 30s wait
+        } else {
+          console.log('✅ Documents ready, proceeding with query')
+        }
+      }
+
       // If only files were attached without a message, show success message
       if (!input.trim()) {
-        let successContent = 'Files uploaded successfully to this session! You can now ask questions about them.'
+        let successContent = 'Files uploaded and processed successfully! You can now ask questions about them.'
 
         // Add note about duplicates if any
         if (uploadResult.duplicates.length > 0) {
@@ -910,7 +1005,13 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       }))
       formData.append('conversation_history', JSON.stringify(recentMessages))
 
+      // 🆕 Add enabled tools and selected agent
+      formData.append('enabled_tools', JSON.stringify(enabledTools))
+      formData.append('selected_agent', selectedAgent)
+
       console.log(`📤 Querying with session ${sessionId} and ${recentMessages.length} context messages`)
+      console.log(`🔧 Tools enabled: ${enabledTools.length}/${AVAILABLE_TOOLS.length}`)
+      console.log(`🤖 Agent selected: ${selectedAgent}`)
 
       const response = await axios.post(`${API_URL}/api/v1/query`, formData, {
         headers: {
@@ -937,6 +1038,12 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
         rag_settings: response.data.rag_settings,
         // 🆕 Capture tool usage tracking
         tools_used: response.data.tools_used
+      }
+
+      // 🧠 Update Brain View with debug context (if enabled and present)
+      if (response.data.debug_context) {
+        setCurrentDebugContext(response.data.debug_context)
+        console.log('🧠 Brain View: Received debug context', response.data.debug_context)
       }
 
       // Log context usage
@@ -1169,6 +1276,18 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
         </div>
       </div>
       )}
+
+      {/* 🆕 Tool & Agent Selector - Collapsible Panel */}
+      <div className="border-b border-sage-100 bg-sage-50/30 px-4 py-2">
+        <div className="max-w-md mx-auto">
+          <ToolAgentSelector
+            enabledTools={enabledTools}
+            onToolsChange={setEnabledTools}
+            selectedAgent={selectedAgent}
+            onAgentChange={setSelectedAgent}
+          />
+        </div>
+      </div>
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-4 py-6">
@@ -1612,6 +1731,13 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
           />
         </div>
       )}
+
+      {/* 🧠 Brain View - Debug Context Inspector */}
+      <BrainView
+        debugContext={currentDebugContext}
+        isOpen={brainViewOpen}
+        onToggle={() => setBrainViewOpen(!brainViewOpen)}
+      />
     </div>
   )
 }

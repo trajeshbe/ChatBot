@@ -136,6 +136,7 @@ class EnhancedRAGAgent(RAGAgent):
 
         # 🎯 ADAPTIVE RAG: Extract strategy weights for dynamic routing
         strategy_weights = user_preferences.get('strategy_weights', {})
+        conversation_only_weight = strategy_weights.get('conversation_only', 0.0)  # 🆕 Conversation-only mode
         direct_llm_weight = strategy_weights.get('direct_llm', 0.02)
         rag_short_term_weight = strategy_weights.get('rag_short_term', 0.3)
         rag_long_term_weight = strategy_weights.get('rag_long_term', 0.03)
@@ -143,11 +144,60 @@ class EnhancedRAGAgent(RAGAgent):
 
         logger.info(
             f"🎯 Strategy routing weights: "
+            f"conversation_only={conversation_only_weight:.2f}, "
             f"direct_llm={direct_llm_weight:.2f}, "
             f"rag_short_term={rag_short_term_weight:.2f}, "
             f"rag_long_term={rag_long_term_weight:.2f}, "
             f"rag_hybrid={rag_hybrid_weight:.2f}"
         )
+
+        # 🚀 Scenario 0: CONVERSATION_ONLY (uses ONLY conversation history, no document RAG)
+        # This is like ChatGPT/Claude context summarization - only uses chat history
+        if conversation_only_weight > 0.8:
+            logger.info("📌 ROUTING: CONVERSATION_ONLY (using ONLY conversation history, no document RAG)")
+            logger.info(f"   Reason: conversation_only weight ({conversation_only_weight:.2f}) > 0.8 threshold")
+            logger.info(f"   Will pass conversation history as context to LLM without document retrieval")
+
+            # 🆕 Use conversation history passed from frontend (ChatGPT/Claude pattern)
+            # Frontend sends conversation_history in request for zero-latency context
+            conversation_history = user_preferences.get('conversation_history', [])
+
+            if not conversation_history:
+                logger.warning("⚠️ No conversation history provided by frontend")
+                return {
+                    "answer": "No conversation history available. Please ensure previous messages are sent with your request.",
+                    "sources": [],
+                    "metadata": {
+                        "routing_strategy": "conversation_only",
+                        "error": "no_history_provided",
+                        "strategy_weights": strategy_weights
+                    }
+                }
+
+            # Format conversation context from passed history
+            conversation_context = "\n".join([
+                f"{msg['role'].capitalize()}: {msg['content']}"
+                for msg in conversation_history
+            ])
+
+            logger.info(f"💬 Using {len(conversation_history)} messages from frontend conversation history")
+
+            # Use LLM with ONLY conversation history (no document search)
+            result = await self._direct_llm_query(
+                query=query,
+                session_id=session_id,
+                user_preferences=user_preferences,
+                conversation_context=conversation_context  # 🆕 Pass conversation history
+            )
+
+            # Add routing metadata
+            result['metadata'] = result.get('metadata', {})
+            result['metadata']['routing_strategy'] = 'conversation_only'
+            result['metadata']['routing_reason'] = f'User set conversation_only={conversation_only_weight:.2f}'
+            result['metadata']['conversation_messages_used'] = len(conversation_history)
+            result['metadata']['strategy_weights'] = strategy_weights
+
+            return result
 
         # 🚀 Scenario 1: User wants DIRECT LLM (skip RAG for general knowledge)
         if direct_llm_weight > 0.8:
@@ -283,11 +333,12 @@ class EnhancedRAGAgent(RAGAgent):
                 from sqlalchemy import select
 
                 # Query session documents
-                session_docs = db.execute(
+                result = await db.execute(
                     select(SessionDocument, Document)
                     .join(Document, SessionDocument.document_id == Document.id)
                     .where(SessionDocument.session_id == session_id)
-                ).all()
+                )
+                session_docs = result.all()
 
                 for sd, doc in session_docs:
                     documents_metadata.append({
@@ -402,6 +453,12 @@ class EnhancedRAGAgent(RAGAgent):
                         # Update tool params for current tool
                         current_tool_params = state["tool_params"].get(tool_id, tool_params.copy())
 
+                        # Pass fallback_chain to vision_analysis for intelligent parallel extraction
+                        if tool_id == "vision_analysis":
+                            current_tool_params['fallback_chain'] = fallback_chain
+                            current_tool_params['requires_vision'] = routing_decision.requires_gpu
+                            logger.info(f"🎯 Passing fallback chain to vision_analysis: {fallback_chain}")
+
                         # Execute tool
                         tool_result = await self._execute_tool(tool_id, current_tool_params)
 
@@ -436,10 +493,11 @@ class EnhancedRAGAgent(RAGAgent):
                         }
                     }
 
-            elif self.use_llm_selection and await self._ensure_openai_client(db=db):
+            elif self.use_llm_selection:
                 try:
-                    # LLM-based intent analysis and tool selection
-                    selection_result = await self._select_tools_llm(
+                    # 🎯 PRIMARY: Use Ollama-based LLM tool selection (local, fast, no API key needed)
+                    logger.info("🤖 Using Ollama LLM tool selection (qwen2.5:1.5b)")
+                    selection_result = await self._select_tools_llm_ollama(
                         query, session_id, top_k=top_k
                     )
 
@@ -450,20 +508,49 @@ class EnhancedRAGAgent(RAGAgent):
                     state["tool_params"] = selection_result["tool_params"]
                     state["tool_selection_reasoning"] = selection_result["tool_selection_reasoning"]
 
-                    logger.info(f"LLM selected tools: {selection_result['tools']} (confidence: {selection_result['confidence']:.2f})")
+                    logger.info(f"🤖 Ollama LLM selected tools: {selection_result['tools']} (confidence: {selection_result['confidence']:.2f})")
 
                 except Exception as e:
-                    logger.warning(f"LLM-based selection failed, falling back to simple selection: {e}")
-                    # Fallback to simple keyword-based selection
-                    tool_id, tool_params = self._select_tool_simple(
-                        query, session_id, top_k=top_k
-                    )
-                    state["selected_tools"] = [tool_id]
-                    state["tool_params"] = {tool_id: tool_params}
-                    state["detected_intent"] = self._infer_intent_from_tool(tool_id)
+                    logger.warning(f"Ollama LLM selection failed, trying OpenAI fallback: {e}")
+
+                    # FALLBACK 1: Try OpenAI if available
+                    if await self._ensure_openai_client(db=db):
+                        try:
+                            logger.info("Trying OpenAI LLM tool selection as fallback")
+                            selection_result = await self._select_tools_llm(
+                                query, session_id, top_k=top_k
+                            )
+
+                            state["detected_intent"] = selection_result["intent"]
+                            state["confidence"] = selection_result["confidence"]
+                            state["intent_reasoning"] = selection_result["reasoning"]
+                            state["selected_tools"] = selection_result["tools"]
+                            state["tool_params"] = selection_result["tool_params"]
+                            state["tool_selection_reasoning"] = selection_result["tool_selection_reasoning"]
+
+                            logger.info(f"OpenAI LLM selected tools: {selection_result['tools']} (confidence: {selection_result['confidence']:.2f})")
+
+                        except Exception as e2:
+                            logger.warning(f"OpenAI LLM selection also failed, using simple selection: {e2}")
+                            # FALLBACK 2: Simple keyword-based selection
+                            tool_id, tool_params = self._select_tool_simple(
+                                query, session_id, top_k=top_k
+                            )
+                            state["selected_tools"] = [tool_id]
+                            state["tool_params"] = {tool_id: tool_params}
+                            state["detected_intent"] = self._infer_intent_from_tool(tool_id)
+                    else:
+                        # FALLBACK 2: No OpenAI available, use simple keyword selection
+                        logger.info("No OpenAI available, using simple keyword-based tool selection")
+                        tool_id, tool_params = self._select_tool_simple(
+                            query, session_id, top_k=top_k
+                        )
+                        state["selected_tools"] = [tool_id]
+                        state["tool_params"] = {tool_id: tool_params}
+                        state["detected_intent"] = self._infer_intent_from_tool(tool_id)
             else:
-                # Use simple keyword-based selection
-                logger.info("Using simple keyword-based tool selection")
+                # Use simple keyword-based selection (if LLM selection is disabled)
+                logger.info("LLM selection disabled - using simple keyword-based tool selection")
                 tool_id, tool_params = self._select_tool_simple(
                     query, session_id, top_k=top_k
                 )
@@ -824,6 +911,156 @@ Respond by calling the appropriate tool function(s)."""
         except Exception as e:
             logger.error(f"LLM-based tool selection failed: {e}")
             raise
+
+    async def _select_tools_llm_ollama(
+        self,
+        query: str,
+        session_id: Optional[str] = None,
+        top_k: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        LLM-based tool selection using local Ollama (qwen2.5:1.5b)
+
+        Uses local Qwen model to analyze the query and intelligently select the best tool(s).
+        This is the PRIMARY method - no OpenAI dependency!
+
+        Args:
+            query: User's question
+            session_id: Optional session ID
+            top_k: Number of results to retrieve
+
+        Returns:
+            Dictionary with selected tools and parameters
+        """
+        from app.services.llm_service import llm_service
+
+        # Structured prompt for tool selection
+        selection_prompt = f"""You are a tool selection assistant. Analyze the user's query and select the most appropriate tool(s).
+
+Available tools:
+1. **document_rag** - Search uploaded documents (PDFs, Word, text files)
+2. **vision_analysis** - Analyze images, diagrams, charts, figures, photos (uses vision LLM)
+3. **ocr** - Extract text from images, scanned documents, screenshots
+4. **docling_pdf** - Advanced PDF processing and extraction
+5. **smart_extraction** - Extract data from web URLs
+6. **navigation_agent** - Navigate multiple web pages
+7. **template_extraction** - Extract data using templates
+8. **web_scraper** - Basic web scraping
+
+Tool Selection Rules:
+- Queries mentioning **"diagram", "chart", "figure", "image", "graph", "table", "drawing", "illustration", "blueprint", "schematic", "floor plan", "map"** → **vision_analysis** OR **ocr**
+- Questions about **uploaded documents** → **document_rag**
+- Queries with **URLs** → **smart_extraction** or **navigation_agent**
+- Queries about **PDFs** → **docling_pdf**
+- Queries with **images or scanned docs** → **ocr**
+
+User Query: "{query}"
+
+Analyze this query and respond with ONLY a JSON object (no markdown, no code blocks):
+{{
+    "selected_tools": ["tool_name"],
+    "reasoning": "why these tools were selected",
+    "confidence": 0.0 to 1.0
+}}
+
+IMPORTANT:
+- If query mentions visual content (diagram/chart/image/etc.), select "vision_analysis" or "ocr"
+- Default to "document_rag" for general questions
+- Be specific and confident"""
+
+        try:
+            # Use ultra-fast Qwen 1.5B model for tool selection
+            result = await llm_service.generate(
+                prompt=selection_prompt,
+                max_tokens=300,
+                temperature=0.1,  # Low temperature for consistent selection
+                model_id="qwen2.5:1.5b"  # Same model as query classification
+            )
+
+            # Extract and parse response
+            response_text = result.get('content', '').strip()
+
+            # Remove markdown code blocks if present
+            if response_text.startswith('```'):
+                lines = response_text.split('\n')
+                response_text = '\n'.join(lines[1:-1]) if len(lines) > 2 else response_text
+                response_text = response_text.replace('```json', '').replace('```', '').strip()
+
+            selection = json.loads(response_text)
+
+            # Validate response
+            if 'selected_tools' not in selection or not selection['selected_tools']:
+                raise ValueError("No tools selected by LLM")
+
+            selected_tools = selection['selected_tools']
+            confidence = selection.get('confidence', 0.8)
+            reasoning = selection.get('reasoning', 'LLM-based tool selection')
+
+            # Build tool parameters
+            tool_params = {}
+            for tool_id in selected_tools:
+                if tool_id == "document_rag":
+                    tool_params[tool_id] = {
+                        "query": query,
+                        "session_id": session_id
+                    }
+                    if top_k is not None:
+                        tool_params[tool_id]["top_k"] = top_k
+
+                elif tool_id in ["vision_analysis", "ocr"]:
+                    # Vision/OCR tools will work with documents in the session
+                    tool_params[tool_id] = {
+                        "query": query,
+                        "session_id": session_id
+                    }
+
+                elif tool_id == "docling_pdf":
+                    tool_params[tool_id] = {
+                        "query": query,
+                        "session_id": session_id
+                    }
+
+                else:
+                    # Generic parameters for other tools
+                    tool_params[tool_id] = {
+                        "query": query
+                    }
+
+            logger.info(
+                f"🤖 Ollama LLM selected tools: {selected_tools} "
+                f"(confidence: {confidence:.2f}) - {reasoning}"
+            )
+
+            return {
+                "intent": "llm_determined",
+                "confidence": confidence,
+                "reasoning": reasoning,
+                "tools": selected_tools,
+                "tool_params": tool_params,
+                "tool_selection_reasoning": f"Qwen 2.5 1.5B analyzed query and selected: {', '.join(selected_tools)}. {reasoning}"
+            }
+
+        except Exception as e:
+            logger.error(f"Ollama LLM tool selection failed: {e}. Falling back to document_rag")
+
+            # Fallback to document RAG
+            default_params = {
+                "query": query,
+                "session_id": session_id
+            }
+            if top_k is not None:
+                default_params["top_k"] = top_k
+
+            return {
+                "intent": "general_query",
+                "confidence": 0.5,
+                "reasoning": f"LLM tool selection error - {str(e)[:100]}",
+                "tools": ["document_rag"],
+                "tool_params": {
+                    "document_rag": default_params
+                },
+                "tool_selection_reasoning": "Default fallback due to LLM error"
+            }
 
     async def _execute_tool(
         self,
@@ -1253,18 +1490,20 @@ Context:
         self,
         query: str,
         session_id: Optional[str] = None,
-        user_preferences: Optional[Dict[str, Any]] = None
+        user_preferences: Optional[Dict[str, Any]] = None,
+        conversation_context: Optional[str] = None  # 🆕 For conversation-only mode
     ) -> Dict[str, Any]:
         """
         Direct LLM query WITHOUT document retrieval (Scenario 1: General Knowledge)
 
-        Used when strategy_weights.direct_llm > 0.8
-        Skips RAG entirely and uses LLM's internal knowledge
+        Used when strategy_weights.direct_llm > 0.8 OR conversation_only > 0.8
+        Skips RAG entirely and uses LLM's internal knowledge or conversation history
 
         Args:
             query: User's question
             session_id: Optional session ID
             user_preferences: User preferences dict
+            conversation_context: 🆕 Optional conversation history for conversation-only mode
 
         Returns:
             Response with answer from LLM only
@@ -1274,12 +1513,26 @@ Context:
         try:
             model_id = user_preferences.get('model_id') if user_preferences else None
 
-            logger.info(f"🤖 DIRECT_LLM: Answering '{query[:100]}...' using LLM knowledge only")
+            # 🆕 Determine if we're in conversation-only mode
+            if conversation_context:
+                logger.info(f"💬 CONVERSATION_ONLY: Answering '{query[:100]}...' using conversation history")
+                logger.info(f"   Conversation context length: {len(conversation_context)} chars")
+            else:
+                logger.info(f"🤖 DIRECT_LLM: Answering '{query[:100]}...' using LLM knowledge only")
 
-            # Call LLM directly without context
+            # Call LLM directly without document retrieval
             # Build messages from conversation history + current query
             conversation_history = user_preferences.get('conversation_history', []) if user_preferences else []
             messages = conversation_history + [{"role": "user", "content": query}]
+
+            # 🆕 If conversation_context provided, add it to the system message
+            if conversation_context:
+                # Prepend conversation context as system message
+                context_message = {
+                    "role": "system",
+                    "content": f"Previous conversation context:\n{conversation_context}\n\nUse this conversation history to answer the user's question."
+                }
+                messages = [context_message] + messages
 
             result = await llm_service.generate(
                 prompt=query,
