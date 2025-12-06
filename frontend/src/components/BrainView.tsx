@@ -83,18 +83,6 @@ interface Chunk {
 export const BrainView: React.FC<BrainViewProps> = ({ debugContext, isOpen, onToggle }) => {
   const [activeTab, setActiveTab] = useState<'routing' | 'history' | 'tools' | 'documents' | 'performance'>('tools');
 
-  if (!debugContext) {
-    return (
-      <div className={`fixed top-0 right-0 h-full bg-white border-l border-gray-200 shadow-2xl transition-all duration-300 ${isOpen ? 'w-96' : 'w-0'} overflow-hidden`}>
-        <div className="p-4 text-center text-gray-500">
-          <Brain className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-          <p className="text-sm">Brain View disabled or no debug context available</p>
-          <p className="text-xs mt-2">Enable Brain View in Settings to see debug information</p>
-        </div>
-      </div>
-    );
-  }
-
   const tabs = [
     { id: 'routing', label: 'Routing', icon: Activity },
     { id: 'history', label: 'History', icon: MessageSquare },
@@ -158,7 +146,38 @@ export const BrainView: React.FC<BrainViewProps> = ({ debugContext, isOpen, onTo
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-4">
-              {activeTab === 'routing' && (
+              {!debugContext ? (
+                <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                  <Brain className="w-16 h-16 text-gray-300 mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">No Debug Context Yet</h3>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Send a query to generate debug context and see detailed information about:
+                  </p>
+                  <ul className="text-xs text-gray-600 space-y-2 text-left">
+                    <li className="flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-purple-500" />
+                      <span>Routing decisions and strategy selection</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Tool className="w-4 h-4 text-purple-500" />
+                      <span>Tools executed (query-time + document processing)</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-purple-500" />
+                      <span>Documents retrieved with similarity scores</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-purple-500" />
+                      <span>Performance metrics and latency breakdown</span>
+                    </li>
+                  </ul>
+                  <div className="mt-6 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                    <p className="text-xs text-purple-700">
+                      <strong>Tip:</strong> Make sure Brain View is enabled in Settings → Strategy tab
+                    </p>
+                  </div>
+                </div>
+              ) : activeTab === 'routing' && (
                 <div className="space-y-4">
                   <h3 className="font-semibold text-sm text-gray-900 mb-3">Routing Decision</h3>
 

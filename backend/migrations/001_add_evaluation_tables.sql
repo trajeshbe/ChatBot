@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS evaluation_results (
     enabled_methods JSONB,
 
     -- Metadata and errors
-    metadata JSONB,
+    meta_info JSONB,
     errors JSONB,
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

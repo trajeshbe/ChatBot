@@ -249,8 +249,14 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   // 🆕 Tool & Agent Selection State
   const [enabledTools, setEnabledTools] = useState<string[]>(AVAILABLE_TOOLS.map(t => t.id)) // All tools enabled by default
   const [selectedAgent, setSelectedAgent] = useState<string>('auto') // Default to auto (multi-strategy)
-  // 🧠 Brain View State
-  const [brainViewOpen, setBrainViewOpen] = useState(false)
+  // 🧠 Brain View State - Load from localStorage to persist across navigations
+  const [brainViewOpen, setBrainViewOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('brainViewOpen')
+      return saved === 'true' // Default to false if not set
+    }
+    return false
+  })
   const [currentDebugContext, setCurrentDebugContext] = useState<any>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -1736,7 +1742,13 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       <BrainView
         debugContext={currentDebugContext}
         isOpen={brainViewOpen}
-        onToggle={() => setBrainViewOpen(!brainViewOpen)}
+        onToggle={() => {
+          const newState = !brainViewOpen
+          setBrainViewOpen(newState)
+          // 🆕 FIX: Persist Brain View open/closed state to localStorage
+          localStorage.setItem('brainViewOpen', String(newState))
+          console.log('🧠 Brain View toggled:', newState ? 'OPEN' : 'CLOSED')
+        }}
       />
     </div>
   )
