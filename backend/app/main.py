@@ -631,6 +631,11 @@ async def query_endpoint(
     # 🔍 DEBUG: Log project_id received from frontend
     logger.info(f"🔍 DEBUG [API /query endpoint]: project_id from Form = {project_id}")
 
+    # 🧠 DEBUG: Log unified_config received from frontend
+    logger.info(f"🧠 DEBUG [API /query endpoint]: unified_config received = {unified_config is not None}")
+    if unified_config:
+        logger.info(f"🧠 DEBUG [API /query endpoint]: unified_config value (first 200 chars) = {unified_config[:200]}")
+
     # Parse conversation history if provided
     parsed_history = None
     if conversation_history:
@@ -751,7 +756,9 @@ async def query_endpoint(
             "db": db,
             # 🆕 Tool & Agent Selection
             "enabled_tools": enabled_tools_list,  # List of enabled tool IDs
-            "selected_agent": selected_agent  # Agent orchestration type
+            "selected_agent": selected_agent,  # Agent orchestration type
+            # 🧠 Brain View: Pass entire unified_config to agent
+            "unified_config": unified_config_dict  # Contains all 48 RAG parameters including enable_brain_view
         }
 
         # Call enhanced agent

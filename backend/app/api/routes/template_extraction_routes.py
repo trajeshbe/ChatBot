@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Any, Dict, Union
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.core.database import get_db
 from app.services.template_extraction_service import (
     template_extraction_service,
@@ -1895,6 +1896,35 @@ async def save_extracted_data_to_db(
         await db.flush()
 
         logger.info(f"📄 Created document record: {extraction_id}")
+
+        # 🔧 FIX: Associate document with session if session_id provided
+        if request.session_id:
+            try:
+                from app.models.database_enhanced import SessionDocument
+                import uuid as uuid_lib
+
+                # session_documents.session_id is VARCHAR, use string directly
+                # It should match the format in chat_sessions (e.g., "session-1765218970617-kx1kj6j9e")
+                session_id_str = str(request.session_id)
+
+                # Verify the session exists in chat_sessions table
+                from app.models.database_enhanced import ChatSession
+                session_exists = await db.execute(
+                    select(ChatSession).where(ChatSession.session_id == session_id_str)
+                )
+                if not session_exists.scalar_one_or_none():
+                    logger.warning(f"⚠️  Session {session_id_str} not found in chat_sessions, skipping association")
+                else:
+                    # Create session_document association
+                    session_doc = SessionDocument(
+                        session_id=session_id_str,
+                        document_id=uuid_lib.UUID(extraction_id)
+                    )
+                    db.add(session_doc)
+                    await db.flush()
+                    logger.info(f"✅ Associated document {extraction_id} with session: {session_id_str}")
+            except Exception as e:
+                logger.warning(f"⚠️  Could not associate document with session: {e}")
 
         # Convert JSON rows to text chunks
         text_chunks = []

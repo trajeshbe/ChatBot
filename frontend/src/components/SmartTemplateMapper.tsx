@@ -51,7 +51,7 @@ export const SmartTemplateMapper = ({ projectId }: SmartTemplateMapperProps = {}
   const [url, setUrl] = useState('')
   const [columns, setColumns] = useState<string[]>([])
   const [columnInput, setColumnInput] = useState('')
-  const [globalSelectedModel, setGlobalSelectedModel] = useState<string>('gpt-4-turbo')
+  const [globalSelectedModel, setGlobalSelectedModel] = useState<string>('')
   const [isMapping, setIsMapping] = useState(false)
   const [mappedData, setMappedData] = useState<MappingResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -265,6 +265,12 @@ export const SmartTemplateMapper = ({ projectId }: SmartTemplateMapperProps = {}
 
     if (columns.length === 0) {
       setError('Please add at least one column')
+      return
+    }
+
+    // Validate that a model is selected
+    if (!globalSelectedModel || !globalSelectedModel.trim()) {
+      setError('Please select a model from the dropdown in the Chat interface first.')
       return
     }
 

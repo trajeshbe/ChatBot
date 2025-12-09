@@ -424,21 +424,30 @@ Raw content:
 
 Extract only the relevant portions:"""
 
-            # Use LLM to filter content
-            response = await llm_service.generate_completion(
+            # Prepare messages for the LLM
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+
+            # Use LLM to filter content - use generate method with model_id parameter
+            response = await llm_service.generate(
                 prompt=user_prompt,
-                system_prompt=system_prompt,
-                model=settings.SMART_SCRAPE_MODEL,
-                max_tokens=settings.SMART_SCRAPE_MAX_TOKENS
+                messages=messages,
+                model_id=settings.SMART_SCRAPE_MODEL,
+                max_tokens=settings.SMART_SCRAPE_MAX_TOKENS,
+                temperature=0.3  # Lower temperature for more focused extraction
             )
 
             filtered_content = response.get('content', content)
             logger.info(f"Smart filtering reduced content from {len(content)} to {len(filtered_content)} chars")
+            logger.info(f"Used model: {response.get('model', 'unknown')} for smart filtering")
 
             return filtered_content
 
         except Exception as e:
             logger.warning(f"Smart filtering failed, using raw content: {e}")
+            logger.exception(e)  # Log full traceback for debugging
             return content
 
     def _format_document_content(self, scraped: ScrapedContent) -> str:

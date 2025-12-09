@@ -290,7 +290,8 @@ class VisionService:
     async def describe_image(
         self,
         image_path: str,
-        question: Optional[str] = None
+        question: Optional[str] = None,
+        model_id: Optional[str] = None
     ) -> str:
         """
         Get a description of the image or answer a question about it.
@@ -298,6 +299,7 @@ class VisionService:
         Args:
             image_path: Path to the image file
             question: Optional specific question about the image
+            model_id: Optional UI-selected model ID (e.g., "gpt-4o-mini", "qwen2.5vl:latest")
 
         Returns:
             Description or answer as string
@@ -313,7 +315,7 @@ class VisionService:
                 "4. Any notable details"
             )
 
-        result = await self.process_image(image_path, prompt)
+        result = await self.process_image(image_path, prompt, model_id=model_id)
         return result.get("text", "")
 
 

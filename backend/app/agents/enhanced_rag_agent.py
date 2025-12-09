@@ -170,7 +170,7 @@ class EnhancedRAGAgent(RAGAgent):
                     "metadata": {
                         "routing_strategy": "conversation_only",
                         "error": "no_history_provided",
-                        "strategy_weights": strategy_weights
+                        "conversation_only_weight": conversation_only_weight
                     }
                 }
 
@@ -237,39 +237,93 @@ class EnhancedRAGAgent(RAGAgent):
             # This will be handled by the balanced routing below
             pass  # Continue to balanced routing which will detect the URL properly
 
-        # 🚀 Scenario 2: User forces RAG (must use document search)
-        elif rag_short_term_weight > 0.8 or rag_long_term_weight > 0.8:
-            logger.info("📌 ROUTING: FORCE_RAG (document search required per user's strategy_weights)")
-            logger.info(f"   Reason: rag_short_term={rag_short_term_weight:.2f} or rag_long_term={rag_long_term_weight:.2f} > 0.8")
-
-            # Force RAG tool selection - include db and model_id from user_preferences
-            tool_params_rag = {
-                "top_k": top_k,
-                "similarity_threshold": similarity_threshold,
-                "semantic_weight": semantic_weight,
-                "keyword_weight": keyword_weight,
-                "model_id": user_preferences.get('model_id') if user_preferences else None,
-                "project_id": user_preferences.get('project_id') if user_preferences else None,  # 🔧 FIX: Include project_id
-                "db": user_preferences.get('db') if user_preferences else None
-            }
-
-            # 🔍 DEBUG: Log project_id being passed to RAG
-            logger.info(f"🔍 DEBUG [FORCE_RAG path]: project_id = {tool_params_rag.get('project_id')}")
-
-            # Execute RAG tool
-            result = await self._execute_tool_document_rag(
+        # 🎨 PRE-CHECK: Detect visual queries BEFORE forcing RAG
+        # REUSES EXISTING _select_tools_llm_ollama() method - NO NEW CODE!
+        # This fixes vision routing regression from MVP 0.92
+        try:
+            tool_selection = await self._select_tools_llm_ollama(
                 query=query,
                 session_id=session_id,
-                tool_params=tool_params_rag
+                top_k=top_k
             )
 
-            # Add routing metadata
-            result['metadata'] = result.get('metadata', {})
-            result['metadata']['routing_strategy'] = 'force_rag'
-            result['metadata']['routing_reason'] = f'User set rag_short_term={rag_short_term_weight:.2f}, rag_long_term={rag_long_term_weight:.2f}'
-            result['metadata']['strategy_weights'] = strategy_weights
+            # If visual tool selected, bypass FORCE_RAG and use TaskRouter
+            if "vision_analysis" in tool_selection.get("tools", []):
+                logger.info(f"🎨 Visual query detected by LLM: {tool_selection.get('reasoning')}")
+                logger.info("   Bypassing FORCE_RAG to use vision_analysis via TaskRouter")
+                # Fall through to balanced routing (line 316) which will use TaskRouter
+                # TaskRouter already has vision fallback chains!
+                pass  # Continue to balanced routing
+            elif rag_short_term_weight > 0.8 or rag_long_term_weight > 0.8:
+                # Not a visual query - proceed with FORCE_RAG
+                logger.info("📌 ROUTING: FORCE_RAG (document search required per user's strategy_weights)")
+                logger.info(f"   Reason: rag_short_term={rag_short_term_weight:.2f} or rag_long_term={rag_long_term_weight:.2f} > 0.8")
 
-            return result
+                # Force RAG tool selection - include db and model_id from user_preferences
+                tool_params_rag = {
+                    "top_k": top_k,
+                    "similarity_threshold": similarity_threshold,
+                    "semantic_weight": semantic_weight,
+                    "keyword_weight": keyword_weight,
+                    "model_id": user_preferences.get('model_id') if user_preferences else None,
+                    "project_id": user_preferences.get('project_id') if user_preferences else None,  # 🔧 FIX: Include project_id
+                    "db": user_preferences.get('db') if user_preferences else None,
+                    "unified_config": user_preferences.get('unified_config') if user_preferences else None  # 🧠 BRAIN VIEW: Include unified_config
+                }
+
+                # 🔍 DEBUG: Log project_id being passed to RAG
+                logger.info(f"🔍 DEBUG [FORCE_RAG path]: project_id = {tool_params_rag.get('project_id')}")
+
+                # Execute RAG tool
+                result = await self._execute_tool_document_rag(
+                    query=query,
+                    session_id=session_id,
+                    tool_params=tool_params_rag
+                )
+
+                # Add routing metadata
+                result['metadata'] = result.get('metadata', {})
+                result['metadata']['routing_strategy'] = 'force_rag'
+                result['metadata']['routing_reason'] = f'User set rag_short_term={rag_short_term_weight:.2f}, rag_long_term={rag_long_term_weight:.2f}'
+                result['metadata']['strategy_weights'] = strategy_weights
+
+                return result
+        except Exception as e:
+            logger.warning(f"⚠️  Visual detection failed: {e}, continuing with normal routing")
+            # If visual detection fails, check FORCE_RAG as before
+            if rag_short_term_weight > 0.8 or rag_long_term_weight > 0.8:
+                logger.info("📌 ROUTING: FORCE_RAG (document search required per user's strategy_weights)")
+                logger.info(f"   Reason: rag_short_term={rag_short_term_weight:.2f} or rag_long_term={rag_long_term_weight:.2f} > 0.8")
+
+                # Force RAG tool selection - include db and model_id from user_preferences
+                tool_params_rag = {
+                    "top_k": top_k,
+                    "similarity_threshold": similarity_threshold,
+                    "semantic_weight": semantic_weight,
+                    "keyword_weight": keyword_weight,
+                    "model_id": user_preferences.get('model_id') if user_preferences else None,
+                    "project_id": user_preferences.get('project_id') if user_preferences else None,  # 🔧 FIX: Include project_id
+                    "db": user_preferences.get('db') if user_preferences else None,
+                    "unified_config": user_preferences.get('unified_config') if user_preferences else None  # 🧠 BRAIN VIEW: Include unified_config
+                }
+
+                # 🔍 DEBUG: Log project_id being passed to RAG
+                logger.info(f"🔍 DEBUG [FORCE_RAG path]: project_id = {tool_params_rag.get('project_id')}")
+
+                # Execute RAG tool
+                result = await self._execute_tool_document_rag(
+                    query=query,
+                    session_id=session_id,
+                    tool_params=tool_params_rag
+                )
+
+                # Add routing metadata
+                result['metadata'] = result.get('metadata', {})
+                result['metadata']['routing_strategy'] = 'force_rag'
+                result['metadata']['routing_reason'] = f'User set rag_short_term={rag_short_term_weight:.2f}, rag_long_term={rag_long_term_weight:.2f}'
+                result['metadata']['strategy_weights'] = strategy_weights
+
+                return result
 
         # 🎯 NEW: Check if user wants to use Claude Code (hybrid agent mode)
         use_agent_mode = user_preferences.get('use_agent_mode', False)
@@ -1310,6 +1364,10 @@ IMPORTANT:
             if "model_name" in result_data:
                 response["model_name"] = result_data["model_name"]
 
+            # 🧠 BRAIN VIEW: Pass through debug_context if present
+            if "debug_context" in result_data:
+                response["debug_context"] = result_data["debug_context"]
+
             return response
 
         # For other tools (smart_extraction, web_scraper, etc.):
@@ -1353,7 +1411,9 @@ Context:
                 no_relevant_docs_threshold=state["user_preferences"].get("no_relevant_docs_threshold"),
                 # Pass through weight parameters from UI
                 semantic_weight=state["user_preferences"].get("semantic_weight"),
-                keyword_weight=state["user_preferences"].get("keyword_weight")
+                keyword_weight=state["user_preferences"].get("keyword_weight"),
+                # 🧠 BRAIN VIEW: Pass unified_config for enable_brain_view flag
+                unified_config=state["user_preferences"].get("unified_config")
             )
 
             # Extract answer from RAG service response
@@ -1499,6 +1559,8 @@ Context:
         Used when strategy_weights.direct_llm > 0.8 OR conversation_only > 0.8
         Skips RAG entirely and uses LLM's internal knowledge or conversation history
 
+        Now supports Brain View (debug_context) generation when enabled
+
         Args:
             query: User's question
             session_id: Optional session ID
@@ -1506,12 +1568,27 @@ Context:
             conversation_context: 🆕 Optional conversation history for conversation-only mode
 
         Returns:
-            Response with answer from LLM only
+            Response with answer from LLM only (includes debug_context if Brain View enabled)
         """
         from app.services.llm_service import llm_service
+        import time
 
         try:
             model_id = user_preferences.get('model_id') if user_preferences else None
+
+            # 🧠 BRAIN VIEW: Extract enable_brain_view flag
+            enable_brain_view = False
+            unified_config = {}
+            if user_preferences:
+                unified_config = user_preferences.get('unified_config', {})
+                logger.info(f"🧠 DEBUG [_direct_llm_query]: unified_config = {unified_config}")
+                if unified_config:
+                    strategy_weights = unified_config.get('strategy_weights', {})
+                    logger.info(f"🧠 DEBUG [_direct_llm_query]: strategy_weights = {strategy_weights}")
+                    enable_brain_view = strategy_weights.get('enable_brain_view', False)
+                    logger.info(f"🧠 DEBUG [_direct_llm_query]: enable_brain_view = {enable_brain_view}")
+                    if enable_brain_view:
+                        logger.info("🧠 Brain View ENABLED for non-RAG path")
 
             # 🆕 Determine if we're in conversation-only mode
             if conversation_context:
@@ -1522,7 +1599,8 @@ Context:
 
             # Call LLM directly without document retrieval
             # Build messages from conversation history + current query
-            conversation_history = user_preferences.get('conversation_history', []) if user_preferences else []
+            conversation_history = user_preferences.get('conversation_history') if user_preferences else None
+            conversation_history = conversation_history if conversation_history is not None else []
             messages = conversation_history + [{"role": "user", "content": query}]
 
             # 🆕 If conversation_context provided, add it to the system message
@@ -1534,6 +1612,9 @@ Context:
                 }
                 messages = [context_message] + messages
 
+            # 🧠 BRAIN VIEW: Track timing
+            start_time = time.time()
+
             result = await llm_service.generate(
                 prompt=query,
                 messages=messages,
@@ -1542,19 +1623,83 @@ Context:
                 temperature=0.7
             )
 
-            return {
+            end_time = time.time()
+            llm_latency_ms = (end_time - start_time) * 1000
+
+            # 🧠 BRAIN VIEW: Build debug_context if enabled (matching RAGService schema)
+            debug_context = None
+            if enable_brain_view:
+                routing_strategy = "conversation_only" if conversation_context else "direct_llm"
+
+                debug_context = {
+                    "routing_decision": {
+                        "strategy": routing_strategy,
+                        "reason": (
+                            f"User set conversation_only weight > 0.9 (using {len(conversation_history)} messages)"
+                            if conversation_context
+                            else "User set direct_llm weight > 0.8"
+                        ),
+                        "strategy_weights": unified_config.get('strategy_weights', {}),
+                        "classification_confidence": 1.0  # Direct routing, 100% confidence
+                    },
+                    "conversation_history": {
+                        "messages_used": len(conversation_history),
+                        "note": f"Using {len(conversation_history)} conversation messages" if conversation_history else "No conversation history"
+                    },
+                    "tools_executed": {
+                        "query_time_tools": [
+                            {
+                                "tool_id": "llm_direct",
+                                "tool_name": "Direct LLM Query",
+                                "status": "success",
+                                "latency_ms": llm_latency_ms
+                            }
+                        ],
+                        "document_processing_tools": []  # No document processing in direct LLM path
+                    },
+                    "documents_retrieved": {
+                        "total_chunks": 0,
+                        "chunks": []  # No documents retrieved in non-RAG path
+                    },
+                    "performance_metrics": {
+                        "total_latency_ms": llm_latency_ms,
+                        "breakdown": {
+                            "security_check": 0,
+                            "embedding_generation": 0,
+                            "vector_search": 0,
+                            "llm_generation": llm_latency_ms
+                        },
+                        "model_used": model_id or "default",
+                        "tokens_used": 0  # Token tracking not available in direct path yet
+                    }
+                }
+
+                logger.info(f"🧠 Brain View debug_context generated for {routing_strategy} path")
+
+            # Build response
+            response = {
                 "answer": result.get("content", ""),  # 🆕 FIXED: Changed from "text" to "content" to match llm_service return format
                 "sources": [],  # No sources since we skipped retrieval
                 "num_sources": 0,
                 "model": model_id or result.get("model", "default"),
                 "metadata": {
-                    "routing_strategy": "direct_llm",
-                    "routing_reason": "User set direct_llm weight > 0.8",
+                    "routing_strategy": "conversation_only" if conversation_context else "direct_llm",
+                    "routing_reason": (
+                        "User set conversation_only weight > 0.9"
+                        if conversation_context
+                        else "User set direct_llm weight > 0.8"
+                    ),
                     "chunks_retrieved": 0,
                     "use_documents": False,
-                    "latency_ms": result.get("latency_ms", 0)
+                    "latency_ms": llm_latency_ms
                 }
             }
+
+            # 🧠 BRAIN VIEW: Add debug_context if present
+            if debug_context:
+                response["debug_context"] = debug_context
+
+            return response
 
         except Exception as e:
             logger.error(f"Direct LLM query failed: {e}")
@@ -1605,7 +1750,8 @@ Context:
                 model_id=tool_params.get('model_id'),  # 🆕 Pass model_id for model selection
                 project_id=tool_params.get('project_id'),  # 🔧 FIX: Pass project_id for project-based filtering
                 db=tool_params.get('db'),
-                force_rag=True  # 🆕 Force RAG even if classified as ai_personal/general
+                force_rag=True,  # 🆕 Force RAG even if classified as ai_personal/general
+                unified_config=tool_params.get('unified_config')  # 🧠 BRAIN VIEW: Pass unified_config
             )
 
             # Ensure metadata exists

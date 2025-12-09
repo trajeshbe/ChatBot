@@ -1493,8 +1493,13 @@ class ToolRegistry:
 
             # Analyze with vision model
             if question:
-                # Specific question mode
-                result = await vision_service.describe_image(image_path, question=question)
+                # Specific question mode - pass UI-selected model
+                logger.info(f"🎯 Calling describe_image with model_id: {model_id}")
+                result = await vision_service.describe_image(
+                    image_path,
+                    question=question,
+                    model_id=model_id  # Pass UI-selected model
+                )
                 text_content = result
             else:
                 # General analysis + text extraction mode

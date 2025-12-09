@@ -354,7 +354,7 @@ class DocumentService:
                 file_path=temp_path,
                 file_type=document.file_type,
                 file_size=len(file_data),
-                consolidation_strategy="voting"  # Can be: voting, confidence_weighted, llm_judgment
+                consolidation_strategy="llm_judgment"  # ✅ LLM-based classification with fallback chain
             )
 
             logger.info(f"📊 Multi-Analyzer Ensemble Results:")

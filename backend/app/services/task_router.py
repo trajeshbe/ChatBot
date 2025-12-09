@@ -471,12 +471,34 @@ Otherwise → requires_vision=false, suggest document_rag"""
             query: User's query
             documents: List of documents attached (with metadata)
             session_id: Session ID for context
-            user_preferences: User preferences
+            user_preferences: User preferences (includes strategy_weights and multi_tool_weights)
 
         Returns:
             RoutingDecision with primary tool, fallbacks, and reasoning
         """
         logger.info(f"🎯 TaskRouter: Analyzing query and {len(documents or [])} documents")
+
+        # Extract user-configured weights (these should OVERRIDE LLM content analysis)
+        strategy_weights = user_preferences.get('strategy_weights', {}) if user_preferences else {}
+        multi_tool_weights = user_preferences.get('multi_tool_weights', {}) if user_preferences else {}
+
+        # Tool weight mappings (map frontend weight names to backend tool names)
+        # Priority: strategy_weights.tool_X (frontend slider) > multi_tool_weights.X (legacy)
+        tool_weight_map = {
+            'navigation_agent': strategy_weights.get('tool_navigation', multi_tool_weights.get('navigation_agent', 0.0)),
+            'smart_extraction': strategy_weights.get('tool_web_scraping', multi_tool_weights.get('smart_extraction', 0.0)),
+            'template_extraction': multi_tool_weights.get('template_extraction', 0.0),
+            'vision_analysis': multi_tool_weights.get('vision_analysis', 0.0),
+            'ocr': strategy_weights.get('tool_ocr', 0.0),
+            'docling_pdf': strategy_weights.get('tool_docling', 0.0),
+            'document_rag': strategy_weights.get('rag_hybrid', 0.25),  # Default RAG weight
+        }
+
+        logger.info(f"⚖️  User-configured tool weights: {tool_weight_map}")
+
+        # Find highest weighted tool (user's explicit preference)
+        max_weight_tool = max(tool_weight_map.items(), key=lambda x: x[1])
+        user_preferred_tool, user_weight = max_weight_tool
 
         # Analyze query complexity
         complexity = await self.analyze_query_complexity(query)
@@ -491,91 +513,125 @@ Otherwise → requires_vision=false, suggest document_rag"""
         available_memory = resources["available_memory_mb"]
         logger.info(f"💾 Available memory: {available_memory:.0f} MB ({resources['memory_percent_used']:.1f}% used)")
 
-        # 🎯 QUERY-INTENT-FIRST ROUTING (regardless of attachments)
-        # Step 1: Analyze query content with LLM to detect intent
-        logger.info("🔍 Analyzing query intent with LLM (regardless of attachments)")
-        content_analysis = await self.analyze_query_content_llm(query)
+        # 🎯 ROUTING DECISION LOGIC:
+        # Priority 1: User-configured weights > 0.5 (explicit user preference - HIGHEST PRIORITY)
+        # Priority 2: LLM content analysis (intelligent query understanding)
+        # Priority 3: File type-based routing (default fallback)
 
-        # Determine primary tool and fallback chain based on QUERY INTENT FIRST
-        if content_analysis["requires_vision"]:
-            # 👁️ VISUAL QUERY DETECTED - prioritize vision_analysis
-            logger.info(f"👁️ Visual query detected: {content_analysis['reasoning']} (confidence: {content_analysis['confidence']:.2f})")
+        if user_weight > 0.5:
+            # User has explicitly configured a tool weight > 0.5
+            # This overrides ALL other routing logic (including LLM content analysis)
+            logger.info(f"✅ USER PREFERENCE OVERRIDE: {user_preferred_tool} (weight: {user_weight:.2f})")
 
-            primary_tool = "vision_analysis"
+            primary_tool = user_preferred_tool
 
-            # Build fallback chain: vision first, then document-specific tools
-            if file_types and file_types != [FileType.UNKNOWN]:
-                # Documents attached - add document-specific tools to fallback
-                doc_tools = []
-                for file_type in file_types:
-                    _, file_tools = self.select_tools_for_file_type(file_type, available_memory, complexity)
-                    # Add all tools from the fallback chain (not just primary)
-                    for tool in file_tools:
-                        if tool not in doc_tools and tool != "vision_analysis":
-                            doc_tools.append(tool)
-
-                # Vision first, then document tools, then general RAG
-                fallback_chain = ["vision_analysis"] + doc_tools + ["document_rag"]
-                # Remove duplicates while preserving order
-                seen = set()
-                fallback_chain = [x for x in fallback_chain if not (x in seen or seen.add(x))]
-
-                reasoning = (
-                    f"Visual query detected: {content_analysis['reasoning']}. "
-                    f"Files: {[ft.value for ft in file_types]}. "
-                    f"Using vision_analysis → {' → '.join(doc_tools)} → document_rag"
-                )
+            # Build appropriate fallback chain based on user's preferred tool
+            if user_preferred_tool == 'navigation_agent':
+                fallback_chain = ['navigation_agent', 'smart_extraction', 'document_rag']
+            elif user_preferred_tool == 'smart_extraction':
+                fallback_chain = ['smart_extraction', 'navigation_agent', 'document_rag']
+            elif user_preferred_tool == 'template_extraction':
+                fallback_chain = ['template_extraction', 'smart_extraction', 'document_rag']
+            elif user_preferred_tool == 'vision_analysis':
+                fallback_chain = ['vision_analysis', 'ocr', 'document_rag']
+            elif user_preferred_tool == 'ocr':
+                fallback_chain = ['ocr', 'vision_analysis', 'document_rag']
+            elif user_preferred_tool == 'docling_pdf':
+                fallback_chain = ['docling_pdf', 'ocr', 'document_rag']
             else:
-                # No documents - vision analysis with RAG fallback
-                fallback_chain = ["vision_analysis", "document_rag"]
-                reasoning = (
-                    f"Visual query detected: {content_analysis['reasoning']}. "
-                    f"No attachments. Using vision_analysis → document_rag"
-                )
+                fallback_chain = ['document_rag']
+
+            reasoning = (
+                f"User explicitly configured {user_preferred_tool} with weight {user_weight:.2f} (> 0.5 threshold). "
+                f"Respecting user preference over content analysis."
+            )
 
         else:
-            # 📚 TEXT-BASED QUERY - use document-specific tools or RAG
-            logger.info(f"📚 Text-based query detected (confidence: {content_analysis['confidence']:.2f})")
+            # User has NOT set strong preference (weight <= 0.5)
+            # Use intelligent LLM content analysis
+            logger.info("🔍 Analyzing query intent with LLM (user weight <= 0.5)")
+            content_analysis = await self.analyze_query_content_llm(query)
 
-            if not file_types or file_types == [FileType.UNKNOWN]:
-                # No documents - use general RAG
-                primary_tool = "document_rag"
-                fallback_chain = ["document_rag"]
-                reasoning = (
-                    f"Text-based query, no attachments. "
-                    f"Using document_rag (confidence: {content_analysis['confidence']:.2f})"
-                )
-                logger.info(f"📚 No files - using document_rag")
+            # Determine primary tool and fallback chain based on QUERY INTENT
+            if content_analysis["requires_vision"]:
+                # 👁️ VISUAL QUERY DETECTED - prioritize vision_analysis
+                logger.info(f"👁️ Visual query detected: {content_analysis['reasoning']} (confidence: {content_analysis['confidence']:.2f})")
 
-            elif len(file_types) == 1:
-                # Single file type - optimize for that type
-                file_type = file_types[0]
-                primary_tool, fallback_chain = self.select_tools_for_file_type(
-                    file_type, available_memory, complexity
-                )
-                reasoning = (
-                    f"Text-based query with {file_type.value} file. "
-                    f"Using {primary_tool} (memory: {self.tool_memory_requirements.get(primary_tool, 0)}MB)"
-                )
-                logger.info(f"📄 Single {file_type.value} - using {primary_tool}")
+                primary_tool = "vision_analysis"
+
+                # Build fallback chain: vision first, then document-specific tools
+                if file_types and file_types != [FileType.UNKNOWN]:
+                    # Documents attached - add document-specific tools to fallback
+                    doc_tools = []
+                    for file_type in file_types:
+                        _, file_tools = self.select_tools_for_file_type(file_type, available_memory, complexity)
+                        # Add all tools from the fallback chain (not just primary)
+                        for tool in file_tools:
+                            if tool not in doc_tools and tool != "vision_analysis":
+                                doc_tools.append(tool)
+
+                    # Vision first, then document tools, then general RAG
+                    fallback_chain = ["vision_analysis"] + doc_tools + ["document_rag"]
+                    # Remove duplicates while preserving order
+                    seen = set()
+                    fallback_chain = [x for x in fallback_chain if not (x in seen or seen.add(x))]
+
+                    reasoning = (
+                        f"Visual query detected: {content_analysis['reasoning']}. "
+                        f"Files: {[ft.value for ft in file_types]}. "
+                        f"Using vision_analysis → {' → '.join(doc_tools)} → document_rag"
+                    )
+                else:
+                    # No documents - vision analysis with RAG fallback
+                    fallback_chain = ["vision_analysis", "document_rag"]
+                    reasoning = (
+                        f"Visual query detected: {content_analysis['reasoning']}. "
+                        f"No attachments. Using vision_analysis → document_rag"
+                    )
 
             else:
-                # Multiple file types - use comprehensive tool
-                primary_tool = "document_rag"
+                # 📚 TEXT-BASED QUERY - use document-specific tools or RAG
+                logger.info(f"📚 Text-based query detected (confidence: {content_analysis['confidence']:.2f})")
 
-                # Build combined fallback chain
-                all_tools = []
-                for ft in file_types:
-                    tools, _ = self.select_tools_for_file_type(ft, available_memory, complexity)
-                    if tools not in all_tools:
-                        all_tools.append(tools)
+                if not file_types or file_types == [FileType.UNKNOWN]:
+                    # No documents - use general RAG
+                    primary_tool = "document_rag"
+                    fallback_chain = ["document_rag"]
+                    reasoning = (
+                        f"Text-based query, no attachments. "
+                        f"Using document_rag (confidence: {content_analysis['confidence']:.2f})"
+                    )
+                    logger.info(f"📚 No files - using document_rag")
 
-                fallback_chain = all_tools if all_tools else ["document_rag"]
-                reasoning = (
-                    f"Text-based query with multiple file types: {[ft.value for ft in file_types]}. "
-                    f"Using document_rag → {' → '.join(all_tools)}"
-                )
-                logger.info(f"📚 Multiple files - using document_rag with fallbacks")
+                elif len(file_types) == 1:
+                    # Single file type - optimize for that type
+                    file_type = file_types[0]
+                    primary_tool, fallback_chain = self.select_tools_for_file_type(
+                        file_type, available_memory, complexity
+                    )
+                    reasoning = (
+                        f"Text-based query with {file_type.value} file. "
+                        f"Using {primary_tool} (memory: {self.tool_memory_requirements.get(primary_tool, 0)}MB)"
+                    )
+                    logger.info(f"📄 Single {file_type.value} - using {primary_tool}")
+
+                else:
+                    # Multiple file types - use comprehensive tool
+                    primary_tool = "document_rag"
+
+                    # Build combined fallback chain
+                    all_tools = []
+                    for ft in file_types:
+                        tools, _ = self.select_tools_for_file_type(ft, available_memory, complexity)
+                        if tools not in all_tools:
+                            all_tools.append(tools)
+
+                    fallback_chain = all_tools if all_tools else ["document_rag"]
+                    reasoning = (
+                        f"Text-based query with multiple file types: {[ft.value for ft in file_types]}. "
+                        f"Using document_rag → {' → '.join(all_tools)}"
+                    )
+                    logger.info(f"📚 Multiple files - using document_rag with fallbacks")
 
         # Build tool parameters
         # Note: file_types is NOT passed to tool_params as it's not a parameter

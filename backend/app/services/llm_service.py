@@ -505,11 +505,17 @@ class LLMService:
             available_models = chat_models
             logger.info(f"📋 Filtered to {len(chat_models)} chat-appropriate models (excluded coder-specific models)")
 
-        # Priority: GPU models > CPU models, larger parameter count > smaller
+        # Priority: Qwen VL > GPU models > CPU models, larger parameter count > smaller
         # Rank models by desirability
         def rank_model(model):
             score = 0
             model_id = model.id.lower()
+
+            # 🔍 HIGHEST PRIORITY: Qwen 2.5 VL (Vision-Language model)
+            # This is the user's preferred default model
+            if 'qwen2.5vl' in model_id or model_id == 'qwen2.5vl:latest':
+                score += 10000  # Highest priority
+                logger.info(f"🔍 Qwen VL model found with highest priority: {model.id}")
 
             # GPU models get priority
             if model.requires_gpu or 'gpu' in model_id:

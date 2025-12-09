@@ -183,7 +183,7 @@ class MultiAnalyzerEnsemble:
         elif consolidation_strategy == "confidence_weighted":
             final_result = self._consolidate_by_confidence(valid_results)
         elif consolidation_strategy == "llm_judgment":
-            final_result = await self._consolidate_by_llm(valid_results)
+            final_result = await self._consolidate_by_llm(valid_results, file_path)
         else:
             final_result = self._consolidate_by_voting(valid_results)
 
@@ -578,11 +578,162 @@ class MultiAnalyzerEnsemble:
             "total_analyzers": len(results)
         }
 
-    async def _consolidate_by_llm(self, results: List[AnalyzerResult]) -> Dict[str, Any]:
-        """Consolidate results using LLM judgment (future implementation)"""
-        # For now, fall back to confidence-weighted
-        logger.info("LLM consolidation not yet implemented, using confidence-weighted")
-        return self._consolidate_by_confidence(results)
+    async def _consolidate_by_llm(self, results: List[AnalyzerResult], file_path: str) -> Dict[str, Any]:
+        """
+        Consolidate results using LLM judgment with llama3.2-vision:11b fallback
+
+        Uses EXISTING llm_service (respects user's chosen LLM) with vision model fallback
+
+        Args:
+            results: List of analyzer results to consolidate
+            file_path: Path to the file being analyzed (for extracting filename)
+        """
+        import json
+        from pathlib import Path
+        from app.services.llm_service import get_llm_service
+
+        try:
+            # Extract filename from file path
+            filename = Path(file_path).name
+
+            # Build analyzer summary for LLM
+            analyzer_votes = []
+            for result in results:
+                analyzer_votes.append({
+                    'analyzer': result.analyzer_name,
+                    'classification': result.content_type.value,
+                    'confidence': result.confidence,
+                    'reasoning': result.reasoning
+                })
+
+            # Filename keyword check (from existing pattern)
+            VISUAL_KEYWORDS = ['arch', 'architecture', 'diagram', 'blueprint', 'drawing',
+                              'plan', 'layout', 'schematic', 'flowchart', 'wireframe',
+                              'chart', 'graph', 'figure', 'illustration', 'map']
+            filename_suggests_visual = any(kw in filename.lower() for kw in VISUAL_KEYWORDS)
+
+            # LLM classification prompt
+            prompt = f"""Analyze these document classification results and determine the BEST content type.
+
+**DOCUMENT**: {filename}
+**Filename suggests visual content**: {filename_suggests_visual}
+
+**ANALYZER VOTES**:
+{json.dumps(analyzer_votes, indent=2)}
+
+**CLASSIFICATION CATEGORIES**:
+1. text_heavy - Primarily text, minimal images
+2. image_heavy - Contains significant photos/images
+3. vector_graphics - Diagrams, charts, technical drawings (USE VISUAL EMBEDDINGS!)
+4. table_heavy - Primarily tables/structured data
+5. code - Source code
+6. mixed - Combination of types
+7. scanned - Scanned document
+
+**CRITICAL RULES**:
+- If filename contains "{'" OR "'.join(VISUAL_KEYWORDS)}" → PREFER vector_graphics
+- Architecture diagrams, flowcharts, technical drawings → vector_graphics (NOT text_heavy!)
+- When uncertain between text_heavy and vector_graphics → choose vector_graphics
+
+Respond with JSON only:
+{{
+    "content_type": "vector_graphics",
+    "confidence": 0.95,
+    "reasoning": "Filename 'arch1.pdf' suggests architecture diagram, analyzer detected edges"
+}}"""
+
+            llm_service = get_llm_service()
+
+            # Try user's chosen LLM first, fallback to llama3.2-vision:11b
+            try:
+                response = await llm_service.generate(
+                    prompt=prompt,
+                    max_tokens=200,
+                    temperature=0.1
+                )
+                result_text = response["content"]  # ✅ FIX: llm_service returns dict, not object
+            except Exception as e:
+                logger.warning(f"⚠️ User LLM failed, trying llama3.2-vision:11b: {e}")
+                response = await llm_service.generate(
+                    prompt=prompt,
+                    max_tokens=200,
+                    temperature=0.1,
+                    model_id="llama3.2-vision:11b"
+                )
+                result_text = response["content"]  # ✅ FIX: llm_service returns dict, not object
+
+            # Parse JSON
+            classification = json.loads(result_text.strip())
+
+            # Map to ContentType
+            content_type_map = {
+                "text_heavy": ContentType.TEXT_HEAVY,
+                "image_heavy": ContentType.IMAGE_HEAVY,
+                "vector_graphics": ContentType.VECTOR_GRAPHICS,
+                "table_heavy": ContentType.TABLE_HEAVY,
+                "code": ContentType.CODE,
+                "mixed": ContentType.MIXED,
+                "scanned": ContentType.SCANNED
+            }
+
+            content_type = content_type_map.get(classification['content_type'], ContentType.TEXT_HEAVY)
+
+            # Map to strategy
+            strategy_map = {
+                ContentType.TEXT_HEAVY: "text_semantic",
+                ContentType.IMAGE_HEAVY: "vision",
+                ContentType.VECTOR_GRAPHICS: "vision",  # ✅ VISUAL EMBEDDINGS!
+                ContentType.TABLE_HEAVY: "table_structure",
+                ContentType.CODE: "code",
+                ContentType.MIXED: "hybrid",
+                ContentType.SCANNED: "text_semantic"
+            }
+
+            vector_column_map = {
+                ContentType.TEXT_HEAVY: "embedding",
+                ContentType.IMAGE_HEAVY: "visual_embedding",
+                ContentType.VECTOR_GRAPHICS: "visual_embedding",  # ✅ USE CLIP!
+                ContentType.TABLE_HEAVY: "embedding",
+                ContentType.CODE: "embedding",
+                ContentType.MIXED: "embedding",
+                ContentType.SCANNED: "embedding"
+            }
+
+            logger.info(f"✅ LLM classified '{filename}' as: {content_type.value}")
+            logger.info(f"   Confidence: {classification['confidence']}")
+            logger.info(f"   Reasoning: {classification['reasoning']}")
+            logger.info(f"   Filename boost: {filename_suggests_visual}")
+
+            return {
+                'content_type': content_type,
+                'confidence': float(classification['confidence']),
+                'reasoning': classification['reasoning'],
+                'strategy': strategy_map[content_type],
+                'vector_column': vector_column_map[content_type],
+                'analyzer_results': results,
+                'filename_boost_applied': filename_suggests_visual,
+                'method': 'llm_judgment'
+            }
+
+        except Exception as e:
+            logger.warning(f"⚠️ LLM classification failed: {e}, falling back to confidence-weighted")
+            fallback_result = self._consolidate_by_confidence(results)
+
+            # Keyword override if needed
+            try:
+                from pathlib import Path
+                filename = Path(file_path).name
+                VISUAL_KEYWORDS = ['arch', 'architecture', 'diagram', 'blueprint', 'drawing']
+                if any(kw in filename.lower() for kw in VISUAL_KEYWORDS) and fallback_result['content_type'] == ContentType.TEXT_HEAVY:
+                    logger.warning(f"📝 Keyword override: '{filename}' → vector_graphics")
+                    fallback_result['content_type'] = ContentType.VECTOR_GRAPHICS
+                    fallback_result['strategy'] = 'vision'
+                    fallback_result['vector_column'] = 'visual_embedding'
+                    fallback_result['reasoning'] += f" [OVERRIDE: Filename '{filename}' suggests visual content]"
+            except Exception:
+                pass
+
+            return fallback_result
 
     async def _analyze_non_pdf(self, file_path: str, file_type: str) -> Dict[str, Any]:
         """Analyze non-PDF files"""

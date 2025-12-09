@@ -10,27 +10,27 @@
 
 strategy_weights:
   # Conversation-only mode (uses ONLY conversation history, no document RAG)
-  conversation_only: 1.0
+  conversation_only: 0.50
 
   # Short-term memory (session documents only) - highest priority
-  rag_short_term: 0.95
+  rag_short_term: 0.48
 
   # Hybrid strategy (combines short + long term)
-  rag_hybrid: 0.90
+  rag_hybrid: 0.45
 
   # Tool-based strategies (navigation, OCR, scraping, etc.)
-  tool_navigation: 0.85
-  tool_ocr: 0.85
-  tool_docling: 0.85
+  tool_navigation: 0.43
+  tool_ocr: 0.43
+  tool_docling: 0.43
 
   # Web scraping
-  tool_web_scraping: 0.80
+  tool_web_scraping: 0.40
 
   # Long-term memory (all documents)
-  rag_long_term: 0.80
+  rag_long_term: 0.40
 
   # Direct LLM (no RAG, uses general knowledge)
-  direct_llm: 0.75
+  direct_llm: 0.38
 
   # Brain View toggle (enable/disable debug context collection)
   # Set to true to collect document processing tools and debug context
@@ -72,19 +72,19 @@ scoring_formula_weights:
 
 source_quality_weights:
   # Short-term memory sources (session documents)
-  short_term: 1.0
-
-  # Long-term memory sources (all documents)
-  long_term: 0.7
-
-  # General knowledge (no specific source)
-  general: 0.5
-
-  # Scraped content
-  scraped: 0.65
+  short_term: 0.50
 
   # OCR-extracted content
-  ocr: 0.80
+  ocr: 0.40
+
+  # Long-term memory sources (all documents)
+  long_term: 0.35
+
+  # Scraped content
+  scraped: 0.33
+
+  # General knowledge (no specific source)
+  general: 0.25
 
 
 # ==========================================
@@ -180,19 +180,19 @@ cache:
 
 multi_tool_weights:
   # Document RAG tool
-  document_rag: 1.0
+  document_rag: 0.50
 
   # Navigation agent tool
-  navigation_agent: 0.90
+  navigation_agent: 0.45
 
   # OCR tool
-  ocr_tool: 0.90
-
-  # Web scraping tool
-  web_scraping: 0.85
+  ocr_tool: 0.45
 
   # Docling tool
-  docling: 0.90
+  docling: 0.45
+
+  # Web scraping tool
+  web_scraping: 0.43
 
 
 # ==========================================

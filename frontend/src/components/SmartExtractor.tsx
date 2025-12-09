@@ -184,7 +184,8 @@ export const SmartExtractor = ({ projectId }: SmartExtractorProps = {}) => {
     if (storedSessionId) {
       setSessionId(storedSessionId)
     } else {
-      const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+      // Use hyphens to match ChatInterfaceEnhanced format: session-{timestamp}-{random}
+      const newSessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
       localStorage.setItem('sessionId', newSessionId)
       setSessionId(newSessionId)
     }
@@ -211,6 +212,12 @@ export const SmartExtractor = ({ projectId }: SmartExtractorProps = {}) => {
 
     if (!userInstructions.trim()) {
       setError('Please provide instructions for what data to extract')
+      return
+    }
+
+    // Validate that a model is selected
+    if (!globalSelectedModel || !globalSelectedModel.trim()) {
+      setError('Please select a model from the dropdown in the Chat interface first.')
       return
     }
 
@@ -257,7 +264,7 @@ export const SmartExtractor = ({ projectId }: SmartExtractorProps = {}) => {
 
     // Validate that a model is selected
     if (!globalSelectedModel || !globalSelectedModel.trim()) {
-      setError('Please select a model from the dropdown in the Chat interface first. No default model is configured.')
+      setError('Please select a model from the dropdown in the Chat interface first.')
       return
     }
 

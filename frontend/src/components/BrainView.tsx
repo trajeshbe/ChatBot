@@ -12,8 +12,6 @@
 import React, { useState } from 'react';
 import {
   Brain,
-  ChevronRight,
-  ChevronLeft,
   X,
   Activity,
   MessageSquare,
@@ -93,14 +91,16 @@ export const BrainView: React.FC<BrainViewProps> = ({ debugContext, isOpen, onTo
 
   return (
     <>
-      {/* Toggle Button */}
-      <button
-        onClick={onToggle}
-        className="fixed top-4 right-4 z-50 bg-purple-600 text-white p-3 rounded-full shadow-lg hover:bg-purple-700 transition-all"
-        title={isOpen ? 'Close Brain View' : 'Open Brain View'}
-      >
-        <Brain className="w-5 h-5" />
-      </button>
+      {/* Toggle Button - Only show after first LLM query (when debugContext exists) */}
+      {debugContext && (
+        <button
+          onClick={onToggle}
+          className="fixed top-4 right-4 z-50 bg-purple-600 text-white p-3 rounded-full shadow-lg hover:bg-purple-700 transition-all"
+          title={isOpen ? 'Close Brain View' : 'Open Brain View'}
+        >
+          <Brain className="w-5 h-5" />
+        </button>
+      )}
 
       {/* Side Panel */}
       <div className={`fixed top-0 right-0 h-full bg-white border-l border-gray-200 shadow-2xl transition-all duration-300 ${isOpen ? 'w-96' : 'w-0'} overflow-hidden z-40`}>
@@ -177,7 +177,7 @@ export const BrainView: React.FC<BrainViewProps> = ({ debugContext, isOpen, onTo
                     </p>
                   </div>
                 </div>
-              ) : activeTab === 'routing' && (
+              ) : activeTab === 'routing' && debugContext && (
                 <div className="space-y-4">
                   <h3 className="font-semibold text-sm text-gray-900 mb-3">Routing Decision</h3>
 
@@ -220,7 +220,7 @@ export const BrainView: React.FC<BrainViewProps> = ({ debugContext, isOpen, onTo
                 </div>
               )}
 
-              {activeTab === 'history' && (
+              {activeTab === 'history' && debugContext && (
                 <div className="space-y-4">
                   <h3 className="font-semibold text-sm text-gray-900 mb-3">Conversation History</h3>
 
@@ -236,7 +236,7 @@ export const BrainView: React.FC<BrainViewProps> = ({ debugContext, isOpen, onTo
                 </div>
               )}
 
-              {activeTab === 'tools' && (
+              {activeTab === 'tools' && debugContext && (
                 <div className="space-y-4">
                   <h3 className="font-semibold text-sm text-gray-900 mb-3">Tools Executed</h3>
 
@@ -247,7 +247,7 @@ export const BrainView: React.FC<BrainViewProps> = ({ debugContext, isOpen, onTo
                       Query Execution Tools
                     </div>
                     <div className="space-y-2">
-                      {debugContext.tools_executed.query_time_tools.map((tool) => (
+                      {debugContext.tools_executed?.query_time_tools?.map((tool) => (
                         <div key={tool.tool_id} className="bg-white border border-purple-200 rounded-lg p-2">
                           <div className="flex items-center justify-between mb-1">
                             <div className="flex items-center gap-2">
@@ -269,14 +269,14 @@ export const BrainView: React.FC<BrainViewProps> = ({ debugContext, isOpen, onTo
                   </div>
 
                   {/* Document Processing Tools */}
-                  {debugContext.tools_executed.document_processing_tools.length > 0 && (
+                  {debugContext.tools_executed?.document_processing_tools?.length > 0 && (
                     <div>
                       <div className="text-xs font-semibold text-blue-700 mb-2 flex items-center gap-1">
                         <FileText className="w-3 h-3" />
                         Document Processing Tools
                       </div>
                       <div className="space-y-2">
-                        {debugContext.tools_executed.document_processing_tools.map((tool) => (
+                        {debugContext.tools_executed?.document_processing_tools?.map((tool) => (
                           <div key={tool.tool_id} className="bg-blue-50 border border-blue-200 rounded-lg p-2">
                             <div className="flex items-center justify-between mb-1">
                               <div className="flex items-center gap-2">
@@ -318,7 +318,7 @@ export const BrainView: React.FC<BrainViewProps> = ({ debugContext, isOpen, onTo
                 </div>
               )}
 
-              {activeTab === 'documents' && (
+              {activeTab === 'documents' && debugContext && (
                 <div className="space-y-4">
                   <h3 className="font-semibold text-sm text-gray-900 mb-3">Documents Retrieved</h3>
 
@@ -344,7 +344,7 @@ export const BrainView: React.FC<BrainViewProps> = ({ debugContext, isOpen, onTo
                 </div>
               )}
 
-              {activeTab === 'performance' && (
+              {activeTab === 'performance' && debugContext && (
                 <div className="space-y-4">
                   <h3 className="font-semibold text-sm text-gray-900 mb-3">Performance Metrics</h3>
 

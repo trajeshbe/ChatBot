@@ -9,7 +9,7 @@ Memory Hierarchy:
 This ensures recently uploaded documents in a session are prioritized.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text as sql_text, and_, func
@@ -61,7 +61,8 @@ class RAGService:
         no_relevant_docs_threshold: Optional[float] = None,
         semantic_weight: Optional[float] = None,
         keyword_weight: Optional[float] = None,
-        force_rag: bool = False  # 🆕 Force RAG search even for ai_personal/general queries
+        force_rag: bool = False,  # 🆕 Force RAG search even for ai_personal/general queries
+        unified_config: Optional[Dict[str, Any]] = None  # 🧠 Unified config for Brain View and all RAG parameters
     ) -> Dict:
         """
         Process query with memory hierarchy:
@@ -150,6 +151,18 @@ class RAGService:
                     f"Risk score: {security_check['risk_score']}, "
                     f"Threat level: {security_check['threat_level']}"
                 )
+
+            # 🧠 BRAIN VIEW: Extract enable_brain_view flag from unified_config
+            enable_brain_view = False
+            strategy_weights = {}  # Initialize to empty dict to avoid UnboundLocalError
+            if unified_config:
+                logger.info(f"🧠 DEBUG [RAGService.query]: unified_config received = {unified_config is not None}")
+                strategy_weights = unified_config.get('strategy_weights', {})
+                enable_brain_view = strategy_weights.get('enable_brain_view', False)
+                if enable_brain_view:
+                    logger.info("🧠 Brain View ENABLED via unified_config")
+                else:
+                    logger.debug("🧠 Brain View disabled (enable_brain_view=False or not in unified_config)")
 
             # Use provided RAG config parameters or fall back to settings
             _top_k = top_k if top_k is not None else settings.TOP_K_RESULTS
@@ -338,55 +351,58 @@ class RAGService:
             # Use first (original processed query) as primary
             query_embedding = query_embeddings[0]['embedding']
 
-            # STEP 4: Search short-term memory first (session documents)
-            short_term_chunks = []
-            if session_id:
-                track_tool("short_term_memory_search", "Search session-specific documents (hybrid)")
-                short_term_chunks = await self._search_session_documents(
-                    session_id=session_id,
+            # STEP 4: Search project-scoped documents (replaces session-scoped approach)
+            # All documents in the same project as the session are now accessible
+            # This eliminates the need for manual session_documents associations
+            project_chunks = []
+            if project_id:
+                # Search all documents in the project
+                search_scope = f"project '{project_id}'"
+                track_tool("project_document_search", f"Search {search_scope} documents (hybrid + cascading fallback)")
+                logger.info(f"🔍 Searching all documents in project {project_id}")
+
+                project_chunks = await document_service.search_similar_chunks(
                     query_embedding=query_embedding,
                     query_text=query_text,  # For keyword matching
-                    top_k=_top_k,
-                    threshold=_similarity_threshold - 0.05,  # Slightly lower threshold for session docs
+                    top_k=_top_k * 3,  # Get more candidates for reranking
+                    threshold=_similarity_threshold - 0.05,  # Slightly lower threshold for project docs
                     use_hybrid=True,  # Enable hybrid search
                     use_cascading_fallback=True,  # Enable cascading fallback
                     semantic_weight=_semantic_weight,  # UI-provided or config default
                     keyword_weight=_keyword_weight,    # UI-provided or config default
+                    project_id=project_id,  # Scope to project
                     vector_column=vector_column,  # 🆕 Use intelligent embedding strategy column
                     db=db
                 )
-                if short_term_chunks:
-                    logger.info(f"✅ Found {len(short_term_chunks)} chunks in short-term memory (session documents) - hybrid search")
-                    logger.info(f"📄 Session documents used: {list(set([c['filename'] for c in short_term_chunks]))}")
+
+                if project_chunks:
+                    logger.info(f"✅ Found {len(project_chunks)} chunks in project documents - hybrid search")
+                    logger.info(f"📄 Project documents used: {list(set([c['filename'] for c in project_chunks]))}")
                 else:
-                    logger.info(f"⚠️ No session-specific documents found for session {session_id}")
+                    logger.info(f"⚠️ No documents found in project {project_id}")
+            else:
+                # Fallback: Search all documents if no project specified
+                logger.info(f"⚠️ No project_id provided, searching all documents")
+                track_tool("global_document_search", "Search all documents (no project filter)")
 
-            # Step 3: Search long-term memory (all documents) using hybrid search with cascading fallback
-            # If project_id exists, scope to project documents only
-            search_scope = f"project {project_id}" if project_id else "all documents"
-            track_tool("long_term_memory_search", f"Search {search_scope} (hybrid + cascading fallback)")
-            long_term_chunks = await document_service.search_similar_chunks(
-                query_embedding=query_embedding,
-                query_text=query_text,  # For keyword matching
-                top_k=_top_k,
-                threshold=_similarity_threshold,
-                use_hybrid=True,  # Enable hybrid search
-                use_cascading_fallback=True,  # Enable cascading fallback
-                semantic_weight=_semantic_weight,  # UI-provided or config default
-                keyword_weight=_keyword_weight,    # UI-provided or config default
-                project_id=project_id,  # Scope to project if provided
-                vector_column=vector_column,  # 🆕 Use intelligent embedding strategy column
-                db=db
-            )
-            logger.info(f"Found {len(long_term_chunks)} chunks in long-term memory - hybrid search with fallback")
+                project_chunks = await document_service.search_similar_chunks(
+                    query_embedding=query_embedding,
+                    query_text=query_text,
+                    top_k=_top_k * 3,
+                    threshold=_similarity_threshold,
+                    use_hybrid=True,
+                    use_cascading_fallback=True,
+                    semantic_weight=_semantic_weight,
+                    keyword_weight=_keyword_weight,
+                    project_id=None,  # No project filter
+                    vector_column=vector_column,
+                    db=db
+                )
+                logger.info(f"Found {len(project_chunks)} chunks in global search")
 
-            # Step 4: Combine and deduplicate results (short-term has priority)
-            combined_chunks = self._combine_memory_results(
-                short_term_chunks,
-                long_term_chunks,
-                max_chunks=_top_k * 3  # 🆕 Get 3x candidates for reranking
-            )
-            logger.info(f"Combined to {len(combined_chunks)} total chunks (before reranking)")
+            # Use project_chunks directly (no need to combine short/long-term anymore)
+            combined_chunks = project_chunks
+            logger.info(f"Using {len(combined_chunks)} project-scoped chunks (before reranking)")
 
             # 🆕 Step 4.5: Cross-Encoder Reranking for State-of-the-Art Accuracy
             # Two-stage retrieval: Fast vector search → Precise cross-encoder reranking
@@ -578,11 +594,13 @@ class RAGService:
                     model_id=model_id
                 )
 
-            # Step 7: Format sources with memory indicators
-            sources = self._format_sources(combined_chunks, short_term_chunks, _no_relevant_docs_threshold)
+            # Step 7: Format sources (all are now project-scoped)
+            sources = self._format_sources(combined_chunks, [], _no_relevant_docs_threshold)
 
-            num_short_term = len([s for s in sources if s.get('memory_type') == 'short-term'])
-            num_long_term = len([s for s in sources if s.get('memory_type') == 'long-term'])
+            # All documents are now project-scoped (no short-term/long-term distinction)
+            num_project = len(sources)
+            num_short_term = 0  # Deprecated with project-scoped approach
+            num_long_term = 0   # Deprecated with project-scoped approach
 
             result = {
                 'answer': response['content'],
@@ -592,11 +610,12 @@ class RAGService:
                 'tokens_used': response['tokens'],
                 'latency_ms': (time.time() - start_time) * 1000,
                 'num_sources': len(sources),
-                'num_short_term_sources': num_short_term,
-                'num_long_term_sources': num_long_term,
+                'num_short_term_sources': num_short_term,  # Deprecated (kept for backward compatibility)
+                'num_long_term_sources': num_long_term,    # Deprecated (kept for backward compatibility)
+                'num_project_sources': num_project,        # New: project-scoped document count
                 'session_id': session_id,
                 'cached': False,
-                'context_info': f"Used {num_short_term} session document(s) and {num_long_term} global document(s)" if sources else "No documents found",
+                'context_info': f"Used {num_project} project document(s)" if sources else "No documents found",
                 'query_classification': classification['query_type'],
                 'classification_confidence': classification['confidence'],  # Include confidence score
                 # 🆕 Tool Usage Tracking - shows which tools were used and in what order
@@ -610,7 +629,7 @@ class RAGService:
                     'chunk_size': settings.CHUNK_SIZE,
                     'chunk_overlap': settings.CHUNK_OVERLAP,
                     'search_type': 'hybrid',  # Indicates we're using hybrid search
-                    'memory_type': 'hierarchical'  # Indicates two-tier memory hierarchy
+                    'memory_type': 'project-scoped'  # Updated from 'hierarchical' to 'project-scoped'
                 }
             }
 
@@ -687,8 +706,7 @@ class RAGService:
                 document_processing_tools = []
                 if sources and db:
                     try:
-                        from sqlalchemy import text as sql_text
-
+                        # sql_text already imported at module level (line 15)
                         # Get document IDs from sources
                         document_ids = [src.get('id') for src in sources if src.get('id')]
 

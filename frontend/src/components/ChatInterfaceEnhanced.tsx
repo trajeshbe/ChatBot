@@ -129,6 +129,8 @@ interface Message {
     search_type?: string
     memory_type?: string
   }
+  // 🧠 Brain View debug context (inline per-message)
+  debug_context?: any
   // User feedback
   userFeedback?: 'thumbs_up' | 'thumbs_down' | 'rated'
   userRating?: number
@@ -161,6 +163,10 @@ interface Props {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+// 🆕 MEMORY OPTIMIZATION: Message limits to prevent unbounded growth
+const MAX_MESSAGES_IN_MEMORY = 100  // Keep max 100 messages in state
+const MAX_MESSAGES_IN_LOCALSTORAGE = 50  // Save only last 50 to localStorage
+
 // Generate or retrieve session ID
 const getSessionId = (): string => {
   if (typeof window === 'undefined') return ''
@@ -189,10 +195,18 @@ const loadMessages = (sessionId: string): Message[] => {
     if (stored) {
       const parsed = JSON.parse(stored)
       // Convert timestamp strings back to Date objects
-      return parsed.map((msg: any) => ({
+      const messages = parsed.map((msg: any) => ({
         ...msg,
         timestamp: new Date(msg.timestamp)
       }))
+
+      // 🆕 MEMORY OPTIMIZATION: Trim to max messages if exceeded
+      if (messages.length > MAX_MESSAGES_IN_MEMORY) {
+        console.log(`⚠️  Trimming ${messages.length} messages to ${MAX_MESSAGES_IN_MEMORY} to prevent memory overflow`)
+        return messages.slice(-MAX_MESSAGES_IN_MEMORY)
+      }
+
+      return messages
     }
   } catch (error) {
     console.error('Error loading messages from localStorage:', error)
@@ -211,9 +225,65 @@ const saveMessages = (sessionId: string, messages: Message[]): void => {
   if (typeof window === 'undefined' || !sessionId) return
 
   try {
-    localStorage.setItem(`chat_messages_${sessionId}`, JSON.stringify(messages))
+    // 🆕 MEMORY OPTIMIZATION: Only save last N messages to localStorage
+    const messagesToSave = messages.slice(-MAX_MESSAGES_IN_LOCALSTORAGE)
+
+    // 🆕 MEMORY OPTIMIZATION: Strip heavy metadata before saving
+    const lightweightMessages = messagesToSave.map(msg => {
+      const { debug_context, tools_used, quality_metrics, ...essential } = msg
+
+      // Keep only essential data for localStorage
+      return {
+        ...essential,
+        // Keep lightweight metadata for UI display
+        latency_ms: msg.latency_ms,
+        tokens_used: msg.tokens_used,
+        num_sources: msg.num_sources,
+        model: msg.model,
+        model_name: msg.model_name
+      }
+    })
+
+    localStorage.setItem(`chat_messages_${sessionId}`, JSON.stringify(lightweightMessages))
+
   } catch (error) {
     console.error('Error saving messages to localStorage:', error)
+
+    // 🆕 MEMORY OPTIMIZATION: Handle QuotaExceededError
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      console.warn('⚠️  localStorage quota exceeded, saving fewer messages...')
+
+      try {
+        // Try saving only last 25 messages as fallback
+        const reducedMessages = messages.slice(-25).map(msg => {
+          const { debug_context, tools_used, quality_metrics, sources, ...minimal } = msg
+          return {
+            ...minimal,
+            // Keep only timestamp and content for minimal storage
+            role: msg.role,
+            content: msg.content.slice(0, 500), // Truncate content to 500 chars
+            timestamp: msg.timestamp
+          }
+        })
+
+        localStorage.setItem(`chat_messages_${sessionId}`, JSON.stringify(reducedMessages))
+        console.log('✅ Saved reduced messages after quota error')
+      } catch (fallbackError) {
+        console.error('❌ Failed to save even reduced messages:', fallbackError)
+        // Clear old sessions to make space
+        try {
+          const keys = Object.keys(localStorage)
+          const sessionKeys = keys.filter(k => k.startsWith('chat_messages_session-'))
+          if (sessionKeys.length > 5) {
+            // Remove oldest session (first 5 alphabetically)
+            sessionKeys.slice(0, 5).forEach(k => localStorage.removeItem(k))
+            console.log(`🧹 Cleaned up ${5} old sessions`)
+          }
+        } catch (cleanupError) {
+          console.error('Failed to cleanup old sessions:', cleanupError)
+        }
+      }
+    }
   }
 }
 
@@ -234,6 +304,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   const [uploadingFiles, setUploadingFiles] = useState(false)
   const [filesJustUploaded, setFilesJustUploaded] = useState(false)
   const [expandedMetrics, setExpandedMetrics] = useState<Record<number, boolean>>({})
+  const [expandedBrainView, setExpandedBrainView] = useState<Record<number, boolean>>({})
   const [metricsSettings, setMetricsSettings] = useState<MetricsSettings>({
     enableEvaluation: false,  // Default - will be loaded from localStorage if available
     showPerformanceMetrics: true,
@@ -424,6 +495,11 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
         localStorage.setItem('globalDefaultModel', selectedModel)
         console.log(`💾 Saved global default model:`, selectedModel)
       }
+
+      // ALWAYS save to globalSelectedModel for cross-component access
+      // This allows SmartExtractor, SmartTemplateMapper, etc. to access the selected model
+      localStorage.setItem('globalSelectedModel', selectedModel)
+      console.log(`💾 Saved globalSelectedModel for all components:`, selectedModel)
     }
   }, [selectedModel, isHydrated])  // 🐛 FIX: Removed selectedProjectId and projectId from dependencies
 
@@ -435,6 +511,14 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   // Toggle metrics expansion for a specific message
   const toggleMetricsExpansion = (index: number) => {
     setExpandedMetrics(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }))
+  }
+
+  // Toggle Brain View expansion for a specific message
+  const toggleBrainViewExpansion = (index: number) => {
+    setExpandedBrainView(prev => ({
       ...prev,
       [index]: !prev[index]
     }))
@@ -481,16 +565,58 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   // Use ref to track last saved session to prevent cross-contamination
   const lastSavedSessionRef = useRef<string | null>(null)
 
+  // 🆕 MEMORY OPTIMIZATION: Debounced save to reduce localStorage writes
   useEffect(() => {
     if (isHydrated && sessionId && messages.length > 0) {
       // Only save if we're saving to the same session we loaded from
       if (!lastSavedSessionRef.current || lastSavedSessionRef.current === sessionId) {
-        saveMessages(sessionId, messages)
-        lastSavedSessionRef.current = sessionId
-        console.log(`💾 Saved ${messages.length} messages for session ${sessionId}`)
+        // Debounce: Wait 1 second after last message before saving
+        const timeoutId = setTimeout(() => {
+          saveMessages(sessionId, messages)
+          lastSavedSessionRef.current = sessionId
+          console.log(`💾 Debounced save: ${messages.length} messages for session ${sessionId}`)
+        }, 1000)
+
+        // Cleanup: Cancel previous timeout if messages change again
+        return () => clearTimeout(timeoutId)
       }
     }
   }, [messages, sessionId, isHydrated])
+
+  // 🆕 MEMORY OPTIMIZATION: Memory usage monitoring (development only)
+  useEffect(() => {
+    if (typeof window === 'undefined' || process.env.NODE_ENV !== 'development') return
+
+    const checkMemory = () => {
+      // Chrome-specific memory API
+      if ('memory' in performance) {
+        const memory = (performance as any).memory
+        const usedMB = (memory.usedJSHeapSize / 1024 / 1024).toFixed(2)
+        const totalMB = (memory.totalJSHeapSize / 1024 / 1024).toFixed(2)
+        const limitMB = (memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2)
+
+        console.log(`💾 Memory Usage: ${usedMB} MB / ${totalMB} MB (Limit: ${limitMB} MB)`)
+        console.log(`   Messages in memory: ${messages.length}`)
+        console.log(`   localStorage keys: ${Object.keys(localStorage).filter(k => k.startsWith('chat_messages_')).length}`)
+
+        // Warn if memory usage is high
+        if (memory.usedJSHeapSize / memory.jsHeapSizeLimit > 0.9) {
+          console.warn('⚠️  Memory usage is high (>90%)! Consider clearing old sessions.')
+        }
+      }
+    }
+
+    // Check memory every 30 seconds in development
+    const interval = setInterval(checkMemory, 30000)
+
+    // Initial check after 5 seconds
+    const initialTimeout = setTimeout(checkMemory, 5000)
+
+    return () => {
+      clearInterval(interval)
+      clearTimeout(initialTimeout)
+    }
+  }, [messages.length])
 
   // Listen for new chat event from parent
   useEffect(() => {
@@ -1043,7 +1169,9 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
         // 🆕 Capture RAG settings used for this query
         rag_settings: response.data.rag_settings,
         // 🆕 Capture tool usage tracking
-        tools_used: response.data.tools_used
+        tools_used: response.data.tools_used,
+        // 🧠 Capture debug context for inline Brain View
+        debug_context: response.data.debug_context
       }
 
       // 🧠 Update Brain View with debug context (if enabled and present)
@@ -1478,6 +1606,110 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                         </div>
                       )}
 
+
+              {/* 🧠 Brain View - Inline Debug Context (No Component Import Issues) */}
+              {message.role === 'assistant' && message.debug_context && (
+                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <button
+                    onClick={() => toggleBrainViewExpansion(index)}
+                    className="flex items-center gap-2 text-xs font-medium text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 transition-colors w-full"
+                  >
+                    {expandedBrainView[index] ? (
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    )}
+                    <span className="flex items-center gap-1.5">
+                      🧠 {expandedBrainView[index] ? 'Hide' : 'Show'} Brain View
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30">
+                        Debug Info
+                      </span>
+                    </span>
+                  </button>
+
+                  {expandedBrainView[index] && (
+                    <div className="mt-3 space-y-3 text-xs">
+                      {/* Routing Decision */}
+                      {message.debug_context.routing_decision && (
+                        <div className="bg-blue-50 dark:bg-blue-950/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                          <p className="font-semibold text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
+                            🎯 Routing Decision
+                          </p>
+                          <div className="space-y-1 text-blue-800 dark:text-blue-200">
+                            <div><strong>Strategy:</strong> {message.debug_context.routing_decision.strategy}</div>
+                            <div><strong>Reason:</strong> {message.debug_context.routing_decision.reason}</div>
+                            <div><strong>Confidence:</strong> {(message.debug_context.routing_decision.classification_confidence * 100).toFixed(0)}%</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Conversation History */}
+                      {message.debug_context.conversation_history && (
+                        <div className="bg-green-50 dark:bg-green-950/20 p-3 rounded-lg border border-green-200 dark:border-green-800">
+                          <p className="font-semibold text-green-900 dark:text-green-100 mb-2 flex items-center gap-2">
+                            💬 Conversation History
+                          </p>
+                          <div className="space-y-1 text-green-800 dark:text-green-200">
+                            <div><strong>Messages Used:</strong> {message.debug_context.conversation_history.messages_used}</div>
+                            <div className="text-[10px]">{message.debug_context.conversation_history.note}</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Tools Executed */}
+                      {message.debug_context.tools_executed && (
+                        <div className="bg-indigo-50 dark:bg-indigo-950/20 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                          <p className="font-semibold text-indigo-900 dark:text-indigo-100 mb-2 flex items-center gap-2">
+                            🔧 Tools Executed
+                          </p>
+                          <div className="space-y-2">
+                            {message.debug_context.tools_executed.query_time_tools?.map((tool: any, idx: number) => (
+                              <div key={idx} className="text-indigo-800 dark:text-indigo-200 flex justify-between">
+                                <span>{tool.tool_name}</span>
+                                <span className="text-[10px]">{tool.latency_ms?.toFixed(0) || 0}ms</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Documents Retrieved */}
+                      {message.debug_context.documents_retrieved && (
+                        <div className="bg-amber-50 dark:bg-amber-950/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800">
+                          <p className="font-semibold text-amber-900 dark:text-amber-100 mb-2 flex items-center gap-2">
+                            📄 Documents Retrieved
+                          </p>
+                          <div className="text-amber-800 dark:text-amber-200">
+                            <div><strong>Total Chunks:</strong> {message.debug_context.documents_retrieved.total_chunks}</div>
+                            {message.debug_context.documents_retrieved.chunks?.slice(0, 3).map((chunk: any, idx: number) => (
+                              <div key={idx} className="text-[10px] mt-1">
+                                {chunk.filename} (score: {chunk.similarity_score?.toFixed(3)})
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Performance Metrics */}
+                      {message.debug_context.performance_metrics && (
+                        <div className="bg-purple-50 dark:bg-purple-950/20 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
+                          <p className="font-semibold text-purple-900 dark:text-purple-100 mb-2 flex items-center gap-2">
+                            ⚡ Performance
+                          </p>
+                          <div className="space-y-1 text-purple-800 dark:text-purple-200">
+                            <div><strong>Total Latency:</strong> {message.debug_context.performance_metrics.total_latency_ms?.toFixed(0) || 0}ms</div>
+                            <div><strong>LLM Time:</strong> {message.debug_context.performance_metrics.breakdown?.llm_generation?.toFixed(0) || 0}ms</div>
+                            <div><strong>Model:</strong> {message.debug_context.performance_metrics.model_used}</div>
+                            {message.debug_context.performance_metrics.tokens_used > 0 && (
+                              <div><strong>Tokens:</strong> {message.debug_context.performance_metrics.tokens_used}</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
                       {/* Sources */}
                       {message.sources && message.sources.length > 0 && (
                         <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
@@ -1738,18 +1970,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
         </div>
       )}
 
-      {/* 🧠 Brain View - Debug Context Inspector */}
-      <BrainView
-        debugContext={currentDebugContext}
-        isOpen={brainViewOpen}
-        onToggle={() => {
-          const newState = !brainViewOpen
-          setBrainViewOpen(newState)
-          // 🆕 FIX: Persist Brain View open/closed state to localStorage
-          localStorage.setItem('brainViewOpen', String(newState))
-          console.log('🧠 Brain View toggled:', newState ? 'OPEN' : 'CLOSED')
-        }}
-      />
+      {/* 🧠 Brain View - Now inline with each message (removed global component to avoid caching issues) */}
     </div>
   )
 }

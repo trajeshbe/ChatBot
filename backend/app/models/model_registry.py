@@ -329,6 +329,22 @@ class ModelRegistry:
             recommended=True
         ))
 
+        # 🔍 Qwen 2.5 VL - Vision-Language model (user requested auto-registration)
+        self.register(ModelInfo(
+            id="qwen2.5vl:latest",
+            name="Qwen 2.5 VL (Ollama Vision) 🔍",
+            provider=ModelProvider.OLLAMA,
+            model_type=ModelType.LOCAL_CPU,  # Ollama handles GPU internally
+            model_path="qwen2.5vl:latest",
+            context_length=32768,
+            cost_per_1k_tokens=0.0,
+            requires_gpu=False,  # Ollama manages GPU
+            min_gpu_memory_gb=0,
+            description="🔍 Qwen 2.5 Vision-Language model. Multimodal (vision + text). Analyzes images, diagrams, construction drawings, and architectural documents. ~5.9GB. Alternative to llama3.2-vision:11b with potentially better memory efficiency.",
+            available=True,
+            recommended=True
+        ))
+
         self.register(ModelInfo(
             id="qwen2.5:1.5b",
             name="Qwen 2.5 1.5B (Ollama)",
