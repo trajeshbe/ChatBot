@@ -958,11 +958,15 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
         formData.append('file', file)
         formData.append('session_id', sessionId) // 🎯 Pass session ID!
 
-        // 🔧 FIX: Always send project_id, default to Global if not specified
+        // 🔧 FIX: Only send project_id if we have a valid value (not empty string)
         const globalProject = availableProjects.find(p => p.name.toLowerCase() === 'global')
-        const activeProjectId = selectedProjectId || projectId || globalProject?.id || ''
-        formData.append('project_id', activeProjectId) // 🎯 Always pass project ID!
-        console.log(`📤 Uploading file with project_id: ${activeProjectId || '(empty - will use Global)'}`)
+        const activeProjectId = selectedProjectId || projectId || globalProject?.id || null
+        if (activeProjectId) {
+          formData.append('project_id', activeProjectId) // 🎯 Pass project ID if available!
+          console.log(`📤 Uploading file with project_id: ${activeProjectId}`)
+        } else {
+          console.log(`📤 Uploading file without project_id - backend will use session's project or Global`)
+        }
 
 
         const token = localStorage.getItem('access_token')
@@ -1078,11 +1082,15 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       formData.append('query', input)
       formData.append('session_id', sessionId) // 🎯 Pass session ID!
 
-      // 🔧 FIX: Always send project_id, default to Global if not specified
+      // 🔧 FIX: Only send project_id if we have a valid value (not empty string)
       const globalProject = availableProjects.find(p => p.name.toLowerCase() === 'global')
-      const activeProjectId = selectedProjectId || projectId || globalProject?.id || ''
-      formData.append('project_id', activeProjectId) // 🎯 Always pass project ID!
-      console.log(`📤 Querying with project_id: ${activeProjectId || '(empty - will use Global)'}`)
+      const activeProjectId = selectedProjectId || projectId || globalProject?.id || null
+      if (activeProjectId) {
+        formData.append('project_id', activeProjectId) // 🎯 Pass project ID if available!
+        console.log(`📤 Querying with project_id: ${activeProjectId}`)
+      } else {
+        console.log(`📤 Querying without project_id - backend will use session's project or Global`)
+      }
 
       formData.append('use_cache', 'true')
 

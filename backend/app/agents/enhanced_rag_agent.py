@@ -254,10 +254,10 @@ class EnhancedRAGAgent(RAGAgent):
                 # Fall through to balanced routing (line 316) which will use TaskRouter
                 # TaskRouter already has vision fallback chains!
                 pass  # Continue to balanced routing
-            elif rag_short_term_weight > 0.8 or rag_long_term_weight > 0.8:
+            elif rag_short_term_weight > 0.8 or rag_long_term_weight > 0.8 or rag_hybrid_weight > 0.8:
                 # Not a visual query - proceed with FORCE_RAG
                 logger.info("📌 ROUTING: FORCE_RAG (document search required per user's strategy_weights)")
-                logger.info(f"   Reason: rag_short_term={rag_short_term_weight:.2f} or rag_long_term={rag_long_term_weight:.2f} > 0.8")
+                logger.info(f"   Reason: rag_short_term={rag_short_term_weight:.2f} or rag_long_term={rag_long_term_weight:.2f} or rag_hybrid={rag_hybrid_weight:.2f} > 0.8")
 
                 # Force RAG tool selection - include db and model_id from user_preferences
                 tool_params_rag = {
@@ -284,16 +284,16 @@ class EnhancedRAGAgent(RAGAgent):
                 # Add routing metadata
                 result['metadata'] = result.get('metadata', {})
                 result['metadata']['routing_strategy'] = 'force_rag'
-                result['metadata']['routing_reason'] = f'User set rag_short_term={rag_short_term_weight:.2f}, rag_long_term={rag_long_term_weight:.2f}'
+                result['metadata']['routing_reason'] = f'User set rag_short_term={rag_short_term_weight:.2f}, rag_long_term={rag_long_term_weight:.2f}, rag_hybrid={rag_hybrid_weight:.2f} (one > 0.8)'
                 result['metadata']['strategy_weights'] = strategy_weights
 
                 return result
         except Exception as e:
             logger.warning(f"⚠️  Visual detection failed: {e}, continuing with normal routing")
             # If visual detection fails, check FORCE_RAG as before
-            if rag_short_term_weight > 0.8 or rag_long_term_weight > 0.8:
+            if rag_short_term_weight > 0.8 or rag_long_term_weight > 0.8 or rag_hybrid_weight > 0.8:
                 logger.info("📌 ROUTING: FORCE_RAG (document search required per user's strategy_weights)")
-                logger.info(f"   Reason: rag_short_term={rag_short_term_weight:.2f} or rag_long_term={rag_long_term_weight:.2f} > 0.8")
+                logger.info(f"   Reason: rag_short_term={rag_short_term_weight:.2f} or rag_long_term={rag_long_term_weight:.2f} or rag_hybrid={rag_hybrid_weight:.2f} > 0.8")
 
                 # Force RAG tool selection - include db and model_id from user_preferences
                 tool_params_rag = {
@@ -320,7 +320,7 @@ class EnhancedRAGAgent(RAGAgent):
                 # Add routing metadata
                 result['metadata'] = result.get('metadata', {})
                 result['metadata']['routing_strategy'] = 'force_rag'
-                result['metadata']['routing_reason'] = f'User set rag_short_term={rag_short_term_weight:.2f}, rag_long_term={rag_long_term_weight:.2f}'
+                result['metadata']['routing_reason'] = f'User set rag_short_term={rag_short_term_weight:.2f}, rag_long_term={rag_long_term_weight:.2f}, rag_hybrid={rag_hybrid_weight:.2f} (one > 0.8)'
                 result['metadata']['strategy_weights'] = strategy_weights
 
                 return result
@@ -1682,6 +1682,7 @@ Context:
                 "sources": [],  # No sources since we skipped retrieval
                 "num_sources": 0,
                 "model": model_id or result.get("model", "default"),
+                "model_name": result.get("model_name", model_id or "default"),  # 🐛 FIX: Add model_name from llm_service response
                 "metadata": {
                     "routing_strategy": "conversation_only" if conversation_context else "direct_llm",
                     "routing_reason": (

@@ -57,7 +57,8 @@ class AgentSandboxManager:
         agent_type: str = "local_mini",
         context: Dict[str, Any] = None,
         max_iterations: int = 20,
-        uploaded_files: list = None
+        uploaded_files: list = None,
+        model_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Execute task in sandbox container
@@ -70,6 +71,7 @@ class AgentSandboxManager:
             context: Additional context (uploaded files, etc.)
             max_iterations: Max iterations for agentic loop
             uploaded_files: List of uploaded files to mount
+            model_id: LLM model to use (from UI selection)
 
         Returns:
             Task execution result with artifacts
@@ -120,11 +122,33 @@ class AgentSandboxManager:
         # Add LLM credentials based on agent type
         if agent_type == "local_mini":
             env_vars["OLLAMA_BASE_URL"] = "http://rag-ollama:11434"
-            env_vars["AGENT_CODE_MODEL"] = "qwen2.5-coder:7b"
-            env_vars["AGENT_VISION_MODEL"] = "llama3.2-vision:11b"
+
+            # Use UI-selected model for code generation, fallback to default if None
+            code_model = model_id or "qwen2.5-coder:7b"
+            vision_model = "llama3.2-vision:11b"  # Keep default for vision-specific tasks
+
+            # If UI model supports vision, use it for vision tasks too
+            vision_capable_models = ['vision', 'qwen2.5vl', 'gpt-4o', 'gpt-4-vision', 'claude-3']
+            if model_id and any(vm in model_id.lower() for vm in vision_capable_models):
+                vision_model = model_id
+                logger.info(f"✅ Using UI-selected vision model for code generation: {vision_model}")
+
+            env_vars["AGENT_CODE_MODEL"] = code_model
+            env_vars["AGENT_VISION_MODEL"] = vision_model
+
+            logger.info(f"🎯 Agent sandbox using code model: {code_model}")
+            logger.info(f"🎯 Agent sandbox using vision model: {vision_model}")
+
         elif agent_type == "claude_cli":
             import os
             env_vars["ANTHROPIC_API_KEY"] = os.getenv("ANTHROPIC_API_KEY", "")
+
+            # Pass model_id for Claude agents too
+            if model_id:
+                env_vars["AGENT_MODEL_ID"] = model_id
+                logger.info(f"🎯 Claude CLI agent using model: {model_id}")
+            else:
+                env_vars["AGENT_MODEL_ID"] = "claude-sonnet-4.5"  # Default
 
         # Launch container
         container = None

@@ -23,8 +23,9 @@ class VisionService:
 
     def __init__(self, ollama_base_url: str = "http://ollama:11434"):
         self.ollama_base_url = ollama_base_url
-        self.vision_model = "llama3.2-vision:11b"
-        self.timeout = 120.0  # Vision processing can take longer
+        # 🆕 FIXED: Changed default to smaller model that fits in memory (6.0 GB vs 7.8 GB)
+        self.vision_model = "qwen2.5vl:latest"
+        self.timeout = 300.0  # 🆕 INCREASED: Vision processing can take 2-3 minutes for complex images
 
     async def process_image(
         self,
@@ -61,28 +62,54 @@ class VisionService:
                     "If the text is handwritten, do your best to decipher it accurately."
                 )
 
-            # Try UI-selected model first (OpenAI/Anthropic) if provided
-            if model_id and ("gpt" in model_id.lower() or "claude" in model_id.lower()):
-                try:
-                    logger.info(f"🎯 Attempting vision analysis with UI-selected model: {model_id}")
-                    response = await self._call_api_vision(model_id, image_data, prompt)
+            # Try UI-selected model first if provided
+            if model_id:
+                # Handle OpenAI/Anthropic API models
+                if "gpt" in model_id.lower() or "claude" in model_id.lower():
+                    try:
+                        logger.info(f"🎯 Attempting vision analysis with UI-selected API model: {model_id}")
+                        response = await self._call_api_vision(model_id, image_data, prompt)
 
-                    if response.get("success"):
-                        logger.info(f"✅ Vision analysis succeeded with {model_id}")
-                        return response
+                        if response.get("success"):
+                            logger.info(f"✅ Vision analysis succeeded with {model_id}")
+                            return response
 
-                except Exception as e:
-                    logger.warning(f"⚠️ API vision model {model_id} failed: {e}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ API vision model {model_id} failed: {e}")
 
-                    if not allow_fallback:
-                        raise
+                        if not allow_fallback:
+                            raise
 
-                    logger.info(f"🔄 Falling back to Ollama vision models...")
+                        logger.info(f"🔄 Falling back to Ollama vision models...")
 
-            # Fallback to Ollama vision API (or primary if no model_id provided)
-            # 🆕 CRITICAL FIX: Pass allow_fallback to enable memory-aware model selection
+                # Handle Ollama models (use UI-selected model directly)
+                else:
+                    logger.info(f"🎯 Using UI-selected Ollama vision model: {model_id}")
+                    response = await self._call_ollama_vision(
+                        model=model_id,  # Use UI-selected model
+                        prompt=prompt,
+                        image_data=image_data,
+                        allow_fallback=allow_fallback
+                    )
+
+                    extracted_text = response.get("response", "")
+
+                    return {
+                        "text": extracted_text,
+                        "model": response.get("model_used", model_id),
+                        "method": "vision_language_model",
+                        "success": True,
+                        "metadata": {
+                            "prompt_tokens": response.get("prompt_eval_count", 0),
+                            "response_tokens": response.get("eval_count", 0),
+                            "total_duration_ms": response.get("total_duration", 0) / 1_000_000,
+                            "fallback_occurred": response.get("fallback_occurred", False)
+                        }
+                    }
+
+            # Fallback to default Ollama vision model if no model_id provided
             response = await self._call_ollama_vision(
-                model=self.vision_model,
+                model=self.vision_model,  # Use default only if no UI selection
                 prompt=prompt,
                 image_data=image_data,
                 allow_fallback=allow_fallback
@@ -245,8 +272,13 @@ class VisionService:
                         f"   Attempting fallback to smaller model..."
                     )
 
-                    # Fallback chain for vision models
-                    fallback_models = ["llama3.2-vision:3b", "qwen2.5:1.5b"]
+                    # Fallback chain for vision models (ONLY vision-capable models)
+                    # 🆕 FIXED: Removed text-only model from fallback chain
+                    fallback_models = [
+                        "llama3.2-vision:3b",   # Smaller vision model (if available)
+                        "qwen2.5vl:7b",          # Alternative vision model
+                        "qwen2.5vl:latest"       # Our default vision model
+                    ]
 
                     for fallback_model in fallback_models:
                         try:

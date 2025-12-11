@@ -129,6 +129,7 @@ services:
     environment:
       OLLAMA_HOST: http://ollama:11434
       AGENT_LLM_MODEL: qwen2.5-coder:7b
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       POSTGRES_SERVER: postgres
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -336,6 +337,13 @@ services:
       - prefect-server
       - tempo
       - ollama  # Local LLM with better WSL2 support
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     networks:
       - rag-network
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000

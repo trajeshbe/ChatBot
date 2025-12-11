@@ -132,6 +132,10 @@ class AgentOrchestrationService:
                 import base64
                 task_description_b64 = base64.b64encode(task.task_description.encode('utf-8')).decode('utf-8')
 
+                # Get OpenAI API key from environment if available
+                import os
+                openai_api_key = os.getenv('OPENAI_API_KEY', '')
+
                 docker_command = [
                     "docker", "exec",
                     "-e", f"TASK_B64={task_description_b64}",
@@ -140,6 +144,7 @@ class AgentOrchestrationService:
                     "-e", f"AGENT_LLM_MODEL={task.model}",
                     "-e", f"AGENT_MAX_ITERATIONS={task.max_iterations}",
                     "-e", f"AGENT_TIMEOUT_SECONDS={task.timeout_seconds}",
+                    "-e", f"OPENAI_API_KEY={openai_api_key}",  # Pass OpenAI API key
                     "rag-agent-runtime",  # Container name from docker-compose
                     "python", "/app/entrypoint_agent.py"
                 ]
@@ -243,77 +248,153 @@ class AgentOrchestrationService:
         if task.started_at:
             task.duration_seconds = (task.completed_at - task.started_at).total_seconds()
 
-        # Determine success/failure based on return code
-        if return_code == 0:
-            task.status = TaskStatus.COMPLETED
+        # IMPORTANT: Agent writes to stderr (Python logging default), so parse BOTH stdout and stderr
+        combined_output = stdout + "\n" + stderr
 
-            # IMPORTANT: Agent writes to stderr (Python logging default), so parse BOTH stdout and stderr
-            combined_output = stdout + "\n" + stderr
+        # NEW: Try to parse JSON result from stdout first (preferred method)
+        agent_result = None
+        if "AGENT_RESULT_JSON_START" in stdout and "AGENT_RESULT_JSON_END" in stdout:
+            try:
+                # Extract JSON between markers
+                start_marker = "AGENT_RESULT_JSON_START"
+                end_marker = "AGENT_RESULT_JSON_END"
+                start_idx = stdout.find(start_marker) + len(start_marker)
+                end_idx = stdout.find(end_marker)
+                json_str = stdout[start_idx:end_idx].strip()
 
-            # Parse output for results
-            # Look for completion markers in order of preference:
-            # 1. "✅ Task completed" with result
-            # 2. Last tool execution result
-            # 3. Success message with iteration count
-            task.result = "Task completed successfully"
+                # Parse JSON
+                agent_result = json.loads(json_str)
+                logger.info(f"✅ Successfully parsed agent result JSON from stdout")
 
-            if "✅ Task completed" in combined_output:
-                # Extract result after completion marker
-                lines = combined_output.split('\n')
-                for i, line in enumerate(lines):
-                    if '✅ Task completed' in line and i + 1 < len(lines):
-                        # Get next non-empty line as result
-                        for j in range(i + 1, len(lines)):
-                            if lines[j].strip() and not lines[j].strip().startswith('2025-'):
-                                task.result = lines[j].strip()
-                                break
-                        break
-            elif "📊 Iterations:" in combined_output:
-                # Agent completed all iterations - extract summary
-                iteration_count = combined_output.count('📍 Iteration')
-                tool_calls = combined_output.count('TOOL_CALL:')
-                task.result = f"Agent completed {iteration_count} iterations with {tool_calls} tool calls"
+                # Update task from parsed result
+                task.status = TaskStatus.COMPLETED if agent_result.get("success") else TaskStatus.FAILED
+                task.result = agent_result.get("final_answer", "Task completed")
+                task.llm_calls = agent_result.get("iterations", 0)
 
-            # Extract artifacts (look for artifact paths in output)
-            artifacts = []
-            for line in combined_output.split('\n'):
-                if '/artifacts/' in line or '/workspace/' in line:
-                    # Simple extraction - can be enhanced
-                    if '.txt' in line or '.csv' in line or '.png' in line:
-                        artifacts.append(line.strip())
+                # Extract artifacts from JSON result (primary source)
+                artifacts = []
+                if "artifacts" in agent_result and agent_result["artifacts"]:
+                    # Artifacts are provided as list of dicts with 'path' key
+                    for artifact in agent_result["artifacts"]:
+                        if isinstance(artifact, dict):
+                            path = artifact.get("path", "")
+                        else:
+                            path = str(artifact)
+                        if path:
+                            # Convert relative path to absolute workspace path
+                            if not path.startswith("/workspace/"):
+                                path = f"/workspace/{path}"
+                            artifacts.append(path)
+                    logger.info(f"📎 Extracted {len(artifacts)} artifacts from JSON result")
 
-            if artifacts:
-                task.artifacts = artifacts
+                # Fallback: Extract from conversation history if not in result
+                if not artifacts:
+                    for msg in agent_result.get("conversation_history", []):
+                        content = msg.get("content", "")
+                        if "/workspace/artifacts/" in content:
+                            # Extract file paths
+                            import re
+                            matches = re.findall(r'/workspace/artifacts/[\w\-\.]+', content)
+                            artifacts.extend(matches)
+                    if artifacts:
+                        logger.info(f"📎 Extracted {len(artifacts)} artifacts from conversation history")
 
-            # Extract tools used (look for TOOL_CALL mentions)
-            tools = []
-            for line in combined_output.split('\n'):
-                if 'TOOL_CALL:' in line or 'Executing tool:' in line:
-                    parts = line.split(':')
-                    if len(parts) > 1:
-                        tool_name = parts[1].strip()
-                        if tool_name not in tools:
+                if artifacts:
+                    task.artifacts = list(set(artifacts))  # Remove duplicates
+
+                # Extract tools used from conversation history
+                tools = []
+                for msg in agent_result.get("conversation_history", []):
+                    content = msg.get("content", "")
+                    if content.startswith("TOOL_CALL:"):
+                        tool_name = content.split("\n")[0].replace("TOOL_CALL:", "").strip()
+                        if tool_name and tool_name not in tools:
                             tools.append(tool_name)
+                if tools:
+                    task.tools_used = tools
 
-            if tools:
-                task.tools_used = tools
+                # Store conversation_history in meta_info for UI access (code viewer)
+                conversation_history = agent_result.get("conversation_history", [])
+                if conversation_history:
+                    task.meta_info = task.meta_info or {}
+                    task.meta_info["conversation_history"] = conversation_history
+                    logger.info(f"💾 Stored conversation_history ({len(conversation_history)} messages) in meta_info")
 
-            # Count LLM calls
-            llm_calls = combined_output.count('Calling LLM') or combined_output.count('🤖')
-            if llm_calls > 0:
-                task.llm_calls = llm_calls
+                logger.info(f"✅ Task {task_id} completed with parsed JSON result")
 
-            logger.info(f"✅ Task {task_id} completed successfully")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to parse agent result JSON: {e}, falling back to log parsing")
+                agent_result = None
 
-        else:
-            task.status = TaskStatus.FAILED
-            task.error = f"Task failed with return code {return_code}"
+        # FALLBACK: If JSON parsing failed or not available, use legacy log parsing
+        if agent_result is None:
+            # Determine success/failure based on return code
+            if return_code == 0:
+                task.status = TaskStatus.COMPLETED
 
-            # Capture error details from stderr
-            if stderr:
-                task.error_details = {"stderr": stderr[:1000]}  # Limit size
+                # Parse output for results
+                # Look for completion markers in order of preference:
+                # 1. "✅ Task completed" with result
+                # 2. Last tool execution result
+                # 3. Success message with iteration count
+                task.result = "Task completed successfully"
 
-            logger.error(f"❌ Task {task_id} failed with return code {return_code}")
+                if "✅ Task completed" in combined_output:
+                    # Extract result after completion marker
+                    lines = combined_output.split('\n')
+                    for i, line in enumerate(lines):
+                        if '✅ Task completed' in line and i + 1 < len(lines):
+                            # Get next non-empty line as result
+                            for j in range(i + 1, len(lines)):
+                                if lines[j].strip() and not lines[j].strip().startswith('2025-'):
+                                    task.result = lines[j].strip()
+                                    break
+                            break
+                elif "📊 Iterations:" in combined_output:
+                    # Agent completed all iterations - extract summary
+                    iteration_count = combined_output.count('📍 Iteration')
+                    tool_calls = combined_output.count('TOOL_CALL:')
+                    task.result = f"Agent completed {iteration_count} iterations with {tool_calls} tool calls"
+
+                # Extract artifacts (look for artifact paths in output)
+                artifacts = []
+                for line in combined_output.split('\n'):
+                    if '/artifacts/' in line or '/workspace/' in line:
+                        # Simple extraction - can be enhanced
+                        if '.txt' in line or '.csv' in line or '.png' in line or '.html' in line:
+                            artifacts.append(line.strip())
+
+                if artifacts:
+                    task.artifacts = artifacts
+
+                # Extract tools used (look for TOOL_CALL mentions)
+                tools = []
+                for line in combined_output.split('\n'):
+                    if 'TOOL_CALL:' in line or 'Executing tool:' in line:
+                        parts = line.split(':')
+                        if len(parts) > 1:
+                            tool_name = parts[1].strip()
+                            if tool_name and tool_name not in tools:
+                                tools.append(tool_name)
+
+                if tools:
+                    task.tools_used = tools
+
+                # Count LLM calls
+                llm_calls = combined_output.count('Calling LLM') or combined_output.count('🤖')
+                if llm_calls > 0:
+                    task.llm_calls = llm_calls
+
+                logger.info(f"✅ Task {task_id} completed successfully (legacy parsing)")
+            else:
+                task.status = TaskStatus.FAILED
+                task.error = f"Task failed with return code {return_code}"
+
+                # Capture error details from stderr
+                if stderr:
+                    task.error_details = {"stderr": stderr[:1000]}  # Limit size
+
+                logger.error(f"❌ Task {task_id} failed with return code {return_code}")
 
         await db.commit()
 

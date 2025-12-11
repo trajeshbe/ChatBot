@@ -64,7 +64,20 @@ export default function ProjectSelector({
       setProjects(response.data)
     } catch (err: any) {
       console.error('Error loading projects:', err)
-      setError('Failed to load projects')
+
+      // If authentication error, try to load without auth (public projects)
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        try {
+          // Try public endpoint or just set empty with helpful message
+          console.log('📂 Authentication required for projects. Using session mode.')
+          setProjects([])
+          setError(null)  // Don't show error, just use session mode
+        } catch {
+          setError('Login required for project access')
+        }
+      } else {
+        setError('Failed to load projects')
+      }
     } finally {
       setLoading(false)
     }

@@ -8,6 +8,8 @@ from typing import Optional, List
 import uvicorn
 import uuid
 import time
+import re  # 🆕 For URL detection
+import json  # Already imported below but moving here for clarity
 
 from app.core.config import settings
 from app.core.database import init_db, close_db, get_db
@@ -721,6 +723,88 @@ async def query_endpoint(
                 logger.info(f"   📊 Total config groups: {len(unified_config_dict)}")
             except json.JSONDecodeError as e:
                 logger.warning(f"⚠️ Failed to parse unified_config JSON: {e}")
+
+        # 🆕 URL DETECTION + UI SETTINGS OVERRIDE LAYER (BEFORE AGENT ROUTING)
+        # Extract navigation threshold from unified_config
+        tool_navigation_threshold = None
+        if unified_config_dict and 'strategy_weights' in unified_config_dict:
+            strategy_weights = unified_config_dict.get('strategy_weights', {})
+            tool_navigation_threshold = strategy_weights.get('tool_navigation')
+
+        # URL regex pattern (matches http:// and https:// with full paths, query strings, fragments)
+        # Captures: https://example.com/path/to/page?query=value#fragment
+        url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
+        detected_urls = re.findall(url_pattern, query)
+
+        # Check if we should force route to web scraper
+        if detected_urls and tool_navigation_threshold is not None and tool_navigation_threshold > 0.8:
+            logger.info(f"🔍 URL Detection: Found {len(detected_urls)} URL(s): {detected_urls}")
+            logger.info(f"🎚️ Navigation threshold from UI: {tool_navigation_threshold}")
+            logger.info(f"🌐 UI OVERRIDE: tool_navigation ({tool_navigation_threshold}) > 0.8 AND URL detected")
+            logger.info(f"   → Triggering web scraper BEFORE agent routing (UI settings override)")
+
+            try:
+                # Trigger web scraper for each URL
+                scrape_results = []
+                for url in detected_urls:
+                    logger.info(f"🔍 Scraping URL: {url}")
+                    scrape_result = await scraper_service.scrape_url(
+                        url=url,
+                        session_id=session_id,
+                        project_id=project_id,
+                        scrape_prompt=query,
+                        strategy="auto",
+                        db=db
+                    )
+                    scrape_results.append({
+                        'url': url,
+                        'status': 'success',
+                        'document_id': scrape_result.get('document_id'),
+                        'filename': scrape_result.get('filename'),
+                        'content': scrape_result.get('content', '')[:500] + '...' if scrape_result.get('content') else 'Processing...'
+                    })
+                    logger.info(f"✅ Successfully scraped: {url} → {scrape_result.get('filename')}")
+
+                # Build response
+                answer = f"✅ I successfully scraped {len(scrape_results)} URL(s) based on your tool_navigation threshold ({tool_navigation_threshold:.2f}):\n\n"
+                for result in scrape_results:
+                    answer += f"• {result['url']}\n  → Saved as: {result.get('filename', 'Unknown')}\n  → Preview: {result.get('content', 'No preview')}\n\n"
+
+                return {
+                    "answer": answer,
+                    "sources": [],
+                    "model": "url_detection_override",
+                    "num_sources": 0,
+                    "cached": False,
+                    "ui_override_triggered": True,
+                    "detected_urls": detected_urls,
+                    "tool_navigation_threshold": tool_navigation_threshold,
+                    "scrape_results": scrape_results
+                }
+
+            except Exception as scrape_error:
+                logger.error(f"❌ Web scraper failed: {scrape_error}")
+                logger.error(f"   Error type: {type(scrape_error).__name__}")
+                logger.error(f"   URL detection and override worked, but scraping execution failed")
+                logger.error(f"   Falling back to normal agent routing...")
+
+                # Return error message instead of falling through
+                return {
+                    "answer": f"⚠️ I detected your URL and tried to scrape it (your tool_navigation threshold is {tool_navigation_threshold:.2f}), but encountered an error:\n\n{str(scrape_error)}\n\nThe scraper was triggered correctly by your UI settings, but failed during execution. Please check the logs for details.",
+                    "sources": [],
+                    "model": "url_detection_override_error",
+                    "num_sources": 0,
+                    "cached": False,
+                    "ui_override_triggered": True,
+                    "scraper_error": str(scrape_error),
+                    "detected_urls": detected_urls,
+                    "tool_navigation_threshold": tool_navigation_threshold
+                }
+
+        elif detected_urls and tool_navigation_threshold is not None:
+            logger.info(f"🔍 URL detected but threshold ({tool_navigation_threshold}) <= 0.8, using normal agent routing")
+        elif detected_urls:
+            logger.info(f"🔍 URL detected but no tool_navigation threshold in unified_config, using normal agent routing")
 
         # 🆕 Parse enabled tools and selected agent
         enabled_tools_list = []

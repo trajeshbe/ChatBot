@@ -71,7 +71,7 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
 
   // Form state
   const [taskDescription, setTaskDescription] = useState('');
-  const [model, setModel] = useState('qwen2.5-coder:7b');
+  const [model, setModel] = useState('qwen2.5-coder:7b'); // Will be synced from main chat UI
   const [maxIterations, setMaxIterations] = useState(20);
   const [timeoutSeconds, setTimeoutSeconds] = useState(600);
 
@@ -83,7 +83,7 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  // Initialize session ID
+  // Initialize session ID and sync model from main chat UI
   useEffect(() => {
     const sid = getSessionId();
     setSessionId(sid);
@@ -94,6 +94,13 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
       if (savedProjectId) {
         setSelectedProjectId(savedProjectId);
         console.log('📁 [AgentTaskMonitor] Loaded project ID from localStorage:', savedProjectId);
+      }
+
+      // ✅ FIX: Sync model selection from main chat UI
+      const globalModel = localStorage.getItem('globalSelectedModel');
+      if (globalModel) {
+        setModel(globalModel);
+        console.log('🤖 [AgentTaskMonitor] Synced model from main chat UI:', globalModel);
       }
     }
   }, []);
@@ -254,14 +261,15 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
       {/* File Upload & Management Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 mb-2">
         {/* Upload New Files */}
-        <div className="bg-white dark:bg-slate-800 rounded shadow-sm p-2 border border-slate-200 dark:border-slate-700">
+        <div className="bg-white dark:bg-slate-800 rounded shadow-sm p-3 border border-slate-200 dark:border-slate-700">
           <h2 className="text-xs font-semibold mb-2 text-slate-700 dark:text-slate-300">📤 Upload Files</h2>
-          <div className="scale-90 origin-top">
+          <div className="scale-90 origin-top max-h-48 pb-2">
             <FileUpload
               currentUser={currentUser}
               sessionId={sessionId}
               projectId={selectedProjectId}  // ✅ Pass selected project from parent
               hideProjectSelector={true}  // ✅ Hide internal selector (we have one above)
+              compact={true}  // ✅ Use compact mode for better scaling
               onUploadComplete={() => {
                 // Refresh file list when upload completes
                 setFilesListKey(prev => prev + 1);
@@ -337,23 +345,18 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
 
         <div className="space-y-2">
           <textarea
-            rows={2}
+            rows={5}
             value={taskDescription}
             onChange={(e) => setTaskDescription(e.target.value)}
-            placeholder="Describe the task..."
-            className="w-full px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded focus:ring-1 focus:ring-[#6b9080] dark:focus:ring-[#85c4a6] bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+            placeholder="Describe the task in detail... Be specific about what you want the agent to do."
+            className="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded focus:ring-1 focus:ring-[#6b9080] dark:focus:ring-[#85c4a6] bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
           />
 
           <div className="grid grid-cols-3 gap-1">
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="w-full px-1 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-            >
-              <option value="qwen2.5-coder:7b">Qwen</option>
-              <option value="deepseek-coder:6.7b">DeepSeek</option>
-              <option value="mistral:latest">Mistral</option>
-            </select>
+            <div className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 truncate flex items-center">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 mr-1">🤖</span>
+              <span className="truncate">{model.split(':')[0] || model}</span>
+            </div>
             <input
               type="number"
               value={maxIterations}
@@ -540,10 +543,79 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
                 </div>
               )}
 
+              {/* Code Viewer - Extract Python code from conversation history */}
+              {selectedTask.meta_info?.conversation_history && (() => {
+                const codeBlocks: Array<{code: string; iteration: number}> = [];
+                const history = selectedTask.meta_info.conversation_history;
+
+                // Extract execute_python tool calls
+                history.forEach((msg: any, idx: number) => {
+                  if (msg.role === 'assistant' && msg.content?.startsWith('TOOL_CALL: execute_python')) {
+                    try {
+                      const argsMatch = msg.content.match(/ARGS: ({.*})/s);
+                      if (argsMatch) {
+                        const args = JSON.parse(argsMatch[1]);
+                        if (args.code) {
+                          codeBlocks.push({
+                            code: args.code,
+                            iteration: Math.floor(idx / 2) + 1
+                          });
+                        }
+                      }
+                    } catch (e) {
+                      console.error('Failed to parse code:', e);
+                    }
+                  }
+                });
+
+                if (codeBlocks.length > 0) {
+                  return (
+                    <div>
+                      <label className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                        💻 Executed Code ({codeBlocks.length})
+                      </label>
+                      <div className="mt-1 space-y-2">
+                        {codeBlocks.map((block, idx) => (
+                          <div key={idx} className="border border-slate-300 dark:border-slate-600 rounded overflow-hidden">
+                            <div className="flex items-center justify-between px-2 py-1 bg-slate-100 dark:bg-slate-700 border-b border-slate-300 dark:border-slate-600">
+                              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                                Iteration {block.iteration}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  const blob = new Blob([block.code], { type: 'text/plain' });
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = `code_iteration_${block.iteration}.py`;
+                                  a.click();
+                                  URL.revokeObjectURL(url);
+                                }}
+                                className="px-2 py-0.5 bg-[#6b9080] hover:bg-[#527566] dark:bg-[#85c4a6] dark:hover:bg-[#b3dbc7] text-white text-xs rounded flex items-center gap-1 transition-colors"
+                                title="Download code"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                .py
+                              </button>
+                            </div>
+                            <pre className="p-2 bg-slate-50 dark:bg-slate-900 text-xs overflow-x-auto">
+                              <code className="text-slate-800 dark:text-slate-200 font-mono">{block.code}</code>
+                            </pre>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               {selectedTask.artifacts && selectedTask.artifacts.length > 0 && (
                 <div>
                   <label className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                    Artifacts ({selectedTask.artifacts.length})
+                    📁 Artifacts ({selectedTask.artifacts.length})
                   </label>
                   <div className="mt-1 space-y-1">
                     {selectedTask.artifacts.map((artifact, idx) => {

@@ -32,6 +32,7 @@ interface FileUploadProps {
   projectId?: string  // ✅ Accept project ID from parent
   onUploadComplete?: () => void  // ✅ Callback after upload
   hideProjectSelector?: boolean  // ✅ Hide internal project selector when parent manages it
+  compact?: boolean  // ✅ Compact mode for scaled contexts (smaller icons, less padding)
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -54,7 +55,8 @@ export default function FileUpload({
   sessionId: externalSessionId,
   projectId: externalProjectId,
   onUploadComplete,
-  hideProjectSelector = false
+  hideProjectSelector = false,
+  compact = false
 }: FileUploadProps) {
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [sessionId, setSessionId] = useState<string>('')
@@ -274,26 +276,28 @@ export default function FileUpload({
         {/* Dropzone */}
         <div
           {...getRootProps()}
-          className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors ${
+          className={`border-2 border-dashed rounded-lg ${compact ? 'p-4' : 'p-12'} text-center cursor-pointer transition-colors ${
             isDragActive
               ? 'border-primary-600 bg-primary-50 dark:bg-blue-900/20'
               : 'border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-primary-500'
           }`}
         >
           <input {...getInputProps()} />
-          <Upload className="w-16 h-16 mx-auto text-slate-400 mb-4" />
+          <Upload className={`${compact ? 'w-8 h-8' : 'w-16 h-16'} mx-auto text-slate-400 ${compact ? 'mb-2' : 'mb-4'}`} />
           {isDragActive ? (
-            <p className="text-lg text-primary-600 dark:text-blue-400">
+            <p className={`${compact ? 'text-sm' : 'text-lg'} text-primary-600 dark:text-blue-400`}>
               Drop the files here...
             </p>
           ) : (
             <>
-              <p className="text-lg text-slate-700 dark:text-slate-300 mb-2">
+              <p className={`${compact ? 'text-sm' : 'text-lg'} text-slate-700 dark:text-slate-300 ${compact ? 'mb-1' : 'mb-2'}`}>
                 Drag & drop files here, or click to select files
               </p>
-              <p className="text-sm text-slate-500">
-                Documents will be processed with Docling and embedded into pgvector
-              </p>
+              {!compact && (
+                <p className="text-sm text-slate-500">
+                  Documents will be processed with Docling and embedded into pgvector
+                </p>
+              )}
             </>
           )}
         </div>

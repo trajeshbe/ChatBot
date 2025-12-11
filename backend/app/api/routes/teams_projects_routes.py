@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 
 from app.core.database import get_db
-from app.api.routes.auth import get_current_user
+from app.api.routes.auth import get_current_user, get_current_user_optional
 
 # Import models from correct modules
 try:
@@ -273,7 +273,7 @@ async def get_projects(
     department_id: Optional[str] = Query(None),
     team_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Get all projects accessible by current user.
@@ -282,19 +282,25 @@ async def get_projects(
     - Owner
     - Member
     - In same department (if role allows)
+
+    If no user is authenticated, returns all active projects (for agent tasks).
     """
     query = select(Project)
 
-    # Filter by user access (owner or member)
-    query = query.where(
-        or_(
-            Project.owner_id == current_user.id,
-            Project.id.in_(
-                select(ProjectMember.project_id)
-                .where(ProjectMember.user_id == current_user.id)
+    # Filter by user access (owner or member) - only if user is authenticated
+    if current_user:
+        query = query.where(
+            or_(
+                Project.owner_id == current_user.id,
+                Project.id.in_(
+                    select(ProjectMember.project_id)
+                    .where(ProjectMember.user_id == current_user.id)
+                )
             )
         )
-    )
+    else:
+        # If no user, only show active projects for agent tasks
+        query = query.where(Project.status == "active")
 
     # Apply filters
     if status:

@@ -673,6 +673,9 @@ class ToolRegistry:
         from app.services.rag_service import rag_service
         from app.core.database import AsyncSessionLocal
 
+        # 🎚️ Extract unified_config from kwargs to pass to RAG service
+        unified_config = kwargs.get('unified_config')
+
         # Use provided db session or create new one
         if db is None:
             async with AsyncSessionLocal() as db:
@@ -683,6 +686,7 @@ class ToolRegistry:
                     use_cache=True,
                     model_id=model_id,  # 🆕 Pass model_id for model selection
                     project_id=project_id,  # 🆕 Pass project_id for project-based filtering
+                    unified_config=unified_config,  # 🎚️ Pass unified_config for UI override logic
                     top_k=top_k,
                     similarity_threshold=similarity_threshold,
                     min_similarity_threshold=min_similarity_threshold,
@@ -700,6 +704,7 @@ class ToolRegistry:
                 use_cache=True,
                 model_id=model_id,  # 🆕 Pass model_id for model selection
                 project_id=project_id,  # 🆕 Pass project_id for project-based filtering
+                unified_config=unified_config,  # 🎚️ Pass unified_config for UI override logic
                 top_k=top_k,
                 similarity_threshold=similarity_threshold,
                 min_similarity_threshold=min_similarity_threshold,
@@ -1217,6 +1222,7 @@ class ToolRegistry:
         question: Optional[str] = None,
         query: Optional[str] = None,
         session_id: Optional[str] = None,
+        project_id: Optional[str] = None,
         db: Optional[Any] = None,
         **kwargs  # Accept all extra parameters from TaskRouter
     ) -> Dict[str, Any]:
@@ -1237,7 +1243,8 @@ class ToolRegistry:
             image_path: Path to specific image (optional)
             question: Question about the image (optional)
             query: Alternative to question (for TaskRouter compatibility)
-            session_id: Session ID to find documents (optional)
+            session_id: Session ID to find documents (optional, legacy)
+            project_id: Project ID to find documents (preferred)
             db: Database session (optional)
             **kwargs: Accept extra parameters from TaskRouter
         """
@@ -1245,64 +1252,112 @@ class ToolRegistry:
             from app.services.vision_service import get_vision_service
             import os
 
+            # Extract project_id from kwargs if not explicitly provided
+            if not project_id:
+                project_id = kwargs.get('project_id')
+
             # Map query to question if question not provided
             if not question and query:
                 question = query
 
-            # If no image_path provided, try to find documents with images in session
-            if not image_path and session_id and db:
-                logger.info(f"🔍 No image_path provided, searching for image/PDF documents in session {session_id}")
+            # If no image_path provided, try to find documents with images
+            # Priority: project_id (current) > session_id (legacy)
+            if not image_path and db and (project_id or session_id):
+                search_scope = f"project {project_id}" if project_id else f"session {session_id}"
+                logger.info(f"🔍 No image_path provided, searching for image/PDF documents in {search_scope}")
 
                 try:
                     from app.models.database import SessionDocument, Document
                     from sqlalchemy import select
                     from app.core.config import settings
+                    from uuid import UUID
 
-                    # Query for documents with visual content in session
+                    # Build query based on available scope (project-based is preferred)
+                    if project_id:
+                        # PROJECT-BASED: Search documents by project_id directly
+                        query_builder = select(Document).where(Document.project_id == UUID(project_id))
+                    else:
+                        # SESSION-BASED (legacy): Search via SessionDocument join
+                        query_builder = (
+                            select(Document)
+                            .join(SessionDocument, SessionDocument.document_id == Document.id)
+                            .where(SessionDocument.session_id == session_id)
+                        )
+
+                    # Add file type filters (same for both approaches)
                     # Includes: PDFs, images, Word docs (with diagrams), PowerPoint (with slides/charts)
                     # Note: file_type can be short form ('pdf') or MIME type ('application/pdf')
-                    result = await db.execute(
-                        select(Document)
-                        .join(SessionDocument, SessionDocument.document_id == Document.id)
-                        .where(SessionDocument.session_id == session_id)
-                        .where(
-                            # Short forms
-                            (Document.file_type.in_(['pdf', 'image', 'png', 'jpg', 'jpeg', 'docx', 'doc', 'pptx', 'ppt'])) |
-                            # MIME types and partial matches
-                            (Document.file_type.like('%pdf%')) |
-                            (Document.file_type.like('%image%')) |
-                            (Document.file_type.like('%png%')) |
-                            (Document.file_type.like('%jpg%')) |
-                            (Document.file_type.like('%jpeg%')) |
-                            (Document.file_type.like('%word%')) |          # application/msword, wordprocessing
-                            (Document.file_type.like('%docx%')) |
-                            (Document.file_type.like('%doc%')) |
-                            (Document.file_type.like('%powerpoint%')) |    # application/vnd.ms-powerpoint
-                            (Document.file_type.like('%presentation%')) |  # presentationml
-                            (Document.file_type.like('%pptx%')) |
-                            (Document.file_type.like('%ppt%'))
+                    query_builder = query_builder.where(
+                        # Short forms
+                        (Document.file_type.in_(['pdf', 'image', 'png', 'jpg', 'jpeg', 'docx', 'doc', 'pptx', 'ppt'])) |
+                        # MIME types and partial matches
+                        (Document.file_type.like('%pdf%')) |
+                        (Document.file_type.like('%image%')) |
+                        (Document.file_type.like('%png%')) |
+                        (Document.file_type.like('%jpg%')) |
+                        (Document.file_type.like('%jpeg%')) |
+                        (Document.file_type.like('%word%')) |          # application/msword, wordprocessing
+                        (Document.file_type.like('%docx%')) |
+                        (Document.file_type.like('%doc%')) |
+                        (Document.file_type.like('%powerpoint%')) |    # application/vnd.ms-powerpoint
+                        (Document.file_type.like('%presentation%')) |  # presentationml
+                        (Document.file_type.like('%pptx%')) |
+                        (Document.file_type.like('%ppt%'))
+                    )
+
+                    # 🎯 FILTER BY FILENAME: If user mentions specific file in their query, prioritize it
+                    mentioned_filename = None
+                    if question:
+                        # Extract potential filename from query (look for file extensions)
+                        import re
+                        filename_pattern = r'[\w\-\_]+\.(pdf|png|jpg|jpeg|docx|doc|pptx|ppt)'
+                        filename_match = re.search(filename_pattern, question, re.IGNORECASE)
+                        if filename_match:
+                            mentioned_filename = filename_match.group(0)
+                            logger.info(f"🎯 User mentioned specific file in query: {mentioned_filename}")
+                            # Filter to only that file
+                            query_builder = query_builder.where(Document.filename.ilike(f'%{mentioned_filename}%'))
+
+                    # 🔝 PRIORITIZE PDFs: Add ORDER BY to prefer PDFs over DOCX/PPTX (more reliable for vision analysis)
+                    from sqlalchemy import case
+                    query_builder = query_builder.order_by(
+                        case(
+                            (Document.file_type == 'pdf', 1),
+                            (Document.file_type.like('%pdf%'), 1),
+                            (Document.file_type.in_(['png', 'jpg', 'jpeg', 'image']), 2),
+                            (Document.file_type.like('%image%'), 2),
+                            else_=3  # DOCX, PPTX come last
                         )
                     )
+
+                    result = await db.execute(query_builder)
                     documents = result.scalars().all()
 
                     if documents:
-                        # Use first document with visual content
+                        # Use first document (already prioritized by ORDER BY)
                         doc = documents[0]
+
+                        if mentioned_filename:
+                            logger.info(f"✅ Found user-requested file: {doc.filename}")
+                        else:
+                            logger.info(f"📋 {len(documents)} visual documents found, selected: {doc.filename} (prioritized by file type)")
 
                         # Use minio_path if available, fallback to file_path
                         minio_path = doc.minio_path or doc.file_path
                         image_path = minio_path
-                        logger.info(f"📄 Found visual document: {doc.filename} ({doc.file_type}) at {minio_path}")
+                        scope_type = "project" if project_id else "session"
+                        logger.info(f"📄 Found visual document in {scope_type}: {doc.filename} ({doc.file_type}) at {minio_path}")
                     else:
-                        logger.warning("No image/PDF documents found in session")
+                        scope_type = "project" if project_id else "session"
+                        logger.warning(f"No image/PDF documents found in {scope_type}")
                         return {
                             "success": False,
-                            "error": "No image or PDF documents found in session to analyze",
+                            "error": f"No image or PDF documents found in {scope_type} to analyze",
                             "text": "",
                             "analysis": ""
                         }
                 except Exception as e:
-                    logger.error(f"Error finding documents: {e}")
+                    logger.error(f"Error finding documents: {e}", exc_info=True)
                     return {
                         "success": False,
                         "error": f"Could not find documents to analyze: {str(e)}",

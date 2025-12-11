@@ -532,6 +532,26 @@ class AgenticLoop:
                 else:
                     logger.warning("⚠️ LLM sent empty content, skipping...")
 
+        # Scan artifacts directory for any files created by Python code
+        # (not tracked by write_file tool)
+        artifacts_dir = self.orchestrator.artifacts_dir
+        if artifacts_dir.exists():
+            for artifact_file in artifacts_dir.iterdir():
+                if artifact_file.is_file():
+                    # Check if already tracked
+                    artifact_path = str(artifact_file.relative_to(self.orchestrator.workspace))
+                    already_tracked = any(
+                        a.get("path") == artifact_path
+                        for a in self.orchestrator.session_state["artifacts"]
+                    )
+                    if not already_tracked:
+                        logger.info(f"📎 Found untracked artifact: {artifact_path}")
+                        self.orchestrator.session_state["artifacts"].append({
+                            "path": artifact_path,
+                            "size": artifact_file.stat().st_size,
+                            "created_at": datetime.utcnow().isoformat()
+                        })
+
         # Build final result
         result = {
             "success": task_complete,
@@ -586,28 +606,28 @@ class AgenticLoop:
         return compressed
 
     async def _call_llm(self) -> str:
-        """Call LLM with conversation history"""
-        try:
-            import ollama
+        """Call LLM with conversation history (OpenAI primary, Ollama fallback)"""
+        # Get model from environment
+        model = os.getenv('AGENT_LLM_MODEL', 'llama3.2-vision:11b')
 
-            # Get Ollama configuration from environment
-            ollama_host = os.getenv('OLLAMA_HOST', 'http://rag-ollama:11434')
-            model = os.getenv('AGENT_LLM_MODEL', 'llama3.2-vision:11b')
+        # Detect if OpenAI model
+        openai_models = ['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo', 'gpt-4o', 'gpt-4-vision-preview']
+        is_openai = model.startswith('gpt-') or model in openai_models
 
-            # IMPORTANT: Compress conversation history to prevent context overflow
-            # For small models like qwen2.5:1.5b (context ~32K tokens), keep history manageable
-            compressed_history = self._compress_history(
-                messages=self.conversation_history,
-                max_messages=6  # Keep task + summary + 3 recent messages
-            )
+        # IMPORTANT: Compress conversation history to prevent context overflow
+        # For small models like qwen2.5:1.5b (context ~32K tokens), keep history manageable
+        compressed_history = self._compress_history(
+            messages=self.conversation_history,
+            max_messages=6  # Keep task + summary + 3 recent messages
+        )
 
-            # Build system prompt with available tools
-            available_tools_desc = "\n".join([
-                f"- {name}: {tool.get('description', 'No description')}"
-                for name, tool in self.orchestrator.available_tools.items()
-            ])
+        # Build system prompt with available tools
+        available_tools_desc = "\n".join([
+            f"- {name}: {tool.get('description', 'No description')}"
+            for name, tool in self.orchestrator.available_tools.items()
+        ])
 
-            system_prompt = f"""You are a TOOL-CALLING AI agent. Your ONLY job is to call tools to complete tasks.
+        system_prompt = f"""You are a TOOL-CALLING AI agent. Your ONLY job is to call tools to complete tasks.
 
 ⚠️ CRITICAL RULES:
 1. NEVER write explanations, plans, or descriptions
@@ -668,25 +688,72 @@ FINAL_ANSWER: XGBoost model trained with R² score displayed in output
 
 🚀 START NOW - Call your first tool immediately!"""
 
-            # Build messages for LLM
-            messages = [{"role": "system", "content": system_prompt}]
-            messages.extend(compressed_history)  # Use compressed history to prevent context overflow
+        # Build messages for LLM
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(compressed_history)  # Use compressed history to prevent context overflow
+
+        # Try OpenAI first if it's an OpenAI model
+        if is_openai:
+            try:
+                from openai import OpenAI
+
+                # Get OpenAI API key from environment
+                openai_api_key = os.getenv('OPENAI_API_KEY')
+                if not openai_api_key:
+                    logger.warning(f"⚠️ OPENAI_API_KEY not set, falling back to Ollama")
+                    raise ValueError("OPENAI_API_KEY not configured")
+
+                logger.info(f"🤖 Calling OpenAI LLM: {model}")
+
+                # Create OpenAI client
+                client = OpenAI(api_key=openai_api_key)
+
+                # Call OpenAI API
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=2000
+                )
+
+                llm_response = response.choices[0].message.content
+                logger.info(f"💬 OpenAI responded ({len(llm_response)} chars): {llm_response[:200]}...")
+
+                return llm_response
+
+            except Exception as e:
+                logger.warning(f"⚠️ OpenAI call failed: {e}, falling back to Ollama")
+                # Fall through to Ollama fallback below
+
+        # Use Ollama (either selected directly or as fallback)
+        try:
+            import ollama
+
+            # Get Ollama configuration from environment
+            ollama_host = os.getenv('OLLAMA_HOST', 'http://rag-ollama:11434')
+
+            # If OpenAI failed, use default Ollama model
+            if is_openai:
+                fallback_model = "qwen2.5-coder:7b"
+                logger.info(f"🔄 Using Ollama fallback model: {fallback_model}")
+            else:
+                fallback_model = model
+                logger.info(f"🤖 Calling Ollama LLM: {fallback_model}")
 
             # Connect to Ollama
             client = ollama.Client(host=ollama_host)
 
             # Call LLM (IMPORTANT: stream=False to get complete response)
-            logger.info(f"🤖 Calling LLM: {model}")
-            response = client.chat(model=model, messages=messages, stream=False)
+            response = client.chat(model=fallback_model, messages=messages, stream=False)
 
             llm_response = response['message']['content']
-            logger.info(f"💬 LLM responded ({len(llm_response)} chars): {llm_response[:200]}...")
+            logger.info(f"💬 Ollama responded ({len(llm_response)} chars): {llm_response[:200]}...")
 
             return llm_response
 
         except Exception as e:
-            logger.error(f"❌ LLM call failed: {e}")
-            # Fallback: provide a sensible default response
+            logger.error(f"❌ LLM call failed (both OpenAI and Ollama): {e}")
+            # Final fallback: provide a sensible default response
             return f"FINAL_ANSWER: I encountered an error: {str(e)}. The task could not be completed."
 
     def _parse_response(self, response: str) -> Dict[str, Any]:
@@ -838,6 +905,14 @@ async def main():
         logger.info(f"📊 Iterations: {result['iterations']}")
         logger.info(f"📁 Artifacts: {len(result['artifacts'])}")
         logger.info("=" * 80)
+
+        # CRITICAL: Print result to stdout so docker exec can capture it
+        # The agent_service.py expects JSON output on stdout to parse the result
+        print("=" * 80)
+        print("AGENT_RESULT_JSON_START")
+        print(json.dumps(result, default=str, indent=2))
+        print("AGENT_RESULT_JSON_END")
+        print("=" * 80)
 
         # Exit with success
         sys.exit(0 if result['success'] else 1)

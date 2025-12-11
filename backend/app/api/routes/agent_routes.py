@@ -538,18 +538,32 @@ async def download_artifact(
             raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
 
         # Check if artifact exists in task artifacts list
-        if filename not in task_status.artifacts:
+        # Artifacts are stored as full paths like /workspace/artifacts/filename.html
+        # Extract just the filenames for comparison
+        from pathlib import Path
+        available_artifacts = task_status.artifacts or []
+        artifact_filenames = [Path(art).name for art in available_artifacts]
+
+        if filename not in artifact_filenames:
             raise HTTPException(
                 status_code=404,
-                detail=f"Artifact '{filename}' not found in task {task_id}. Available artifacts: {task_status.artifacts}"
+                detail=f"Artifact '{filename}' not found in task {task_id}. Available artifacts: {artifact_filenames}"
             )
+
+        # Find the full path of the matching artifact
+        artifact_full_path = None
+        for artifact in available_artifacts:
+            if Path(artifact).name == filename:
+                artifact_full_path = artifact
+                break
 
         # Create temporary file to store artifact
         with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{filename}") as tmp_file:
             tmp_path = tmp_file.name
 
         # Copy artifact from agent-runtime container to temporary file
-        artifact_path = f"/artifacts/{filename}"
+        # Use the full path from the database (e.g., /workspace/artifacts/filename.html)
+        artifact_path = artifact_full_path if artifact_full_path else f"/workspace/artifacts/{filename}"
         docker_command = [
             "docker", "cp",
             f"rag-agent-runtime:{artifact_path}",

@@ -480,18 +480,16 @@ Otherwise → requires_vision=false, suggest document_rag"""
 
         # Extract user-configured weights (these should OVERRIDE LLM content analysis)
         strategy_weights = user_preferences.get('strategy_weights', {}) if user_preferences else {}
-        multi_tool_weights = user_preferences.get('multi_tool_weights', {}) if user_preferences else {}
 
         # Tool weight mappings (map frontend weight names to backend tool names)
-        # Priority: strategy_weights.tool_X (frontend slider) > multi_tool_weights.X (legacy)
+        # Uses strategy_weights.tool_* from unified config
         tool_weight_map = {
-            'navigation_agent': strategy_weights.get('tool_navigation', multi_tool_weights.get('navigation_agent', 0.0)),
-            'smart_extraction': strategy_weights.get('tool_web_scraping', multi_tool_weights.get('smart_extraction', 0.0)),
-            'template_extraction': multi_tool_weights.get('template_extraction', 0.0),
-            'vision_analysis': multi_tool_weights.get('vision_analysis', 0.0),
+            'navigation_agent': strategy_weights.get('tool_navigation', 0.0),
+            'smart_extraction': strategy_weights.get('tool_web_scraping', 0.0),
             'ocr': strategy_weights.get('tool_ocr', 0.0),
             'docling_pdf': strategy_weights.get('tool_docling', 0.0),
             'document_rag': strategy_weights.get('rag_hybrid', 0.25),  # Default RAG weight
+            # Note: template_extraction and vision_analysis not yet mapped to strategy_weights
         }
 
         logger.info(f"⚖️  User-configured tool weights: {tool_weight_map}")

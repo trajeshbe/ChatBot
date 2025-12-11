@@ -230,20 +230,14 @@ class DocumentService:
                 await db.flush()  # Flush to get ID without committing
                 await db.refresh(document)
 
-                # Associate with session if session_id provided
+                # ✅ PROJECT-BASED ASSOCIATION ONLY
+                # Documents are associated via project_id field (not session_id)
+                # This eliminates foreign key constraint issues with non-existent sessions
                 if session_id:
-                    try:
-                        from app.models.database_enhanced import SessionDocument
-                        session_doc = SessionDocument(
-                            session_id=session_id,
-                            document_id=document.id
-                        )
-                        db.add(session_doc)
-                        await db.flush()
-                        logger.info(f"Associated document {document.id} with session {session_id}")
-                    except Exception as e:
-                        # Log warning but don't fail the upload
-                        logger.warning(f"Could not associate document with session {session_id}: {e}")
+                    logger.info(
+                        f"📁 Document {document.id} associated with project_id={project_id} "
+                        f"(session_id={session_id} tracked in logs only, not in DB)"
+                    )
 
             return document
 
@@ -824,6 +818,36 @@ class DocumentService:
             embedding_count = embedding_count_result.scalar()
 
             if embedding_count == 0:
+                # 🔄 FALLBACK: If requested vector_column is NULL, try falling back to "embedding" column
+                if vector_column != "embedding":
+                    # Check if "embedding" column (text_semantic) has data
+                    fallback_count_query = select(func.count()).select_from(DocumentChunk).where(
+                        DocumentChunk.embedding.isnot(None)
+                    )
+                    fallback_count_result = await db.execute(fallback_count_query)
+                    fallback_count = fallback_count_result.scalar()
+
+                    if fallback_count > 0:
+                        logger.warning(
+                            f"⚠️  {vector_column} embeddings are NULL ({embedding_count}), but {fallback_count} chunks have text embeddings.\n"
+                            f"   Reason: {vector_column} strategy not yet implemented during upload, fell back to text_semantic.\n"
+                            f"   Solution: Falling back to 'embedding' column (text_semantic strategy) for retrieval."
+                        )
+                        # Recursively call with embedding column
+                        return await self.search_similar_chunks(
+                            query_embedding=query_embedding,
+                            top_k=top_k,
+                            threshold=threshold,
+                            db=db,
+                            query_text=query_text,
+                            use_hybrid=use_hybrid,
+                            use_cascading_fallback=use_cascading_fallback,
+                            semantic_weight=semantic_weight,
+                            keyword_weight=keyword_weight,
+                            project_id=project_id,
+                            vector_column="embedding"  # 🔄 Fallback to text_semantic
+                        )
+
                 logger.error(f"❌ No {vector_column} embeddings found! {chunk_count} chunks exist but none have {vector_column}")
                 return []
 
@@ -1399,19 +1423,14 @@ class DocumentService:
                 await db.flush()
                 await db.refresh(document)
 
-                # Associate with session if provided
+                # ✅ PROJECT-BASED ASSOCIATION ONLY
+                # Documents are associated via project_id field (not session_id)
+                # This eliminates foreign key constraint issues with non-existent sessions
                 if session_id:
-                    try:
-                        from app.models.database_enhanced import SessionDocument
-                        session_doc = SessionDocument(
-                            session_id=uuid.UUID(session_id) if isinstance(session_id, str) else session_id,
-                            document_id=document.id
-                        )
-                        db.add(session_doc)
-                        await db.flush()
-                        logger.info(f"Associated document {document.id} with session {session_id}")
-                    except Exception as e:
-                        logger.warning(f"Could not associate document with session: {e}")
+                    logger.info(
+                        f"📁 Document {document.id} associated with project_id={project_id} "
+                        f"(session_id={session_id} tracked in logs only, not in DB)"
+                    )
 
                 logger.info(
                     f"Created document record: {document.id} "

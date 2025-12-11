@@ -248,9 +248,9 @@ class IntelligentEmbeddingService:
         if strategy == "text_semantic":
             embeddings = await self._embed_text_semantic(texts)
         elif strategy == "table_structure":
-            # Future: Table structure embeddings
-            logger.warning("⚠️  Table structure embeddings not yet implemented, using text semantic")
-            embeddings = await self._embed_text_semantic(texts)
+            # Table structure embeddings with enhanced structural metadata
+            logger.info("📊 Generating table structure embeddings (hybrid approach)")
+            embeddings = await self._embed_table_structure(texts)
         elif strategy == "vision":
             # Vision embeddings using CLIP (text-to-image for queries)
             logger.info("🎨 Generating vision embeddings using CLIP (text-to-image)")
@@ -371,11 +371,20 @@ class IntelligentEmbeddingService:
 
         try:
             logger.info("🎨 Loading CLIP model for vision embeddings...")
+            import torch
             from transformers import CLIPModel, CLIPProcessor
 
             model_name = self.model_registry["vision"]["model_name"]
             model = CLIPModel.from_pretrained(model_name)
             processor = CLIPProcessor.from_pretrained(model_name)
+
+            # Move model to GPU if available
+            if torch.cuda.is_available():
+                device = torch.device("cuda")
+                model = model.to(device)
+                logger.info(f"✅ CLIP model moved to GPU: {torch.cuda.get_device_name(0)}")
+            else:
+                logger.warning("⚠️ GPU not available, using CPU for CLIP")
 
             self.models["vision"] = model
             self.models["vision_processor"] = processor
@@ -386,6 +395,124 @@ class IntelligentEmbeddingService:
         except Exception as e:
             logger.error(f"Failed to load CLIP model: {e}")
             raise
+
+    def _parse_table_structure(self, text: str) -> Dict[str, Any]:
+        """
+        Parse table structure from markdown/text table format
+
+        Args:
+            text: Text containing table (markdown format with | delimiters)
+
+        Returns:
+            Dictionary with table metadata (rows, columns, structure)
+        """
+        import re
+
+        # Detect if text contains table patterns
+        has_table_markers = '|' in text and '\n' in text
+
+        if not has_table_markers:
+            return {
+                'has_table': False,
+                'num_rows': 0,
+                'num_columns': 0,
+                'columns': [],
+                'data_rows': []
+            }
+
+        # Split into lines and filter table lines (contain |)
+        lines = [line.strip() for line in text.split('\n') if '|' in line]
+
+        if len(lines) < 2:  # Need at least header + 1 data row
+            return {
+                'has_table': False,
+                'num_rows': 0,
+                'num_columns': 0,
+                'columns': [],
+                'data_rows': []
+            }
+
+        # Parse header (first line with |)
+        header_line = lines[0]
+        columns = [col.strip() for col in header_line.split('|') if col.strip()]
+
+        # Skip separator lines (---, ===, |||)
+        data_lines = [line for line in lines[1:] if not re.match(r'^\|?[\s\-=|]+\|?$', line)]
+
+        # Parse data rows
+        data_rows = []
+        for line in data_lines[:10]:  # Limit to first 10 rows for metadata
+            cells = [cell.strip() for cell in line.split('|') if cell.strip()]
+            if len(cells) == len(columns):  # Valid row
+                data_rows.append(cells)
+
+        return {
+            'has_table': True,
+            'num_rows': len(data_rows),
+            'num_columns': len(columns),
+            'columns': columns,
+            'data_rows': data_rows[:3],  # Sample first 3 rows
+            'total_cells': len(columns) * len(data_rows)
+        }
+
+    async def _embed_table_structure(self, texts: List[str]) -> List[List[float]]:
+        """
+        Generate table structure embeddings using hybrid approach
+
+        Strategy:
+        1. Parse table structure (rows, columns, cells)
+        2. Enhance text with structural metadata
+        3. Generate text embeddings with enhanced context
+        4. Project to 512 dimensions (matching table_embedding column)
+
+        Args:
+            texts: List of text chunks (may contain tables)
+
+        Returns:
+            List of 512-dimensional embedding vectors
+        """
+        model = self.models.get("text_semantic")
+        if not model:
+            raise RuntimeError("Text semantic model not loaded")
+
+        enhanced_embeddings = []
+
+        for text in texts:
+            # Parse table structure
+            table_info = self._parse_table_structure(text)
+
+            if table_info['has_table']:
+                # Enhance text with structural metadata
+                structural_context = f"""
+Table with {table_info['num_rows']} rows and {table_info['num_columns']} columns.
+Columns: {', '.join(table_info['columns'])}
+Total cells: {table_info['total_cells']}
+Sample data: {' | '.join([' '.join(row) for row in table_info['data_rows']])}
+
+Table content:
+{text}
+"""
+                logger.debug(f"📊 Enhanced table text: {len(structural_context)} chars")
+            else:
+                # Not a table, use original text
+                structural_context = text
+
+            # Generate base embedding (384-dim)
+            base_embedding = model.encode(
+                [structural_context],
+                convert_to_numpy=True,
+                show_progress_bar=False
+            )[0].tolist()
+
+            # Project to 512 dimensions (match database schema)
+            # Strategy: Zero-pad from 384 to 512 dimensions
+            # This preserves the original semantic information while meeting schema requirements
+            padded_embedding = base_embedding + [0.0] * (512 - len(base_embedding))
+
+            enhanced_embeddings.append(padded_embedding)
+
+        logger.info(f"✅ Generated {len(enhanced_embeddings)} table embeddings (512-dim)")
+        return enhanced_embeddings
 
     async def _embed_visual(self, image_paths: List[str]) -> List[List[float]]:
         """
@@ -431,6 +558,10 @@ class IntelligentEmbeddingService:
                     # Load and preprocess image
                     image = Image.open(img_path).convert('RGB')
                     inputs = processor(images=image, return_tensors="pt")
+
+                    # Move inputs to same device as model
+                    if torch.cuda.is_available():
+                        inputs = {k: v.to("cuda") for k, v in inputs.items()}
 
                     # Generate embedding
                     with torch.no_grad():

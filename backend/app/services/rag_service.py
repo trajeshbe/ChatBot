@@ -11,6 +11,7 @@ This ensures recently uploaded documents in a session are prioritized.
 
 from typing import Dict, List, Optional, Any
 import logging
+import re  # 🆕 For URL detection
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text as sql_text, and_, func
 from app.services.embedding_service import embedding_service
@@ -211,14 +212,161 @@ class RAGService:
                 _similarity_threshold = recommended_threshold
                 logger.info(f"🎯 Using adaptive threshold: {_similarity_threshold:.2f}")
 
+            # 🆕 URL DETECTION + UI SETTINGS OVERRIDE LAYER
+            # Check if query contains URL and navigation threshold is set
+            # This allows UI settings to OVERRIDE LLM classification for web scraping
+            track_tool("url_detection", "Check for URLs and navigation threshold")
+
+            # URL regex pattern (matches http:// and https://)
+            url_pattern = r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+'
+            detected_urls = re.findall(url_pattern, query_text)
+
+            # Extract navigation threshold from unified_config
+            navigation_threshold = None
+            if unified_config and 'strategy_weights' in unified_config:
+                strategy_weights = unified_config.get('strategy_weights', {})
+                # Navigation threshold could be stored as 'navigation_threshold' or similar
+                navigation_threshold = strategy_weights.get('navigation_threshold')
+                # Also check for alternative names
+                if navigation_threshold is None:
+                    navigation_threshold = strategy_weights.get('navigation_confidence')
+                if navigation_threshold is None:
+                    navigation_threshold = unified_config.get('navigation_threshold')
+
+            # Check if we should force route to web scraper
+            force_web_scraper = False
+            if detected_urls and navigation_threshold is not None:
+                logger.info(f"🔍 URL Detection: Found {len(detected_urls)} URL(s): {detected_urls}")
+                logger.info(f"🎚️ Navigation threshold from UI: {navigation_threshold}")
+
+                # If navigation threshold > 0.8 (or configured value), route to web scraper
+                # This gives UI settings priority over LLM classification
+                if navigation_threshold > 0.8:
+                    force_web_scraper = True
+                    logger.info(f"🌐 UI OVERRIDE: Navigation threshold ({navigation_threshold}) > 0.8 AND URL detected")
+                    logger.info(f"   → Forcing route to web scraper tool (UI settings override LLM classification)")
+            elif detected_urls:
+                logger.info(f"🔍 URL Detection: Found {len(detected_urls)} URL(s) but no navigation threshold set in UI")
+
+            # If forcing web scraper, trigger actual web scraping
+            if force_web_scraper:
+                track_tool("web_scraper_routing", f"UI override: navigation threshold ({navigation_threshold}) triggered scraper")
+
+                logger.info(f"🌐 Triggering web scraper for URL(s): {detected_urls}")
+
+                # Import scraper service
+                from app.services.scraper_service import scraper_service
+
+                # Scrape each detected URL
+                scrape_results = []
+                for url in detected_urls:
+                    try:
+                        logger.info(f"🔍 Scraping URL: {url}")
+
+                        # Call scraper service with auto strategy
+                        scrape_result = await scraper_service.scrape_url(
+                            url=url,
+                            session_id=session_id,
+                            project_id=project_id,
+                            scrape_prompt=query_text,  # Use the full query as scrape prompt
+                            strategy="auto",  # Let scraper decide best strategy
+                            db=db
+                        )
+
+                        scrape_results.append({
+                            'url': url,
+                            'status': 'success',
+                            'document_id': scrape_result.get('document_id'),
+                            'filename': scrape_result.get('filename'),
+                            'content_preview': scrape_result.get('content', '')[:500] + '...' if scrape_result.get('content') else 'Processing...'
+                        })
+
+                        logger.info(f"✅ Successfully scraped: {url} → {scrape_result.get('filename')}")
+
+                    except Exception as scrape_error:
+                        logger.error(f"❌ Error scraping {url}: {scrape_error}")
+                        scrape_results.append({
+                            'url': url,
+                            'status': 'error',
+                            'error': str(scrape_error)
+                        })
+
+                # Build response with scraping results
+                if any(r['status'] == 'success' for r in scrape_results):
+                    successful_scrapes = [r for r in scrape_results if r['status'] == 'success']
+                    answer = (
+                        f"✅ I successfully scraped {len(successful_scrapes)} URL(s) based on your navigation threshold ({navigation_threshold:.2f}):\n\n"
+                    )
+                    for result in successful_scrapes:
+                        answer += f"• {result['url']}\n  → Saved as: {result.get('filename', 'Unknown')}\n  → Preview: {result.get('content_preview', 'No preview available')}\n\n"
+
+                    if any(r['status'] == 'error' for r in scrape_results):
+                        failed_scrapes = [r for r in scrape_results if r['status'] == 'error']
+                        answer += f"\n⚠️ {len(failed_scrapes)} URL(s) failed to scrape:\n"
+                        for result in failed_scrapes:
+                            answer += f"• {result['url']}: {result.get('error', 'Unknown error')}\n"
+                else:
+                    answer = (
+                        f"❌ Failed to scrape the detected URL(s). Errors:\n" +
+                        "\n".join([f"• {r['url']}: {r.get('error', 'Unknown error')}" for r in scrape_results])
+                    )
+
+                result = {
+                    'answer': answer,
+                    'sources': [],
+                    'model': 'url_detection_override',
+                    'model_name': 'URL Detection + UI Override + Web Scraper',
+                    'tokens_used': 0,
+                    'latency_ms': (time.time() - start_time) * 1000,
+                    'num_sources': 0,
+                    'num_short_term_sources': 0,
+                    'num_long_term_sources': 0,
+                    'cached': False,
+                    'search_strategy': 'url_detection_override',
+                    'ui_override_triggered': True,
+                    'detected_urls': detected_urls,
+                    'navigation_threshold': navigation_threshold,
+                    'scrape_results': scrape_results,
+                    'tools_used': tools_used
+                }
+
+                logger.info(f"✅ Web scraping complete (UI override mode)")
+                return result
+
             # 🆕 FIXED ARCHITECTURE: ALWAYS classify first to detect general knowledge/AI-personal queries
             # This prevents wrong answers for questions like "What is the capital of France?"
             track_tool("query_classification", "Classify query type")
             classification = await query_classifier.classify(processed_query)
             logger.info(f"📊 Classification: {classification['query_type']} (confidence: {classification['confidence']:.2f}) - {classification['reason']}")
 
-            # If it's general knowledge or AI-personal, skip RAG entirely (UNLESS force_rag is True)
-            if classification['query_type'] in ['general', 'ai_personal'] and classification['confidence'] >= 0.75 and not force_rag:
+            # 🎚️ UI UNIFIED CONFIG OVERRIDE CHECK (EARLY BYPASS PREVENTION)
+            # Check if user has set RAG weights > 0.8 in the UI
+            # This OVERRIDES query classification when user explicitly wants RAG
+            force_rag_override_early = False
+
+            # 🔍 DEBUG: Log unified_config to understand why override isn't working
+            logger.info(f"🔍 DEBUG: About to check UI override - unified_config exists: {unified_config is not None}")
+            if unified_config:
+                logger.info(f"🔍 DEBUG: unified_config type: {type(unified_config)}")
+                logger.info(f"🔍 DEBUG: unified_config keys: {list(unified_config.keys()) if hasattr(unified_config, 'keys') else 'N/A'}")
+                logger.info(f"🔍 DEBUG: strategy_weights in config: {'strategy_weights' in unified_config if hasattr(unified_config, '__contains__') else 'N/A'}")
+                if 'strategy_weights' in unified_config:
+                    logger.info(f"🔍 DEBUG: strategy_weights value: {unified_config.get('strategy_weights')}")
+
+            if unified_config and 'strategy_weights' in unified_config:
+                strategy_weights_config = unified_config.get('strategy_weights', {})
+                rag_short_term_weight = strategy_weights_config.get('rag_short_term', 0.0)
+                rag_long_term_weight = strategy_weights_config.get('rag_long_term', 0.0)
+                rag_hybrid_weight = strategy_weights_config.get('rag_hybrid', 0.0)
+
+                # If ANY RAG weight > 0.8, user wants to force RAG retrieval
+                if rag_short_term_weight > 0.8 or rag_long_term_weight > 0.8 or rag_hybrid_weight > 0.8:
+                    force_rag_override_early = True
+                    logger.info(f"🎚️ UI OVERRIDE (EARLY): User set RAG weights > 0.8 (short={rag_short_term_weight:.2f}, long={rag_long_term_weight:.2f}, hybrid={rag_hybrid_weight:.2f})")
+                    logger.info(f"   → Will search documents EVEN IF classified as {classification['query_type']} (UI settings override classification)")
+
+            # If it's general knowledge or AI-personal, skip RAG entirely (UNLESS force_rag is True OR UI override is active)
+            if classification['query_type'] in ['general', 'ai_personal'] and classification['confidence'] >= 0.75 and not force_rag and not force_rag_override_early:
                 track_tool("direct_llm", f"Classified as {classification['query_type']} - skipping RAG")
                 logger.info(f"✨ {classification['query_type']} query detected → using direct LLM (no documents needed)")
 
@@ -467,8 +615,24 @@ class RAGService:
                 classification = await query_classifier.classify(processed_query)
                 logger.info(f"📊 Classification: {classification['query_type']} (confidence: {classification['confidence']:.2f})")
 
-                # If high confidence personal query, use direct LLM
-                if classification['query_type'] == 'ai_personal' and classification['confidence'] >= 0.85:
+                # 🎚️ UI UNIFIED CONFIG OVERRIDE CHECK
+                # Check if user has set RAG weights > 0.8 in the UI
+                # This OVERRIDES query classification when user explicitly wants RAG
+                force_rag_override = False
+                if unified_config and 'strategy_weights' in unified_config:
+                    strategy_weights_config = unified_config.get('strategy_weights', {})
+                    rag_short_term_weight = strategy_weights_config.get('rag_short_term', 0.0)
+                    rag_long_term_weight = strategy_weights_config.get('rag_long_term', 0.0)
+                    rag_hybrid_weight = strategy_weights_config.get('rag_hybrid', 0.0)
+
+                    # If ANY RAG weight > 0.8, user wants to force RAG retrieval
+                    if rag_short_term_weight > 0.8 or rag_long_term_weight > 0.8 or rag_hybrid_weight > 0.8:
+                        force_rag_override = True
+                        logger.info(f"🎚️ UI OVERRIDE: User set RAG weights > 0.8 (short={rag_short_term_weight:.2f}, long={rag_long_term_weight:.2f}, hybrid={rag_hybrid_weight:.2f})")
+                        logger.info(f"   → Will search documents EVEN IF classified as ai_personal (UI settings override classification)")
+
+                # If high confidence personal query BUT user didn't force RAG via UI, use direct LLM
+                if classification['query_type'] == 'ai_personal' and classification['confidence'] >= 0.85 and not force_rag_override:
                     track_tool("query_classification", f"Classified as {classification['query_type']}")
                     track_tool("direct_llm", "High confidence AI-personal query")
                     logger.info("✨ High confidence AI-personal query with low RAG quality → using direct LLM")

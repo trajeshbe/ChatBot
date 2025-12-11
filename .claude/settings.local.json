@@ -34,7 +34,8 @@
       "Bash(source:*)",
       "Bash(python -m pytest:*)",
       "Bash(mkdir:*)",
-      "Bash(docker logs:*)"
+      "Bash(docker logs:*)",
+      "Bash(nvidia-smi:*)"
     ],
     "deny": [],
     "ask": []

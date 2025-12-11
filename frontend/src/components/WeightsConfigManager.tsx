@@ -2,7 +2,7 @@
  * Weights Configuration Manager Component
  *
  * Provides UI for configuring all weights used in RAG system dynamic computation:
- * - Strategy weights
+ * - Strategy weights (includes tool selection via tool_navigation, tool_ocr, etc.)
  * - Scoring formula weights
  * - Source quality weights
  * - Classification thresholds
@@ -10,8 +10,11 @@
  * - Reranking weights
  * - Query preprocessing parameters
  * - Cache configuration
- * - Multi-tool weights
- * - Answer fusion weights
+ * - Answer fusion weights (NOT YET IMPLEMENTED - placeholder)
+ * - RAG settings (chunk size, top_k, etc.)
+ *
+ * DEPRECATED (removed in consolidation):
+ * - multi_tool_weights (merged into strategy_weights.tool_*)
  */
 
 import React, { useState, useEffect } from 'react';
@@ -74,13 +77,6 @@ interface WeightsConfig {
     similarity_threshold: number;
     ttl_seconds: number;
   };
-  multi_tool_weights: {
-    document_rag: number;
-    navigation_agent: number;
-    ocr_tool: number;
-    web_scraping: number;
-    docling: number;
-  };
   answer_fusion: {
     best_answer_weight: number;
     second_best_weight: number;
@@ -110,7 +106,6 @@ type TabType =
   | 'reranking'
   | 'preprocessing'
   | 'cache'
-  | 'multi_tool'
   | 'fusion'
   | 'rag_settings';
 
@@ -131,6 +126,14 @@ export const WeightsConfigManager: React.FC = () => {
       if (sessionConfig) {
         try {
           const parsedConfig = JSON.parse(sessionConfig);
+
+          // 🧹 One-time migration: Remove deprecated multi_tool_weights
+          if (parsedConfig.multi_tool_weights) {
+            delete parsedConfig.multi_tool_weights;
+            localStorage.setItem('userWeightsConfig', JSON.stringify(parsedConfig));
+            console.log('✅ Migrated config: removed deprecated multi_tool_weights');
+          }
+
           setConfig(parsedConfig);
           setHasSessionConfig(true);
           setLoading(false); // 🔧 CRITICAL FIX: Set loading to false when using localStorage
@@ -581,21 +584,6 @@ export const WeightsConfigManager: React.FC = () => {
           </div>
         );
 
-      case 'multi_tool':
-        return (
-          <div>
-            <h3 className="text-lg font-semibold mb-4">Multi-Tool Agent Weights</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Weights for multi-tool agent strategy selection (0-1 scale)
-            </p>
-            {renderSlider('multi_tool_weights', 'document_rag', 'Document RAG Tool', 0, 1, 0.05)}
-            {renderSlider('multi_tool_weights', 'navigation_agent', 'Navigation Agent', 0, 1, 0.05)}
-            {renderSlider('multi_tool_weights', 'ocr_tool', 'OCR Tool', 0, 1, 0.05)}
-            {renderSlider('multi_tool_weights', 'web_scraping', 'Web Scraping', 0, 1, 0.05)}
-            {renderSlider('multi_tool_weights', 'docling', 'Docling', 0, 1, 0.05)}
-          </div>
-        );
-
       case 'fusion':
         return (
           <div>
@@ -800,8 +788,7 @@ export const WeightsConfigManager: React.FC = () => {
               { key: 'reranking', label: 'Reranking', icon: '📈' },
               { key: 'preprocessing', label: 'Preprocessing', icon: '⚙️' },
               { key: 'cache', label: 'Cache', icon: '⚡' },
-              { key: 'multi_tool', label: 'Multi-Tool', icon: '🛠️' },
-              { key: 'fusion', label: 'Fusion', icon: '🔀' },
+              { key: 'fusion', label: 'Fusion (Not Implemented)', icon: '🔀' },
               { key: 'rag_settings', label: 'RAG Settings', icon: '🎛️' },
             ].map((tab) => (
               <motion.button

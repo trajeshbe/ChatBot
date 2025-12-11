@@ -174,29 +174,7 @@ cache:
 
 
 # ==========================================
-# MULTI-TOOL AGENT WEIGHTS
-# ==========================================
-# Weights for multi-tool agent strategy selection
-
-multi_tool_weights:
-  # Document RAG tool
-  document_rag: 0.50
-
-  # Navigation agent tool
-  navigation_agent: 0.45
-
-  # OCR tool
-  ocr_tool: 0.45
-
-  # Docling tool
-  docling: 0.45
-
-  # Web scraping tool
-  web_scraping: 0.43
-
-
-# ==========================================
-# ANSWER FUSION WEIGHTS
+# ANSWER FUSION WEIGHTS (NOT YET IMPLEMENTED)
 # ==========================================
 # Weights for combining multiple answers
 

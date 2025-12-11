@@ -259,7 +259,7 @@ class MultiChannelProcessor:
         self.channels_enabled = {
             ChannelType.TEXT: True,      # Always enabled
             ChannelType.VISUAL: True,    # ✅ ENABLED! CLIP processing for image-heavy PDFs
-            ChannelType.TABLE: False,    # Enable when table model available
+            ChannelType.TABLE: True,     # ✅ ENABLED! Hybrid table structure embeddings implemented
             ChannelType.CODE: False,     # Enable when CodeBERT available
             ChannelType.NUMERICAL: False # Enable when numerical model available
         }
@@ -370,10 +370,12 @@ class MultiChannelProcessor:
             if self.channels_enabled[ChannelType.VISUAL]:
                 channels.append(ChannelType.VISUAL)
 
-        # Add table channel for table-heavy
-        if content_type_str in ["table_heavy", "numerical", "mixed"]:
-            if self.channels_enabled[ChannelType.TABLE]:
-                channels.append(ChannelType.TABLE)
+        # Add table channel ALWAYS if enabled
+        # Let _process_table_channel() detect if there are actual table chunks
+        # This prevents misclassification from causing us to miss tables
+        if self.channels_enabled[ChannelType.TABLE]:
+            channels.append(ChannelType.TABLE)
+            logger.debug(f"📊 TABLE channel added (enabled globally, will detect table content in chunks)")
 
         # Add code channel for code
         if content_type_str == "code":
@@ -539,10 +541,49 @@ class MultiChannelProcessor:
         chunks: List[TraceableChunk],
         file_path: str
     ):
-        """Process table channel (generate table embeddings)"""
-        logger.info(f"📊 Table channel processing not yet implemented")
-        # Future: Extract tables, generate specialized embeddings
-        # For now, skip
+        """Process table channel (generate table embeddings with structural enhancement)"""
+        from app.services.intelligent_embedding_service import intelligent_embedding_service
+
+        logger.info(f"📊 Processing table channel for {len(chunks)} chunks...")
+
+        # Identify chunks with table content (contain | characters in multiple lines)
+        table_chunks = [
+            chunk for chunk in chunks
+            if '|' in chunk.content and chunk.content.count('\n') > 1
+        ]
+
+        if not table_chunks:
+            logger.info("No table content detected in chunks, skipping table channel")
+            return
+
+        logger.info(f"📋 Found {len(table_chunks)} chunks with table content")
+
+        # Extract text content
+        texts = [chunk.content for chunk in table_chunks]
+
+        # Initialize intelligent embedding service if needed
+        if not intelligent_embedding_service._initialized:
+            await intelligent_embedding_service.initialize()
+
+        # Generate table structure embeddings (512-dim)
+        embeddings = await intelligent_embedding_service._embed_table_structure(texts)
+
+        # Add to traceable chunks
+        for chunk, embedding in zip(table_chunks, embeddings):
+            chunk.add_embedding(
+                channel=ChannelType.TABLE,
+                vector=embedding,
+                model="sentence-transformers/all-MiniLM-L6-v2 (table-enhanced)",
+                confidence=0.90,
+                source="table_structure_extraction",
+                metadata={
+                    'strategy': 'table_structure',
+                    'dimension': 512,
+                    'enhancement': 'structural_metadata'
+                }
+            )
+
+        logger.info(f"✅ Generated {len(embeddings)} table structure embeddings (512-dim)")
 
 
 # Global singleton
