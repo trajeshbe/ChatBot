@@ -44,8 +44,28 @@ export default function ProjectDetail({ projectId, onBack, onNewChat }: ProjectD
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeView, setActiveView] = useState<'all' | 'files' | 'chats'>('all')
-  const [isInChatMode, setIsInChatMode] = useState(false) // Track if we're chatting within project
   const [showFileUpload, setShowFileUpload] = useState(false) // Track file upload modal
+
+  // 🆕 FIX: Persist chat mode state in sessionStorage to survive navigation
+  const [isInChatMode, setIsInChatMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedMode = sessionStorage.getItem(`project_${projectId}_chat_mode`)
+      const isInChat = savedMode === 'true'
+      if (isInChat) {
+        console.log(`📂 Restoring chat mode for project ${projectId}`)
+      }
+      return isInChat
+    }
+    return false
+  })
+
+  // 🆕 FIX: Save chat mode to sessionStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(`project_${projectId}_chat_mode`, isInChatMode.toString())
+      console.log(`💾 Saved chat mode for project ${projectId}: ${isInChatMode}`)
+    }
+  }, [isInChatMode, projectId])
 
   useEffect(() => {
     loadProjectData()
@@ -143,10 +163,16 @@ export default function ProjectDetail({ projectId, onBack, onNewChat }: ProjectD
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
         <ChatInterface
+          key={`project-chat-${projectId}`}  // Stable key to prevent remounting
           activeTab="chat"
           projectId={projectId}
           onBackToProject={() => {
+            console.log(`⬅️ Exiting chat mode for project ${projectId}`)
             setIsInChatMode(false)
+            // Clear the chat mode flag
+            if (typeof window !== 'undefined') {
+              sessionStorage.removeItem(`project_${projectId}_chat_mode`)
+            }
             loadProjectData()
           }}
         />
@@ -221,6 +247,7 @@ export default function ProjectDetail({ projectId, onBack, onNewChat }: ProjectD
                   console.log('🆕 Dispatched new-chat event for project chat')
 
                   // ✅ FIX: Set chat mode AFTER storing session (so ChatInterface finds it)
+                  console.log(`💬 Entering chat mode for project ${projectId}`)
                   setIsInChatMode(true)
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium shadow-sm"
@@ -313,6 +340,7 @@ export default function ProjectDetail({ projectId, onBack, onNewChat }: ProjectD
                     console.log('🆕 Dispatched new-chat event for project chat')
 
                     // ✅ FIX: Set chat mode AFTER storing session (so ChatInterface finds it)
+                    console.log(`💬 Entering chat mode for project ${projectId}`)
                     setIsInChatMode(true)
                   }}
                   className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium"
@@ -340,11 +368,13 @@ export default function ProjectDetail({ projectId, onBack, onNewChat }: ProjectD
                       localStorage.setItem('selected_project_id', projectId)
 
                       // Dispatch event to load this session
+                      console.log(`📂 Loading existing chat session: ${item.data.session_id}`)
                       window.dispatchEvent(new CustomEvent('session-changed', {
                         detail: { sessionId: item.data.session_id, projectId }
                       }))
 
                       // Enter chat mode
+                      console.log(`💬 Entering chat mode for project ${projectId} (existing chat)`)
                       setIsInChatMode(true)
                     }
                   }}

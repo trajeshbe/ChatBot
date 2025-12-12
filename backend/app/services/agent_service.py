@@ -30,6 +30,9 @@ logger = logging.getLogger(__name__)
 class AgentOrchestrationService:
     """Service for orchestrating agent task execution"""
 
+    # 🆕 FIX: Track running processes for cancellation
+    _running_processes: Dict[str, asyncio.subprocess.Process] = {}
+
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -284,6 +287,20 @@ Task name:"""
 
                 logger.info(f"🚀 Executing agent task: {task_id}")
 
+                # 🆕 FIX: Clean up old artifacts from previous runs of this task_name
+                # This prevents old artifacts from showing up in new task results
+                try:
+                    import subprocess
+                    workspace_path = f"/workspace/{task.task_name}"
+                    cleanup_cmd = [
+                        "docker", "exec", "rag-agent-runtime",
+                        "bash", "-c", f"rm -rf {workspace_path}/artifacts/* 2>/dev/null || true"
+                    ]
+                    subprocess.run(cleanup_cmd, capture_output=True, timeout=5)
+                    logger.info(f"🧹 Cleaned up old artifacts from {workspace_path}/artifacts/")
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not clean artifacts directory: {e}")
+
                 # Build docker exec command to run task in agent-runtime container
                 # SECURITY: Properly escape task description for shell safety
                 # Base64 encode to avoid shell escaping issues with newlines and special chars
@@ -344,6 +361,10 @@ Task name:"""
                     stderr=asyncio.subprocess.PIPE
                 )
 
+                # 🆕 FIX: Store process for cancellation
+                AgentOrchestrationService._running_processes[task_id] = process
+                logger.info(f"📍 Stored process for task {task_id}, PID: {process.pid}")
+
                 try:
                     stdout, stderr = await asyncio.wait_for(
                         process.communicate(),
@@ -389,6 +410,12 @@ Task name:"""
                         task.completed_at = datetime.now()
                         task.duration_seconds = (task.completed_at - task.started_at).total_seconds()
                         await db.commit()
+
+                finally:
+                    # 🆕 FIX: Clean up process reference after completion
+                    if task_id in AgentOrchestrationService._running_processes:
+                        del AgentOrchestrationService._running_processes[task_id]
+                        logger.info(f"🧹 Removed process reference for task {task_id}")
 
             except Exception as e:
                 logger.error(f"❌ Error executing task {task_id}: {e}")
@@ -496,6 +523,7 @@ Task name:"""
                             logger.info(f"📎 Extracted {len(matches)} artifact paths from final_answer: {artifacts}")
 
                 # Additional fallback: Extract from conversation history if still nothing
+                # 🆕 FIX: Only extract files that were CREATED in this task (mentioned in tool RESULTS)
                 if not artifacts:
                     import re
                     for msg in agent_result.get("conversation_history", []):
@@ -503,13 +531,17 @@ Task name:"""
                         # Skip assistant messages (tool calls) - only look at tool results
                         if msg.get("role") == "assistant":
                             continue
-                        if "/workspace/artifacts/" in content or "/workspace/" in content:
-                            # Extract file paths
-                            matches = re.findall(r'/workspace/(?:artifacts/)?[\w\-\.]+', content)
+                        # 🆕 FIX: Only look for files in execute_python results or write_file results
+                        # Check if this is a tool result message (contains "SUCCESS:" or shows file creation)
+                        if "SUCCESS:" in content or "saved" in content.lower() or "created" in content.lower() or "written" in content.lower():
+                            # Extract file paths from this specific creation message
+                            matches = re.findall(r'/workspace/[\w\-/]+\.(?:html|png|jpg|jpeg|pdf|csv|xlsx|json|txt|docx|svg)', content)
                             for match in matches:
-                                artifacts.append(match)
+                                # Only add if it's from this task's workspace
+                                if f"/workspace/{task.task_name}/" in match or "/workspace/artifacts/" in match:
+                                    artifacts.append(match)
                     if artifacts:
-                        logger.info(f"📎 Extracted {len(artifacts)} artifact paths from conversation")
+                        logger.info(f"📎 Extracted {len(artifacts)} artifact paths from tool creation messages")
 
                 if artifacts:
                     task.artifacts = list(set(artifacts))  # Remove duplicates
@@ -791,6 +823,15 @@ Task name:"""
         if not task:
             return None
 
+        # 🆕 FIX: Use minio_base_path from database, or construct from task_name if available
+        minio_base_path = task.minio_base_path  # Use stored path if available
+        if not minio_base_path and task.task_name:
+            # Fallback: construct from database fields
+            username = "unknown"  # Default until user auth is fully integrated
+            project_name = "global-project"  # Default project
+            # Path format: projects/{project}/{user}/agent-tasks/{task_name}/{task_id}/
+            minio_base_path = f"projects/{project_name}/{username}/agent-tasks/{task.task_name}/{task.task_id}/"
+
         return AgentTaskStatusResponse(
             task_id=task.task_id,
             status=task.status,
@@ -809,7 +850,8 @@ Task name:"""
             error=task.error,
             error_details=task.error_details,
             created_at=task.created_at,
-            meta_info=task.meta_info
+            meta_info=task.meta_info,
+            minio_base_path=minio_base_path  # 🆕 FIX: Include MinIO path
         )
 
     async def list_tasks(
@@ -861,6 +903,15 @@ Task name:"""
         # Convert to response schema
         task_responses = []
         for task in tasks:
+            # 🆕 FIX: Use minio_base_path from database, or construct from task_name if available
+            minio_base_path = task.minio_base_path  # Use stored path if available
+            if not minio_base_path and task.task_name:
+                # Fallback: construct from database fields
+                username = "unknown"  # Default until user auth is fully integrated
+                project_name = "global-project"  # Default project
+                # Path format: projects/{project}/{user}/agent-tasks/{task_name}/{task_id}/
+                minio_base_path = f"projects/{project_name}/{username}/agent-tasks/{task.task_name}/{task.task_id}/"
+
             task_responses.append(AgentTaskStatusResponse(
                 task_id=task.task_id,
                 status=task.status,
@@ -879,7 +930,8 @@ Task name:"""
                 error=task.error,
                 error_details=task.error_details,
                 created_at=task.created_at,
-                meta_info=task.meta_info
+                meta_info=task.meta_info,
+                minio_base_path=minio_base_path  # 🆕 FIX: Include MinIO path
             ))
 
         return AgentTaskList(
@@ -923,9 +975,23 @@ Task name:"""
         task.error = reason or "Task cancelled by user"
         await self.db.commit()
 
-        logger.info(f"🚫 Task {task_id} cancelled")
+        logger.info(f"🚫 Task {task_id} cancelled in database")
 
-        # TODO: Kill the docker exec process if task is running
-        # This would require tracking the process ID
+        # 🆕 FIX: Kill the running process if it exists
+        if task_id in AgentOrchestrationService._running_processes:
+            process = AgentOrchestrationService._running_processes[task_id]
+            try:
+                logger.info(f"🔪 Killing process for task {task_id}, PID: {process.pid}")
+                process.kill()
+                await process.wait()  # Wait for process to actually terminate
+                logger.info(f"✅ Successfully killed process for task {task_id}")
+            except Exception as e:
+                logger.warning(f"⚠️ Error killing process for task {task_id}: {e}")
+            finally:
+                # Clean up reference
+                del AgentOrchestrationService._running_processes[task_id]
+                logger.info(f"🧹 Removed process reference for cancelled task {task_id}")
+        else:
+            logger.info(f"ℹ️ No running process found for task {task_id} (may not have started yet)")
 
         return True

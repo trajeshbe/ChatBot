@@ -19,6 +19,7 @@ from minio.error import S3Error
 from app.core.database import get_db
 from app.core.config import settings
 from app.services.agent_service import AgentOrchestrationService
+from app.api.routes.auth import get_current_user_optional  # 🆕 FIX: Import auth dependency
 from app.services.minio_path_builder import MinIOPathBuilder
 from app.models.database import Document, AgentTask
 from app.schemas.agent_schemas import (
@@ -40,7 +41,8 @@ router = APIRouter(prefix="/api/v1/agent", tags=["Agent Tasks"])
 @router.post("/tasks", response_model=AgentTaskResponse)
 async def create_agent_task(
     request: AgentTaskCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user_optional)  # 🆕 FIX: Get authenticated user
 ):
     """
     Create a new autonomous agent task
@@ -87,13 +89,16 @@ async def create_agent_task(
     try:
         service = AgentOrchestrationService(db)
 
-        # TODO: Get user_id from authentication
-        # user_id = get_current_user()
+        # 🆕 FIX: Use authenticated user if available
+        user_id = None
+        if current_user:
+            user_id = current_user.id if hasattr(current_user, 'id') else current_user.get('id')
+            logger.info(f"👤 Agent task created by user: {current_user.username if hasattr(current_user, 'username') else current_user.get('username')}")
 
         response = await service.create_task(
             request=request,
-            user_id=None,  # Will be populated from auth
-            project_id=None  # Can be extracted from session_id
+            user_id=user_id,
+            project_id=None  # 🆕 FIX: Use default project (global-project) for now
         )
 
         logger.info(f"✅ Created agent task: {response.task_id}")

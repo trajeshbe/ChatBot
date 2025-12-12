@@ -25,6 +25,19 @@ System architecture, design patterns, and deployment documentation.
 - Decision framework and recommendations
 - Migration paths and future considerations
 
+### [MULTI_ENGINE_AGENT_ARCHITECTURE.md](./MULTI_ENGINE_AGENT_ARCHITECTURE.md) 🎨 DESIGN
+**Multi-Engine Agent Execution Framework** (Design Proposal)
+- Unified architecture supporting multiple execution engines
+- Native Interactive Agent, Claude Code CLI, OpenAI Code Interpreter, E2B
+- Interactive chat capabilities for all engines
+- MinIO integration patterns for each engine
+- Authentication and session management
+- UI/UX designs and WebSocket implementation
+- 6-phase implementation roadmap (15-17 weeks)
+- Cost analysis and optimization strategies
+- Security considerations and challenges
+- MVP recommendation (8 weeks)
+
 ### [MEMORY_HIERARCHY_GUIDE.md](./MEMORY_HIERARCHY_GUIDE.md)
 Comprehensive guide to the memory hierarchy architecture.
 - Short-term memory (session-based)

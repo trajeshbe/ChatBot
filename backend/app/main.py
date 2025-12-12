@@ -931,17 +931,26 @@ async def query_endpoint(
 
                 if not chat_session:
                     # Create new chat session if it doesn't exist
+                    # 🆕 FIX: Include project_id to associate session with project
+                    project_uuid = None
+                    if project_id:
+                        try:
+                            project_uuid = uuid_lib.UUID(project_id) if isinstance(project_id, str) else project_id
+                        except (ValueError, AttributeError) as e:
+                            logger.warning(f"Invalid project_id format: {project_id}, error: {e}")
+
                     chat_session = ChatSession(
                         id=uuid_lib.uuid4(),
                         session_id=session_id,
                         user_id=user_id,
+                        project_id=project_uuid,  # ✅ Associate with project
                         created_at=datetime.utcnow(),
                         last_activity=datetime.utcnow(),
                         is_active=True
                     )
                     db.add(chat_session)
                     await db.flush()  # Get the ID
-                    logger.info(f"📝 Created new chat session: {session_id}")
+                    logger.info(f"📝 Created new chat session: {session_id}" + (f" in project {project_id}" if project_id else ""))
                 else:
                     # Update last activity
                     chat_session.last_activity = datetime.utcnow()

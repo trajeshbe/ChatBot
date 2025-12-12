@@ -90,6 +90,9 @@ class AgentTaskStatusResponse(BaseModel):
     created_at: datetime = Field(..., description="Task creation timestamp")
     meta_info: Optional[Dict[str, Any]] = Field(None, description="Additional metadata")
 
+    # 🆕 Storage path
+    minio_base_path: Optional[str] = Field(None, description="MinIO base path for artifacts")
+
     class Config:
         json_schema_extra = {
             "example": {

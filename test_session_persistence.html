@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Session Persistence Test</title>
+</head>
+<body>
+    <h1>Session Storage Test</h1>
+    <div id="output"></div>
+    
+    <script>
+        // Check what's in sessionStorage and localStorage
+        const sessionData = {
+            chat_session_id: sessionStorage.getItem('chat_session_id'),
+            session_global: localStorage.getItem('session_global')
+        };
+        
+        const chatMessages = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('chat_messages_')) {
+                chatMessages.push({
+                    key: key,
+                    messageCount: JSON.parse(localStorage.getItem(key) || '[]').length
+                });
+            }
+        }
+        
+        document.getElementById('output').innerHTML = `
+            <h2>Session Data:</h2>
+            <pre>${JSON.stringify(sessionData, null, 2)}</pre>
+            
+            <h2>Chat Messages in localStorage:</h2>
+            <pre>${JSON.stringify(chatMessages, null, 2)}</pre>
+        `;
+        
+        console.log('Session Data:', sessionData);
+        console.log('Chat Messages:', chatMessages);
+    </script>
+</body>
+</html>

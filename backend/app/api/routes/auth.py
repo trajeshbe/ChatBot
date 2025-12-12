@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.services.auth_service import AuthService
+from app.models.database_enhanced import User
 from app.schemas.auth_schemas import (
     LoginRequest,
     LoginResponse,
@@ -124,6 +125,35 @@ async def get_current_user(
         created_at=user.created_at,
         last_login=user.last_login
     )
+
+
+# Dependency function for required authentication
+async def get_current_user_dependency(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    auth: AuthService = Depends(get_auth_service)
+) -> User:
+    """
+    Dependency function to get current authenticated user.
+    Raises 401 if not authenticated.
+    """
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token = credentials.credentials
+    user = await auth.get_current_user(token)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return user
 
 
 # Dependency function for optional authentication (for public endpoints)

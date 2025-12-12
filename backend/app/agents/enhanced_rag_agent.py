@@ -181,6 +181,8 @@ class EnhancedRAGAgent(RAGAgent):
             ])
 
             logger.info(f"💬 Using {len(conversation_history)} messages from frontend conversation history")
+            logger.info(f"📝 Conversation context preview (first 500 chars): {conversation_context[:500]}...")
+            logger.info(f"📊 Full conversation history: {json.dumps(conversation_history, indent=2)}")
 
             # Use LLM with ONLY conversation history (no document search)
             result = await self._direct_llm_query(
@@ -1611,6 +1613,9 @@ Context:
                     "content": f"Previous conversation context:\n{conversation_context}\n\nUse this conversation history to answer the user's question."
                 }
                 messages = [context_message] + messages
+                logger.info(f"💬 [CONVERSATION_ONLY] Added conversation context as system message")
+                logger.info(f"💬 [CONVERSATION_ONLY] Total messages to LLM: {len(messages)}")
+                logger.info(f"💬 [CONVERSATION_ONLY] System message preview: {context_message['content'][:300]}...")
 
             # 🧠 BRAIN VIEW: Track timing
             start_time = time.time()

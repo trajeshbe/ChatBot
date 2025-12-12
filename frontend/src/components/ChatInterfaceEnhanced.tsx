@@ -639,6 +639,39 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
     return () => window.removeEventListener('new-chat', handleNewChat as EventListener)
   }, [])
 
+  // 🆕 FIX: Save messages immediately when tab/window loses focus
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && sessionId && messages.length > 0) {
+        saveMessages(sessionId, messages)
+        console.log(`💾 [Tab Hidden] Saved ${messages.length} messages for session ${sessionId}`)
+      } else if (document.visibilityState === 'visible' && sessionId && isHydrated) {
+        // Reload messages when tab becomes visible to sync with any external changes
+        const loadedMessages = loadMessages(sessionId)
+        if (loadedMessages.length > 0 && loadedMessages.length !== messages.length) {
+          console.log(`🔄 [Tab Visible] Reloaded ${loadedMessages.length} messages (had ${messages.length})`)
+          setMessages(loadedMessages)
+        }
+      }
+    }
+
+    const handleBeforeUnload = () => {
+      // Save messages one last time before page unload
+      if (sessionId && messages.length > 0) {
+        saveMessages(sessionId, messages)
+        console.log(`💾 [Before Unload] Saved ${messages.length} messages`)
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [sessionId, messages, isHydrated])
+
   // 🐛 FIX: Reload session when selectedProjectId changes (from dropdown)
   useEffect(() => {
     if (!isHydrated || projectId) return // Skip if not hydrated yet, or if using fixed projectId prop
@@ -1152,6 +1185,8 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       console.log(`📤 Querying with session ${sessionId} and ${recentMessages.length} context messages`)
       console.log(`🔧 Tools enabled: ${enabledTools.length}/${AVAILABLE_TOOLS.length}`)
       console.log(`🤖 Agent selected: ${selectedAgent}`)
+      console.log(`🎯 Model selected: ${selectedModel}`)
+      console.log(`💬 Conversation history (last ${recentMessages.length} messages):`, recentMessages.map(m => `${m.role}: ${m.content.substring(0, 50)}...`))
 
       const response = await axios.post(`${API_URL}/api/v1/query`, formData, {
         headers: {

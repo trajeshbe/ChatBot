@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 
 from app.core.database import get_db
-from app.api.routes.auth import get_current_user, get_current_user_optional
+from app.api.routes.auth import get_current_user_dependency, get_current_user_optional
 
 # Import models from correct modules
 try:
@@ -111,7 +111,7 @@ class ProjectResponse(BaseModel):
 @router.get("/departments", response_model=List[DepartmentResponse])
 async def get_departments(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dependency)
 ):
     """Get all active departments"""
     result = await db.execute(
@@ -141,7 +141,7 @@ async def get_departments(
 async def get_teams(
     department_id: Optional[str] = Query(None, description="Filter by department"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dependency)
 ):
     """
     Get all teams, optionally filtered by department.
@@ -208,7 +208,7 @@ async def get_teams(
 async def create_project(
     request: ProjectCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dependency)
 ):
     """
     Create a new project.
@@ -327,7 +327,7 @@ async def get_projects(
 async def get_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dependency)
 ):
     """Get project by ID"""
     result = await db.execute(
@@ -350,7 +350,7 @@ async def update_project(
     project_id: str,
     request: ProjectUpdateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dependency)
 ):
     """Update project (owner or admin only)"""
     result = await db.execute(
@@ -385,7 +385,7 @@ async def update_project(
 async def delete_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dependency)
 ):
     """Delete project (owner or admin only)"""
     result = await db.execute(
@@ -508,7 +508,7 @@ class ChatSessionResponse(BaseModel):
 async def get_project_chats(
     project_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_dependency)
 ):
     """
     Get all chat sessions for a specific project

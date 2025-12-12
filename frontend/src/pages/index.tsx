@@ -135,7 +135,12 @@ export default function Home() {
 
           {/* 🆕 FIX: Keep ChatInterface mounted but hidden to preserve state during tab switches */}
           <div className={`flex-1 flex flex-col overflow-hidden ${activeTab === 'chat' || activeTab === 'upload' ? '' : 'hidden'}`}>
-            <ChatInterface activeTab={activeTab} ragConfig={ragConfig} projectId={selectedProjectId} />
+            <ChatInterface
+              key="main-chat-interface"  // Stable key prevents React from unmounting
+              activeTab={activeTab}
+              ragConfig={ragConfig}
+              projectId={selectedProjectId}
+            />
           </div>
 
           {/* Show other tabs on top when active */}

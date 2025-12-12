@@ -22,6 +22,7 @@ interface AgentTask {
   error?: string;
   error_details?: any;
   created_at: string;
+  minio_base_path?: string;  // 🆕 MinIO base path for artifacts folder link
 }
 
 interface Document {
@@ -69,8 +70,17 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [selectedProject, setSelectedProject] = useState<any>(null);
 
-  // Form state
-  const [taskDescription, setTaskDescription] = useState('');
+  // Form state - 🆕 FIX: Persist taskDescription to sessionStorage
+  const [taskDescription, setTaskDescription] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('agent_task_draft');
+      if (saved) {
+        console.log('📝 Restored task draft from sessionStorage');
+        return saved;
+      }
+    }
+    return '';
+  });
   const [model, setModel] = useState('qwen2.5-coder:7b'); // Will be synced from main chat UI
   const [maxIterations, setMaxIterations] = useState(20);
   const [timeoutSeconds, setTimeoutSeconds] = useState(600);
@@ -105,6 +115,14 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
     }
   }, []);
 
+  // 🆕 FIX: Save taskDescription to sessionStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined' && taskDescription) {
+      sessionStorage.setItem('agent_task_draft', taskDescription);
+      console.log('💾 Saved task draft to sessionStorage');
+    }
+  }, [taskDescription]);
+
   // Fetch tasks on mount and periodically refresh
   useEffect(() => {
     if (sessionId) {
@@ -121,7 +139,11 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
         params.session_id = sessionId;
       }
 
-      const response = await axios.get(`${API_URL}/api/v1/agent/tasks`, { params });
+      // 🆕 FIX: Include JWT token for user authentication
+      const token = localStorage.getItem('access_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+      const response = await axios.get(`${API_URL}/api/v1/agent/tasks`, { params, headers });
       setTasks(response.data.tasks || []);
     } catch (error) {
       console.error('Error fetching tasks:', error);
@@ -189,10 +211,20 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
         console.log('📂 Selected document IDs:', payload.document_ids);
       }
 
-      await axios.post(`${API_URL}/api/v1/agent/tasks`, payload);
+      // 🆕 FIX: Include JWT token for user authentication
+      const token = localStorage.getItem('access_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      console.log('[AgentTaskMonitor] Token from localStorage:', token ? `${token.substring(0, 20)}...` : 'NULL');
+
+      await axios.post(`${API_URL}/api/v1/agent/tasks`, payload, { headers });
 
       console.log('✅ Task created successfully');
       setTaskDescription('');
+      // 🆕 FIX: Clear saved draft when task is successfully created
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('agent_task_draft');
+        console.log('🗑️ Cleared task draft from sessionStorage');
+      }
       await fetchTasks();
     } catch (error: any) {
       console.error('Error creating task:', error);
@@ -204,7 +236,11 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
 
   const cancelTask = async (taskId: string) => {
     try {
-      await axios.delete(`${API_URL}/api/v1/agent/tasks/${taskId}`);
+      // 🆕 FIX: Include JWT token for user authentication
+      const token = localStorage.getItem('access_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+      await axios.delete(`${API_URL}/api/v1/agent/tasks/${taskId}`, { headers });
       console.log(`🚫 Task ${taskId} cancelled`);
       await fetchTasks();
     } catch (error) {
@@ -478,6 +514,14 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
             </div>
 
             <div className="p-4 space-y-4">
+              {/* 🆕 FIX: Display Task ID for tracing */}
+              <div>
+                <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Task ID</label>
+                <div className="mt-1 font-mono text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded">
+                  {selectedTask.task_id}
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Status</label>
                 <div className="flex items-center gap-2 mt-1">
@@ -643,6 +687,27 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
                       );
                     })}
                   </div>
+
+                  {/* 🆕 MinIO Browser Link */}
+                  {selectedTask.minio_base_path && (
+                    <div className="mt-2">
+                      <a
+                        href={`http://localhost:9001/browser/documents/${selectedTask.minio_base_path}artifacts/`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-3 py-2 bg-[#6b9080] hover:bg-[#527566] dark:bg-[#85c4a6] dark:hover:bg-[#b3dbc7] text-white text-xs rounded transition-colors"
+                        title="Open artifacts folder in MinIO browser"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                        </svg>
+                        Open Artifacts Folder in MinIO
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
