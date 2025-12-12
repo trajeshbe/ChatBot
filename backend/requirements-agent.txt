@@ -35,6 +35,13 @@ asyncio==3.4.3
 # Redis for session state (optional)
 redis==5.0.1
 
+# MinIO for object storage
+minio==7.2.3
+
+# Database drivers
+asyncpg==0.31.0
+sqlalchemy==2.0.45
+
 # ============================================================================
 # MONTH 1: DATA SCIENCE & ANALYTICS
 # ============================================================================

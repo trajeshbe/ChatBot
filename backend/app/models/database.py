@@ -143,12 +143,14 @@ class AgentTask(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     task_id = Column(String(255), unique=True, nullable=False, index=True)  # Human-readable task ID
+    task_name = Column(String(255), nullable=True, index=True)  # 🆕 NEW: LLM-generated task name
 
     # Task details
     task_description = Column(Text, nullable=False)
     status = Column(String(50), nullable=False, default='pending')  # pending, running, completed, failed, cancelled
     session_id = Column(String(255), nullable=True, index=True)
     model = Column(String(100), nullable=False, default='qwen2.5-coder:7b')
+    minio_base_path = Column(Text, nullable=True)  # 🆕 NEW: Base path in MinIO for task artifacts
 
     # Configuration
     max_iterations = Column(Integer, default=20)

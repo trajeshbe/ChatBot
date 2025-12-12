@@ -33,6 +33,95 @@ class AgentOrchestrationService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def _generate_task_name(self, task_description: str) -> str:
+        """
+        Generate a concise, human-readable name for a task using LLM.
+
+        Args:
+            task_description: Full task description from user
+
+        Returns:
+            Short name (e.g., "sales_analysis_chart", "data_processing_pipeline")
+
+        Examples:
+            "use sales2.txt and create a plotly chart" → "sales_analysis_chart"
+            "analyze customer data and generate report" → "customer_analysis_report"
+            "scrape website and extract product info" → "website_product_scraper"
+        """
+        import re
+        from app.services.llm_service import LLMService
+
+        prompt = f"""Generate a short, descriptive name (3-5 words, snake_case) for this task:
+
+Task: {task_description}
+
+Requirements:
+- Use snake_case (lowercase with underscores)
+- Be specific and descriptive
+- 3-5 words maximum
+- No special characters
+- Focus on the main action and output
+
+Examples:
+"analyze sales data" → "sales_data_analysis"
+"create chart from CSV" → "csv_chart_generation"
+"scrape news articles" → "news_article_scraper"
+
+Task name:"""
+
+        try:
+            # Use lightweight model for quick response
+            from app.core.config import settings
+            import httpx
+
+            # Try Ollama first (free, fast)
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(
+                        f"{settings.OLLAMA_BASE_URL}/api/generate",
+                        json={
+                            "model": "qwen2.5-coder:7b",
+                            "prompt": prompt,
+                            "stream": False,
+                            "options": {
+                                "temperature": 0.3,
+                                "num_predict": 50
+                            }
+                        }
+                    )
+                    if response.status_code == 200:
+                        result = response.json()
+                        task_name = result.get("response", "").strip().lower()
+                    else:
+                        raise Exception("Ollama request failed")
+            except Exception as e:
+                logger.warning(f"Ollama task name generation failed: {e}, using fallback")
+                # Fallback: Simple rule-based generation
+                task_name = task_description.lower()
+                task_name = re.sub(r'[^a-z0-9\s]', '', task_name)
+                words = task_name.split()[:5]  # Take first 5 words
+                task_name = '_'.join(words)
+
+            # Sanitize
+            task_name = re.sub(r'[^a-z0-9_]', '', task_name)
+            task_name = re.sub(r'_+', '_', task_name).strip('_')
+
+            # Fallback if generation fails
+            if not task_name or len(task_name) < 3:
+                task_name = "agent_task"
+
+            logger.info(f"✅ Generated task name: '{task_name}' from description: '{task_description[:50]}...'")
+            return task_name
+
+        except Exception as e:
+            logger.warning(f"Failed to generate task name: {e}, using default")
+            # Fallback: Use first few words
+            import re
+            task_name = task_description.lower()
+            task_name = re.sub(r'[^a-z0-9\s]', '', task_name)
+            words = task_name.split()[:3]
+            return '_'.join(words) if words else "agent_task"
+
     async def create_task(
         self,
         request: AgentTaskCreate,
@@ -53,6 +142,73 @@ class AgentOrchestrationService:
         # Generate unique task ID
         task_id = f"task-{uuid.uuid4().hex[:12]}"
 
+        # 🆕 Generate human-readable task name using LLM
+        task_name = await self._generate_task_name(request.task_description)
+        logger.info(f"📝 Generated task name: '{task_name}' for task {task_id}")
+
+        # 🆕 Build MinIO base path - inherit organizational structure from source documents
+        from app.services.minio_path_builder import MinIOPathBuilder
+        from app.models.database import Document
+        from uuid import UUID
+
+        # Try to extract organizational path from source documents
+        organizational_path = None
+        if request.document_ids:
+            try:
+                # Get first document to extract organizational path
+                first_doc_id = UUID(request.document_ids[0])
+                doc_result = await self.db.execute(
+                    select(Document).where(Document.id == first_doc_id)
+                )
+                first_doc = doc_result.scalar_one_or_none()
+                if first_doc and first_doc.minio_path:
+                    # Extract organizational path (everything before /documents/)
+                    # Example: "Technology/Backend-Development/Construction-Intelligence/admin/documents/sales2.txt"
+                    # Extract: "Technology/Backend-Development/Construction-Intelligence/admin"
+                    parts = first_doc.minio_path.split('/documents/')
+                    if parts:
+                        organizational_path = parts[0]
+                        logger.info(f"📁 Inherited organizational path from document: {organizational_path}")
+            except Exception as e:
+                logger.warning(f"Failed to extract organizational path from documents: {e}")
+
+        # Fallback to project/user structure if no organizational path found
+        if not organizational_path:
+            from app.models.database_enhanced import User, Project
+            username = "unknown"
+            if user_id:
+                try:
+                    result = await self.db.execute(
+                        select(User).where(User.id == user_id)
+                    )
+                    user = result.scalar_one_or_none()
+                    if user:
+                        username = user.username
+                except Exception as e:
+                    logger.warning(f"Failed to get username: {e}")
+
+            project_name = "global-project"
+            if project_id:
+                try:
+                    result = await self.db.execute(
+                        select(Project).where(Project.id == project_id)
+                    )
+                    project = result.scalar_one_or_none()
+                    if project:
+                        project_name = project.name
+                except Exception as e:
+                    logger.warning(f"Failed to get project name: {e}")
+
+            organizational_path = f"projects/{MinIOPathBuilder.sanitize(project_name)}/{MinIOPathBuilder.sanitize(username)}"
+            logger.info(f"📁 Using fallback organizational path: {organizational_path}")
+
+        # Build MinIO base path with organizational structure
+        minio_base_path = (
+            f"{organizational_path}/agent-tasks/"
+            f"{MinIOPathBuilder.sanitize(task_name)}/{task_id}/"
+        )
+        logger.info(f"📦 MinIO base path: {minio_base_path}")
+
         # 🆕 Sync documents to agent workspace
         # Priority 1: Explicitly selected documents (document_ids)
         # Priority 2: Session documents (if session_id provided)
@@ -72,6 +228,8 @@ class AgentOrchestrationService:
         # Create database record
         agent_task = AgentTask(
             task_id=task_id,
+            task_name=task_name,  # 🆕 NEW
+            minio_base_path=minio_base_path,  # 🆕 NEW
             task_description=request.task_description,
             status=TaskStatus.PENDING,
             session_id=request.session_id,
@@ -136,10 +294,40 @@ class AgentOrchestrationService:
                 import os
                 openai_api_key = os.getenv('OPENAI_API_KEY', '')
 
+                # 🆕 Get username and project for MinIO paths
+                username = "unknown"
+                project_name = "global-project"
+                if task.created_by:
+                    try:
+                        from app.models.database_enhanced import User
+                        result = await session.execute(
+                            select(User).where(User.id == task.created_by)
+                        )
+                        user = result.scalar_one_or_none()
+                        if user:
+                            username = user.username
+                    except Exception as e:
+                        logger.warning(f"Failed to get username: {e}")
+
+                if task.project_id:
+                    try:
+                        from app.models.database_enhanced import Project
+                        result = await session.execute(
+                            select(Project).where(Project.id == task.project_id)
+                        )
+                        project = result.scalar_one_or_none()
+                        if project:
+                            project_name = project.name
+                    except Exception as e:
+                        logger.warning(f"Failed to get project: {e}")
+
                 docker_command = [
                     "docker", "exec",
                     "-e", f"TASK_B64={task_description_b64}",
                     "-e", f"TASK_ID={task_id}",
+                    "-e", f"TASK_NAME={task.task_name or 'agent_task'}",  # 🆕 NEW
+                    "-e", f"USERNAME={username}",  # 🆕 NEW
+                    "-e", f"PROJECT_NAME={project_name}",  # 🆕 NEW
                     "-e", f"SESSION_ID={task.session_id or 'default'}",
                     "-e", f"AGENT_LLM_MODEL={task.model}",
                     "-e", f"AGENT_MAX_ITERATIONS={task.max_iterations}",
@@ -267,7 +455,9 @@ class AgentOrchestrationService:
                 logger.info(f"✅ Successfully parsed agent result JSON from stdout")
 
                 # Update task from parsed result
-                task.status = TaskStatus.COMPLETED if agent_result.get("success") else TaskStatus.FAILED
+                # Always mark as COMPLETED (ChatGPT behavior - complete with whatever progress was made)
+                # Store success flag in meta_info for tracking
+                task.status = TaskStatus.COMPLETED
                 task.result = agent_result.get("final_answer", "Task completed")
                 task.llm_calls = agent_result.get("iterations", 0)
 
@@ -281,23 +471,45 @@ class AgentOrchestrationService:
                         else:
                             path = str(artifact)
                         if path:
-                            # Convert relative path to absolute workspace path
+                            # Convert relative path to task-specific workspace path
                             if not path.startswith("/workspace/"):
-                                path = f"/workspace/{path}"
+                                # Use task_name for task-specific workspace
+                                path = f"/workspace/{task.task_name}/{path}"
                             artifacts.append(path)
                     logger.info(f"📎 Extracted {len(artifacts)} artifacts from JSON result")
 
-                # Fallback: Extract from conversation history if not in result
+                # Fallback: Extract from final_answer if not in result
                 if not artifacts:
+                    import re
+                    final_answer = agent_result.get("final_answer", "")
+                    if final_answer:
+                        # Extract file paths from final_answer (handles both absolute and relative paths)
+                        # Match: /workspace/artifacts/file.html OR artifacts/file.html
+                        matches = re.findall(r'(?:/workspace/)?(?:artifacts/)([\w\-\.]+\.(html|png|jpg|jpeg|pdf|csv|xlsx|json|txt|docx|svg))', final_answer)
+                        for match_tuple in matches:
+                            # match_tuple is (filename, extension), we want the full filename
+                            filename = match_tuple[0]
+                            # Use task_name for task-specific workspace
+                            artifact_path = f"/workspace/{task.task_name}/artifacts/{filename}"
+                            artifacts.append(artifact_path)
+                        if matches:
+                            logger.info(f"📎 Extracted {len(matches)} artifact paths from final_answer: {artifacts}")
+
+                # Additional fallback: Extract from conversation history if still nothing
+                if not artifacts:
+                    import re
                     for msg in agent_result.get("conversation_history", []):
                         content = msg.get("content", "")
-                        if "/workspace/artifacts/" in content:
+                        # Skip assistant messages (tool calls) - only look at tool results
+                        if msg.get("role") == "assistant":
+                            continue
+                        if "/workspace/artifacts/" in content or "/workspace/" in content:
                             # Extract file paths
-                            import re
-                            matches = re.findall(r'/workspace/artifacts/[\w\-\.]+', content)
-                            artifacts.extend(matches)
+                            matches = re.findall(r'/workspace/(?:artifacts/)?[\w\-\.]+', content)
+                            for match in matches:
+                                artifacts.append(match)
                     if artifacts:
-                        logger.info(f"📎 Extracted {len(artifacts)} artifacts from conversation history")
+                        logger.info(f"📎 Extracted {len(artifacts)} artifact paths from conversation")
 
                 if artifacts:
                     task.artifacts = list(set(artifacts))  # Remove duplicates

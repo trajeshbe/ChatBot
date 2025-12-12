@@ -193,6 +193,98 @@ class MinIOPathBuilder:
         )
 
     @staticmethod
+    def build_agent_task_path(
+        project_id: str,
+        username: str,
+        task_name: str,
+        task_id: str,
+        subfolder: str,
+        filename: str
+    ) -> str:
+        """
+        Build hierarchical MinIO path for agent task artifacts.
+
+        Args:
+            project_id: Project UUID or 'global-project'
+            username: User's username
+            task_name: Human-readable task name (e.g., 'sales_analysis_chart')
+            task_id: Unique task execution ID (e.g., 'task-a81656d4e7e9')
+            subfolder: Folder within task ('input', 'artifacts', 'logs')
+            filename: File name
+
+        Returns:
+            Full MinIO path string
+
+        Example:
+            >>> build_agent_task_path(
+            ...     project_id='global-project',
+            ...     username='admin',
+            ...     task_name='sales_analysis_chart',
+            ...     task_id='task-a81656d4e7e9',
+            ...     subfolder='artifacts',
+            ...     filename='revenue_chart.html'
+            ... )
+            'projects/global-project/admin/agent-tasks/sales_analysis_chart/task-a81656d4e7e9/artifacts/revenue_chart.html'
+        """
+        # Sanitize components
+        sanitized_project = MinIOPathBuilder.sanitize(project_id)
+        sanitized_username = MinIOPathBuilder.sanitize(username)
+        sanitized_task_name = MinIOPathBuilder.sanitize(task_name)
+
+        # Validate subfolder
+        valid_subfolders = ['input', 'artifacts', 'logs']
+        if subfolder not in valid_subfolders:
+            logger.warning(f"Invalid subfolder '{subfolder}', defaulting to 'artifacts'")
+            subfolder = 'artifacts'
+
+        # Build path
+        path = (
+            f"projects/{sanitized_project}/{sanitized_username}/agent-tasks/"
+            f"{sanitized_task_name}/{task_id}/{subfolder}/{filename}"
+        )
+
+        logger.debug(f"Built agent task MinIO path: {path}")
+        return path
+
+    @staticmethod
+    def get_agent_task_prefix(
+        project_id: str,
+        username: str,
+        task_name: Optional[str] = None,
+        task_id: Optional[str] = None
+    ) -> str:
+        """
+        Get prefix for listing agent task files.
+
+        Examples:
+            # All tasks for user in project
+            get_agent_task_prefix('global-project', 'admin')
+            → 'projects/global-project/admin/agent-tasks/*'
+
+            # All executions of specific task
+            get_agent_task_prefix('global-project', 'admin', 'sales_analysis_chart')
+            → 'projects/global-project/admin/agent-tasks/sales_analysis_chart/*'
+
+            # Specific task execution
+            get_agent_task_prefix('global-project', 'admin', 'sales_analysis_chart', 'task-123')
+            → 'projects/global-project/admin/agent-tasks/sales_analysis_chart/task-123/*'
+        """
+        sanitized_project = MinIOPathBuilder.sanitize(project_id)
+        sanitized_username = MinIOPathBuilder.sanitize(username)
+
+        prefix = f"projects/{sanitized_project}/{sanitized_username}/agent-tasks/"
+
+        if task_name:
+            sanitized_task_name = MinIOPathBuilder.sanitize(task_name)
+            prefix += f"{sanitized_task_name}/"
+
+            if task_id:
+                prefix += f"{task_id}/"
+
+        prefix += "*"
+        return prefix
+
+    @staticmethod
     def parse_path(minio_path: str) -> PathComponents:
         """
         Parse MinIO path back into components.

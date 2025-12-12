@@ -64,7 +64,7 @@ COPY app/services/__init__.py /app/services/__init__.py
 # Copy enhanced tools (Month 1 & 2: Data Science, Documents, Vision)
 COPY agent_tools_enhanced.py /app/agent_tools_enhanced.py
 
-# Copy entry point
+# Copy entry point (updated with workspace isolation)
 COPY entrypoint_agent.py /app/entrypoint_agent.py
 
 # Set ownership

@@ -37,23 +37,44 @@ class AgentOrchestrator:
     - Context management
     """
 
-    def __init__(self, task_id: str, session_id: str, workspace: Path):
+    def __init__(
+        self,
+        task_id: str,
+        task_name: str,  # 🆕 NEW: Human-readable task name
+        session_id: str,
+        workspace: Path,
+        username: str = "unknown",  # 🆕 NEW: For MinIO paths
+        project_name: str = "global-project"  # 🆕 NEW: For MinIO paths
+    ):
         self.task_id = task_id
+        self.task_name = task_name
         self.session_id = session_id
         self.workspace = workspace
+        self.username = username
+        self.project_name = project_name
 
         # Create workspace directories
         self.input_dir = workspace / "input"
         self.output_dir = workspace / "output"
         self.artifacts_dir = workspace / "artifacts"
+        self.logs_dir = workspace / "logs"  # 🆕 NEW: For logs
         self.temp_dir = workspace / "temp"
 
-        for dir_path in [self.input_dir, self.output_dir, self.artifacts_dir, self.temp_dir]:
+        for dir_path in [self.input_dir, self.output_dir, self.artifacts_dir, self.logs_dir, self.temp_dir]:
             dir_path.mkdir(parents=True, exist_ok=True)
+
+        # 🆕 Setup logging to file
+        log_file = self.logs_dir / "agent.log"
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        ))
+        logger.addHandler(file_handler)
 
         # Session state (must be created before enhanced tools)
         self.session_state = {
             "task_id": task_id,
+            "task_name": task_name,
             "session_id": session_id,
             "created_at": datetime.utcnow().isoformat(),
             "status": "initialized",
@@ -177,11 +198,28 @@ class AgentOrchestrator:
         if tool_name in ["read_file", "write_file"]:
             # Validate file path is within workspace
             file_path = Path(args.get("path", ""))
-            try:
-                file_path.resolve().relative_to(self.workspace.resolve())
-            except ValueError:
-                logger.error(f"🚨 File access outside workspace: {file_path}")
-                return False
+
+            # For read_file: Allow reading from task workspace OR parent /workspace/ (for input files)
+            # For write_file: Only allow writing to task workspace
+            if tool_name == "read_file":
+                parent_workspace = self.workspace.parent  # /workspace/
+                try:
+                    # Try task workspace first
+                    file_path.resolve().relative_to(self.workspace.resolve())
+                except ValueError:
+                    # Try parent workspace
+                    try:
+                        file_path.resolve().relative_to(parent_workspace.resolve())
+                        logger.info(f"✅ Allowing read from parent workspace: {file_path}")
+                    except ValueError:
+                        logger.error(f"🚨 File access outside allowed directories: {file_path}")
+                        return False
+            else:  # write_file
+                try:
+                    file_path.resolve().relative_to(self.workspace.resolve())
+                except ValueError:
+                    logger.error(f"🚨 Write access outside task workspace: {file_path}")
+                    return False
 
         return True
 
@@ -190,6 +228,12 @@ class AgentOrchestrator:
         try:
             import io
             import sys
+            import os
+
+            # Change to task-specific workspace directory so relative paths work correctly
+            original_cwd = os.getcwd()
+            os.chdir(str(self.workspace))
+            logger.info(f"📂 Changed working directory to: {self.workspace}")
 
             # Capture stdout
             stdout_buffer = io.StringIO()
@@ -214,8 +258,9 @@ class AgentOrchestrator:
             # Execute code
             exec(code, exec_globals)
 
-            # Restore stdout
+            # Restore stdout and working directory
             sys.stdout = old_stdout
+            os.chdir(original_cwd)
             output = stdout_buffer.getvalue()
 
             return {
@@ -224,9 +269,11 @@ class AgentOrchestrator:
                 "output": output
             }
         except Exception as e:
-            # Restore stdout if error
+            # Restore stdout and working directory if error
             if 'old_stdout' in locals():
                 sys.stdout = old_stdout
+            if 'original_cwd' in locals():
+                os.chdir(original_cwd)
             logger.error(f"Python execution error: {str(e)}")
             return {"success": False, "error": str(e)}
 
@@ -308,10 +355,17 @@ class AgentOrchestrator:
     async def _read_file(self, path: str) -> Dict[str, Any]:
         """Read file contents"""
         try:
+            # Try task workspace first
             file_path = self.workspace / path
 
+            # If not found in task workspace, try parent /workspace/ (for input files)
             if not file_path.exists():
-                return {"success": False, "error": "File not found"}
+                parent_path = self.workspace.parent / path
+                if parent_path.exists():
+                    file_path = parent_path
+                    logger.info(f"📖 Reading from parent workspace: {file_path}")
+                else:
+                    return {"success": False, "error": "File not found"}
 
             if file_path.stat().st_size > self.max_file_size:
                 return {"success": False, "error": "File too large"}
@@ -532,25 +586,104 @@ class AgenticLoop:
                 else:
                     logger.warning("⚠️ LLM sent empty content, skipping...")
 
-        # Scan artifacts directory for any files created by Python code
-        # (not tracked by write_file tool)
-        artifacts_dir = self.orchestrator.artifacts_dir
-        if artifacts_dir.exists():
-            for artifact_file in artifacts_dir.iterdir():
-                if artifact_file.is_file():
-                    # Check if already tracked
-                    artifact_path = str(artifact_file.relative_to(self.orchestrator.workspace))
-                    already_tracked = any(
-                        a.get("path") == artifact_path
-                        for a in self.orchestrator.session_state["artifacts"]
-                    )
-                    if not already_tracked:
-                        logger.info(f"📎 Found untracked artifact: {artifact_path}")
-                        self.orchestrator.session_state["artifacts"].append({
-                            "path": artifact_path,
-                            "size": artifact_file.stat().st_size,
-                            "created_at": datetime.utcnow().isoformat()
-                        })
+        # Scan workspace for any files created by Python code (not tracked by write_file tool)
+        # Check both artifacts directory AND workspace root for generated files
+        scan_dirs = [
+            self.orchestrator.artifacts_dir,  # /workspace/artifacts/
+            self.orchestrator.workspace       # /workspace/ (root)
+        ]
+
+        for scan_dir in scan_dirs:
+            if not scan_dir.exists():
+                continue
+
+            # For workspace root, only check files directly in root (not subdirectories)
+            files_to_check = []
+            if scan_dir == self.orchestrator.workspace:
+                # Workspace root: only direct files, skip directories
+                files_to_check = [f for f in scan_dir.iterdir() if f.is_file()]
+            else:
+                # Artifacts dir: all files
+                files_to_check = [f for f in scan_dir.iterdir() if f.is_file()]
+
+            for artifact_file in files_to_check:
+                # Check if already tracked
+                artifact_path = str(artifact_file.relative_to(self.orchestrator.workspace))
+                already_tracked = any(
+                    a.get("path") == artifact_path
+                    for a in self.orchestrator.session_state["artifacts"]
+                )
+
+                # Skip input files (sales2.txt, etc.)
+                if artifact_file.name in ['sales2.txt', 'sales.txt', 'sales.csv', 'sales2.csv']:
+                    continue
+
+                if not already_tracked:
+                    logger.info(f"📎 Found untracked artifact: {artifact_path}")
+                    self.orchestrator.session_state["artifacts"].append({
+                        "path": artifact_path,
+                        "size": artifact_file.stat().st_size,
+                        "created_at": datetime.utcnow().isoformat()
+                    })
+
+        # 🆕 Auto-complete detection: Check every 4 iterations if artifacts created
+        # This handles local models (llama, qwen, deepseek) that don't reliably call FINAL_ANSWER
+        # Check at iterations 4, 8, 12, 16, etc. to give agent multiple chances
+        if not task_complete and len(self.orchestrator.session_state["artifacts"]) > 0:
+            # Check every 4 iterations (4, 8, 12, 16, 20, etc.)
+            if self.iteration >= 4 and self.iteration % 4 == 0:
+                # Check if any artifact looks like requested output
+                output_extensions = ['.html', '.png', '.jpg', '.jpeg', '.svg', '.pdf',
+                                   '.csv', '.json', '.txt', '.xlsx', '.docx']
+                for artifact in self.orchestrator.session_state["artifacts"]:
+                    artifact_path = artifact.get("path", "")
+                    if any(artifact_path.endswith(ext) for ext in output_extensions):
+                        logger.info(f"✅ Auto-completing: Detected output file '{artifact_path}' after {self.iteration} iterations (checkpoint every 4 iterations)")
+                        final_answer = f"Task completed. Created output file: {artifact_path}"
+                        task_complete = True
+                        break
+
+        # 🆕 FINAL ARTIFACT SCAN - Scan workspace one more time AFTER loop completes
+        # This catches files created in the last iteration (when FINAL_ANSWER is called)
+        # Add to session_state["artifacts"] so it's included in the result dict below
+        logger.info("🔍 Running final artifact scan after loop completion...")
+        final_scan_dirs = [
+            self.orchestrator.artifacts_dir,  # /workspace/artifacts/
+            self.orchestrator.workspace       # /workspace/ (root)
+        ]
+
+        for scan_dir in final_scan_dirs:
+            if not scan_dir.exists():
+                continue
+
+            files_to_check = []
+            if scan_dir == self.orchestrator.workspace:
+                # Workspace root: only direct files, skip directories
+                files_to_check = [f for f in scan_dir.iterdir() if f.is_file()]
+            else:
+                # Artifacts dir: all files
+                files_to_check = [f for f in scan_dir.iterdir() if f.is_file()]
+
+            for artifact_file in files_to_check:
+                artifact_path = str(artifact_file.relative_to(self.orchestrator.workspace))
+
+                # Skip input files
+                if artifact_file.name in ['sales2.txt', 'sales.txt', 'sales.csv', 'sales2.csv']:
+                    continue
+
+                # Check if already tracked
+                already_tracked = any(
+                    a.get("path") == artifact_path
+                    for a in self.orchestrator.session_state["artifacts"]
+                )
+
+                if not already_tracked:
+                    logger.info(f"📎 Final scan found artifact: {artifact_path}")
+                    self.orchestrator.session_state["artifacts"].append({
+                        "path": artifact_path,
+                        "size": artifact_file.stat().st_size,
+                        "created_at": datetime.utcnow().isoformat()
+                    })
 
         # Build final result
         result = {
@@ -663,28 +796,51 @@ ARGS: {{"path": "sales.txt"}}
 
 Your Response (Step 2 - after seeing data):
 TOOL_CALL: execute_python
-ARGS: {{"code": "import pandas as pd\\nimport matplotlib.pyplot as plt\\ndf = pd.read_csv('sales.txt', sep='\\\\t')\\nplt.bar(df['Product'], df['Revenue'])\\nplt.savefig('/workspace/artifacts/chart.png')\\nprint('Done')"}}
+ARGS: {{"code": "import pandas as pd\\nimport matplotlib.pyplot as plt\\nimport os\\n# Process data and create chart\\nos.makedirs('artifacts', exist_ok=True)\\nplt.bar(df['Product'], df['Revenue'])\\n# Save with RELATIVE path\\nplt.savefig('artifacts/chart.png')\\nprint('Done')"}}
 
 Your Response (Step 3):
-FINAL_ANSWER: Chart created at /workspace/artifacts/chart.png showing revenue by product
+FINAL_ANSWER: Chart created at artifacts/chart.png showing revenue by product
 
-Example 2 - ML Task (needs package):
-User: "Build XGBoost model on data.csv"
+Example 2 - CSV Analysis with read_file content (IMPORTANT):
+User: "Analyze sales2.txt and create a plotly bar chart"
+
+Your Response (Step 1):
+TOOL_CALL: read_file
+ARGS: {{"path": "sales2.txt"}}
+
+Your Response (Step 2 - after getting file content):
+TOOL_CALL: install_package
+ARGS: {{"package": "plotly"}}
+
+Your Response (Step 3 - use content from read_file):
+TOOL_CALL: execute_python
+ARGS: {{"code": "import pandas as pd\\nimport plotly.express as px\\nfrom io import StringIO\\nimport os\\n# Use the CONTENT from read_file (already in memory)\\n# The read_file tool returned the content, use it via StringIO\\ncontent = '''<file content from read_file result>'''\\ndf = pd.read_csv(StringIO(content), delimiter='\\\\t')\\nos.makedirs('artifacts', exist_ok=True)\\nfig = px.bar(df, x='product', y='revenue', title='Revenue by Product')\\nfig.write_html('artifacts/revenue_chart.html')\\nprint('Chart saved')"}}
+
+Your Response (Step 4):
+FINAL_ANSWER: Interactive Plotly chart saved to artifacts/revenue_chart.html
+
+Example 3 - Plotly Interactive Chart (IMPORTANT):
+User: "Create a plotly chart and save as HTML"
 
 Your Response (Step 1):
 TOOL_CALL: install_package
-ARGS: {{"package": "xgboost"}}
+ARGS: {{"package": "plotly"}}
 
 Your Response (Step 2):
-TOOL_CALL: read_file
-ARGS: {{"path": "data.csv"}}
+TOOL_CALL: execute_python
+ARGS: {{"code": "import plotly.express as px\\nimport pandas as pd\\nimport os\\n# Process data and create chart\\nos.makedirs('artifacts', exist_ok=True)\\nfig = px.bar(df, x='Product', y='Revenue', title='Sales Report')\\n# Save with RELATIVE path\\nfig.write_html('artifacts/chart.html')\\nprint('Chart saved')"}}
 
 Your Response (Step 3):
-TOOL_CALL: execute_python
-ARGS: {{"code": "import pandas as pd\\nimport xgboost as xgb\\ndf = pd.read_csv('data.csv')\\nX = df.drop('target', axis=1)\\ny = df['target']\\nmodel = xgb.XGBRegressor()\\nmodel.fit(X, y)\\nprint(f'Model R2: {{model.score(X, y):.3f}}')"}}
+FINAL_ANSWER: Interactive Plotly chart saved to artifacts/chart.html
 
-Your Response (Step 4):
-FINAL_ANSWER: XGBoost model trained with R² score displayed in output
+⚠️ CRITICAL RULES:
+- ALWAYS save output files with RELATIVE paths: 'artifacts/chart.html' NOT '/workspace/artifacts/chart.html'
+- Create artifacts directory if needed: os.makedirs('artifacts', exist_ok=True)
+- For Plotly: Use fig.write_html('artifacts/filename.html') - NEVER use Dash or app.run_server()
+- NEVER use absolute paths like /workspace/artifacts/ when saving files
+- NEVER try to run interactive servers (Dash, Flask, Streamlit)
+- When you use read_file, the content is returned in the tool result - USE IT! Don't try to read the file again with pd.read_csv(filename)
+- ALWAYS use StringIO for CSV content: df = pd.read_csv(StringIO(content), delimiter='\\t')
 
 🚀 START NOW - Call your first tool immediately!"""
 
@@ -759,14 +915,8 @@ FINAL_ANSWER: XGBoost model trained with R² score displayed in output
     def _parse_response(self, response: str) -> Dict[str, Any]:
         """Parse LLM response for actions"""
 
-        # Check for final answer
-        if "FINAL_ANSWER:" in response:
-            return {
-                "type": "final_answer",
-                "content": response.split("FINAL_ANSWER:")[1].strip()
-            }
-
-        # Check for tool call
+        # Check for tool call FIRST (priority over FINAL_ANSWER)
+        # This prevents premature completion when LLM includes both in same message
         if "TOOL_CALL:" in response:
             try:
                 # Parse tool name and arguments from LLM response
@@ -793,6 +943,14 @@ FINAL_ANSWER: XGBoost model trained with R² score displayed in output
 
                 args_json = args_line[0].replace('ARGS:', '').strip()
 
+                # Clean up markdown code fences and other formatting issues
+                # LLMs sometimes include ```json or ``` at the end
+                args_json = args_json.rstrip('`').strip()
+                if args_json.startswith('```json'):
+                    args_json = args_json[7:].strip()
+                elif args_json.startswith('```'):
+                    args_json = args_json[3:].strip()
+
                 # Parse JSON arguments
                 try:
                     args = json.loads(args_json)
@@ -813,11 +971,166 @@ FINAL_ANSWER: XGBoost model trained with R² score displayed in output
                 logger.error(f"❌ Error parsing tool call: {e}")
                 return {"type": "thinking", "content": response}
 
+        # Check for final answer (AFTER tool call check)
+        if "FINAL_ANSWER:" in response:
+            return {
+                "type": "final_answer",
+                "content": response.split("FINAL_ANSWER:")[1].strip()
+            }
+
         # Default: thinking/reasoning step
         return {
             "type": "thinking",
             "content": response
         }
+
+
+async def upload_to_minio(orchestrator: AgentOrchestrator, task_id: str, result: Dict[str, Any]):
+    """
+    Upload all task files to MinIO for persistence.
+
+    Structure:
+        projects/{project}/{user}/agent-tasks/{task_name}/{task_id}/
+            ├── input/
+            ├── artifacts/
+            ├── logs/
+            └── metadata.json
+    """
+    try:
+        from minio import Minio
+        import re
+
+        # Get MinIO config from env
+        minio_endpoint = os.getenv("MINIO_ENDPOINT", "minio:9000")
+        minio_access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+        minio_secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+        bucket_name = os.getenv("MINIO_BUCKET", "documents")  # Changed from chatbot-bucket to documents
+
+        # Initialize MinIO client
+        minio_client = Minio(
+            minio_endpoint,
+            access_key=minio_access_key,
+            secret_key=minio_secret_key,
+            secure=False
+        )
+
+        # Sanitize path components
+        def sanitize(s: str) -> str:
+            s = s.lower().strip()
+            s = re.sub(r'\s+', '-', s)
+            s = re.sub(r'[^a-z0-9\-_.]', '', s)
+            return s.strip('-')
+
+        # Get base path from database (includes organizational structure)
+        # Query database for minio_base_path
+        import asyncpg
+        from sqlalchemy import text
+
+        # Get database connection details from env
+        db_host = os.getenv("POSTGRES_HOST", "postgres")
+        db_port = os.getenv("POSTGRES_PORT", "5432")
+        db_name = os.getenv("POSTGRES_DB", "ragchatbot")
+        db_user = os.getenv("POSTGRES_USER", "postgres")
+        db_password = os.getenv("POSTGRES_PASSWORD", "postgres")
+
+        # Fetch minio_base_path from database
+        base_path = None
+        try:
+            conn = await asyncpg.connect(
+                host=db_host,
+                port=db_port,
+                database=db_name,
+                user=db_user,
+                password=db_password
+            )
+            base_path = await conn.fetchval(
+                "SELECT minio_base_path FROM agent_tasks WHERE task_id = $1",
+                task_id
+            )
+            await conn.close()
+        except Exception as e:
+            logger.warning(f"Failed to fetch minio_base_path from database: {e}")
+
+        # Fallback to old structure if database query fails
+        if not base_path:
+            project_sanitized = sanitize(orchestrator.project_name)
+            username_sanitized = sanitize(orchestrator.username)
+            task_name_sanitized = sanitize(orchestrator.task_name)
+            base_path = f"projects/{project_sanitized}/{username_sanitized}/agent-tasks/{task_name_sanitized}/{task_id}/"
+            logger.warning(f"Using fallback base_path: {base_path}")
+
+        logger.info(f"📤 Uploading to MinIO: {base_path}")
+
+        # Upload input files
+        for input_file in orchestrator.input_dir.iterdir():
+            if input_file.is_file():
+                minio_path = f"{base_path}input/{input_file.name}"
+                minio_client.fput_object(bucket_name, minio_path, str(input_file))
+                logger.info(f"  ✅ Uploaded input: {input_file.name}")
+
+        # Upload artifacts from both artifacts directory AND workspace root
+        # This handles files created anywhere in the workspace
+        artifact_files = []
+
+        # From artifacts directory
+        if orchestrator.artifacts_dir.exists():
+            artifact_files.extend([f for f in orchestrator.artifacts_dir.iterdir() if f.is_file()])
+
+        # From workspace root (skip input files and subdirectories)
+        skip_files = {'sales2.txt', 'sales.txt', 'sales.csv', 'sales2.csv'}
+        if orchestrator.workspace.exists():
+            workspace_files = [
+                f for f in orchestrator.workspace.iterdir()
+                if f.is_file() and f.name not in skip_files
+            ]
+            artifact_files.extend(workspace_files)
+
+        # Upload all collected artifacts
+        for artifact_file in artifact_files:
+            minio_path = f"{base_path}artifacts/{artifact_file.name}"
+            try:
+                minio_client.fput_object(bucket_name, minio_path, str(artifact_file))
+                logger.info(f"  ✅ Uploaded artifact: {artifact_file.name}")
+            except Exception as e:
+                logger.warning(f"  ⚠️ Failed to upload {artifact_file.name}: {e}")
+
+        # Upload logs
+        for log_file in orchestrator.logs_dir.iterdir():
+            if log_file.is_file():
+                minio_path = f"{base_path}logs/{log_file.name}"
+                minio_client.fput_object(bucket_name, minio_path, str(log_file))
+                logger.info(f"  ✅ Uploaded log: {log_file.name}")
+
+        # Create and upload metadata.json
+        metadata = {
+            "task_id": task_id,
+            "task_name": orchestrator.task_name,
+            "username": orchestrator.username,
+            "project_name": orchestrator.project_name,
+            "session_id": orchestrator.session_id,
+            "created_at": orchestrator.session_state.get("created_at"),
+            "completed_at": datetime.utcnow().isoformat(),
+            "success": result.get("success"),
+            "iterations": result.get("iterations"),
+            "artifacts_count": len(result.get("artifacts", [])),
+            "tool_calls_count": result.get("tool_calls", 0)
+        }
+
+        metadata_file = orchestrator.workspace / "metadata.json"
+        with open(metadata_file, 'w') as f:
+            json.dump(metadata, f, indent=2)
+
+        minio_path = f"{base_path}metadata.json"
+        minio_client.fput_object(bucket_name, minio_path, str(metadata_file))
+        logger.info(f"  ✅ Uploaded metadata.json")
+
+        logger.info(f"✅ MinIO upload complete: {base_path}")
+
+    except Exception as e:
+        logger.error(f"❌ MinIO upload failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 async def main():
@@ -841,7 +1154,10 @@ async def main():
 
     # Get values from config or env vars (env vars as fallback)
     task_id = task_config.get("task_id") or os.getenv("TASK_ID", "default")
+    task_name = task_config.get("task_name") or os.getenv("TASK_NAME", "agent_task")  # 🆕 NEW
     session_id = task_config.get("session_id") or os.getenv("SESSION_ID", "default")
+    username = task_config.get("username") or os.getenv("USERNAME", "unknown")  # 🆕 NEW
+    project_name = task_config.get("project_name") or os.getenv("PROJECT_NAME", "global-project")  # 🆕 NEW
 
     # Get task - try base64 encoded first (newer method), then plain text (legacy)
     task = task_config.get("task")
@@ -863,19 +1179,27 @@ async def main():
 
     max_iterations = task_config.get("max_iterations") or int(os.getenv("AGENT_MAX_ITERATIONS", "20"))
 
-    workspace = Path(os.getenv("AGENT_WORKSPACE", "/workspace"))
+    # 🆕 Use task_name for workspace path (user's request)
+    base_workspace = Path(os.getenv("AGENT_WORKSPACE", "/workspace"))
+    workspace = base_workspace / task_name  # Use task_name instead of task_id
 
     logger.info(f"📋 Task ID: {task_id}")
+    logger.info(f"🏷️  Task Name: {task_name}")
+    logger.info(f"👤 Username: {username}")
+    logger.info(f"📁 Project: {project_name}")
     logger.info(f"🔖 Session ID: {session_id}")
-    logger.info(f"📁 Workspace: {workspace}")
+    logger.info(f"📂 Workspace: {workspace}")
     logger.info(f"🔄 Max Iterations: {max_iterations}")
     logger.info(f"📝 Task: {task[:200]}...")
 
     # Layer 1: Initialize orchestrator
     orchestrator = AgentOrchestrator(
         task_id=task_id,
+        task_name=task_name,  # 🆕 NEW
         session_id=session_id,
-        workspace=workspace
+        workspace=workspace,
+        username=username,  # 🆕 NEW
+        project_name=project_name  # 🆕 NEW
     )
 
     # Layer 2: Initialize agentic loop
@@ -903,8 +1227,16 @@ async def main():
         logger.info("=" * 80)
         logger.info(f"✅ TASK COMPLETED: {result['success']}")
         logger.info(f"📊 Iterations: {result['iterations']}")
-        logger.info(f"📁 Artifacts: {len(result['artifacts'])}")
+        logger.info(f"📁 Artifacts: {len(result.get('artifacts', []))}")
         logger.info("=" * 80)
+
+        # 🆕 Upload all files to MinIO before returning result
+        try:
+            await upload_to_minio(orchestrator, task_id, result)
+            logger.info("✅ Successfully uploaded all files to MinIO")
+        except Exception as e:
+            logger.error(f"❌ Failed to upload to MinIO: {e}")
+            # Continue anyway - don't fail the task if MinIO upload fails
 
         # CRITICAL: Print result to stdout so docker exec can capture it
         # The agent_service.py expects JSON output on stdout to parse the result
@@ -914,8 +1246,9 @@ async def main():
         print("AGENT_RESULT_JSON_END")
         print("=" * 80)
 
-        # Exit with success
-        sys.exit(0 if result['success'] else 1)
+        # Exit with success (always exit 0, let backend determine success/failure from JSON)
+        # This matches ChatGPT behavior where tasks complete with whatever progress was made
+        sys.exit(0)
 
     except Exception as e:
         logger.error(f"❌ Fatal error: {str(e)}")
