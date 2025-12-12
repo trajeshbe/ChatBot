@@ -1,0 +1,98 @@
+{
+  "total": 13,
+  "passed": 6,
+  "failed": 7,
+  "tests": [
+    {
+      "id": "TC-DIRECT-001",
+      "description": "Simple factual question",
+      "status": "PASS",
+      "details": "Answer: The capital of France is Paris.",
+      "timestamp": "2025-12-12T19:22:54.889420"
+    },
+    {
+      "id": "TC-DIRECT-002",
+      "description": "Mathematical calculation",
+      "status": "PASS",
+      "details": "Answer: The product of 127 and 43 is **5,461**.",
+      "timestamp": "2025-12-12T19:23:33.323114"
+    },
+    {
+      "id": "TC-DIRECT-003",
+      "description": "Code generation",
+      "status": "FAIL",
+      "details": "Error: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=60)",
+      "timestamp": "2025-12-12T19:24:35.316522"
+    },
+    {
+      "id": "TC-DOC-001",
+      "description": "Get documents list",
+      "status": "PASS",
+      "details": "Found 36 documents (5 PDFs, 23 TXT files)",
+      "timestamp": "2025-12-12T19:24:35.345857"
+    },
+    {
+      "id": "TC-RAG-001",
+      "description": "RAG query on PDF",
+      "status": "PASS",
+      "details": "Retrieved 0 sources. Answer: The document discusses the use of OCR (Optical Character Recognition) and vision-based large language models for evaluating document parsing and recog",
+      "timestamp": "2025-12-12T19:25:20.107202"
+    },
+    {
+      "id": "TC-RAG-002",
+      "description": "RAG query on text document",
+      "status": "FAIL",
+      "details": "Error: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=60)",
+      "timestamp": "2025-12-12T19:26:22.175502"
+    },
+    {
+      "id": "TC-RAG-003",
+      "description": "Semantic search accuracy",
+      "status": "FAIL",
+      "details": "Error: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=60)",
+      "timestamp": "2025-12-12T19:27:24.097327"
+    },
+    {
+      "id": "TC-RAG-004",
+      "description": "Multi-document RAG",
+      "status": "FAIL",
+      "details": "Error: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=60)",
+      "timestamp": "2025-12-12T19:28:26.115253"
+    },
+    {
+      "id": "TC-MEM-001",
+      "description": "Short-term memory (session)",
+      "status": "FAIL",
+      "details": "Error: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=60)",
+      "timestamp": "2025-12-12T19:30:31.123502"
+    },
+    {
+      "id": "TC-MEM-002",
+      "description": "Session isolation",
+      "status": "PASS",
+      "details": "Session properly isolated (no answer about previous context)",
+      "timestamp": "2025-12-12T19:31:33.128568"
+    },
+    {
+      "id": "TC-EDGE-001",
+      "description": "Empty query handling",
+      "status": "PASS",
+      "details": "API handled empty query gracefully",
+      "timestamp": "2025-12-12T19:31:33.160992"
+    },
+    {
+      "id": "TC-EDGE-002",
+      "description": "Long query handling",
+      "status": "FAIL",
+      "details": "Error: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=60)",
+      "timestamp": "2025-12-12T19:33:17.694901"
+    },
+    {
+      "id": "TC-EDGE-003",
+      "description": "Special characters handling",
+      "status": "FAIL",
+      "details": "Error: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=60)",
+      "timestamp": "2025-12-12T19:34:19.248364"
+    }
+  ]
+}

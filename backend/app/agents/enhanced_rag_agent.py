@@ -1025,12 +1025,12 @@ IMPORTANT:
 - Be specific and confident"""
 
         try:
-            # Use ultra-fast Qwen 1.5B model for tool selection
+            # Use Qwen 2.5 Coder 7B model for tool selection (more reliable than 1.5b)
             result = await llm_service.generate(
                 prompt=selection_prompt,
                 max_tokens=300,
                 temperature=0.1,  # Low temperature for consistent selection
-                model_id="qwen2.5:1.5b"  # Same model as query classification
+                model_id="qwen2.5-coder:7b"  # Reliable model that fits in GPU
             )
 
             # Extract and parse response
@@ -1281,6 +1281,23 @@ IMPORTANT:
                 if row_count > 10:
                     context += f"\n... and {row_count - 10} more records"
 
+        elif tool_id == "navigation_agent":
+            # Navigation agent returns same structure as smart_extraction
+            table_data = result_data.get("table", [])
+            row_count = result_data.get("row_count", 0)
+            start_url = result_data.get("extraction_metadata", {}).get("start_url", "the website")
+
+            if row_count == 0:
+                context = f"I navigated {start_url} but found no results."
+            else:
+                # Show sample data
+                sample_rows = table_data[:10]
+                context = f"Data extracted by navigating {start_url} ({row_count} records total):\n\n"
+                for i, row in enumerate(sample_rows, 1):
+                    context += f"{i}. {row}\n"
+                if row_count > 10:
+                    context += f"\n... and {row_count - 10} more records"
+
         elif tool_id == "web_scraper":
             text = result_data.get("text", "")
             url = result_data.get("url", "unknown")
@@ -1393,9 +1410,10 @@ IMPORTANT:
 
         try:
             # Create a synthetic query that includes the context
-            synthesis_query = f"""Based on the following information, {state["query"]}
+            # Note: Avoid "can you" phrasing to prevent ai_personal classification
+            synthesis_query = f"""Using this information, answer the question: {state["query"]}
 
-Context:
+Extracted Data:
 {context}"""
 
             # Call enhanced RAG service with user's chosen model and threshold parameters
@@ -1468,6 +1486,33 @@ Context:
                 }],
                 "metadata": {
                     **result_data.get("metadata", {}),
+                    "synthesis_method": "rag_service"
+                }
+            }
+            # Add model info if present in rag_response
+            if "model" in rag_response:
+                response["model"] = rag_response["model"]
+            if "model_name" in rag_response:
+                response["model_name"] = rag_response["model_name"]
+            return response
+
+        elif tool_id == "navigation_agent":
+            # Navigation agent returns same structure as smart_extraction
+            table_data = result_data.get("table", [])
+            row_count = result_data.get("row_count", 0)
+
+            response = {
+                "answer": answer,
+                "sources": [{
+                    "type": "web_navigation",
+                    "url": result_data.get("extraction_metadata", {}).get("start_url", ""),
+                    "data": table_data,
+                    "extraction_metadata": result_data.get("extraction_metadata", {})
+                }],
+                "metadata": {
+                    "extraction_method": "playwright_navigation",
+                    "row_count": row_count,
+                    "pages_visited": result_data.get("pages_visited", 1),
                     "synthesis_method": "rag_service"
                 }
             }

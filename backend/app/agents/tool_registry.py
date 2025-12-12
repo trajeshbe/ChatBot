@@ -734,16 +734,40 @@ class ToolRegistry:
 
     async def _wrap_smart_extraction(
         self,
-        url: str,
-        user_instructions: str,
-        llm_provider: str = "ollama",
-        model_id: str = "qwen2.5:1.5b"
+        **kwargs
     ) -> Dict[str, Any]:
         """
         Wrapper for Smart Web Extraction
 
         Calls the ultra-smart extraction endpoint to extract data from websites.
+
+        Accepts query parameter and extracts URL from it.
         """
+        import re
+
+        # Extract parameters
+        query = kwargs.get('query', '')
+        url = kwargs.get('url')
+        user_instructions = kwargs.get('user_instructions', query)
+        llm_provider = kwargs.get('llm_provider', 'ollama')
+        model_id = kwargs.get('model_id', 'qwen2.5:1.5b')
+
+        # Extract URL from query if not explicitly provided
+        if not url:
+            url_pattern = r'https?://[^\s]+'
+            urls = re.findall(url_pattern, query)
+            if urls:
+                url = urls[0]
+            else:
+                logger.error(f"No URL found in query: {query}")
+                return {
+                    "success": False,
+                    "table": [],
+                    "columns": [],
+                    "row_count": 0,
+                    "error": "No URL found in query. Please provide a valid URL."
+                }
+
         try:
             # Call the extraction API with increased timeout for complex sites
             async with httpx.AsyncClient(timeout=180.0) as client:
@@ -930,7 +954,7 @@ class ToolRegistry:
                     .join(SessionDocument, SessionDocument.document_id == Document.id)
                     .where(SessionDocument.session_id == session_id)
                     .where(Document.file_type == 'pdf')
-                    .order_by(Document.upload_date.desc())
+                    .order_by(Document.created_at.desc())
                     .limit(1)
                 )
                 pdf_doc = result.scalar_one_or_none()
@@ -1036,7 +1060,7 @@ class ToolRegistry:
                     .join(SessionDocument, SessionDocument.document_id == Document.id)
                     .where(SessionDocument.session_id == session_id)
                     .where(Document.file_type.in_(['pdf', 'png', 'jpg', 'jpeg', 'tiff']))
-                    .order_by(Document.upload_date.desc())
+                    .order_by(Document.created_at.desc())
                     .limit(1)
                 )
                 doc = result.scalar_one_or_none()
@@ -1110,21 +1134,43 @@ class ToolRegistry:
 
     async def _wrap_navigation_agent(
         self,
-        start_url: str,
-        navigation_instructions: str,
-        max_pages: int = 10,
-        llm_provider: str = "ollama",
-        model_id: str = "qwen2.5:1.5b"
+        **kwargs
     ) -> Dict[str, Any]:
         """
         Wrapper for Navigation Agent
 
         Navigates through multiple pages using AI guidance.
+
+        Accepts query parameter and extracts URL from it.
         """
         import time
+        import re
         from app.services.tool_usage_tracker import tool_tracker, ToolCategory
         from app.core.database import AsyncSessionLocal
         from app.core.config import settings
+
+        # Extract parameters
+        query = kwargs.get('query', '')
+        start_url = kwargs.get('start_url') or kwargs.get('url')
+        navigation_instructions = kwargs.get('navigation_instructions', query)
+        max_pages = kwargs.get('max_pages', 10)
+        llm_provider = kwargs.get('llm_provider', 'ollama')
+        model_id = kwargs.get('model_id', 'qwen2.5:1.5b')
+
+        # Extract URL from query if not explicitly provided
+        if not start_url:
+            url_pattern = r'https?://[^\s]+'
+            urls = re.findall(url_pattern, query)
+            if urls:
+                start_url = urls[0]
+            else:
+                logger.error(f"No URL found in query: {query}")
+                return {
+                    "success": False,
+                    "pages_visited": 0,
+                    "data": [],
+                    "error": "No URL found in query. Please provide a valid URL to navigate."
+                }
 
         start_time = time.time()
 
