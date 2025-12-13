@@ -250,12 +250,14 @@ async def cancel_agent_task(
 async def upload_workspace_file(
     file: UploadFile = File(...),
     project_id: Optional[str] = Form(None),
+    session_id: Optional[str] = Form(None),
     role: str = Form("user"),
     department: str = Form("default"),
     team: str = Form("default-team"),
     username: str = Form("anonymous"),
     project_name: str = Form("agent-workspace"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user_optional)
 ):
     """
     Upload a file to MinIO with organizational path structure and copy to agent workspace
@@ -270,7 +272,8 @@ async def upload_workspace_file(
 
     **Form Data**:
     - file: File to upload (multipart/form-data)
-    - project_id: Optional project ID (UUID)
+    - project_id: Optional project ID (UUID) - will be derived from session if not provided
+    - session_id: Optional session ID - used to derive project_id if not explicitly provided
     - role: User role (default: "user")
     - department: Department name (default: "default")
     - team: Team name (default: "default-team")
@@ -287,6 +290,33 @@ async def upload_workspace_file(
     """
     try:
         logger.info(f"📤 Uploading file to agent workspace: {file.filename}")
+        logger.info(f"📁 Received project_id from form: {project_id}")
+
+        # 🆕 PROJECT ID RESOLUTION (same as main upload endpoint)
+        # Priority: 1. Form data  2. User default  3. Session project  4. Fallback to "Global"
+
+        # Get user's default project if not overridden by form
+        if not project_id and current_user and hasattr(current_user, 'default_project_id') and current_user.default_project_id:
+            project_id = str(current_user.default_project_id)
+            logger.info(f"📂 Using user's default project_id: {project_id}")
+
+        # 🆕 FALLBACK: Get project_id from session if not provided
+        if not project_id and session_id:
+            from app.models.database_enhanced import ChatSession, Project
+            session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+            session_result = await db.execute(session_query)
+            session = session_result.scalar_one_or_none()
+            if session and session.project_id:
+                project_id = str(session.project_id)
+                logger.info(f"📂 Using session's project_id: {project_id}")
+
+                # Also derive project_name from project_id
+                project_query = select(Project).where(Project.id == session.project_id)
+                project_result = await db.execute(project_query)
+                project = project_result.scalar_one_or_none()
+                if project:
+                    project_name = project.name
+                    logger.info(f"📂 Project (from session): {project_name}")
 
         # Initialize MinIO client
         minio_client = Minio(
