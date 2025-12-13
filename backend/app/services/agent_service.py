@@ -228,6 +228,13 @@ Task name:"""
             logger.warning(f"⚠️ Failed to sync documents to workspace: {e}")
             # Continue task creation - agent can still access workspace files uploaded via /upload-workspace-file
 
+        # Validate and normalize engine selection
+        engine = (request.engine or "default").lower()
+        valid_engines = ["default", "codex-cli", "claude-code-cli"]
+        if engine not in valid_engines:
+            logger.warning(f"⚠️ Invalid engine '{engine}', defaulting to 'default'")
+            engine = "default"
+
         # Create database record
         agent_task = AgentTask(
             task_id=task_id,
@@ -248,10 +255,10 @@ Task name:"""
         await self.db.commit()
         await self.db.refresh(agent_task)
 
-        logger.info(f"📝 Created agent task: {task_id}")
+        logger.info(f"📝 Created agent task: {task_id} with engine: {engine}")
 
-        # Execute task asynchronously (non-blocking)
-        asyncio.create_task(self._execute_task_async(task_id))
+        # Execute task asynchronously (non-blocking) with selected engine
+        asyncio.create_task(self._execute_task_async(task_id, engine))
 
         return AgentTaskResponse(
             task_id=task_id,
@@ -260,9 +267,26 @@ Task name:"""
             created_at=agent_task.created_at
         )
 
-    async def _execute_task_async(self, task_id: str):
+    async def _execute_task_async(self, task_id: str, engine: str = "default"):
         """
-        Execute agent task asynchronously in agent-runtime container
+        Execute agent task asynchronously using specified engine
+
+        Args:
+            task_id: Task identifier
+            engine: Execution engine (default, codex-cli, or claude-code-cli)
+        """
+        # Route to appropriate engine
+        if engine == "default":
+            await self._execute_task_default_engine(task_id)
+        elif engine in ["codex-cli", "claude-code-cli"]:
+            await self._execute_task_cli_engine(task_id, engine)
+        else:
+            logger.error(f"❌ Unknown engine: {engine}")
+            await self._execute_task_default_engine(task_id)  # Fallback
+
+    async def _execute_task_default_engine(self, task_id: str):
+        """
+        Execute agent task asynchronously in agent-runtime container (DEFAULT engine)
 
         Args:
             task_id: Task identifier
@@ -285,7 +309,7 @@ Task name:"""
                 task.started_at = datetime.now()
                 await db.commit()
 
-                logger.info(f"🚀 Executing agent task: {task_id}")
+                logger.info(f"🚀 Executing agent task with DEFAULT engine: {task_id}")
 
                 # 🆕 FIX: Clean up old artifacts from previous runs of this task_name
                 # This prevents old artifacts from showing up in new task results
@@ -566,6 +590,10 @@ Task name:"""
 
                 logger.info(f"✅ Task {task_id} completed with parsed JSON result")
 
+                # 🆕 Upload artifacts to MinIO
+                if task.artifacts and task.minio_base_path:
+                    await self._upload_artifacts_to_minio(task)
+
             except Exception as e:
                 logger.warning(f"⚠️ Failed to parse agent result JSON: {e}, falling back to log parsing")
                 agent_result = None
@@ -641,6 +669,88 @@ Task name:"""
                 logger.error(f"❌ Task {task_id} failed with return code {return_code}")
 
         await db.commit()
+
+    async def _upload_artifacts_to_minio(self, task: AgentTask):
+        """
+        Upload agent task artifacts from container to MinIO storage
+
+        Reads artifact files from the agent-runtime container and uploads them to MinIO
+        at the task's minio_base_path location.
+
+        Args:
+            task: AgentTask with artifacts list and minio_base_path
+        """
+        import subprocess
+        import io
+        import mimetypes
+        from pathlib import Path
+        from minio import Minio
+        from app.core.config import settings
+
+        if not task.artifacts:
+            logger.info(f"No artifacts to upload for task {task.task_id}")
+            return
+
+        if not task.minio_base_path:
+            logger.warning(f"No minio_base_path set for task {task.task_id}, skipping upload")
+            return
+
+        logger.info(f"📤 Uploading {len(task.artifacts)} artifact(s) to MinIO for task {task.task_id}")
+
+        # Initialize MinIO client
+        minio_client = Minio(
+            settings.MINIO_ENDPOINT,
+            access_key=settings.MINIO_ACCESS_KEY,
+            secret_key=settings.MINIO_SECRET_KEY,
+            secure=settings.MINIO_SECURE
+        )
+
+        uploaded_count = 0
+        for artifact_path in task.artifacts:
+            try:
+                # Extract filename from path (e.g., "/workspace/artifacts/chart.html" → "chart.html")
+                artifact_name = Path(artifact_path).name
+
+                # Read file from agent-runtime container
+                logger.info(f"📥 Reading artifact from container: {artifact_path}")
+                read_cmd = [
+                    "docker", "exec", "rag-agent-runtime",
+                    "cat", artifact_path
+                ]
+                result = subprocess.run(read_cmd, capture_output=True, timeout=30)
+
+                if result.returncode != 0:
+                    logger.error(f"❌ Failed to read {artifact_path} from container: {result.stderr.decode()}")
+                    continue
+
+                file_data = result.stdout
+
+                # Determine content type
+                content_type, _ = mimetypes.guess_type(artifact_name)
+                if not content_type:
+                    content_type = "application/octet-stream"
+
+                # Construct MinIO path (e.g., "projects/.../task-id/chart.html")
+                minio_object_path = f"{task.minio_base_path}{artifact_name}"
+
+                # Upload to MinIO
+                minio_client.put_object(
+                    settings.MINIO_BUCKET_NAME,
+                    minio_object_path,
+                    io.BytesIO(file_data),
+                    length=len(file_data),
+                    content_type=content_type
+                )
+
+                logger.info(f"✅ Uploaded {artifact_name} to MinIO: {minio_object_path} ({len(file_data)} bytes)")
+                uploaded_count += 1
+
+            except subprocess.TimeoutExpired:
+                logger.error(f"⏱️ Timeout reading artifact {artifact_path} from container")
+            except Exception as e:
+                logger.error(f"❌ Failed to upload artifact {artifact_path}: {e}")
+
+        logger.info(f"🎉 Uploaded {uploaded_count}/{len(task.artifacts)} artifacts to MinIO")
 
     async def _sync_session_documents_to_workspace(self, session_id: str):
         """
@@ -940,6 +1050,97 @@ Task name:"""
             page=page,
             page_size=page_size
         )
+
+    async def _execute_task_cli_engine(self, task_id: str, engine: str):
+        """
+        Execute agent task using CLI engine (Codex CLI or Claude Code CLI)
+
+        Args:
+            task_id: Task identifier
+            engine: Engine name (codex-cli or claude-code-cli)
+        """
+        from app.core.database import AsyncSessionLocal
+        from app.services.engines import CodexCLIEngine, ClaudeCodeCLIEngine, EngineType
+        from pathlib import Path
+
+        async with AsyncSessionLocal() as db:
+            try:
+                # Get task from database
+                result = await db.execute(
+                    select(AgentTask).filter(AgentTask.task_id == task_id)
+                )
+                task = result.scalar_one_or_none()
+                if not task:
+                    logger.error(f"❌ Task not found: {task_id}")
+                    return
+
+                # Update status to running
+                task.status = TaskStatus.RUNNING
+                task.started_at = datetime.now()
+                await db.commit()
+
+                logger.info(f"🚀 Executing agent task with {engine.upper()} engine: {task_id}")
+
+                # Create workspace and artifacts directories
+                workspace_path = f"/workspace/{task.task_name or task_id}"
+                artifacts_path = f"{workspace_path}/artifacts"
+
+                Path(workspace_path).mkdir(parents=True, exist_ok=True)
+                Path(artifacts_path).mkdir(parents=True, exist_ok=True)
+
+                # Instantiate the appropriate engine with database session
+                # Database session is required to retrieve API keys from secrets service
+                if engine == "codex-cli":
+                    cli_engine = CodexCLIEngine(db_session=db)
+                elif engine == "claude-code-cli":
+                    cli_engine = ClaudeCodeCLIEngine(db_session=db)
+                else:
+                    raise ValueError(f"Unknown engine: {engine}")
+
+                # Execute task using the CLI engine
+                result_dict = await cli_engine.execute(
+                    task_description=task.task_description,
+                    workspace_path=workspace_path,
+                    artifacts_path=artifacts_path,
+                    max_iterations=task.max_iterations,
+                    timeout_seconds=task.timeout_seconds,
+                    model=task.model
+                )
+
+                # Update task with results
+                task.completed_at = datetime.now()
+                if task.started_at:
+                    task.duration_seconds = (task.completed_at - task.started_at).total_seconds()
+
+                if result_dict.get("success"):
+                    task.status = TaskStatus.COMPLETED
+                    task.result = result_dict.get("result", "Task completed")
+                    task.artifacts = result_dict.get("artifacts", [])
+                    task.llm_calls = result_dict.get("iterations", 0)
+                    logger.info(f"✅ Task {task_id} completed with {engine}")
+                else:
+                    task.status = TaskStatus.FAILED
+                    task.error = result_dict.get("error", "Task failed")
+                    logger.error(f"❌ Task {task_id} failed with {engine}: {task.error}")
+
+                await db.commit()
+
+            except Exception as e:
+                logger.error(f"❌ Error executing task {task_id} with {engine}: {e}")
+
+                # Update task as failed
+                result = await db.execute(
+                    select(AgentTask).filter(AgentTask.task_id == task_id)
+                )
+                task = result.scalar_one_or_none()
+                if task:
+                    task.status = TaskStatus.FAILED
+                    task.error = str(e)
+                    task.error_details = {"exception": str(type(e).__name__), "engine": engine}
+                    task.completed_at = datetime.now()
+                    if task.started_at:
+                        task.duration_seconds = (task.completed_at - task.started_at).total_seconds()
+                    await db.commit()
 
     async def cancel_task(self, task_id: str, reason: Optional[str] = None) -> bool:
         """
