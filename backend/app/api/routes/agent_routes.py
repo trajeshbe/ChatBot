@@ -9,7 +9,7 @@ import logging
 import shutil
 import os
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional, List
@@ -854,3 +854,333 @@ async def agent_service_health():
             "message": str(e),
             "agent_runtime": "unavailable"
         }
+
+
+@router.websocket("/tasks/{task_id}/ws")
+async def agent_task_websocket(
+    websocket: WebSocket,
+    task_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    WebSocket endpoint for real-time agent task execution streaming
+
+    Provides Claude Code-like interactive visualization of agent execution.
+    Streams events in real-time as the agent thinks, uses tools, and completes tasks.
+
+    **Connection URL**:
+    ```
+    ws://localhost:8000/api/v1/agent/tasks/{task_id}/ws
+    ```
+
+    **Event Types Streamed**:
+
+    1. **connection** - Initial connection confirmation
+    ```json
+    {
+      "type": "connection",
+      "task_id": "task-abc123",
+      "status": "connected",
+      "timestamp": "2025-12-13T10:30:00Z"
+    }
+    ```
+
+    2. **status_update** - Task status changes
+    ```json
+    {
+      "type": "status_update",
+      "status": "running",
+      "message": "Agent task started",
+      "timestamp": "2025-12-13T10:30:01Z"
+    }
+    ```
+
+    3. **thinking** - Agent's thought process
+    ```json
+    {
+      "type": "thinking",
+      "thought": "I need to analyze the sales data using pandas",
+      "iteration": 1,
+      "timestamp": "2025-12-13T10:30:02Z"
+    }
+    ```
+
+    4. **tool_use** - When agent calls a tool
+    ```json
+    {
+      "type": "tool_use",
+      "tool_name": "python_repl_tool",
+      "tool_input": "import pandas as pd\ndf = pd.read_csv('sales.csv')",
+      "iteration": 1,
+      "timestamp": "2025-12-13T10:30:03Z"
+    }
+    ```
+
+    5. **tool_result** - Tool execution result
+    ```json
+    {
+      "type": "tool_result",
+      "tool_name": "python_repl_tool",
+      "result": "DataFrame loaded successfully with 1000 rows",
+      "success": true,
+      "iteration": 1,
+      "timestamp": "2025-12-13T10:30:04Z"
+    }
+    ```
+
+    6. **artifact** - Artifact generated
+    ```json
+    {
+      "type": "artifact",
+      "artifact_path": "/workspace/artifacts/visualization.png",
+      "artifact_name": "visualization.png",
+      "artifact_type": "image/png",
+      "download_url": "/api/v1/agent/tasks/task-abc123/artifacts/visualization.png",
+      "timestamp": "2025-12-13T10:30:05Z"
+    }
+    ```
+
+    7. **completed** - Task completion
+    ```json
+    {
+      "type": "completed",
+      "status": "completed",
+      "result": "Successfully analyzed sales data and created visualization",
+      "artifacts": ["visualization.png", "report.html"],
+      "duration_seconds": 45.3,
+      "iterations": 5,
+      "timestamp": "2025-12-13T10:30:45Z"
+    }
+    ```
+
+    8. **error** - Error occurred
+    ```json
+    {
+      "type": "error",
+      "error": "Failed to read file: sales.csv not found",
+      "iteration": 2,
+      "timestamp": "2025-12-13T10:30:10Z"
+    }
+    ```
+
+    **Usage Example (JavaScript/TypeScript)**:
+    ```javascript
+    const ws = new WebSocket('ws://localhost:8000/api/v1/agent/tasks/task-abc123/ws');
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      switch(data.type) {
+        case 'thinking':
+          console.log('Agent thinking:', data.thought);
+          break;
+        case 'tool_use':
+          console.log('Using tool:', data.tool_name, data.tool_input);
+          break;
+        case 'tool_result':
+          console.log('Tool result:', data.result);
+          break;
+        case 'completed':
+          console.log('Task completed:', data.result);
+          ws.close();
+          break;
+      }
+    };
+    ```
+
+    **Connection Lifecycle**:
+    1. Client connects to WebSocket
+    2. Server sends 'connection' event
+    3. Server polls task status every 1 second
+    4. Server streams events as they occur
+    5. Server sends 'completed' or 'error' event when task finishes
+    6. Connection closes automatically on completion
+    """
+    import json
+    import asyncio
+    from datetime import datetime
+
+    await websocket.accept()
+    logger.info(f"🔌 WebSocket connected for task: {task_id}")
+
+    try:
+        # Send initial connection confirmation
+        await websocket.send_json({
+            "type": "connection",
+            "task_id": task_id,
+            "status": "connected",
+            "timestamp": datetime.now().isoformat()
+        })
+
+        # Initialize service
+        service = AgentOrchestrationService(db)
+
+        # Verify task exists
+        task_status = await service.get_task_status(task_id)
+        if not task_status:
+            await websocket.send_json({
+                "type": "error",
+                "error": f"Task not found: {task_id}",
+                "timestamp": datetime.now().isoformat()
+            })
+            await websocket.close()
+            return
+
+        # Send initial status
+        await websocket.send_json({
+            "type": "status_update",
+            "status": task_status.status,
+            "message": f"Task status: {task_status.status}",
+            "timestamp": datetime.now().isoformat()
+        })
+
+        # Track last known state to detect changes
+        last_status = task_status.status
+        last_iteration = 0
+        sent_artifacts = set()
+
+        # Poll task status and stream updates
+        while True:
+            # Check if client disconnected
+            try:
+                # Non-blocking check for disconnect
+                await asyncio.wait_for(websocket.receive_text(), timeout=0.1)
+            except asyncio.TimeoutError:
+                pass  # No message received, continue polling
+            except WebSocketDisconnect:
+                logger.info(f"🔌 WebSocket disconnected for task: {task_id}")
+                break
+
+            # Get latest task status
+            task_status = await service.get_task_status(task_id)
+
+            if not task_status:
+                await websocket.send_json({
+                    "type": "error",
+                    "error": "Task status unavailable",
+                    "timestamp": datetime.now().isoformat()
+                })
+                break
+
+            # Status changed
+            if task_status.status != last_status:
+                await websocket.send_json({
+                    "type": "status_update",
+                    "status": task_status.status,
+                    "message": f"Task status changed to: {task_status.status}",
+                    "timestamp": datetime.now().isoformat()
+                })
+                last_status = task_status.status
+
+            # New iteration started
+            if task_status.current_iteration and task_status.current_iteration > last_iteration:
+                last_iteration = task_status.current_iteration
+
+                # Send thinking event
+                await websocket.send_json({
+                    "type": "thinking",
+                    "thought": f"Iteration {last_iteration} in progress",
+                    "iteration": last_iteration,
+                    "timestamp": datetime.now().isoformat()
+                })
+
+            # Parse execution_log for detailed events
+            if task_status.execution_log:
+                try:
+                    # Extract recent tool uses from execution log
+                    # The execution log contains detailed step-by-step execution data
+                    # For now, we'll send a summary event
+
+                    # Check for new execution details
+                    if "tool_calls" in task_status.execution_log:
+                        tool_calls = task_status.execution_log.get("tool_calls", [])
+                        for tool_call in tool_calls[-3:]:  # Send last 3 tool calls
+                            await websocket.send_json({
+                                "type": "tool_use",
+                                "tool_name": tool_call.get("name", "unknown"),
+                                "tool_input": tool_call.get("input", ""),
+                                "iteration": last_iteration,
+                                "timestamp": datetime.now().isoformat()
+                            })
+                except Exception as e:
+                    logger.warning(f"Failed to parse execution log: {e}")
+
+            # Check for new artifacts
+            if task_status.artifacts:
+                for artifact in task_status.artifacts:
+                    if artifact not in sent_artifacts:
+                        sent_artifacts.add(artifact)
+
+                        from pathlib import Path
+                        artifact_name = Path(artifact).name
+
+                        # Determine artifact type
+                        artifact_type = "application/octet-stream"
+                        if artifact_name.endswith('.png'):
+                            artifact_type = "image/png"
+                        elif artifact_name.endswith('.html'):
+                            artifact_type = "text/html"
+                        elif artifact_name.endswith('.csv'):
+                            artifact_type = "text/csv"
+                        elif artifact_name.endswith('.json'):
+                            artifact_type = "application/json"
+
+                        await websocket.send_json({
+                            "type": "artifact",
+                            "artifact_path": artifact,
+                            "artifact_name": artifact_name,
+                            "artifact_type": artifact_type,
+                            "download_url": f"/api/v1/agent/tasks/{task_id}/artifacts/{artifact_name}",
+                            "timestamp": datetime.now().isoformat()
+                        })
+
+            # Task completed or failed
+            if task_status.status in ["completed", "failed", "cancelled"]:
+                # Build artifact URLs for download
+                artifacts_with_urls = []
+                if task_status.artifacts and task_status.minio_base_path:
+                    for artifact_path in task_status.artifacts:
+                        artifact_name = Path(artifact_path).name
+                        # Construct MinIO download URL
+                        minio_path = f"{task_status.minio_base_path}{artifact_name}"
+                        download_url = f"/api/v1/agents/tasks/{task_id}/artifacts/{artifact_name}"
+                        artifacts_with_urls.append({
+                            "name": artifact_name,
+                            "path": artifact_path,
+                            "minio_path": minio_path,
+                            "download_url": download_url
+                        })
+
+                await websocket.send_json({
+                    "type": "completed",
+                    "status": task_status.status,
+                    "result": task_status.result or "",
+                    "error": task_status.error if task_status.status == "failed" else None,
+                    "artifacts": artifacts_with_urls,
+                    "minio_base_path": task_status.minio_base_path,
+                    "duration_seconds": task_status.duration_seconds,
+                    "iterations": task_status.current_iteration,
+                    "timestamp": datetime.now().isoformat()
+                })
+                logger.info(f"✅ Task {task_id} {task_status.status}, closing WebSocket")
+                break
+
+            # Wait 1 second before next poll
+            await asyncio.sleep(1.0)
+
+        # Close connection
+        await websocket.close()
+        logger.info(f"🔌 WebSocket closed for task: {task_id}")
+
+    except WebSocketDisconnect:
+        logger.info(f"🔌 Client disconnected WebSocket for task: {task_id}")
+    except Exception as e:
+        logger.error(f"❌ WebSocket error for task {task_id}: {e}")
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            })
+        except:
+            pass  # Connection may already be closed
