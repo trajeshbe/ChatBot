@@ -35,7 +35,10 @@
       "Bash(python -m pytest:*)",
       "Bash(mkdir:*)",
       "Bash(docker logs:*)",
-      "Bash(nvidia-smi:*)"
+      "Bash(nvidia-smi:*)",
+      "Bash(__NEW_LINE__ echo '⏳ Waiting for test completion...' echo for i in {1..6})",
+      "Bash(do sleep 30 if ! ps -p 81905)",
+      "Bash(/dev/null)"
     ],
     "deny": [],
     "ask": []

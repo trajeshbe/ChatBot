@@ -1,0 +1,98 @@
+{
+  "total": 13,
+  "passed": 5,
+  "failed": 8,
+  "tests": [
+    {
+      "id": "TC-DIRECT-001",
+      "description": "Simple factual question",
+      "status": "FAIL",
+      "details": "Error: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=60)",
+      "timestamp": "2025-12-13T02:29:28.440836"
+    },
+    {
+      "id": "TC-DIRECT-002",
+      "description": "Mathematical calculation",
+      "status": "PASS",
+      "details": "Answer: Sure! Let's calculate \\( 127 \\times 43 \\).\n\nFirst, break down the multiplication:\n\\[ 127 \\times 43 =",
+      "timestamp": "2025-12-13T02:29:58.724714"
+    },
+    {
+      "id": "TC-DIRECT-003",
+      "description": "Code generation",
+      "status": "PASS",
+      "details": "Generated Python function",
+      "timestamp": "2025-12-13T02:30:16.676439"
+    },
+    {
+      "id": "TC-DOC-001",
+      "description": "Get documents list",
+      "status": "PASS",
+      "details": "Found 36 documents (5 PDFs, 23 TXT files)",
+      "timestamp": "2025-12-13T02:30:16.893723"
+    },
+    {
+      "id": "TC-RAG-001",
+      "description": "RAG query on PDF",
+      "status": "FAIL",
+      "details": "Error: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=60)",
+      "timestamp": "2025-12-13T02:31:18.945202"
+    },
+    {
+      "id": "TC-RAG-002",
+      "description": "RAG query on text document",
+      "status": "FAIL",
+      "details": "Error: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=60)",
+      "timestamp": "2025-12-13T02:32:20.998523"
+    },
+    {
+      "id": "TC-RAG-003",
+      "description": "Semantic search accuracy",
+      "status": "FAIL",
+      "details": "Error: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=60)",
+      "timestamp": "2025-12-13T02:33:23.041734"
+    },
+    {
+      "id": "TC-RAG-004",
+      "description": "Multi-document RAG",
+      "status": "FAIL",
+      "details": "Error: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=60)",
+      "timestamp": "2025-12-13T02:34:25.155639"
+    },
+    {
+      "id": "TC-MEM-001",
+      "description": "Short-term memory (session)",
+      "status": "FAIL",
+      "details": "Error: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=60)",
+      "timestamp": "2025-12-13T02:55:58.729744"
+    },
+    {
+      "id": "TC-MEM-002",
+      "description": "Session isolation",
+      "status": "PASS",
+      "details": "Session properly isolated (no answer about previous context)",
+      "timestamp": "2025-12-13T02:56:59.933969"
+    },
+    {
+      "id": "TC-EDGE-001",
+      "description": "Empty query handling",
+      "status": "PASS",
+      "details": "API handled empty query gracefully",
+      "timestamp": "2025-12-13T02:56:59.967114"
+    },
+    {
+      "id": "TC-EDGE-002",
+      "description": "Long query handling",
+      "status": "FAIL",
+      "details": "Error: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=60)",
+      "timestamp": "2025-12-13T02:58:01.314428"
+    },
+    {
+      "id": "TC-EDGE-003",
+      "description": "Special characters handling",
+      "status": "FAIL",
+      "details": "Error: HTTPConnectionPool(host='localhost', port=8000): Read timed out. (read timeout=60)",
+      "timestamp": "2025-12-13T02:59:02.711044"
+    }
+  ]
+}

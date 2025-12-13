@@ -1030,7 +1030,7 @@ IMPORTANT:
                 prompt=selection_prompt,
                 max_tokens=300,
                 temperature=0.1,  # Low temperature for consistent selection
-                model_id="qwen2.5-coder:7b"  # Reliable model that fits in GPU
+                model_id="qwen2.5:1.5b"  # Fast classification with smaller model
             )
 
             # Extract and parse response
