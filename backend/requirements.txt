@@ -14,6 +14,7 @@ uvicorn[standard]==0.30.0     # ASGI server - runs FastAPI application (updated 
 python-multipart==0.0.9       # Form/file upload handling - used by file upload endpoints
 pydantic==2.8.2               # Data validation - used throughout for request/response models (updated for prefect 3.0: >=2.7)
 pydantic-settings==2.3.4      # Settings management - used by app/core/config.py (updated for pydantic 2.8)
+sse-starlette==1.8.2          # Server-Sent Events - enables real-time streaming for chat responses
 
 # ----------------------------------------------------------------------------
 # GRAPHQL API (Required)

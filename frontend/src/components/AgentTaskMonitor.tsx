@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import FileUpload from './FileUpload';
 import ProjectSelector from './ProjectSelector';
-import { FileText, CheckCircle, XCircle, Loader2, X } from 'lucide-react';
+import { FileText, CheckCircle, XCircle, Loader2, X, Zap, MessageSquare, Wrench, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useAgentWebSocket } from '../hooks/useAgentWebSocket';
 
 interface AgentTask {
   task_id: string;
@@ -70,6 +71,21 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [selectedProject, setSelectedProject] = useState<any>(null);
 
+  // Define API_URL before using it in hooks
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+  // 🆕 WebSocket hook for real-time task streaming
+  const {
+    events: wsEvents,
+    isConnected: wsConnected,
+    isComplete: wsComplete,
+    taskStatus: wsStatus,
+    error: wsError,
+    connect: wsConnect,
+    disconnect: wsDisconnect,
+    reset: wsReset
+  } = useAgentWebSocket(API_URL);
+
   // Form state - 🆕 FIX: Persist taskDescription to sessionStorage
   const [taskDescription, setTaskDescription] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -82,6 +98,7 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
     return '';
   });
   const [model, setModel] = useState('qwen2.5-coder:7b'); // Will be synced from main chat UI
+  const [engine, setEngine] = useState('default'); // 🆕 Engine selection
   const [maxIterations, setMaxIterations] = useState(20);
   const [timeoutSeconds, setTimeoutSeconds] = useState(600);
 
@@ -90,8 +107,6 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<Set<string>>(new Set()); // Document UUIDs for API
   const [uploadedDocuments, setUploadedDocuments] = useState<Document[]>([]);
   const [filesListKey, setFilesListKey] = useState(0); // Force refresh uploaded files list
-
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
   // Initialize session ID and sync model from main chat UI
   useEffect(() => {
@@ -122,6 +137,23 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
       console.log('💾 Saved task draft to sessionStorage');
     }
   }, [taskDescription]);
+
+  // 🆕 WebSocket connection effect - connect when task is selected
+  useEffect(() => {
+    if (selectedTask && selectedTask.task_id) {
+      console.log('🔌 Connecting WebSocket for task:', selectedTask.task_id);
+      wsConnect(selectedTask.task_id);
+
+      // Cleanup: disconnect when task is deselected
+      return () => {
+        console.log('🔌 Disconnecting WebSocket for task:', selectedTask.task_id);
+        wsDisconnect();
+      };
+    } else {
+      // Reset when no task is selected
+      wsReset();
+    }
+  }, [selectedTask, wsConnect, wsDisconnect, wsReset]);
 
   // Fetch tasks on mount and periodically refresh
   useEffect(() => {
@@ -196,12 +228,14 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
         task_description: enhancedDescription,
         session_id: sessionId,
         model,
+        engine, // 🆕 Add engine selection
         max_iterations: maxIterations,
         timeout_seconds: timeoutSeconds,
         project_id: selectedProjectId || undefined,
         meta_info: {
           files_available: Array.from(selectedFiles),
-          project_id: selectedProjectId
+          project_id: selectedProjectId,
+          engine // 🆕 Add to meta_info for tracking
         }
       };
 
@@ -388,23 +422,37 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
             className="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded focus:ring-1 focus:ring-[#6b9080] dark:focus:ring-[#85c4a6] bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
           />
 
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-2 gap-1 mb-1">
+            <div>
+              <label className="text-[10px] text-slate-500 dark:text-slate-400 mb-0.5 block">Engine</label>
+              <select
+                value={engine}
+                onChange={(e) => setEngine(e.target.value)}
+                className="w-full px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+              >
+                <option value="default">🏠 Default (LangGraph)</option>
+                <option value="codex-cli">🤖 Codex CLI (GPT-4)</option>
+                <option value="claude-code-cli">🧠 Claude Code CLI</option>
+              </select>
+            </div>
             <div className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 truncate flex items-center">
               <span className="text-[10px] text-slate-500 dark:text-slate-400 mr-1">🤖</span>
               <span className="truncate">{model.split(':')[0] || model}</span>
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-1">
             <input
               type="number"
               value={maxIterations}
               onChange={(e) => setMaxIterations(parseInt(e.target.value))}
-              placeholder="Iterations"
+              placeholder="Max Iterations"
               className="w-full px-1 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
             />
             <input
               type="number"
               value={timeoutSeconds}
               onChange={(e) => setTimeoutSeconds(parseInt(e.target.value))}
-              placeholder="Timeout"
+              placeholder="Timeout (sec)"
               className="w-full px-1 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
             />
           </div>
@@ -536,6 +584,155 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
                 <label className="text-xs font-medium text-slate-500 dark:text-slate-400">Task Description</label>
                 <p className="mt-1 text-sm whitespace-pre-wrap text-slate-700 dark:text-slate-300">{selectedTask.task_description}</p>
               </div>
+
+              {/* 🆕 Real-Time Event Stream (WebSocket) */}
+              {wsEvents.length > 0 && (
+                <div className="border border-indigo-200 dark:border-indigo-800 rounded-lg overflow-hidden">
+                  <div className="bg-indigo-50 dark:bg-indigo-900/30 px-3 py-2 border-b border-indigo-200 dark:border-indigo-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">
+                        Real-Time Event Stream
+                      </span>
+                      {wsConnected && (
+                        <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                          Connected
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-indigo-600 dark:text-indigo-400">
+                      {wsEvents.length} events
+                    </span>
+                  </div>
+
+                  <div className="max-h-96 overflow-y-auto bg-slate-50 dark:bg-slate-900/50">
+                    <div className="p-3 space-y-2">
+                      {wsEvents.map((event, idx) => {
+                        // Render different event types with appropriate styling
+                        if (event.type === 'thinking') {
+                          return (
+                            <div key={idx} className="flex gap-2 items-start p-2 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700">
+                              <MessageSquare className="w-4 h-4 mt-0.5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                                  Thinking (Iteration {event.iteration})
+                                </div>
+                                <div className="text-xs text-slate-700 dark:text-slate-300 mt-1 italic">
+                                  {event.thought}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        } else if (event.type === 'tool_use') {
+                          return (
+                            <div key={idx} className="flex gap-2 items-start p-2 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-200 dark:border-amber-800">
+                              <Wrench className="w-4 h-4 mt-0.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                                  Using Tool: {event.tool_name}
+                                </div>
+                                <div className="text-xs text-slate-600 dark:text-slate-400 mt-1 font-mono bg-white dark:bg-slate-900 p-2 rounded border border-slate-200 dark:border-slate-700 overflow-x-auto">
+                                  {event.tool_input}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        } else if (event.type === 'tool_result') {
+                          return (
+                            <div key={idx} className="flex gap-2 items-start p-2 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
+                              <CheckCircle2 className="w-4 h-4 mt-0.5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-medium text-green-700 dark:text-green-300">
+                                  Tool Result: {event.tool_name}
+                                </div>
+                                <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                                  {event.result}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        } else if (event.type === 'artifact') {
+                          return (
+                            <div key={idx} className="flex gap-2 items-start p-2 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-200 dark:border-purple-800">
+                              <FileText className="w-4 h-4 mt-0.5 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-medium text-purple-700 dark:text-purple-300">
+                                  Artifact Created
+                                </div>
+                                <a
+                                  href={event.download_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-purple-600 dark:text-purple-400 hover:underline mt-1 flex items-center gap-1"
+                                >
+                                  📎 {event.artifact_name}
+                                </a>
+                              </div>
+                            </div>
+                          );
+                        } else if (event.type === 'status_update') {
+                          return (
+                            <div key={idx} className="flex gap-2 items-start p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+                              <Loader2 className="w-4 h-4 mt-0.5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                                  Status: {event.status}
+                                </div>
+                                <div className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                                  {event.message}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        } else if (event.type === 'error') {
+                          return (
+                            <div key={idx} className="flex gap-2 items-start p-2 bg-red-50 dark:bg-red-900/20 rounded border border-red-200 dark:border-red-800">
+                              <AlertCircle className="w-4 h-4 mt-0.5 text-red-600 dark:text-red-400 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-medium text-red-700 dark:text-red-300">
+                                  Error
+                                </div>
+                                <div className="text-xs text-red-600 dark:text-red-400 mt-1">
+                                  {event.error}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        } else if (event.type === 'completed') {
+                          return (
+                            <div key={idx} className="flex gap-2 items-start p-2 bg-green-100 dark:bg-green-900/30 rounded border-2 border-green-500 dark:border-green-600">
+                              <CheckCircle className="w-5 h-5 mt-0.5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-semibold text-green-700 dark:text-green-300">
+                                  Task {event.status}
+                                </div>
+                                <div className="text-xs text-slate-700 dark:text-slate-300 mt-1">
+                                  Duration: {event.duration_seconds?.toFixed(2)}s | Iterations: {event.iterations}
+                                </div>
+                                {event.result && (
+                                  <div className="text-xs text-slate-600 dark:text-slate-400 mt-2 p-2 bg-white dark:bg-slate-900 rounded">
+                                    {event.result}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        } else {
+                          // Generic event fallback
+                          return (
+                            <div key={idx} className="flex gap-2 items-start p-2 bg-slate-100 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700">
+                              <div className="text-xs text-slate-500 dark:text-slate-400">
+                                {event.type}
+                              </div>
+                            </div>
+                          );
+                        }
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {selectedTask.result && (
                 <div>

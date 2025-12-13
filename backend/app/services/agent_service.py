@@ -10,7 +10,7 @@ import uuid
 import subprocess
 import json
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
@@ -730,8 +730,8 @@ Task name:"""
                 if not content_type:
                     content_type = "application/octet-stream"
 
-                # Construct MinIO path (e.g., "projects/.../task-id/chart.html")
-                minio_object_path = f"{task.minio_base_path}{artifact_name}"
+                # Construct MinIO path with artifacts/ subfolder (e.g., "projects/.../task-id/artifacts/chart.html")
+                minio_object_path = f"{task.minio_base_path}artifacts/{artifact_name}"
 
                 # Upload to MinIO
                 minio_client.put_object(
@@ -1168,7 +1168,7 @@ Task name:"""
 
         # Update task status
         task.status = TaskStatus.CANCELLED
-        task.completed_at = datetime.now()
+        task.completed_at = datetime.now(timezone.utc)
 
         if task.started_at:
             task.duration_seconds = (task.completed_at - task.started_at).total_seconds()

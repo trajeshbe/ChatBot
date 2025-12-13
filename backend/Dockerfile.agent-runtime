@@ -37,6 +37,38 @@ RUN apt-get update && apt-get install -y \
     # Clean up
     && rm -rf /var/lib/apt/lists/*
 
+# ============================================
+# CLI ENGINES INSTALLATION (Phase 2)
+# Install Node.js, Claude Code CLI, and OpenAI CLI
+# ============================================
+
+# Install Node.js 20.x LTS (required for Claude Code CLI)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Verify Node.js and npm installation
+RUN node --version && npm --version
+
+# Install Claude Code CLI globally
+# Note: @anthropic-ai/claude-code package may not exist yet
+# This is a placeholder - replace with actual package when available
+RUN npm install -g @anthropic-ai/claude-code || \
+    echo "⚠️ Claude Code CLI package not available - will be configured at runtime"
+
+# Install OpenAI Python package (includes CLI)
+RUN pip install --no-cache-dir openai
+
+# Verify CLI installations
+RUN echo "=== Verifying CLI Installations ===" \
+    && (claude --version 2>/dev/null || echo "⚠️ Claude CLI: Will be configured at runtime") \
+    && (which openai && python -c "import openai; print(f'OpenAI Python v{openai.__version__}')" || echo "⚠️ OpenAI CLI not found") \
+    && echo "=== CLI Verification Complete ==="
+
+# ============================================
+# END CLI ENGINES INSTALLATION
+# ============================================
+
 # Create non-root user for security
 RUN useradd -m -u 1000 -s /bin/bash agentuser
 

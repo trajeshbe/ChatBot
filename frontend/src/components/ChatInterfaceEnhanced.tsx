@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Loader2, FileText, ExternalLink, Paperclip, X, Trash2, ChevronDown, ChevronUp, ArrowLeft, Download } from 'lucide-react'
+import { Send, Loader2, FileText, ExternalLink, Paperclip, X, Trash2, ChevronDown, ChevronUp, ArrowLeft, Download, Zap } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import { useStreamingChat } from '../hooks/useStreamingChat'
 import FileUpload from './FileUpload'
 import WebScraperEnhanced from './WebScraperEnhanced'
 import ModelSelector from './ModelSelector'
@@ -92,6 +93,7 @@ interface Message {
   model?: string
   model_name?: string
   contextInfo?: string
+  isStreaming?: boolean  // 🆕 Flag to indicate streaming message
   // Performance metrics
   latency_ms?: number
   tokens_used?: number
@@ -332,6 +334,19 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const previousProjectIdRef = useRef<string | null>(null)  // 🐛 FIX: Track previous project to detect switches
+
+  // 🆕 Streaming chat hook
+  const {
+    streamingContent,
+    isStreaming,
+    error: streamingError,
+    startStreaming,
+    stopStreaming,
+    resetStream
+  } = useStreamingChat(API_URL)
+
+  // 🆕 Streaming toggle state
+  const [enableStreaming, setEnableStreaming] = useState<boolean>(false)
 
   // 🆕 Fetch unified configuration on mount
   useEffect(() => {
@@ -846,6 +861,82 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
     }
   }, [selectedProjectId, isHydrated])
 
+  // 🆕 Real-time streaming display - update message as content streams in
+  useEffect(() => {
+    if (isStreaming && streamingContent) {
+      // Update or create assistant message with streaming content
+      setMessages(prev => {
+        const lastMessage = prev[prev.length - 1]
+
+        // If last message is from assistant and is being streamed, update it
+        if (lastMessage?.role === 'assistant' && lastMessage?.isStreaming) {
+          return [
+            ...prev.slice(0, -1),
+            {
+              ...lastMessage,
+              content: streamingContent
+            }
+          ]
+        }
+        // Otherwise, create new streaming message
+        else {
+          return [
+            ...prev,
+            {
+              role: 'assistant' as const,
+              content: streamingContent,
+              timestamp: new Date(),
+              isStreaming: true  // Flag to indicate this is a streaming message
+            }
+          ]
+        }
+      })
+    }
+  }, [streamingContent, isStreaming])
+
+  // 🆕 Finalize streaming message when complete
+  useEffect(() => {
+    if (!isStreaming && streamingContent && !streamingError) {
+      // Mark the last message as complete
+      setMessages(prev => {
+        const lastMessage = prev[prev.length - 1]
+        if (lastMessage?.isStreaming) {
+          return [
+            ...prev.slice(0, -1),
+            {
+              ...lastMessage,
+              isStreaming: false,
+              model: selectedModel || undefined  // Add final metadata
+            }
+          ]
+        }
+        return prev
+      })
+
+      // Reset streaming state
+      resetStream()
+      setIsLoading(false)
+    }
+  }, [isStreaming, streamingContent, streamingError, selectedModel, resetStream])
+
+  // 🆕 Handle streaming errors
+  useEffect(() => {
+    if (streamingError) {
+      const errorMessage: Message = {
+        role: 'assistant',
+        content: `Streaming error: ${streamingError}`,
+        timestamp: new Date()
+      }
+      setMessages(prev => {
+        // Remove any partial streaming message
+        const filtered = prev.filter(msg => !msg.isStreaming)
+        return [...filtered, errorMessage]
+      })
+      setIsLoading(false)
+      resetStream()
+    }
+  }, [streamingError, resetStream])
+
   // Handle file attachment
   const handleFileAttach = () => {
     fileInputRef.current?.click()
@@ -1037,7 +1128,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   }
 
   const handleSendMessage = async () => {
-    if ((!input.trim() && attachedFiles.length === 0) || isLoading) return
+    if ((!input.trim() && attachedFiles.length === 0) || isLoading || (isStreaming && enableStreaming)) return
 
     // 🎯 SMART UPLOAD SYNC: Upload files AND wait for processing
     if (attachedFiles.length > 0) {
@@ -1104,9 +1195,40 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
     }
 
     setMessages(prev => [...prev, userMessage])
+    const queryText = input  // Save query text before clearing
     setInput('')
     setIsLoading(true)
 
+    // 🆕 STREAMING MODE
+    if (enableStreaming) {
+      try {
+        console.log('🌊 Starting streaming mode for query:', queryText)
+
+        // Start streaming
+        startStreaming(queryText, {
+          modelId: selectedModel || undefined,
+          sessionId: sessionId || undefined,
+          maxTokens: 1024,
+          temperature: 0.7
+        })
+
+        // Note: Streaming content is handled by useEffect hooks below
+        // The loading state will be cleared when streaming completes
+
+      } catch (error: any) {
+        console.error('Streaming error:', error)
+        const errorMessage: Message = {
+          role: 'assistant',
+          content: `Sorry, streaming failed: ${error.message || 'Unknown error'}. Please try again or disable streaming.`,
+          timestamp: new Date()
+        }
+        setMessages(prev => [...prev, errorMessage])
+        setIsLoading(false)
+      }
+      return  // Exit early for streaming mode
+    }
+
+    // NON-STREAMING MODE (existing logic)
     try {
       // 🆕 Get fresh RAG config to ensure we use latest slider values
       const currentRagConfig = getCurrentConfig()
@@ -1358,6 +1480,23 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
                 />
               </div>
 
+              {/* 🆕 Streaming Toggle - ChatGPT-like */}
+              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-slate-200 dark:border-slate-700">
+                <Zap className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                  Streaming
+                </span>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={enableStreaming}
+                    onChange={(e) => setEnableStreaming(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                </label>
+              </div>
+
               {/* Project Selector - Sleek Dropdown (only show if not in project context) */}
               {!projectId && (
                 <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg px-3 py-1.5 border border-slate-200 dark:border-slate-700 flex-1 max-w-xs">
@@ -1489,6 +1628,14 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
               <div className={`markdown-content ${message.role === 'user' ? 'user-message-text' : ''}`}>
                 <ReactMarkdown>{message.content}</ReactMarkdown>
               </div>
+
+              {/* 🆕 Streaming indicator */}
+              {message.isStreaming && (
+                <div className="flex items-center gap-1.5 mt-2 text-indigo-500 dark:text-indigo-400">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span className="text-xs font-medium">Streaming...</span>
+                </div>
+              )}
 
               {/* Model used and context info (for assistant messages) */}
               {message.role === 'assistant' && (message.model_name || message.model || message.contextInfo) && (
@@ -1987,17 +2134,29 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
               />
             </div>
 
-            <button
-              onClick={handleSendMessage}
-              disabled={(attachedFiles.length === 0 && !input.trim()) || isLoading || uploadingFiles}
-              className="p-3 bg-primary-600 text-white rounded-xl hover:bg-primary-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed transition-colors flex items-center"
-            >
-              {isLoading || uploadingFiles ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Send className="w-5 h-5" />
-              )}
-            </button>
+            {/* 🆕 Stop Streaming Button (shown when streaming) */}
+            {isStreaming ? (
+              <button
+                onClick={stopStreaming}
+                className="p-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors flex items-center gap-2"
+                title="Stop streaming"
+              >
+                <X className="w-5 h-5" />
+                <span className="text-sm font-medium">Stop</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleSendMessage}
+                disabled={(attachedFiles.length === 0 && !input.trim()) || isLoading || uploadingFiles}
+                className="p-3 bg-primary-600 text-white rounded-xl hover:bg-primary-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 disabled:cursor-not-allowed transition-colors flex items-center"
+              >
+                {isLoading || uploadingFiles ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5" />
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>

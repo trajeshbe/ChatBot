@@ -872,6 +872,240 @@ class LLMService:
             raise
 
     # ============================================================================
+    # STREAMING METHODS
+    # ============================================================================
+
+    async def _call_openai_stream(
+        self,
+        model_info: ModelInfo,
+        messages: List[Dict],
+        max_tokens: int = 512,
+        temperature: float = 0.7
+    ):
+        """Stream responses from OpenAI API"""
+        if not self.openai_client:
+            raise ValueError("OpenAI client not initialized")
+
+        try:
+            stream = await self.openai_client.chat.completions.create(
+                model=model_info.model_path,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stream=True
+            )
+
+            async for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    yield {
+                        "type": "content",
+                        "content": chunk.choices[0].delta.content,
+                        "model": model_info.id
+                    }
+
+        except Exception as e:
+            logger.error(f"OpenAI streaming failed: {e}")
+            yield {
+                "type": "error",
+                "error": str(e),
+                "model": model_info.id
+            }
+
+    async def _call_anthropic_stream(
+        self,
+        model_info: ModelInfo,
+        messages: List[Dict],
+        max_tokens: int = 512,
+        temperature: float = 0.7
+    ):
+        """Stream responses from Anthropic Claude API"""
+        if not self.anthropic_client:
+            raise ValueError("Anthropic client not initialized")
+
+        try:
+            # Convert OpenAI-style messages to Claude format
+            system_message = None
+            claude_messages = []
+
+            for msg in messages:
+                if msg["role"] == "system":
+                    system_message = msg["content"]
+                else:
+                    claude_messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"]
+                    })
+
+            # Call Claude API with streaming
+            async with self.anthropic_client.messages.stream(
+                model=model_info.model_path,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system_message if system_message else "You are a helpful AI assistant.",
+                messages=claude_messages
+            ) as stream:
+                async for text in stream.text_stream:
+                    yield {
+                        "type": "content",
+                        "content": text,
+                        "model": model_info.id
+                    }
+
+        except Exception as e:
+            logger.error(f"Anthropic streaming failed: {e}")
+            yield {
+                "type": "error",
+                "error": str(e),
+                "model": model_info.id
+            }
+
+    async def _call_ollama_stream(
+        self,
+        model_info: ModelInfo,
+        prompt: str,
+        max_tokens: int = 512,
+        temperature: float = 0.7
+    ):
+        """Stream responses from Ollama service"""
+        client = await self._ensure_ollama_client()
+
+        try:
+            logger.info(f"🔧 Streaming from Ollama: model={model_info.model_path}")
+
+            response = await client.post(
+                f"{settings.OLLAMA_ENDPOINT}/api/generate",
+                json={
+                    "model": model_info.model_path,
+                    "prompt": prompt,
+                    "stream": True,
+                    "options": {
+                        "num_predict": max_tokens,
+                        "temperature": temperature,
+                        "top_p": 0.9,
+                        "stop": ["</s>", "Human:", "User:"],
+                    }
+                }
+            )
+
+            response.raise_for_status()
+
+            # Stream line by line
+            async for line in response.aiter_lines():
+                if line:
+                    try:
+                        import json
+                        chunk = json.loads(line)
+                        if "response" in chunk and chunk["response"]:
+                            yield {
+                                "type": "content",
+                                "content": chunk["response"],
+                                "model": model_info.id
+                            }
+                        if chunk.get("done", False):
+                            logger.info("✅ Ollama stream completed")
+                            break
+                    except json.JSONDecodeError:
+                        logger.warning(f"Invalid JSON in Ollama stream: {line}")
+                        continue
+
+        except Exception as e:
+            logger.error(f"❌ Ollama streaming failed: {e}")
+            yield {
+                "type": "error",
+                "error": str(e),
+                "model": model_info.id
+            }
+        finally:
+            await client.aclose()
+
+    async def generate_stream(
+        self,
+        prompt: str,
+        messages: Optional[List[Dict]] = None,
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+        model_id: Optional[str] = None
+    ):
+        """
+        Stream response generation using specified or default model
+
+        Args:
+            prompt: Text prompt
+            messages: Chat messages (for chat models)
+            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature
+            model_id: Optional model ID (uses default if not specified)
+
+        Yields:
+            Dict with type ('content' or 'error'), content, and model info
+        """
+        # Lazy initialization
+        if not self._initialized:
+            logger.warning("⚠️  LLM service not initialized, initializing now (lazy init)")
+            await self.initialize()
+
+        # Get model info
+        if model_id is None:
+            model_id = self._default_model_id
+            logger.info(f"🎯 No model specified, using default: {model_id}")
+
+        model_info = self.model_registry.get_model(model_id)
+        if not model_info:
+            yield {
+                "type": "error",
+                "error": f"Model not found: {model_id}",
+                "model": model_id
+            }
+            return
+
+        if not model_info.available:
+            yield {
+                "type": "error",
+                "error": f"Model not available: {model_info.name}",
+                "model": model_id
+            }
+            return
+
+        logger.info(f"✅ Streaming from: {model_info.name} via {model_info.provider.value} provider")
+
+        # Convert prompt to messages if needed
+        if not messages:
+            messages = [{"role": "user", "content": prompt}]
+
+        # Route to appropriate provider streaming method
+        try:
+            if model_info.provider == ModelProvider.OPENAI:
+                async for chunk in self._call_openai_stream(model_info, messages, max_tokens, temperature):
+                    yield chunk
+
+            elif model_info.provider == ModelProvider.ANTHROPIC:
+                async for chunk in self._call_anthropic_stream(model_info, messages, max_tokens, temperature):
+                    yield chunk
+
+            elif model_info.provider == ModelProvider.OLLAMA:
+                prompt_text = self._messages_to_prompt(messages)
+                async for chunk in self._call_ollama_stream(model_info, prompt_text, max_tokens, temperature):
+                    yield chunk
+
+            else:
+                # For providers that don't support streaming, fall back to non-streaming
+                logger.warning(f"Streaming not supported for {model_info.provider.value}, using non-streaming fallback")
+                result = await self.generate(prompt, messages, max_tokens, temperature, model_id)
+                yield {
+                    "type": "content",
+                    "content": result["content"],
+                    "model": model_info.id
+                }
+
+        except Exception as e:
+            logger.error(f"❌ Streaming failed with {model_info.name}: {e}")
+            yield {
+                "type": "error",
+                "error": str(e),
+                "model": model_info.id
+            }
+
+    # ============================================================================
     # PUBLIC API
     # ============================================================================
 

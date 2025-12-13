@@ -27,6 +27,7 @@ class AgentTaskCreate(BaseModel):
     max_iterations: Optional[int] = Field(20, description="Maximum agentic loop iterations")
     timeout_seconds: Optional[int] = Field(600, description="Task timeout in seconds")
     model: Optional[str] = Field("qwen2.5-coder:7b", description="LLM model to use")
+    engine: Optional[str] = Field("default", description="Execution engine: default, codex-cli, or claude-code-cli")
 
     class Config:
         json_schema_extra = {
@@ -36,7 +37,8 @@ class AgentTaskCreate(BaseModel):
                 "document_ids": ["3f204a1c-d21d-4dac-b6a8-44d80e8d1215"],
                 "max_iterations": 15,
                 "timeout_seconds": 300,
-                "model": "qwen2.5-coder:7b"
+                "model": "qwen2.5-coder:7b",
+                "engine": "default"
             }
         }
 
@@ -81,6 +83,7 @@ class AgentTaskStatusResponse(BaseModel):
     artifacts: List[str] = Field(default_factory=list, description="Generated artifacts (file paths)")
     tools_used: List[str] = Field(default_factory=list, description="Tools executed during task")
     llm_calls: Optional[int] = Field(None, description="Number of LLM calls made")
+    execution_log: Optional[str] = Field(None, description="Execution log from agent runtime")
 
     # Error handling
     error: Optional[str] = Field(None, description="Error message if task failed")
