@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException, Req
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from strawberry.fastapi import GraphQLRouter
+from sse_starlette.sse import EventSourceResponse  # 🆕 For streaming responses
 from contextlib import asynccontextmanager
 import logging
 from typing import Optional, List
@@ -389,6 +390,16 @@ async def upload_file(
         if not project_id and current_user.default_project_id:
             project_id = current_user.default_project_id
 
+    # 🆕 FALLBACK: Get project_id from session if not provided
+    if not project_id and session_id and ENHANCED_RAG_AVAILABLE:
+        from app.models.database_enhanced import ChatSession
+        session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+        session_result = await db.execute(session_query)
+        session = session_result.scalar_one_or_none()
+        if session and session.project_id:
+            project_id = session.project_id
+            logger.info(f"📂 Using session's project_id: {project_id}")
+
     # CRITICAL FIX: If project_id was provided (from form or user default), fetch its name
     if project_id:
         from app.models.database_enhanced import Project
@@ -595,6 +606,94 @@ async def upload_file(
                 logger.error(f"Failed to log audit entry: {audit_error}")
 
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# STREAMING CHAT ENDPOINT (SSE)
+# ============================================================================
+
+@app.get("/api/v1/chat/stream")
+async def stream_chat_response(
+    request: Request,
+    query: str,
+    model_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    max_tokens: int = 512,
+    temperature: float = 0.7
+):
+    """
+    Stream LLM response in real-time using Server-Sent Events (SSE)
+
+    This endpoint provides ChatGPT-like streaming experience where
+    the response appears character-by-character.
+
+    Args:
+        query: User question/prompt
+        model_id: Optional model to use (uses default if not specified)
+        session_id: Optional session ID for conversation history
+        max_tokens: Maximum tokens to generate
+        temperature: Sampling temperature (0.0-1.0)
+
+    Returns:
+        EventSourceResponse with streaming content
+    """
+
+    async def event_generator():
+        """Generate SSE events from LLM streaming response"""
+        try:
+            logger.info(f"🌊 Streaming chat started: query='{query[:50]}...', model={model_id}")
+
+            # Stream from LLM service
+            async for chunk in llm_service.generate_stream(
+                prompt=query,
+                model_id=model_id,
+                max_tokens=max_tokens,
+                temperature=temperature
+            ):
+                if chunk["type"] == "content":
+                    # Send content chunk
+                    yield {
+                        "event": "message",
+                        "data": json.dumps({
+                            "type": "content",
+                            "content": chunk["content"],
+                            "model": chunk.get("model", "unknown")
+                        })
+                    }
+                elif chunk["type"] == "error":
+                    # Send error and stop
+                    yield {
+                        "event": "error",
+                        "data": json.dumps({
+                            "type": "error",
+                            "error": chunk["error"],
+                            "model": chunk.get("model", "unknown")
+                        })
+                    }
+                    return
+
+            # Send completion event
+            yield {
+                "event": "done",
+                "data": json.dumps({
+                    "type": "done",
+                    "message": "Stream completed successfully"
+                })
+            }
+
+            logger.info("✅ Streaming chat completed successfully")
+
+        except Exception as e:
+            logger.error(f"❌ Streaming error: {e}")
+            yield {
+                "event": "error",
+                "data": json.dumps({
+                    "type": "error",
+                    "error": str(e)
+                })
+            }
+
+    return EventSourceResponse(event_generator())
 
 
 @app.post("/api/v1/query")
