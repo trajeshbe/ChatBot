@@ -9,7 +9,7 @@ import logging
 import shutil
 import os
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, WebSocket, WebSocketDisconnect, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional, List
@@ -404,13 +404,15 @@ async def upload_workspace_file(
 
 @router.get("/project-files")
 async def list_project_files(
+    session_id: Optional[str] = Query(None, description="Session ID for context"),
     project_id: Optional[str] = Query(None, description="Filter by project ID"),
-    role: str = Query("user", description="User role"),
-    department: str = Query("default", description="Department name"),
-    team: str = Query("default-team", description="Team name"),
-    username: str = Query("anonymous", description="Username"),
-    project_name: str = Query("agent-workspace", description="Project name"),
-    db: AsyncSession = Depends(get_db)
+    role: str = Query(None, description="User role"),
+    department: str = Query(None, description="Department name"),
+    team: str = Query(None, description="Team name"),
+    username: str = Query(None, description="Username"),
+    project_name: str = Query(None, description="Project name"),
+    db: AsyncSession = Depends(get_db),
+    request: Request = None
 ):
     """
     List files from a selected project in MinIO
@@ -419,12 +421,13 @@ async def list_project_files(
     for a specific project.
 
     **Query Parameters**:
+    - session_id: Session ID (will derive organizational context from session)
     - project_id: Optional project UUID
-    - role: User role
-    - department: Department name
-    - team: Team name
-    - username: Username
-    - project_name: Project name
+    - role: User role (optional, derived from user)
+    - department: Department name (optional, derived from user)
+    - team: Team name (optional, derived from user)
+    - username: Username (optional, derived from user)
+    - project_name: Project name (optional, derived from session/project)
 
     **Returns**:
     - files: List of file objects with metadata
@@ -432,7 +435,70 @@ async def list_project_files(
     - project_prefix: MinIO prefix used for filtering
     """
     try:
-        logger.info(f"📂 Listing files for project: {project_name}")
+        # 🆕 Get organizational context from session and user
+        from app.core.security import get_current_user_from_request
+        from app.models.rbac import Department, Team
+        from app.models.database_enhanced import UserTeam, ChatSession, Project
+
+        # Try to get authenticated user
+        current_user = None
+        if request:
+            current_user = await get_current_user_from_request(request, db)
+
+        # Get department from user if not provided
+        if not department and current_user and current_user.department_id:
+            dept_query = select(Department).where(Department.id == current_user.department_id)
+            dept_result = await db.execute(dept_query)
+            dept = dept_result.scalar_one_or_none()
+            if dept:
+                department = dept.name
+                logger.info(f"📁 Department from user: {department}")
+
+        # Get team from user if not provided
+        if not team and current_user:
+            teams_query = select(UserTeam, Team).join(
+                Team, UserTeam.team_id == Team.id
+            ).where(
+                UserTeam.user_id == current_user.id,
+                UserTeam.is_primary == True
+            ).limit(1)
+            teams_result = await db.execute(teams_query)
+            user_team_data = teams_result.first()
+            if user_team_data:
+                team = user_team_data[1].name
+                logger.info(f"👥 Team from user: {team}")
+
+        # Get username if not provided
+        if not username:
+            if current_user:
+                username = current_user.username
+            else:
+                username = "admin"  # Default for anonymous
+
+        # Get project from session if not provided
+        if not project_name and session_id:
+            session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+            session_result = await db.execute(session_query)
+            session = session_result.scalar_one_or_none()
+            if session and session.project_id:
+                project_query = select(Project).where(Project.id == session.project_id)
+                project_result = await db.execute(project_query)
+                project = project_result.scalar_one_or_none()
+                if project:
+                    project_name = project.name
+                    logger.info(f"📂 Project from session: {project_name}")
+
+        # Fallback defaults
+        if not department:
+            department = "Technology"
+        if not team:
+            team = "Backend-Development"
+        if not project_name:
+            project_name = "Global"
+        if not role:
+            role = "admin"
+
+        logger.info(f"📂 Listing files for project: {project_name} (dept={department}, team={team}, user={username})")
 
         # Initialize MinIO client
         minio_client = Minio(
@@ -1141,9 +1207,9 @@ async def agent_task_websocket(
                 if task_status.artifacts and task_status.minio_base_path:
                     for artifact_path in task_status.artifacts:
                         artifact_name = Path(artifact_path).name
-                        # Construct MinIO download URL
-                        minio_path = f"{task_status.minio_base_path}{artifact_name}"
-                        download_url = f"/api/v1/agents/tasks/{task_id}/artifacts/{artifact_name}"
+                        # Construct MinIO download URL (with artifacts/ subfolder)
+                        minio_path = f"{task_status.minio_base_path}artifacts/{artifact_name}"
+                        download_url = f"/api/v1/agent/tasks/{task_id}/download-minio?path=artifacts/{artifact_name}"
                         artifacts_with_urls.append({
                             "name": artifact_name,
                             "path": artifact_path,
