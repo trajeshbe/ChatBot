@@ -239,9 +239,45 @@ class EnhancedRAGAgent(RAGAgent):
             # This will be handled by the balanced routing below
             pass  # Continue to balanced routing which will detect the URL properly
 
-        # 🎨 PRE-CHECK: Detect visual queries BEFORE forcing RAG
-        # REUSES EXISTING _select_tools_llm_ollama() method - NO NEW CODE!
-        # This fixes vision routing regression from MVP 0.92
+        # 🎯 PRIORITY FIX: Strategy weights OVERRIDE LLM classification
+        # Check FORCE_RAG FIRST before calling LLM (prevents hangs and respects user preferences)
+        if rag_short_term_weight > 0.8 or rag_long_term_weight > 0.8 or rag_hybrid_weight > 0.8:
+            logger.info("📌 ROUTING: FORCE_RAG (strategy weights OVERRIDE LLM classification)")
+            logger.info(f"   Reason: User explicitly set rag_short_term={rag_short_term_weight:.2f} or rag_long_term={rag_long_term_weight:.2f} or rag_hybrid={rag_hybrid_weight:.2f} > 0.8")
+            logger.info(f"   Skipping LLM-based tool selection to respect user preference")
+
+            # Force RAG tool selection - include db and model_id from user_preferences
+            tool_params_rag = {
+                "top_k": top_k,
+                "similarity_threshold": similarity_threshold,
+                "semantic_weight": semantic_weight,
+                "keyword_weight": keyword_weight,
+                "model_id": user_preferences.get('model_id') if user_preferences else None,
+                "project_id": user_preferences.get('project_id') if user_preferences else None,  # 🔧 FIX: Include project_id
+                "db": user_preferences.get('db') if user_preferences else None,
+                "unified_config": user_preferences.get('unified_config') if user_preferences else None  # 🧠 BRAIN VIEW: Include unified_config
+            }
+
+            # 🔍 DEBUG: Log project_id being passed to RAG
+            logger.info(f"🔍 DEBUG [FORCE_RAG path]: project_id = {tool_params_rag.get('project_id')}")
+
+            # Execute RAG tool
+            result = await self._execute_tool_document_rag(
+                query=query,
+                session_id=session_id,
+                tool_params=tool_params_rag
+            )
+
+            # Add routing metadata
+            result['metadata'] = result.get('metadata', {})
+            result['metadata']['routing_strategy'] = 'force_rag'
+            result['metadata']['routing_reason'] = f'User set rag_short_term={rag_short_term_weight:.2f}, rag_long_term={rag_long_term_weight:.2f}, rag_hybrid={rag_hybrid_weight:.2f} (one > 0.8) - strategy weights override LLM'
+            result['metadata']['strategy_weights'] = strategy_weights
+
+            return result
+
+        # 🎨 SECONDARY CHECK: Detect visual queries via LLM (only if NOT forcing RAG)
+        # This runs AFTER strategy weight check to avoid LLM hangs blocking user preferences
         try:
             tool_selection = await self._select_tools_llm_ollama(
                 query=query,
@@ -249,83 +285,16 @@ class EnhancedRAGAgent(RAGAgent):
                 top_k=top_k
             )
 
-            # If visual tool selected, bypass FORCE_RAG and use TaskRouter
+            # If visual tool selected, use TaskRouter
             if "vision_analysis" in tool_selection.get("tools", []):
                 logger.info(f"🎨 Visual query detected by LLM: {tool_selection.get('reasoning')}")
-                logger.info("   Bypassing FORCE_RAG to use vision_analysis via TaskRouter")
-                # Fall through to balanced routing (line 316) which will use TaskRouter
+                logger.info("   Using vision_analysis via TaskRouter")
+                # Fall through to balanced routing which will use TaskRouter
                 # TaskRouter already has vision fallback chains!
                 pass  # Continue to balanced routing
-            elif rag_short_term_weight > 0.8 or rag_long_term_weight > 0.8 or rag_hybrid_weight > 0.8:
-                # Not a visual query - proceed with FORCE_RAG
-                logger.info("📌 ROUTING: FORCE_RAG (document search required per user's strategy_weights)")
-                logger.info(f"   Reason: rag_short_term={rag_short_term_weight:.2f} or rag_long_term={rag_long_term_weight:.2f} or rag_hybrid={rag_hybrid_weight:.2f} > 0.8")
-
-                # Force RAG tool selection - include db and model_id from user_preferences
-                tool_params_rag = {
-                    "top_k": top_k,
-                    "similarity_threshold": similarity_threshold,
-                    "semantic_weight": semantic_weight,
-                    "keyword_weight": keyword_weight,
-                    "model_id": user_preferences.get('model_id') if user_preferences else None,
-                    "project_id": user_preferences.get('project_id') if user_preferences else None,  # 🔧 FIX: Include project_id
-                    "db": user_preferences.get('db') if user_preferences else None,
-                    "unified_config": user_preferences.get('unified_config') if user_preferences else None  # 🧠 BRAIN VIEW: Include unified_config
-                }
-
-                # 🔍 DEBUG: Log project_id being passed to RAG
-                logger.info(f"🔍 DEBUG [FORCE_RAG path]: project_id = {tool_params_rag.get('project_id')}")
-
-                # Execute RAG tool
-                result = await self._execute_tool_document_rag(
-                    query=query,
-                    session_id=session_id,
-                    tool_params=tool_params_rag
-                )
-
-                # Add routing metadata
-                result['metadata'] = result.get('metadata', {})
-                result['metadata']['routing_strategy'] = 'force_rag'
-                result['metadata']['routing_reason'] = f'User set rag_short_term={rag_short_term_weight:.2f}, rag_long_term={rag_long_term_weight:.2f}, rag_hybrid={rag_hybrid_weight:.2f} (one > 0.8)'
-                result['metadata']['strategy_weights'] = strategy_weights
-
-                return result
         except Exception as e:
-            logger.warning(f"⚠️  Visual detection failed: {e}, continuing with normal routing")
-            # If visual detection fails, check FORCE_RAG as before
-            if rag_short_term_weight > 0.8 or rag_long_term_weight > 0.8 or rag_hybrid_weight > 0.8:
-                logger.info("📌 ROUTING: FORCE_RAG (document search required per user's strategy_weights)")
-                logger.info(f"   Reason: rag_short_term={rag_short_term_weight:.2f} or rag_long_term={rag_long_term_weight:.2f} or rag_hybrid={rag_hybrid_weight:.2f} > 0.8")
-
-                # Force RAG tool selection - include db and model_id from user_preferences
-                tool_params_rag = {
-                    "top_k": top_k,
-                    "similarity_threshold": similarity_threshold,
-                    "semantic_weight": semantic_weight,
-                    "keyword_weight": keyword_weight,
-                    "model_id": user_preferences.get('model_id') if user_preferences else None,
-                    "project_id": user_preferences.get('project_id') if user_preferences else None,  # 🔧 FIX: Include project_id
-                    "db": user_preferences.get('db') if user_preferences else None,
-                    "unified_config": user_preferences.get('unified_config') if user_preferences else None  # 🧠 BRAIN VIEW: Include unified_config
-                }
-
-                # 🔍 DEBUG: Log project_id being passed to RAG
-                logger.info(f"🔍 DEBUG [FORCE_RAG path]: project_id = {tool_params_rag.get('project_id')}")
-
-                # Execute RAG tool
-                result = await self._execute_tool_document_rag(
-                    query=query,
-                    session_id=session_id,
-                    tool_params=tool_params_rag
-                )
-
-                # Add routing metadata
-                result['metadata'] = result.get('metadata', {})
-                result['metadata']['routing_strategy'] = 'force_rag'
-                result['metadata']['routing_reason'] = f'User set rag_short_term={rag_short_term_weight:.2f}, rag_long_term={rag_long_term_weight:.2f}, rag_hybrid={rag_hybrid_weight:.2f} (one > 0.8)'
-                result['metadata']['strategy_weights'] = strategy_weights
-
-                return result
+            logger.warning(f"⚠️  Visual detection LLM call failed: {e}, continuing with normal routing")
+            # Continue to balanced routing
 
         # 🎯 NEW: Check if user wants to use Claude Code (hybrid agent mode)
         use_agent_mode = user_preferences.get('use_agent_mode', False)
