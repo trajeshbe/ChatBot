@@ -319,6 +319,14 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
           onChange={(projectId, project) => {
             setSelectedProject(project);
             setSelectedProjectId(projectId);
+            // ✅ FIX: Save project ID to localStorage so FileUpload can access it
+            if (projectId) {
+              localStorage.setItem('selected_project_id', projectId);
+              console.log('📁 [AgentTaskMonitor] Saved project ID to localStorage:', projectId);
+            } else {
+              localStorage.removeItem('selected_project_id');
+              console.log('📁 [AgentTaskMonitor] Removed project ID from localStorage');
+            }
             setSelectedFiles(new Set());
             setSelectedDocumentIds(new Set()); // Clear selected document IDs
             setUploadedDocuments([]);
