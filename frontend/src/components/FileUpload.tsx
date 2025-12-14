@@ -230,17 +230,22 @@ export default function FileUpload({
   }
 
   return (
-    <div className="h-full p-6 overflow-y-auto">
-      <div className="max-w-4xl mx-auto">
-        <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-          Upload Documents
-        </h2>
-        <p className="text-slate-600 dark:text-slate-400 mb-6">
-          Upload documents to be processed and added to the knowledge base. Supported formats: PDF, TXT, DOC, DOCX, JSON, MD
-        </p>
+    <div className={`h-full ${compact ? 'p-2' : 'p-6'} overflow-y-auto`}>
+      <div className={compact ? '' : 'max-w-4xl mx-auto'}>
+        {/* Hide header and description in compact mode */}
+        {!compact && (
+          <>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+              Upload Documents
+            </h2>
+            <p className="text-slate-600 dark:text-slate-400 mb-6">
+              Upload documents to be processed and added to the knowledge base. Supported formats: PDF, TXT, DOC, DOCX, JSON, MD
+            </p>
+          </>
+        )}
 
         {/* Project Selector - Hide when parent component manages project selection */}
-        {!hideProjectSelector && (
+        {!hideProjectSelector && !compact && (
           <div className="mb-6">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               Project (Optional)
@@ -276,22 +281,22 @@ export default function FileUpload({
         {/* Dropzone */}
         <div
           {...getRootProps()}
-          className={`border-2 border-dashed rounded-lg ${compact ? 'p-4' : 'p-12'} text-center cursor-pointer transition-colors ${
+          className={`border-2 border-dashed rounded-lg ${compact ? 'p-3' : 'p-12'} text-center cursor-pointer transition-colors ${
             isDragActive
               ? 'border-primary-600 bg-primary-50 dark:bg-blue-900/20'
               : 'border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-primary-500'
           }`}
         >
           <input {...getInputProps()} />
-          <Upload className={`${compact ? 'w-8 h-8' : 'w-16 h-16'} mx-auto text-slate-400 ${compact ? 'mb-2' : 'mb-4'}`} />
+          <Upload className={`${compact ? 'w-6 h-6' : 'w-16 h-16'} mx-auto text-slate-400 ${compact ? 'mb-1' : 'mb-4'}`} />
           {isDragActive ? (
-            <p className={`${compact ? 'text-sm' : 'text-lg'} text-primary-600 dark:text-blue-400`}>
+            <p className={`${compact ? 'text-xs' : 'text-lg'} text-primary-600 dark:text-blue-400`}>
               Drop the files here...
             </p>
           ) : (
             <>
-              <p className={`${compact ? 'text-sm' : 'text-lg'} text-slate-700 dark:text-slate-300 ${compact ? 'mb-1' : 'mb-2'}`}>
-                Drag & drop files here, or click to select files
+              <p className={`${compact ? 'text-xs' : 'text-lg'} text-slate-700 dark:text-slate-300 ${compact ? 'mb-0' : 'mb-2'}`}>
+                {compact ? 'Drag & drop or click' : 'Drag & drop files here, or click to select files'}
               </p>
               {!compact && (
                 <p className="text-sm text-slate-500">
@@ -304,58 +309,62 @@ export default function FileUpload({
 
         {/* Uploaded Files List */}
         {files.length > 0 && (
-          <div className="mt-8">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-              Uploaded Files
-            </h3>
-            <div className="space-y-3">
+          <div className={compact ? 'mt-2' : 'mt-8'}>
+            {!compact && (
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+                Uploaded Files
+              </h3>
+            )}
+            <div className={compact ? 'space-y-1' : 'space-y-3'}>
               {files.map((file, index) => (
                 <div
                   key={index}
-                  className="bg-white dark:bg-slate-800 rounded-lg p-4 shadow-sm border border-slate-200 dark:border-slate-700"
+                  className={`bg-white dark:bg-slate-800 rounded ${compact ? 'p-1.5' : 'p-4'} shadow-sm border border-slate-200 dark:border-slate-700`}
                 >
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1">
-                      <FileText className="w-8 h-8 text-primary-600" />
+                    <div className={`flex items-center ${compact ? 'gap-1.5' : 'gap-3'} flex-1`}>
+                      <FileText className={`${compact ? 'w-4 h-4' : 'w-8 h-8'} text-primary-600`} />
                       <div className="flex-1">
-                        <p className="font-medium text-slate-900 dark:text-white">
+                        <p className={`${compact ? 'text-xs' : 'font-medium'} text-slate-900 dark:text-white ${compact ? 'truncate' : ''}`}>
                           {file.name}
                         </p>
-                        <p className="text-sm text-slate-500">
-                          {formatFileSize(file.size)}
-                        </p>
+                        {!compact && (
+                          <p className="text-sm text-slate-500">
+                            {formatFileSize(file.size)}
+                          </p>
+                        )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className={`flex items-center ${compact ? 'gap-1' : 'gap-2'}`}>
                       {file.status === 'uploading' && (
                         <>
-                          <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
-                          <span className="text-sm text-slate-600">Uploading...</span>
+                          <Loader2 className={`${compact ? 'w-3 h-3' : 'w-5 h-5'} animate-spin text-primary-600`} />
+                          {!compact && <span className="text-sm text-slate-600">Uploading...</span>}
                         </>
                       )}
                       {file.status === 'processing' && (
                         <>
-                          <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
-                          <span className="text-sm text-slate-600">Processing...</span>
+                          <Loader2 className={`${compact ? 'w-3 h-3' : 'w-5 h-5'} animate-spin text-primary-600`} />
+                          {!compact && <span className="text-sm text-slate-600">Processing...</span>}
                         </>
                       )}
                       {file.status === 'success' && (
                         <>
-                          <CheckCircle className="w-5 h-5 text-green-600" />
-                          <span className="text-sm text-green-600">Processed</span>
+                          <CheckCircle className={`${compact ? 'w-3 h-3' : 'w-5 h-5'} text-green-600`} />
+                          {!compact && <span className="text-sm text-green-600">Processed</span>}
                         </>
                       )}
                       {file.status === 'duplicate' && (
                         <>
-                          <AlertCircle className="w-5 h-5 text-amber-600" />
-                          <span className="text-sm text-amber-600">{file.error || 'Already uploaded'}</span>
+                          <AlertCircle className={`${compact ? 'w-3 h-3' : 'w-5 h-5'} text-amber-600`} />
+                          {!compact && <span className="text-sm text-amber-600">{file.error || 'Already uploaded'}</span>}
                         </>
                       )}
                       {file.status === 'error' && (
                         <>
-                          <XCircle className="w-5 h-5 text-red-600" />
-                          <span className="text-sm text-red-600">{file.error}</span>
+                          <XCircle className={`${compact ? 'w-3 h-3' : 'w-5 h-5'} text-red-600`} />
+                          {!compact && <span className="text-sm text-red-600">{file.error}</span>}
                         </>
                       )}
                     </div>
