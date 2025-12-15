@@ -250,14 +250,18 @@ async def _read_pty_output(session: TerminalSession):
         while session.is_running and session.process.isalive():
             try:
                 # Read with timeout to avoid blocking
+                logger.debug(f"📖 Attempting to read from PTY for task: {session.task_id}")
                 output = await asyncio.get_event_loop().run_in_executor(
                     None,
                     lambda: session.process.read(1024).decode('utf-8', errors='ignore')
                 )
 
                 if output:
+                    logger.info(f"📤 PTY output ({len(output)} bytes): {repr(output[:100])}")
                     # Queue output for WebSocket transmission
                     await session.read_queue.put(output)
+                else:
+                    logger.debug(f"📖 No output from PTY")
 
             except EOFError:
                 # Process ended
@@ -270,6 +274,13 @@ async def _read_pty_output(session: TerminalSession):
     finally:
         session.is_running = False
         logger.info(f"PTY reader stopped for task: {session.task_id}")
+
+        # ✅ NEW: Scan workspace and upload artifacts when PTY ends
+        logger.info(f"🔍 Triggering artifact scan for task: {session.task_id}")
+        try:
+            await _scan_and_upload_artifacts(session.task_id)
+        except Exception as e:
+            logger.error(f"❌ Failed to scan artifacts after PTY end: {e}")
 
 
 async def _read_subprocess_output(session: TerminalSession):
@@ -319,15 +330,123 @@ async def get_terminal_session(task_id: str) -> Optional[TerminalSession]:
     return _sessions.get(task_id)
 
 
-async def close_terminal_session(task_id: str):
+async def _scan_and_upload_artifacts(task_id: str):
     """
-    Close and remove a terminal session
+    Scan workspace for artifacts and upload to MinIO
+
+    ✨ NEW: Detects files created during Claude Code execution and uploads them to MinIO
+    Uses the same organizational path structure as custom agent
 
     Args:
         task_id: Task identifier
     """
+    import subprocess
+    from pathlib import Path
+    from sqlalchemy import select
+    from app.models.database import AgentTask
+
+    logger.info(f"📂 Scanning workspace for artifacts (task: {task_id})")
+
+    # Get workspace path from agent-runtime container
+    workspace_path = "/workspace"
+
+    try:
+        # Find all files modified/created in last 30 minutes (during task execution)
+        # Exclude common directories to avoid noise
+        find_cmd = [
+            "docker", "exec", "rag-agent-runtime",
+            "find", workspace_path,
+            "-type", "f",
+            "-mmin", "-30",  # Modified in last 30 minutes
+            "!", "-path", "*/.*",  # Exclude hidden files/dirs
+            "!", "-path", "*/temp/*",  # Exclude temp directory
+            "!", "-path", "*/input/*"  # Exclude input directory
+        ]
+
+        result = subprocess.run(
+            find_cmd,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode != 0:
+            logger.warning(f"⚠️ Find command failed: {result.stderr}")
+            return
+
+        # Parse found files
+        found_files = [
+            line.strip() for line in result.stdout.strip().split('\n')
+            if line.strip() and line.strip() != workspace_path
+        ]
+
+        if not found_files:
+            logger.info(f"ℹ️ No artifacts found for task {task_id}")
+            return
+
+        # Convert absolute paths to relative paths
+        artifacts = [
+            str(Path(f).relative_to(workspace_path)) for f in found_files
+        ]
+
+        logger.info(f"✅ Found {len(artifacts)} artifact(s): {artifacts[:5]}...")  # Show first 5
+
+        # Update task in database with artifacts list
+        from app.core.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as db:
+            result_query = await db.execute(
+                select(AgentTask).filter(AgentTask.task_id == task_id)
+            )
+            task = result_query.scalar_one_or_none()
+
+            if not task:
+                logger.warning(f"⚠️ Task {task_id} not found in database")
+                return
+
+            # Update artifacts
+            task.artifacts = artifacts
+            await db.commit()
+
+            logger.info(f"✅ Updated task {task_id} with {len(artifacts)} artifacts")
+
+            # Upload to MinIO using the SAME organizational path as custom agent
+            # The minio_base_path is already set with the correct org structure:
+            # e.g., "Technology/Backend-Development/Construction-Intelligence/admin/agent-tasks/task_name/task_id/"
+            if task.minio_base_path:
+                from app.services.agent_service import AgentOrchestrationService
+                agent_service = AgentOrchestrationService(db)
+                await agent_service._upload_artifacts_to_minio(task)
+                logger.info(f"🎉 Artifacts uploaded to MinIO: {task.minio_base_path}artifacts/")
+            else:
+                logger.warning(f"⚠️ No minio_base_path set for task {task_id}")
+
+    except subprocess.TimeoutExpired:
+        logger.error(f"❌ Timeout scanning workspace for task {task_id}")
+    except Exception as e:
+        logger.error(f"❌ Error scanning artifacts for task {task_id}: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+async def close_terminal_session(task_id: str, scan_artifacts: bool = True):
+    """
+    Close and remove a terminal session
+
+    ✨ NEW: Optionally scans workspace for artifacts and uploads to MinIO before closing
+
+    Args:
+        task_id: Task identifier
+        scan_artifacts: If True, scan workspace and upload artifacts to MinIO (default: True)
+    """
     session = _sessions.get(task_id)
     if session:
+        # ✅ NEW: Scan workspace for artifacts before closing (if requested)
+        if scan_artifacts:
+            try:
+                await _scan_and_upload_artifacts(task_id)
+            except Exception as e:
+                logger.error(f"❌ Failed to scan artifacts for task {task_id}: {e}")
+
         await session.close()
         del _sessions[task_id]
         logger.info(f"Removed terminal session for task: {task_id}")

@@ -33,7 +33,7 @@ from app.schemas.agent_schemas import (
     AgentTaskCancelResponse,
     TaskStatus
 )
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -246,6 +246,147 @@ async def cancel_agent_task(
     except Exception as e:
         logger.error(f"❌ Error cancelling task: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to cancel task: {str(e)}")
+
+
+@router.post("/tasks/{task_id}/complete-and-close")
+async def complete_and_close_terminal(
+    task_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    ✨ Complete task and gracefully close terminal session
+
+    This endpoint is designed for interactive CLI agents (Claude Code, Codex CLI) where:
+    1. User has finished working in the terminal
+    2. We want to scan and upload artifacts
+    3. Close the terminal gracefully (not cancel the job)
+    4. Mark task as completed (preserves OAuth session for next time)
+
+    **Use Cases**:
+    - "I'm done with Claude Code, save my work and close the terminal"
+    - Better UX than "Cancel Job" which sounds destructive
+
+    **What Happens**:
+    1. Scans workspace for artifacts (files created in last 30 minutes)
+    2. Uploads artifacts to MinIO with organizational path
+    3. Updates task database with artifact list
+    4. Closes terminal session gracefully
+    5. Marks task as 'completed'
+
+    **Note**: OAuth session persists in Docker volume, so next terminal session won't require re-login!
+
+    **Returns**:
+    - task_id: Task identifier
+    - status: 'completed'
+    - artifacts_found: Number of artifacts detected and uploaded
+    - message: Success message
+    """
+    try:
+        from app.services.terminal_session_manager import close_terminal_session
+
+        logger.info(f"✅ Complete & close request for task: {task_id}")
+
+        # 1. Verify task exists
+        service = AgentOrchestrationService(db)
+        task_status = await service.get_task_status(task_id)
+
+        if not task_status:
+            raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
+
+        # 2. Close terminal session gracefully (triggers artifact scanning)
+        logger.info(f"🔌 Closing terminal session for task: {task_id}")
+        await close_terminal_session(task_id, scan_artifacts=True)
+
+        # 3. Get updated task to see artifacts
+        task_status = await service.get_task_status(task_id)
+        artifacts_count = len(task_status.artifacts) if task_status.artifacts else 0
+
+        # 4. Mark task as completed (not cancelled)
+        result = await db.execute(
+            select(AgentTask).filter(AgentTask.task_id == task_id)
+        )
+        task = result.scalar_one_or_none()
+
+        if task and task.status == TaskStatus.RUNNING:
+            task.status = TaskStatus.COMPLETED
+            task.completed_at = datetime.now(timezone.utc)
+
+            if task.started_at:
+                task.duration_seconds = (task.completed_at - task.started_at).total_seconds()
+
+            await db.commit()
+            logger.info(f"✅ Task {task_id} marked as completed")
+
+        return {
+            "task_id": task_id,
+            "status": "completed",
+            "artifacts_found": artifacts_count,
+            "artifacts": task_status.artifacts or [],
+            "minio_path": f"{task_status.minio_base_path}artifacts/" if task_status.minio_base_path else None,
+            "message": f"Terminal closed successfully. Found and uploaded {artifacts_count} artifacts. OAuth session preserved for next time!",
+            "oauth_persisted": True
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error completing and closing terminal: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to complete task: {str(e)}")
+
+
+@router.post("/tasks/{task_id}/scan-artifacts")
+async def scan_task_artifacts(
+    task_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    ✨ NEW: Manually trigger artifact scanning and MinIO upload for a task
+
+    Useful for:
+    - Testing artifact detection
+    - Uploading artifacts without closing the terminal session
+    - Re-scanning after adding more files
+
+    **Path Parameters**:
+    - task_id: Task identifier (e.g., task-73bf8582653e)
+
+    **Returns**:
+    - artifacts_found: Number of artifacts detected
+    - artifacts: List of artifact paths
+    - uploaded: Whether artifacts were uploaded to MinIO
+    - minio_path: MinIO base path where artifacts were uploaded
+    """
+    try:
+        from app.services.terminal_session_manager import _scan_and_upload_artifacts
+
+        logger.info(f"🔍 Manual artifact scan requested for task: {task_id}")
+
+        # Trigger artifact scan
+        await _scan_and_upload_artifacts(task_id)
+
+        # Get updated task to return results
+        result = await db.execute(
+            select(AgentTask).filter(AgentTask.task_id == task_id)
+        )
+        task = result.scalar_one_or_none()
+
+        if not task:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+        return {
+            "task_id": task_id,
+            "artifacts_found": len(task.artifacts) if task.artifacts else 0,
+            "artifacts": task.artifacts or [],
+            "uploaded": bool(task.minio_base_path and task.artifacts),
+            "minio_path": f"{task.minio_base_path}artifacts/" if task.minio_base_path else None,
+            "message": f"Scanned and uploaded {len(task.artifacts) if task.artifacts else 0} artifacts"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error scanning artifacts: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to scan artifacts: {str(e)}")
 
 
 @router.post("/upload-workspace-file")
@@ -1357,11 +1498,14 @@ async def agent_task_terminal_websocket(
         async def stream_output():
             """Stream terminal output to WebSocket"""
             try:
+                logger.info(f"📡 Starting output streaming for task: {task_id}")
                 async for output in session.read_output():
+                    logger.info(f"📡 Sending terminal output via WebSocket ({len(output)} bytes): {repr(output[:100])}")
                     await websocket.send_json({
                         "type": "terminal_output",
                         "data": output
                     })
+                logger.info(f"📡 Output streaming ended for task: {task_id}")
             except Exception as e:
                 logger.error(f"Error streaming terminal output: {e}")
 

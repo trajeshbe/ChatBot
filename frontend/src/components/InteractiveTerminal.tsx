@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { Terminal as TerminalIcon, Maximize2, Minimize2 } from 'lucide-react'
+import { Terminal as TerminalIcon, Maximize2, Minimize2, Clipboard } from 'lucide-react'
 
 // Import xterm and addons
 // These will be imported dynamically to avoid SSR issues with Next.js
@@ -31,6 +31,7 @@ export default function InteractiveTerminal({ taskId, onClose }: InteractiveTerm
   const xtermRef = useRef<any>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const fitAddonRef = useRef<any>(null)
+  const isInitializedRef = useRef<boolean>(false)  // ✅ Track initialization state
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [hasError, setHasError] = useState(false)
@@ -38,6 +39,12 @@ export default function InteractiveTerminal({ taskId, onClose }: InteractiveTerm
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
   useEffect(() => {
+    // ✅ Prevent duplicate initialization (React Strict Mode runs effects twice)
+    if (isInitializedRef.current) {
+      console.log('⚠️ Terminal already initialized, skipping duplicate initialization')
+      return
+    }
+
     // Dynamically import xterm to avoid SSR issues
     const loadXterm = async () => {
       if (typeof window === 'undefined') return
@@ -51,6 +58,8 @@ export default function InteractiveTerminal({ taskId, onClose }: InteractiveTerm
         FitAddon = fitAddonModule.FitAddon
         WebLinksAddon = webLinksAddonModule.WebLinksAddon
 
+        // ✅ Mark as initialized before initializing terminal
+        isInitializedRef.current = true
         initTerminal()
       } catch (error) {
         console.error('Failed to load xterm:', error)
@@ -61,6 +70,8 @@ export default function InteractiveTerminal({ taskId, onClose }: InteractiveTerm
     loadXterm()
 
     return () => {
+      // ✅ Reset initialization flag on cleanup
+      isInitializedRef.current = false
       cleanup()
     }
   }, [taskId])
@@ -134,6 +145,77 @@ export default function InteractiveTerminal({ taskId, onClose }: InteractiveTerm
       }
     })
 
+    // ✅ IMPROVED: Handle paste with multiple approaches for browser compatibility
+    const handlePaste = async (event: ClipboardEvent) => {
+      try {
+        event.preventDefault()
+        event.stopPropagation()
+
+        let text: string | null = null
+
+        // Method 1: Try event.clipboardData (most common)
+        if (event.clipboardData) {
+          text = event.clipboardData.getData('text')
+          console.log('📋 Paste via clipboardData:', text?.length, 'chars')
+        }
+
+        // Method 2: Try navigator.clipboard API (fallback)
+        if (!text && navigator.clipboard && navigator.clipboard.readText) {
+          try {
+            text = await navigator.clipboard.readText()
+            console.log('📋 Paste via navigator.clipboard:', text?.length, 'chars')
+          } catch (err) {
+            console.warn('Clipboard API denied:', err)
+          }
+        }
+
+        // Send to backend if we got text
+        if (text && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          console.log(`✅ Sending ${text.length} characters to terminal`)
+          wsRef.current.send(JSON.stringify({
+            type: 'terminal_input',
+            data: text
+          }))
+        } else {
+          console.error('❌ No text found in clipboard or WebSocket not connected')
+        }
+      } catch (error) {
+        console.error('❌ Paste error:', error)
+      }
+    }
+
+    // Attach paste listener to terminal container AND document
+    const terminalElement = terminalRef.current
+    if (terminalElement) {
+      // On the terminal element itself
+      terminalElement.addEventListener('paste', handlePaste as EventListener)
+
+      // Also listen for paste when terminal is focused
+      terminalElement.addEventListener('keydown', async (e: KeyboardEvent) => {
+        // Ctrl+V or Cmd+V
+        if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+          e.preventDefault()
+          console.log('📋 Keyboard paste detected (Ctrl/Cmd+V)')
+
+          try {
+            if (navigator.clipboard && navigator.clipboard.readText) {
+              const text = await navigator.clipboard.readText()
+              if (text && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                console.log(`✅ Pasting ${text.length} characters`)
+                wsRef.current.send(JSON.stringify({
+                  type: 'terminal_input',
+                  data: text
+                }))
+              }
+            }
+          } catch (err) {
+            console.error('❌ Clipboard read failed:', err)
+            alert('Paste permission denied. Please use right-click → Paste or grant clipboard access.')
+          }
+        }
+      })
+    }
+
     // Handle window resize
     const handleResize = () => {
       fitAddon.fit()
@@ -142,10 +224,49 @@ export default function InteractiveTerminal({ taskId, onClose }: InteractiveTerm
 
     return () => {
       window.removeEventListener('resize', handleResize)
+      if (terminalElement) {
+        terminalElement.removeEventListener('paste', handlePaste as EventListener)
+        // Note: keydown listener doesn't need explicit removal as it's recreated on mount
+      }
+    }
+  }
+
+  // ✅ NEW: Manual paste button function
+  const handleManualPaste = async () => {
+    try {
+      console.log('📋 Manual paste button clicked')
+
+      if (!navigator.clipboard || !navigator.clipboard.readText) {
+        alert('Clipboard API not supported in this browser')
+        return
+      }
+
+      const text = await navigator.clipboard.readText()
+      if (text && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        console.log(`✅ Pasting ${text.length} characters from manual button`)
+        wsRef.current.send(JSON.stringify({
+          type: 'terminal_input',
+          data: text
+        }))
+      } else if (!text) {
+        alert('Clipboard is empty')
+      } else {
+        alert('Terminal not connected')
+      }
+    } catch (err) {
+      console.error('❌ Manual paste failed:', err)
+      alert(`Paste permission denied. Please:\n1. Copy your text\n2. Click inside the terminal\n3. Press Ctrl+V (Windows/Linux) or Cmd+V (Mac)`)
     }
   }
 
   const connectWebSocket = (term: any) => {
+    // ✅ Guard: Close existing WebSocket before creating new one
+    if (wsRef.current) {
+      console.log('⚠️ Closing existing WebSocket before creating new connection')
+      wsRef.current.close()
+      wsRef.current = null
+    }
+
     const wsUrl = `${API_URL.replace('http', 'ws')}/api/v1/agent/tasks/${taskId}/terminal`
 
     console.log('🔌 Connecting to terminal WebSocket:', wsUrl)
@@ -238,6 +359,15 @@ export default function InteractiveTerminal({ taskId, onClose }: InteractiveTerm
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* ✅ NEW: Manual Paste Button */}
+          <button
+            onClick={handleManualPaste}
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 rounded transition-colors"
+            title="Paste from clipboard"
+          >
+            <Clipboard className="w-3 h-3" />
+            <span>Paste</span>
+          </button>
           <button
             onClick={toggleFullscreen}
             className="text-slate-400 hover:text-slate-200 transition-colors"
@@ -275,7 +405,7 @@ export default function InteractiveTerminal({ taskId, onClose }: InteractiveTerm
           Task ID: {taskId}
         </div>
         <div className="text-xs text-slate-400">
-          Press Ctrl+C to interrupt • Type to interact
+          Ctrl+C: interrupt • Ctrl+V: paste • Right-click: paste • Type to interact
         </div>
       </div>
     </div>

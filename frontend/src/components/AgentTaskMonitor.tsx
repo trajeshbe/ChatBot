@@ -284,6 +284,39 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
     }
   };
 
+  // ✨ NEW: Complete and close terminal (graceful exit for Claude Code CLI)
+  const completeAndCloseTerminal = async (taskId: string) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+      const response = await axios.post(
+        `${API_URL}/api/v1/agent/tasks/${taskId}/complete-and-close`,
+        {},
+        { headers }
+      );
+
+      const result = response.data;
+      console.log(`✅ Terminal closed successfully for task ${taskId}:`, result);
+
+      // Show success message with OAuth info
+      alert(
+        `✅ Terminal Closed Successfully!\n\n` +
+        `Artifacts Found: ${result.artifacts_found}\n` +
+        `Status: ${result.status}\n\n` +
+        `🔐 OAuth session preserved - no re-login needed next time!\n\n` +
+        `${result.minio_path ? `📦 Artifacts uploaded to:\n${result.minio_path}` : ''}`
+      );
+
+      // Close modal and refresh tasks
+      setSelectedTask(null);
+      await fetchTasks();
+    } catch (error: any) {
+      console.error('Error completing task:', error);
+      alert(`Failed to complete task: ${error.response?.data?.detail || error.message}`);
+    }
+  };
+
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -594,6 +627,26 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
               {/* ✅ Interactive Terminal for Claude CLI */}
               {selectedTask.meta_info?.engine === 'claude_code_cli' && selectedTask.status === 'running' && (
                 <div className="my-4">
+                  <div className="mb-3 flex items-center justify-between bg-indigo-50 dark:bg-indigo-900/30 px-4 py-3 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                    <div className="flex items-center gap-2">
+                      <Terminal className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                      <div>
+                        <h4 className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">
+                          Claude Code Interactive Terminal
+                        </h4>
+                        <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-0.5">
+                          🔐 OAuth session preserved - no re-login needed next time
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => completeAndCloseTerminal(selectedTask.task_id)}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm flex items-center gap-2"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      Complete & Close Terminal
+                    </button>
+                  </div>
                   <InteractiveTerminal taskId={selectedTask.task_id} />
                 </div>
               )}

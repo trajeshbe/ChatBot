@@ -1225,4 +1225,12 @@ Task name:"""
         else:
             logger.info(f"ℹ️ No running process found for task {task_id} (may not have started yet)")
 
+        # ✨ NEW: Close terminal session gracefully (triggers artifact scanning)
+        from app.services.terminal_session_manager import close_terminal_session
+        try:
+            logger.info(f"🔌 Closing terminal session for cancelled task: {task_id}")
+            await close_terminal_session(task_id, scan_artifacts=True)
+        except Exception as e:
+            logger.warning(f"⚠️ Error closing terminal session: {e}")
+
         return True
