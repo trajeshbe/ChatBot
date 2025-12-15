@@ -1456,6 +1456,16 @@ except ImportError as e:
 except Exception as e:
     logger.warning(f"Could not register Construction Metrics router: {e}")
 
+# Fine-Tuning API
+try:
+    from app.api.routes import finetuning_routes
+    app.include_router(finetuning_routes.router)
+    logger.info("✓ Fine-Tuning API router registered (dataset, job, model registry, GPU monitoring)")
+except ImportError as e:
+    logger.warning(f"Fine-Tuning API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Fine-Tuning router: {e}")
+
 # Playwright test routes (for debugging)
 try:
     from app.api.routes import playwright_test_routes

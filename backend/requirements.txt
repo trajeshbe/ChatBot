@@ -260,6 +260,26 @@ fairlearn==0.9.0                  # Bias and fairness metrics for ML models
 # ============================================================================
 
 # ----------------------------------------------------------------------------
+# ML/LLM FINE-TUNING (Optional)
+# Used by: app/services/finetuning/*, app/services/finetuning/trainers/*
+# ----------------------------------------------------------------------------
+# NOTE: Fine-tuning is an optional feature for model customization
+# Core dependencies for fine-tuning LLMs
+transformers==4.38.0            # Hugging Face transformers - model loading and training
+peft==0.10.0                    # Parameter-Efficient Fine-Tuning - LoRA/QLoRA adapters
+trl==0.8.0                      # Transformer Reinforcement Learning - SFT and RLHF
+bitsandbytes==0.43.0            # 4-bit and 8-bit quantization - memory-efficient training
+accelerate==0.29.0              # Distributed training utilities - multi-GPU support
+datasets==2.18.0                # Dataset loading and processing - Hugging Face datasets
+optuna==3.5.0                   # Hyperparameter optimization - Bayesian optimization with TPE
+scipy==1.12.0                   # Scientific computing - required by Optuna
+# GPU monitoring
+pynvml==11.5.0                  # NVIDIA Management Library - GPU stats and allocation
+
+# MLflow integration for experiment tracking (already included in requirements.txt)
+# mlflow==2.10.2                # Experiment tracking - model registry
+
+# ----------------------------------------------------------------------------
 # MCP (MODEL CONTEXT PROTOCOL) INTEGRATION (Optional)
 # Used by: app/mcp/server.py, app/mcp/client.py
 # ----------------------------------------------------------------------------
@@ -270,3 +290,11 @@ fairlearn==0.9.0                  # Bias and fairness metrics for ML models
 # mcp>=1.0.0                      # Model Context Protocol SDK - bidirectional tool integration (optional)
 # If mcp is not available yet, the platform will work without it
 # External MCP servers will be disabled with graceful fallback
+
+# ----------------------------------------------------------------------------
+# INTERACTIVE TERMINAL (Required for Claude CLI)
+# Used by: app/services/engines/claude_code_cli_engine.py, app/api/routes/agent_routes.py
+# ----------------------------------------------------------------------------
+ptyprocess==0.7.0               # Pseudo-terminal process management - enables interactive terminal sessions
+# Note: Python's built-in `pty` module is used for basic PTY operations,
+# but ptyprocess provides better cross-platform support and process management

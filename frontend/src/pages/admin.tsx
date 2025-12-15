@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
-import { Users, Activity, Database, TrendingUp, Search, Filter, ChevronDown, ChevronUp, Key, Server, Wrench, Globe, Shield, Lock, UserPlus, Trash2 } from 'lucide-react'
+import { Users, Activity, Database, TrendingUp, Search, Filter, ChevronDown, ChevronUp, Key, Server, Wrench, Globe, Shield, Lock, UserPlus, Trash2, Settings } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import UserHeader from '@/components/UserHeader'
 import APIKeysManager from '../components/APIKeysManager'
@@ -11,6 +11,7 @@ import { ScrapingConfigManager } from '../components/ScrapingConfigManager'
 import RoleManager from '../components/admin/RoleManager'
 import PermissionMatrix from '../components/admin/PermissionMatrix'
 import UserRoleAssignment from '../components/admin/UserRoleAssignment'
+import FineTuningManager from '../components/finetuning/FineTuningManager'
 
 interface User {
   id: string
@@ -144,7 +145,7 @@ interface DbStats {
 export default function AdminPage() {
   const router = useRouter()
   const { user, token, isAuthenticated, isLoading } = useAuth()
-  const [activeTab, setActiveTab] = useState<'users' | 'sessions' | 'audit' | 'metrics' | 'database' | 'apikeys' | 'ollama' | 'mcptools' | 'scraping' | 'rbac'>('users')
+  const [activeTab, setActiveTab] = useState<'users' | 'sessions' | 'audit' | 'metrics' | 'database' | 'apikeys' | 'ollama' | 'mcptools' | 'scraping' | 'rbac' | 'finetuning'>('users')
   const [rbacSubTab, setRbacSubTab] = useState<'roles' | 'permissions' | 'users'>('roles')
   const [users, setUsers] = useState<User[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
@@ -645,6 +646,19 @@ export default function AdminPage() {
                 <div className="flex items-center space-x-2">
                   <Users className="w-4 h-4" />
                   <span>RBAC</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('finetuning')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'finetuning'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <Settings className="w-4 h-4" />
+                  <span>Fine-Tuning</span>
                 </div>
               </button>
             </div>
@@ -1392,6 +1406,13 @@ export default function AdminPage() {
                   {rbacSubTab === 'roles' && <RoleManager />}
                   {rbacSubTab === 'permissions' && <PermissionMatrix />}
                   {rbacSubTab === 'users' && <UserRoleAssignment />}
+                </div>
+              )}
+
+              {/* Fine-Tuning Tab */}
+              {activeTab === 'finetuning' && (
+                <div>
+                  <FineTuningManager />
                 </div>
               )}
 

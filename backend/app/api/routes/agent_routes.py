@@ -8,6 +8,8 @@ autonomous agent tasks with LLM integration.
 import logging
 import shutil
 import os
+import asyncio  # ✅ FIX: Added for terminal WebSocket
+import json  # ✅ FIX: Added for terminal WebSocket JSON parsing
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, WebSocket, WebSocketDisconnect, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1280,3 +1282,146 @@ async def agent_task_websocket(
             })
         except:
             pass  # Connection may already be closed
+
+
+@router.websocket("/tasks/{task_id}/terminal")
+async def agent_task_terminal_websocket(
+    websocket: WebSocket,
+    task_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Interactive Terminal WebSocket endpoint for Claude CLI
+
+    Provides bidirectional communication with a PTY (pseudo-terminal)
+    running Claude CLI. Enables user to type responses to Claude's prompts.
+
+    **Connection URL**:
+    ```
+    ws://localhost:8000/api/v1/agent/tasks/{task_id}/terminal
+    ```
+
+    **Client → Server Messages** (User Input):
+    ```json
+    {
+      "type": "terminal_input",
+      "data": "user typed text\\n"
+    }
+    ```
+
+    **Server → Client Messages** (Terminal Output):
+    ```json
+    {
+      "type": "terminal_output",
+      "data": "output from Claude CLI"
+    }
+    ```
+
+    **Features**:
+    - Full TTY support with ANSI escape codes
+    - Real-time bidirectional I/O
+    - Keyboard input forwarding (including Ctrl+C, Tab, etc.)
+    - Terminal resizing support
+    """
+    await websocket.accept()
+    logger.info(f"🖥️ Interactive terminal WebSocket connected for task: {task_id}")
+
+    try:
+        # Get task from database
+        query = select(AgentTask).where(AgentTask.task_id == task_id)
+        result = await db.execute(query)
+        task = result.scalar_one_or_none()
+
+        if not task:
+            await websocket.send_json({
+                "type": "error",
+                "error": f"Task {task_id} not found"
+            })
+            await websocket.close()
+            return
+
+        # Get task's terminal session manager
+        from app.services.terminal_session_manager import get_terminal_session
+
+        session = await get_terminal_session(task_id)
+
+        if not session:
+            await websocket.send_json({
+                "type": "error",
+                "error": f"No terminal session found for task {task_id}"
+            })
+            await websocket.close()
+            return
+
+        # Start background task to stream terminal output
+        async def stream_output():
+            """Stream terminal output to WebSocket"""
+            try:
+                async for output in session.read_output():
+                    await websocket.send_json({
+                        "type": "terminal_output",
+                        "data": output
+                    })
+            except Exception as e:
+                logger.error(f"Error streaming terminal output: {e}")
+
+        # Start output streaming task
+        output_task = asyncio.create_task(stream_output())
+
+        try:
+            # Handle incoming WebSocket messages (user input)
+            while True:
+                message = await websocket.receive_text()
+
+                try:
+                    data = json.loads(message)
+
+                    if data.get("type") == "terminal_input":
+                        # Forward user input to terminal stdin
+                        user_input = data.get("data", "")
+                        logger.info(f"📝 Terminal input received ({len(user_input)} bytes): {repr(user_input[:50])}")
+                        await session.write_input(user_input)
+
+                    elif data.get("type") == "resize":
+                        # Handle terminal resize
+                        rows = data.get("rows", 24)
+                        cols = data.get("cols", 80)
+                        await session.resize(rows, cols)
+
+                except json.JSONDecodeError:
+                    logger.warning(f"Invalid JSON message: {message}")
+
+        except WebSocketDisconnect:
+            logger.info(f"🖥️ Terminal WebSocket disconnected for task: {task_id}")
+        finally:
+            # Cancel output streaming task
+            output_task.cancel()
+            try:
+                await output_task
+            except asyncio.CancelledError:
+                pass
+
+            # Notify frontend of disconnection
+            try:
+                await websocket.send_json({
+                    "type": "disconnected",
+                    "message": "Terminal session ended"
+                })
+            except:
+                pass
+
+    except Exception as e:
+        logger.error(f"❌ Terminal WebSocket error for task {task_id}: {e}")
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "error": str(e)
+            })
+        except:
+            pass
+    finally:
+        try:
+            await websocket.close()
+        except:
+            pass
+        logger.info(f"🖥️ Terminal WebSocket closed for task: {task_id}")

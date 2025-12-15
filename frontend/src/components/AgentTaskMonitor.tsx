@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import FileUpload from './FileUpload';
+import AgentWorkspaceFileUpload from './AgentWorkspaceFileUpload';
 import ProjectSelector from './ProjectSelector';
-import { FileText, CheckCircle, XCircle, Loader2, X, Zap, MessageSquare, Wrench, CheckCircle2, AlertCircle } from 'lucide-react';
+import InteractiveTerminal from './InteractiveTerminal';
+import { FileText, CheckCircle, XCircle, Loader2, X, Zap, MessageSquare, Wrench, CheckCircle2, AlertCircle, Terminal } from 'lucide-react';
 import { useAgentWebSocket } from '../hooks/useAgentWebSocket';
 
 interface AgentTask {
@@ -340,14 +341,11 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 mb-2">
         {/* Upload New Files */}
         <div className="bg-white dark:bg-slate-800 rounded shadow-sm p-3 border border-slate-200 dark:border-slate-700">
-          <h2 className="text-xs font-semibold mb-2 text-slate-700 dark:text-slate-300">📤 Upload Files</h2>
+          <h2 className="text-xs font-semibold mb-2 text-slate-700 dark:text-slate-300">📤 Upload Files to Agent Workspace</h2>
           <div className="scale-90 origin-top max-h-48 pb-2">
-            <FileUpload
-              currentUser={currentUser}
-              sessionId={sessionId}
+            <AgentWorkspaceFileUpload
               projectId={selectedProjectId}  // ✅ Pass selected project from parent
-              hideProjectSelector={true}  // ✅ Hide internal selector (we have one above)
-              compact={true}  // ✅ Use compact mode for better scaling
+              currentUser={currentUser}
               onUploadComplete={() => {
                 // Refresh file list when upload completes
                 setFilesListKey(prev => prev + 1);
@@ -593,6 +591,13 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
                 <p className="mt-1 text-sm whitespace-pre-wrap text-slate-700 dark:text-slate-300">{selectedTask.task_description}</p>
               </div>
 
+              {/* ✅ Interactive Terminal for Claude CLI */}
+              {selectedTask.meta_info?.engine === 'claude_code_cli' && selectedTask.status === 'running' && (
+                <div className="my-4">
+                  <InteractiveTerminal taskId={selectedTask.task_id} />
+                </div>
+              )}
+
               {/* 🆕 Real-Time Event Stream (WebSocket) */}
               {wsEvents.length > 0 && (
                 <div className="border border-indigo-200 dark:border-indigo-800 rounded-lg overflow-hidden">
@@ -618,7 +623,19 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
                     <div className="p-3 space-y-2">
                       {wsEvents.map((event, idx) => {
                         // Render different event types with appropriate styling
-                        if (event.type === 'thinking') {
+                        // ✅ NEW: Handle terminal output from Claude CLI
+                        if (event.type === 'terminal_output') {
+                          return (
+                            <div key={idx} className="flex gap-2 items-start p-1 bg-slate-900 dark:bg-slate-950 rounded border border-slate-700 dark:border-slate-800">
+                              <Terminal className="w-3 h-3 mt-0.5 text-green-400 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-mono text-green-400 whitespace-pre-wrap break-words">
+                                  {event.output}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        } else if (event.type === 'thinking') {
                           return (
                             <div key={idx} className="flex gap-2 items-start p-2 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700">
                               <MessageSquare className="w-4 h-4 mt-0.5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />

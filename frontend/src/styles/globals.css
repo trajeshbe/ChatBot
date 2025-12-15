@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Import xterm.js CSS for terminal styling */
+/* Note: xterm CSS loaded via component instead to avoid build issues */
+/* @import '@xterm/xterm/css/xterm.css'; */
+
 /**
  * Theme CSS Variables
  * Sage Green/Teal theme with light and dark mode support

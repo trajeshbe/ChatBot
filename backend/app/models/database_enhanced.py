@@ -1,7 +1,7 @@
 """
 Enhanced database models for RBAC, Sessions, and Audit Logging
 """
-from sqlalchemy import Column, String, DateTime, Integer, Text, ForeignKey, Boolean, Float, JSON, Enum as SQLEnum, UniqueConstraint
+from sqlalchemy import Column, String, DateTime, Integer, Text, ForeignKey, Boolean, Float, JSON, Enum as SQLEnum, UniqueConstraint, LargeBinary
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
@@ -421,7 +421,7 @@ class APICredential(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     provider = Column(String(50), unique=True, nullable=False, index=True)  # 'openai', 'anthropic', 'huggingface'
-    api_key_encrypted = Column(Text, nullable=False)  # Fernet-encrypted API key
+    api_key_encrypted = Column(LargeBinary, nullable=False)  # Fernet-encrypted API key (bytea)
     encryption_key_id = Column(String(100), nullable=True)  # For key rotation tracking
     is_active = Column(Boolean, default=True, nullable=False, index=True)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

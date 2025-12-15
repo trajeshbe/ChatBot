@@ -1,0 +1,546 @@
+"""
+Dataset Preprocessor - Flexible and Extensible
+
+Automatically preprocesses datasets based on training objective.
+Supports custom preprocessing pipelines that can be easily extended.
+
+Supported formats:
+- QA: Question-Answer pairs
+- Classification: Text-Label pairs
+- Instruction: Instruction-Response pairs
+- Preference: Prompt with chosen/rejected (for RLHF)
+- Summarization: Document-Summary pairs
+
+Extension mechanism:
+- Add new objective types by registering preprocessor functions
+- Custom formatters can be added via register_formatter()
+"""
+
+from typing import Optional, Dict, Any, List, Callable
+from abc import ABC, abstractmethod
+import logging
+import json
+import pandas as pd
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+
+class DatasetFormatter(ABC):
+    """
+    Abstract base class for dataset formatters
+
+    Each training objective has its own formatter that converts
+    raw data into the format expected by the model.
+    """
+
+    @abstractmethod
+    def format(self, example: Dict[str, Any]) -> str:
+        """
+        Format a single example
+
+        Args:
+            example: Raw example from dataset
+
+        Returns:
+            Formatted string ready for tokenization
+        """
+        pass
+
+    @abstractmethod
+    def validate(self, example: Dict[str, Any]) -> bool:
+        """
+        Validate that example has required fields
+
+        Args:
+            example: Raw example from dataset
+
+        Returns:
+            True if valid, False otherwise
+        """
+        pass
+
+
+class QAFormatter(DatasetFormatter):
+    """Formatter for Question-Answer datasets"""
+
+    def __init__(self, question_col: str = "question", answer_col: str = "answer"):
+        self.question_col = question_col
+        self.answer_col = answer_col
+        self.template = """### Question:
+{question}
+
+### Answer:
+{answer}"""
+
+    def format(self, example: Dict[str, Any]) -> str:
+        return self.template.format(
+            question=example[self.question_col],
+            answer=example[self.answer_col]
+        )
+
+    def validate(self, example: Dict[str, Any]) -> bool:
+        return (
+            self.question_col in example and
+            self.answer_col in example and
+            example[self.question_col] and
+            example[self.answer_col]
+        )
+
+
+class ClassificationFormatter(DatasetFormatter):
+    """Formatter for Classification datasets"""
+
+    def __init__(
+        self,
+        text_col: str = "text",
+        label_col: str = "label",
+        categories: Optional[List[str]] = None
+    ):
+        self.text_col = text_col
+        self.label_col = label_col
+        self.categories = categories
+        self.template = """### Task:
+Classify the following text{categories_str}.
+
+### Text:
+{text}
+
+### Classification:
+{label}"""
+
+    def format(self, example: Dict[str, Any]) -> str:
+        categories_str = ""
+        if self.categories:
+            categories_str = f" into one of these categories: {', '.join(self.categories)}"
+
+        return self.template.format(
+            categories_str=categories_str,
+            text=example[self.text_col],
+            label=example[self.label_col]
+        )
+
+    def validate(self, example: Dict[str, Any]) -> bool:
+        return (
+            self.text_col in example and
+            self.label_col in example and
+            example[self.text_col] and
+            example[self.label_col]
+        )
+
+
+class InstructionFormatter(DatasetFormatter):
+    """Formatter for Instruction-Following datasets (Alpaca/ShareGPT style)"""
+
+    def __init__(
+        self,
+        instruction_col: str = "instruction",
+        response_col: str = "response",
+        input_col: Optional[str] = None
+    ):
+        self.instruction_col = instruction_col
+        self.response_col = response_col
+        self.input_col = input_col
+
+    def format(self, example: Dict[str, Any]) -> str:
+        instruction = example[self.instruction_col]
+
+        # Include input field if present
+        if self.input_col and self.input_col in example and example[self.input_col]:
+            template = f"""### Instruction:
+{instruction}
+
+### Input:
+{example[self.input_col]}
+
+### Response:
+{example[self.response_col]}"""
+        else:
+            template = f"""### Instruction:
+{instruction}
+
+### Response:
+{example[self.response_col]}"""
+
+        return template
+
+    def validate(self, example: Dict[str, Any]) -> bool:
+        return (
+            self.instruction_col in example and
+            self.response_col in example and
+            example[self.instruction_col] and
+            example[self.response_col]
+        )
+
+
+class SummarizationFormatter(DatasetFormatter):
+    """Formatter for Summarization datasets"""
+
+    def __init__(self, document_col: str = "document", summary_col: str = "summary"):
+        self.document_col = document_col
+        self.summary_col = summary_col
+        self.template = """### Document:
+{document}
+
+### Summary:
+{summary}"""
+
+    def format(self, example: Dict[str, Any]) -> str:
+        return self.template.format(
+            document=example[self.document_col],
+            summary=example[self.summary_col]
+        )
+
+    def validate(self, example: Dict[str, Any]) -> bool:
+        return (
+            self.document_col in example and
+            self.summary_col in example and
+            example[self.document_col] and
+            example[self.summary_col]
+        )
+
+
+class PreferenceFormatter(DatasetFormatter):
+    """Formatter for RLHF Preference datasets (chosen/rejected pairs)"""
+
+    def __init__(
+        self,
+        prompt_col: str = "prompt",
+        chosen_col: str = "chosen",
+        rejected_col: str = "rejected"
+    ):
+        self.prompt_col = prompt_col
+        self.chosen_col = chosen_col
+        self.rejected_col = rejected_col
+
+    def format(self, example: Dict[str, Any]) -> Dict[str, str]:
+        """
+        For preference datasets, we return a dict instead of string
+        because we need both chosen and rejected responses
+        """
+        return {
+            "prompt": example[self.prompt_col],
+            "chosen": example[self.chosen_col],
+            "rejected": example[self.rejected_col]
+        }
+
+    def validate(self, example: Dict[str, Any]) -> bool:
+        return (
+            self.prompt_col in example and
+            self.chosen_col in example and
+            self.rejected_col in example and
+            example[self.prompt_col] and
+            example[self.chosen_col] and
+            example[self.rejected_col]
+        )
+
+
+class DatasetPreprocessor:
+    """
+    Flexible dataset preprocessor with extensible formatters
+
+    Usage:
+        preprocessor = DatasetPreprocessor()
+
+        # Process a dataset
+        processed = preprocessor.process(
+            dataset_path="dataset.csv",
+            format_type="qa",
+            columns={"question": "user_query", "answer": "agent_response"}
+        )
+
+        # Or register custom formatter
+        preprocessor.register_formatter("custom", MyCustomFormatter())
+    """
+
+    def __init__(self):
+        # Registry of formatters
+        self._formatters: Dict[str, type] = {
+            "qa": QAFormatter,
+            "classification": ClassificationFormatter,
+            "instruction": InstructionFormatter,
+            "summarization": SummarizationFormatter,
+            "preference": PreferenceFormatter
+        }
+
+        logger.info("Initialized DatasetPreprocessor with default formatters")
+
+    def register_formatter(self, name: str, formatter_class: type):
+        """
+        Register a custom formatter
+
+        Args:
+            name: Name to register formatter under
+            formatter_class: DatasetFormatter subclass
+
+        Example:
+            preprocessor.register_formatter("my_format", MyCustomFormatter)
+        """
+        if not issubclass(formatter_class, DatasetFormatter):
+            raise ValueError(f"Formatter must extend DatasetFormatter, got {formatter_class}")
+
+        self._formatters[name] = formatter_class
+        logger.info(f"Registered custom formatter: {name}")
+
+    def load_dataset(self, dataset_path: str) -> pd.DataFrame:
+        """
+        Load dataset from file
+
+        Supports: CSV, JSON, JSONL, Parquet
+
+        Args:
+            dataset_path: Path to dataset file
+
+        Returns:
+            DataFrame with dataset
+        """
+        path = Path(dataset_path)
+
+        if not path.exists():
+            raise FileNotFoundError(f"Dataset not found: {dataset_path}")
+
+        file_extension = path.suffix.lower()
+
+        if file_extension == ".csv":
+            df = pd.read_csv(dataset_path)
+        elif file_extension == ".json":
+            df = pd.read_json(dataset_path)
+        elif file_extension == ".jsonl":
+            df = pd.read_json(dataset_path, lines=True)
+        elif file_extension == ".parquet":
+            df = pd.read_parquet(dataset_path)
+        else:
+            raise ValueError(f"Unsupported file format: {file_extension}")
+
+        logger.info(f"Loaded dataset from {dataset_path}: {len(df)} samples")
+        return df
+
+    def validate_dataset(
+        self,
+        df: pd.DataFrame,
+        format_type: str,
+        columns: Dict[str, str]
+    ) -> Dict[str, Any]:
+        """
+        Validate dataset structure and content
+
+        Args:
+            df: DataFrame to validate
+            format_type: Dataset format type
+            columns: Column mapping
+
+        Returns:
+            Validation results dictionary
+        """
+        errors = []
+        warnings = []
+
+        # Check format type is supported
+        if format_type not in self._formatters:
+            errors.append(f"Unsupported format type: {format_type}")
+            return {
+                "is_valid": False,
+                "errors": errors,
+                "warnings": warnings
+            }
+
+        # Get formatter class and instantiate
+        formatter_class = self._formatters[format_type]
+        try:
+            formatter = formatter_class(**columns)
+        except Exception as e:
+            errors.append(f"Failed to initialize formatter: {str(e)}")
+            return {
+                "is_valid": False,
+                "errors": errors,
+                "warnings": warnings
+            }
+
+        # Validate each row
+        invalid_rows = []
+        for idx, row in df.iterrows():
+            if not formatter.validate(row.to_dict()):
+                invalid_rows.append(idx)
+
+        if invalid_rows:
+            errors.append(f"Invalid rows found: {len(invalid_rows)}/{len(df)}")
+            if len(invalid_rows) <= 10:
+                errors.append(f"Invalid row indices: {invalid_rows}")
+
+        # Check for empty values
+        for col_name, col_key in columns.items():
+            if col_key in df.columns:
+                empty_count = df[col_key].isna().sum()
+                if empty_count > 0:
+                    warnings.append(f"Column '{col_key}' has {empty_count} empty values")
+
+        # Size check
+        if len(df) < 10:
+            warnings.append(f"Dataset is very small ({len(df)} samples). May not be enough for training.")
+        elif len(df) < 100:
+            warnings.append(f"Dataset is small ({len(df)} samples). Consider adding more data.")
+
+        is_valid = len(errors) == 0
+
+        return {
+            "is_valid": is_valid,
+            "errors": errors,
+            "warnings": warnings,
+            "num_samples": len(df),
+            "valid_samples": len(df) - len(invalid_rows),
+            "invalid_samples": len(invalid_rows)
+        }
+
+    def process(
+        self,
+        dataset_path: str,
+        format_type: str,
+        columns: Dict[str, str],
+        train_split: float = 0.8,
+        max_samples: Optional[int] = None,
+        shuffle: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Process and prepare dataset for training
+
+        Args:
+            dataset_path: Path to dataset file
+            format_type: Format type (qa, classification, etc.)
+            columns: Column mapping
+            train_split: Train/validation split ratio
+            max_samples: Maximum number of samples to use
+            shuffle: Whether to shuffle before splitting
+
+        Returns:
+            Dictionary with train/val datasets and metadata
+        """
+        logger.info(f"Processing dataset: {dataset_path} (format: {format_type})")
+
+        # Load dataset
+        df = self.load_dataset(dataset_path)
+
+        # Limit samples if requested
+        if max_samples and len(df) > max_samples:
+            df = df.sample(n=max_samples, random_state=42)
+            logger.info(f"Limited to {max_samples} samples")
+
+        # Validate
+        validation_results = self.validate_dataset(df, format_type, columns)
+        if not validation_results["is_valid"]:
+            raise ValueError(f"Dataset validation failed: {validation_results['errors']}")
+
+        # Shuffle if requested
+        if shuffle:
+            df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+
+        # Get formatter
+        formatter_class = self._formatters[format_type]
+        formatter = formatter_class(**columns)
+
+        # Format all examples
+        formatted_data = []
+        for idx, row in df.iterrows():
+            try:
+                formatted = formatter.format(row.to_dict())
+                formatted_data.append(formatted)
+            except Exception as e:
+                logger.warning(f"Failed to format row {idx}: {e}")
+
+        # Split train/val
+        split_idx = int(len(formatted_data) * train_split)
+        train_data = formatted_data[:split_idx]
+        val_data = formatted_data[split_idx:]
+
+        logger.info(f"Dataset processed: {len(train_data)} train, {len(val_data)} val samples")
+
+        return {
+            "train": train_data,
+            "validation": val_data,
+            "metadata": {
+                "total_samples": len(df),
+                "train_samples": len(train_data),
+                "val_samples": len(val_data),
+                "format_type": format_type,
+                "columns": columns,
+                "validation_results": validation_results
+            }
+        }
+
+    def get_sample_preview(
+        self,
+        dataset_path: str,
+        format_type: str,
+        columns: Dict[str, Any],
+        num_samples: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Get a preview of formatted samples
+
+        Args:
+            dataset_path: Path to dataset
+            format_type: Format type
+            columns: Column mapping
+            num_samples: Number of samples to preview
+
+        Returns:
+            List of formatted samples
+        """
+        df = self.load_dataset(dataset_path)
+        df = df.head(num_samples)
+
+        formatter_class = self._formatters[format_type]
+        formatter = formatter_class(**columns)
+
+        samples = []
+        for idx, row in df.iterrows():
+            try:
+                formatted = formatter.format(row.to_dict())
+                samples.append({
+                    "index": int(idx),
+                    "raw": row.to_dict(),
+                    "formatted": formatted
+                })
+            except Exception as e:
+                logger.warning(f"Failed to format sample {idx}: {e}")
+
+        return samples
+
+
+# ============================================================================
+# Utility Functions
+# ============================================================================
+
+def infer_format_type(df: pd.DataFrame) -> Optional[str]:
+    """
+    Attempt to infer dataset format type from column names
+
+    Args:
+        df: DataFrame to analyze
+
+    Returns:
+        Inferred format type or None
+    """
+    columns = set(col.lower() for col in df.columns)
+
+    # QA detection
+    if ("question" in columns and "answer" in columns):
+        return "qa"
+
+    # Classification detection
+    if ("text" in columns and "label" in columns):
+        return "classification"
+
+    # Instruction detection
+    if ("instruction" in columns and "response" in columns):
+        return "instruction"
+
+    # Preference detection
+    if ("prompt" in columns and "chosen" in columns and "rejected" in columns):
+        return "preference"
+
+    # Summarization detection
+    if ("document" in columns and "summary" in columns):
+        return "summarization"
+
+    logger.warning("Could not infer format type from columns")
+    return None

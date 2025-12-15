@@ -106,6 +106,64 @@ class Settings(BaseSettings):
     PREFER_CLAUDE_FOR_RESEARCH: bool = True  # Use Claude CLI for research (if budget allows)
     PREFER_CLAUDE_FOR_WEB_AUTOMATION: bool = True  # Use Claude CLI for web tasks (if budget allows)
 
+    # ========================================
+    # MODEL FINE-TUNING SYSTEM
+    # ========================================
+
+    # Fine-Tuning Feature Flags
+    ENABLE_FINETUNING: bool = True  # Enable/disable fine-tuning feature globally
+    FINETUNING_REQUIRE_APPROVAL: bool = True  # Require admin approval for training jobs
+
+    # GPU Configuration
+    FINETUNING_GPU_POOL: Optional[List[str]] = None  # GPU IDs to use (None = auto-detect all)
+    FINETUNING_DEFAULT_GPU_COUNT: int = 1  # Default number of GPUs per job
+    FINETUNING_MIN_GPU_MEMORY_GB: float = 12.0  # Minimum GPU memory required (GB)
+    FINETUNING_MAX_CONCURRENT_JOBS: int = 2  # Maximum concurrent training jobs
+
+    # Container Configuration
+    FINETUNING_CONTAINER_IMAGE: str = "chatbot-finetuning-runtime:latest"
+    FINETUNING_CONTAINER_NETWORK: str = "chatbot_default"  # Docker network
+    FINETUNING_WORKSPACE_BASE: str = "/tmp/finetuning_workspaces"  # Base directory for training workspaces
+
+    # Resource Limits
+    FINETUNING_MAX_MEMORY_GB: int = 24  # Maximum RAM per training job
+    FINETUNING_MAX_CPU_CORES: int = 8  # Maximum CPU cores per job
+    FINETUNING_MAX_TRAINING_TIME_HOURS: int = 24  # Maximum training time before timeout
+    FINETUNING_MAX_DATASET_SIZE_MB: int = 1000  # Maximum dataset size (1GB)
+
+    # Default Hyperparameters (can be overridden per job)
+    FINETUNING_DEFAULT_LEARNING_RATE: float = 2e-4
+    FINETUNING_DEFAULT_BATCH_SIZE: int = 4
+    FINETUNING_DEFAULT_NUM_EPOCHS: int = 3
+    FINETUNING_DEFAULT_WARMUP_STEPS: int = 100
+    FINETUNING_DEFAULT_GRADIENT_ACCUMULATION: int = 4
+    FINETUNING_DEFAULT_LORA_R: int = 16  # LoRA rank
+    FINETUNING_DEFAULT_LORA_ALPHA: int = 32  # LoRA alpha
+    FINETUNING_DEFAULT_LORA_DROPOUT: float = 0.05
+
+    # Supported Methods
+    FINETUNING_SUPPORTED_METHODS: List[str] = ["peft", "sft", "rlhf-ppo", "rlhf-grpo"]
+    FINETUNING_SUPPORTED_OBJECTIVES: List[str] = ["qa", "classification", "instruction", "summarization", "preference"]
+
+    # MLflow Configuration (Optional - for experiment tracking)
+    MLFLOW_TRACKING_URI: Optional[str] = None  # e.g., "http://mlflow:5000"
+    MLFLOW_EXPERIMENT_NAME: str = "model-finetuning"
+    MLFLOW_ENABLE_AUTOLOGGING: bool = True
+
+    # Model Deployment
+    FINETUNING_DEFAULT_DEPLOYMENT_TARGET: str = "ollama"  # ollama, vllm
+    FINETUNING_AUTO_DEPLOY_ON_COMPLETION: bool = False  # Automatically deploy successful models
+
+    # Checkpointing
+    FINETUNING_SAVE_CHECKPOINTS: bool = True
+    FINETUNING_CHECKPOINT_FREQUENCY: int = 100  # Save checkpoint every N steps
+    FINETUNING_KEEP_BEST_CHECKPOINTS: int = 3  # Number of best checkpoints to keep
+
+    # MinIO Paths for Fine-Tuning
+    MINIO_FINETUNING_DATASETS_BUCKET: str = "finetuning-datasets"
+    MINIO_FINETUNING_CHECKPOINTS_BUCKET: str = "finetuning-checkpoints"
+    MINIO_FINETUNING_MODELS_BUCKET: str = "finetuning-models"
+
     # Embeddings
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     EMBEDDING_DIMENSION: int = 384

@@ -1098,30 +1098,60 @@ Task name:"""
                     raise ValueError(f"Unknown engine: {engine}")
 
                 # Execute task using the CLI engine
-                result_dict = await cli_engine.execute(
-                    task_description=task.task_description,
-                    workspace_path=workspace_path,
-                    artifacts_path=artifacts_path,
-                    max_iterations=task.max_iterations,
-                    timeout_seconds=task.timeout_seconds,
-                    model=task.model
-                )
+                # ✅ For Claude Code CLI, use interactive mode for terminal UI
+                if engine == "claude-code-cli":
+                    result_dict = await cli_engine.execute(
+                        task_description=task.task_description,
+                        workspace_path=workspace_path,
+                        artifacts_path=artifacts_path,
+                        max_iterations=task.max_iterations,
+                        timeout_seconds=task.timeout_seconds,
+                        model=task.model,
+                        interactive=True,  # Enable PTY for interactive terminal
+                        task_id=task_id    # Required for WebSocket terminal session
+                    )
+                else:
+                    result_dict = await cli_engine.execute(
+                        task_description=task.task_description,
+                        workspace_path=workspace_path,
+                        artifacts_path=artifacts_path,
+                        max_iterations=task.max_iterations,
+                        timeout_seconds=task.timeout_seconds,
+                        model=task.model
+                    )
 
                 # Update task with results
-                task.completed_at = datetime.now()
-                if task.started_at:
-                    task.duration_seconds = (task.completed_at - task.started_at).total_seconds()
+                # ✅ FIX: For interactive tasks, keep status as RUNNING (don't mark as completed)
+                if result_dict.get("interactive"):
+                    # Interactive task - terminal session is active, keep status as RUNNING
+                    task.status = TaskStatus.RUNNING
+                    task.result = result_dict.get("result", "Interactive session started")
 
-                if result_dict.get("success"):
-                    task.status = TaskStatus.COMPLETED
-                    task.result = result_dict.get("result", "Task completed")
-                    task.artifacts = result_dict.get("artifacts", [])
-                    task.llm_calls = result_dict.get("iterations", 0)
-                    logger.info(f"✅ Task {task_id} completed with {engine}")
+                    # Store engine and interactive flag in meta_info for UI
+                    task.meta_info = task.meta_info or {}
+                    task.meta_info["engine"] = engine.replace("-", "_")  # claude-code-cli -> claude_code_cli
+                    task.meta_info["interactive"] = True
+                    task.meta_info["session_id"] = result_dict.get("session_id")
+                    task.meta_info["needs_auth"] = result_dict.get("needs_auth", False)
+
+                    logger.info(f"🖥️ Interactive terminal session started for task {task_id}")
+                    logger.info(f"💡 Status: RUNNING (terminal active) - will complete when terminal session ends")
                 else:
-                    task.status = TaskStatus.FAILED
-                    task.error = result_dict.get("error", "Task failed")
-                    logger.error(f"❌ Task {task_id} failed with {engine}: {task.error}")
+                    # Non-interactive task - mark as completed or failed
+                    task.completed_at = datetime.now()
+                    if task.started_at:
+                        task.duration_seconds = (task.completed_at - task.started_at).total_seconds()
+
+                    if result_dict.get("success"):
+                        task.status = TaskStatus.COMPLETED
+                        task.result = result_dict.get("result", "Task completed")
+                        task.artifacts = result_dict.get("artifacts", [])
+                        task.llm_calls = result_dict.get("iterations", 0)
+                        logger.info(f"✅ Task {task_id} completed with {engine}")
+                    else:
+                        task.status = TaskStatus.FAILED
+                        task.error = result_dict.get("error", "Task failed")
+                        logger.error(f"❌ Task {task_id} failed with {engine}: {task.error}")
 
                 await db.commit()
 

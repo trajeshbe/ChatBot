@@ -140,6 +140,7 @@ services:
     volumes:
       - agent_workspace:/workspace
       - agent_artifacts:/artifacts
+      - claude_session:/home/agentuser/.anthropic  # Persist Claude OAuth session
     depends_on:
       - ollama
       - postgres
@@ -149,6 +150,67 @@ services:
     # Override ENTRYPOINT to keep container alive for docker exec commands
     entrypoint: ["/bin/bash", "-c"]
     command: ["tail -f /dev/null"]  # Keep container running for on-demand execution
+    restart: unless-stopped
+
+  # Fine-Tuning Runtime - GPU-accelerated model training
+  # Runs on-demand via API calls, built but not started
+  finetuning-runtime:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.finetuning-runtime
+    image: chatbot-finetuning-runtime:latest
+    container_name: rag-finetuning-runtime
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      HF_HOME: /workspace/temp/.cache/huggingface
+      TRANSFORMERS_CACHE: /workspace/temp/.cache/transformers
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - finetuning_workspaces:/workspace
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 24G
+          cpus: '8'
+    networks:
+      - rag-network
+    # Container runs on-demand, not as persistent service
+    # FineTuningSandboxManager spawns containers as needed
+    profiles:
+      - finetuning  # Only start if explicitly requested
+
+  # MLflow Tracking Server (Optional - for experiment tracking)
+  # Uncomment to enable MLflow integration
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.9.2
+    container_name: rag-mlflow
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://postgres:postgres@postgres:5432/mlflow
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: s3://mlflow-artifacts/
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgres
+      - minio
+    networks:
+      - rag-network
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://postgres:postgres@postgres:5432/mlflow
+      --default-artifact-root s3://mlflow-artifacts/
+      --host 0.0.0.0
+      --port 5000
+    profiles:
+      - finetuning  # Only start if explicitly requested
     restart: unless-stopped
 
   # llama.cpp CPU fallback (DISABLED - replaced by Ollama)
@@ -407,3 +469,5 @@ volumes:
   frontend_nextjs_cache:
   agent_workspace:
   agent_artifacts:
+  claude_session:  # Claude CLI OAuth session persistence
+  finetuning_workspaces:  # Training workspaces (datasets, checkpoints, logs)

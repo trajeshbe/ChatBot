@@ -146,6 +146,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠ Construction Metrics routes not available: {type(e).__name__}: {e}")
 
+# Add Fine-Tuning router
+try:
+    from app.api.routes.finetuning_routes import router as finetuning_router
+    app.include_router(finetuning_router)
+    logger.info("✓ Fine-Tuning API routes loaded")
+except Exception as e:
+    logger.warning(f"⚠ Fine-Tuning routes not available: {type(e).__name__}: {e}")
+
 
 # === REST API Endpoints ===
 

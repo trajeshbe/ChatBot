@@ -9,6 +9,13 @@ from app.models.database import (
     QueryCache,
 )
 
+from app.models.finetuning_models import (
+    FineTuningDataset,
+    FineTuningJob,
+    FineTunedModel,
+    TrainingMetric,
+)
+
 __all__ = [
     "Base",
     "Document",
@@ -17,4 +24,9 @@ __all__ = [
     "Message",
     "WebScrapeJob",
     "QueryCache",
+    # Fine-tuning models
+    "FineTuningDataset",
+    "FineTuningJob",
+    "FineTunedModel",
+    "TrainingMetric",
 ]

@@ -89,7 +89,7 @@ class SecretsService:
         try:
             # Encrypt the API key
             encrypted_key = self.cipher.encrypt(api_key.encode())
-            encrypted_key_str = base64.b64encode(encrypted_key).decode('utf-8')
+            # Store as bytes directly (column is bytea, not text)
 
             # Check if provider already exists
             result = await db.execute(
@@ -103,7 +103,7 @@ class SecretsService:
                     update(APICredential)
                     .where(APICredential.provider == provider)
                     .values(
-                        api_key_encrypted=encrypted_key_str,
+                        api_key_encrypted=encrypted_key,
                         updated_at=datetime.utcnow(),
                         is_active=True
                     )
@@ -113,7 +113,7 @@ class SecretsService:
                 # Create new
                 new_credential = APICredential(
                     provider=provider,
-                    api_key_encrypted=encrypted_key_str,
+                    api_key_encrypted=encrypted_key,
                     created_by=user_id,
                     is_active=True
                 )
@@ -212,8 +212,8 @@ class SecretsService:
 
             # Decrypt key
             try:
-                encrypted_bytes = base64.b64decode(credential.api_key_encrypted.encode('utf-8'))
-                decrypted_bytes = self.cipher.decrypt(encrypted_bytes)
+                # api_key_encrypted is stored as bytes (bytea column)
+                decrypted_bytes = self.cipher.decrypt(credential.api_key_encrypted)
                 api_key = decrypted_bytes.decode('utf-8')
             except InvalidToken:
                 logger.error(f"Failed to decrypt API key for {provider} - invalid token or corrupted data")

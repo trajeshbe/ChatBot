@@ -235,6 +235,15 @@ class CodexCLIEngine(AgentEngine):
 
         used_model = model or self.model
 
+        # Retrieve API key from secrets service (same as execute method)
+        api_key = await self._get_api_key()
+        if not api_key:
+            yield self._format_event(
+                "error",
+                error="OpenAI API key not configured. Please add it via Admin UI at /api/v1/admin/secrets/api-keys"
+            )
+            return
+
         try:
             # Create task file
             task_file = Path(workspace_path) / "task.txt"
@@ -258,7 +267,7 @@ class CodexCLIEngine(AgentEngine):
                 *command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env={**os.environ, "OPENAI_API_KEY": self.api_key}
+                env={**os.environ, "OPENAI_API_KEY": api_key}
             )
 
             # Stream stdout line by line
@@ -323,6 +332,9 @@ class CodexCLIEngine(AgentEngine):
     async def health_check(self) -> Dict[str, Any]:
         """Check if Codex CLI is available"""
         try:
+            # Check API key availability from database
+            api_key = await self._get_api_key()
+
             # Try to run codex-cli --version
             process = await asyncio.create_subprocess_exec(
                 "python", "-m", "codex_cli", "--version",
@@ -342,7 +354,8 @@ class CodexCLIEngine(AgentEngine):
                     "message": "Codex CLI is available",
                     "details": {
                         "model": self.model,
-                        "api_key_set": bool(self.api_key),
+                        "api_key_set": bool(api_key),
+                        "api_key_source": "database (secrets service)" if api_key else "not configured",
                         "capabilities": [
                             "Code generation",
                             "Code execution",

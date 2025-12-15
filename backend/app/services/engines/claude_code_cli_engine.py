@@ -80,6 +80,8 @@ class ClaudeCodeCLIEngine(AgentEngine):
         max_iterations: int = 20,
         timeout_seconds: int = 600,
         model: Optional[str] = None,
+        interactive: bool = False,  # ✅ NEW: Enable PTY for interactive sessions
+        task_id: Optional[str] = None,  # ✅ NEW: Required for PTY sessions
         **kwargs
     ) -> Dict[str, Any]:
         """
@@ -88,27 +90,23 @@ class ClaudeCodeCLIEngine(AgentEngine):
         This will:
         1. Retrieve API key from secrets service
         2. Create a task file with the description
-        3. Execute claude-code command in Docker
+        3. Execute claude-code command in Docker (with PTY if interactive=True)
         4. Monitor output and artifacts
         5. Return results
+
+        Args:
+            interactive: If True, creates PTY session for bidirectional I/O
+            task_id: Required when interactive=True for session management
 
         Note: API key is retrieved from database, not environment variables
         """
         self.logger.info(f"🤖 [Claude Code] Executing: {task_description[:100]}")
 
-        # Retrieve API key from secrets service
+        # Retrieve API key from secrets service (optional - Claude CLI can use OAuth)
         api_key = await self._get_api_key()
         if not api_key:
-            return {
-                "success": False,
-                "result": "",
-                "artifacts": [],
-                "iterations": 0,
-                "duration_seconds": 0,
-                "error": "Anthropic API key not configured. Please add it via Admin UI at /api/v1/admin/secrets/api-keys",
-                "engine": self.engine_type.value,
-                "model": model or self.model
-            }
+            self.logger.info("ℹ️ No API key found - Claude CLI will use OAuth authentication")
+            self.logger.info("💡 If not authenticated, run: docker exec -it rag-agent-runtime claude login")
 
         used_model = model or self.model
         start_time = asyncio.get_event_loop().time()
@@ -118,16 +116,33 @@ class ClaudeCodeCLIEngine(AgentEngine):
             task_file = Path(workspace_path) / "task.txt"
             task_file.write_text(task_description)
 
-            # Build command to execute Claude CLI in agent-runtime container
+            # ✅ NEW: Check if interactive mode is requested
+            if interactive:
+                return await self._execute_interactive(
+                    task_description,
+                    api_key,
+                    workspace_path,
+                    artifacts_path,
+                    task_id,
+                    timeout_seconds,
+                    used_model
+                )
+
+            # Build command to execute Claude CLI in agent-runtime container (non-interactive)
             # Uses existing sandbox container (rag-agent-runtime) for isolation
-            # Pass API key via environment variable
-            command = [
-                "docker", "exec", "-i",
-                "-e", f"ANTHROPIC_API_KEY={api_key}",  # Set API key in container environment
+            # Pass API key via environment variable (if available), otherwise use OAuth
+            command = ["docker", "exec", "-i"]
+
+            if api_key:
+                # Use API key if provided
+                command.extend(["-e", f"ANTHROPIC_API_KEY={api_key}"])
+
+            command.extend([
+                "-w", "/workspace",  # Set working directory
                 "rag-agent-runtime",  # Reuse existing sandbox container
-                "claude",  # Claude Code CLI (must be installed in container)
-                task_description  # Pass task directly as argument
-            ]
+                "claude", ".",  # ✅ Launch Claude in current directory
+                task_description  # ✅ Pass task description as prompt argument
+            ])
 
             # Execute in existing agent-runtime sandbox container
             process = await asyncio.create_subprocess_exec(
@@ -232,18 +247,32 @@ class ClaudeCodeCLIEngine(AgentEngine):
 
         used_model = model or self.model
 
+        # Retrieve API key from secrets service (optional - Claude CLI can use OAuth)
+        api_key = await self._get_api_key()
+        if not api_key:
+            self.logger.info("ℹ️ No API key found - Claude CLI will use OAuth authentication")
+            yield self._format_event(
+                "log",
+                message="Using Claude CLI OAuth authentication (no API key configured)"
+            )
+
         try:
             # Create task file
             task_file = Path(workspace_path) / "task.txt"
             task_file.write_text(task_description)
 
-            # Build command for streaming execution in agent-runtime container
-            command = [
-                "docker", "exec", "-i",
+            # Build command with optional API key (uses OAuth if not provided)
+            command = ["docker", "exec", "-i"]
+
+            if api_key:
+                command.extend(["-e", f"ANTHROPIC_API_KEY={api_key}"])
+
+            command.extend([
+                "-w", "/workspace",  # Set working directory
                 "rag-agent-runtime",
-                "claude",
-                task_description
-            ]
+                "claude", ".",  # ✅ Launch Claude in current directory
+                task_description  # ✅ Pass task description as prompt argument
+            ])
 
             # Execute with streaming output in existing sandbox
             process = await asyncio.create_subprocess_exec(
@@ -255,24 +284,28 @@ class ClaudeCodeCLIEngine(AgentEngine):
             )
 
             # Stream stdout line by line
+            # ✅ FIX: Stream as terminal output for interactive Claude display
             async for line in process.stdout:
-                line_str = line.decode('utf-8').strip()
-                if not line_str:
-                    continue
+                line_str = line.decode('utf-8').rstrip('\n')  # Keep formatting but remove trailing newline
 
-                # Try to parse as JSON event
-                try:
-                    event = json.loads(line_str)
-                    yield self._format_event(
-                        event.get("type", "log"),
-                        **{k: v for k, v in event.items() if k != "type"}
-                    )
-                except json.JSONDecodeError:
-                    # Plain text output - treat as log
-                    yield self._format_event(
-                        "log",
-                        message=line_str
-                    )
+                # ✅ NEW: Send as terminal_output event for real-time display
+                yield self._format_event(
+                    "terminal_output",
+                    output=line_str,
+                    stream="stdout"
+                )
+
+                # Also try to parse as JSON event for structured data
+                if line_str.strip():
+                    try:
+                        event = json.loads(line_str.strip())
+                        yield self._format_event(
+                            event.get("type", "log"),
+                            **{k: v for k, v in event.items() if k != "type"}
+                        )
+                    except json.JSONDecodeError:
+                        # Not JSON, already sent as terminal_output above
+                        pass
 
             # Wait for completion
             await process.wait()
@@ -313,9 +346,153 @@ class ClaudeCodeCLIEngine(AgentEngine):
         # TODO: Implement process tracking and cancellation
         return True
 
+    async def _check_claude_auth(self) -> bool:
+        """
+        Check if Claude CLI is authenticated by verifying session files exist
+
+        ✅ FIX: Check for actual session files, not just the directory
+
+        Returns:
+            True if authenticated, False otherwise
+        """
+        try:
+            # Check if session files exist (Claude stores auth in ~/.anthropic/)
+            # We need to verify there are actual files, not just an empty directory
+            process = await asyncio.create_subprocess_exec(
+                "docker", "exec", "rag-agent-runtime",
+                "bash", "-c", "test -f ~/.anthropic/session || test -f ~/.anthropic/config.json && echo 'authenticated' || echo 'not_authenticated'",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=5.0)
+            result = stdout.decode('utf-8').strip()
+            return result == 'authenticated'
+        except Exception as e:
+            self.logger.error(f"Error checking Claude authentication: {e}")
+            return False
+
+    async def _execute_interactive(
+        self,
+        task_description: str,
+        api_key: str,
+        workspace_path: str,
+        artifacts_path: str,
+        task_id: str,
+        timeout_seconds: int,
+        model: str
+    ) -> Dict[str, Any]:
+        """
+        Execute Claude CLI in interactive PTY mode
+
+        Creates a PTY session that allows bidirectional communication via WebSocket.
+        User can type responses to Claude's prompts through the terminal UI.
+
+        ✨ NEW: Automatically handles OAuth authentication flow if not authenticated
+
+        Args:
+            task_description: Task to execute
+            api_key: Anthropic API key (optional - will use OAuth if not provided)
+            workspace_path: Working directory
+            artifacts_path: Path for generated artifacts
+            task_id: Unique task ID for session management
+            timeout_seconds: Execution timeout
+            model: Claude model to use
+
+        Returns:
+            Dict with success status and session info
+        """
+        from app.services.terminal_session_manager import create_terminal_session
+
+        self.logger.info(f"🖥️ [Claude Code] Starting interactive session for task: {task_id}")
+
+        try:
+            # Check if Claude is authenticated (if no API key provided)
+            is_authenticated = await self._check_claude_auth()
+
+            # ✅ FIX: Use ptyprocess for true PTY support - Claude CLI needs a real TTY
+            # ⚠️ NOTE: Claude CLI syntax is: claude [options] [command] [prompt]
+            # NOT: claude . --task "prompt" (--task flag doesn't exist!)
+
+            # ✅ FIX: When using ptyprocess, DON'T use docker exec -it flags
+            # ptyprocess creates the PTY on the host, docker should just exec the command
+
+            # ✅ FIX: If not authenticated, start Claude interactively and show message
+            # User needs to type /login inside the Claude session to authenticate via OAuth
+            # ✅ FIX: Use custom Python PTY wrapper to properly allocate PTY inside container
+            # This ensures stdin/stdout are correctly bridged to the PTY for full interactivity
+
+            # Sanitize task description: replace newlines with spaces and escape single quotes
+            sanitized_description = task_description.replace('\n', ' ').replace('\r', ' ').replace("'", "'\\''")
+
+            if not api_key and not is_authenticated:
+                # Start Claude interactively - user will see "Invalid API key" message
+                # and can type /login to start OAuth flow
+                self.logger.info("🔐 Claude not authenticated - starting interactive session")
+                self.logger.info("💡 User will need to type /login in the terminal to authenticate")
+                # Don't use API key, let user login interactively
+                # NO pty_wrapper - ptyprocess on host + docker exec -it handles PTY
+                bash_cmd = f"cd /workspace && claude . '{sanitized_description}'"
+            else:
+                # Already authenticated or using API key
+                # Pass API key as environment variable
+                # NO pty_wrapper - ptyprocess on host + docker exec -it handles PTY
+                bash_cmd = f"cd /workspace && ANTHROPIC_API_KEY='{api_key}' claude . '{sanitized_description}'"
+
+            command = [
+                "docker", "exec", "-it",  # ✅ Use -it flags with ptyprocess on host
+                "rag-agent-runtime",
+                "/bin/bash", "-c", bash_cmd
+            ]
+
+            # Create terminal session - use ptyprocess on host with docker exec -it
+            # ✅ FIX: use_pty=True to use ptyprocess on host
+            # ptyprocess allocates PTY on host, docker exec -it allocates TTY in container
+            # This creates proper PTY bridge: ptyprocess (host) ↔ docker -it (container) ↔ claude
+            session = await create_terminal_session(
+                task_id=task_id,
+                command=command,
+                cwd=workspace_path,
+                env={"ANTHROPIC_API_KEY": api_key} if api_key else {},
+                use_pty=True  # ✅ Use ptyprocess on host for proper PTY allocation
+            )
+
+            self.logger.info(f"✅ Interactive terminal session created for task: {task_id}")
+
+            # Return immediately - execution continues via PTY/WebSocket
+            return {
+                "success": True,
+                "result": "Interactive session started. Connect via WebSocket to interact." +
+                         (" OAuth authentication required - follow prompts in terminal." if not api_key and not is_authenticated else ""),
+                "artifacts": [],
+                "iterations": 0,
+                "duration_seconds": 0,
+                "error": None,
+                "engine": self.engine_type.value,
+                "model": model,
+                "interactive": True,
+                "session_id": task_id,
+                "needs_auth": not api_key and not is_authenticated
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ Failed to start interactive session: {e}")
+            return {
+                "success": False,
+                "result": "",
+                "artifacts": [],
+                "iterations": 0,
+                "duration_seconds": 0,
+                "error": f"Failed to start interactive session: {str(e)}",
+                "engine": self.engine_type.value,
+                "model": model
+            }
+
     async def health_check(self) -> Dict[str, Any]:
         """Check if Claude Code CLI is available in agent-runtime container"""
         try:
+            # Check API key availability from database
+            api_key = await self._get_api_key()
+
             # Check if claude CLI is available in agent-runtime container
             process = await asyncio.create_subprocess_exec(
                 "docker", "exec", "rag-agent-runtime",
@@ -336,7 +513,8 @@ class ClaudeCodeCLIEngine(AgentEngine):
                     "message": "Claude Code CLI is available",
                     "details": {
                         "model": self.model,
-                        "api_key_set": bool(self.api_key),
+                        "api_key_set": bool(api_key),
+                        "api_key_source": "database (secrets service)" if api_key else "not configured",
                         "capabilities": [
                             "Code generation",
                             "Code execution",
