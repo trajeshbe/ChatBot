@@ -399,16 +399,60 @@ services:
       - prefect-server
       - tempo
       - ollama  # Local LLM with better WSL2 support
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    # GPU access: WSL2 nvidia-container-cli runtime broken (cannot detect adapters)
+    # Ollama works because it started 3 days ago when runtime was healthy
+    # New containers cannot start with GPU until WSL2/NVIDIA runtime is fixed
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
     networks:
       - rag-network
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  # Celery Worker for Fine-Tuning Tasks
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rag-celery-worker
+    environment:
+      POSTGRES_SERVER: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ragchatbot
+      REDIS_HOST: redis
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      OLLAMA_ENDPOINT: http://ollama:11434
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      FINETUNING_WORKSPACE_BASE: /workspace/finetuning
+    volumes:
+      - ./backend:/app
+      - finetuning_workspaces:/workspace/finetuning
+      - /var/run/docker.sock:/var/run/docker.sock  # For launching training containers
+    depends_on:
+      - postgres
+      - redis
+      - minio
+      - backend
+    # GPU access commented out - celery worker launches separate training containers with GPU
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    networks:
+      - rag-network
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=2 --max-tasks-per-child=1
 
   # Next.js Frontend
   frontend:
@@ -432,6 +476,8 @@ services:
       - backend
     networks:
       - rag-network
+    extra_hosts:
+      - "localhost:host-gateway"  # Map localhost to host machine's IP for API calls
     command: npm run dev
 
   # Envoy Proxy (Ingress)

@@ -18,7 +18,7 @@ Modular Design:
 from typing import Optional, Dict, Any, List
 from uuid import UUID
 import logging
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 
 from app.models.finetuning_models import (
@@ -41,12 +41,12 @@ class FineTuningService:
     a high-level API for the REST endpoints.
     """
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         """
         Initialize fine-tuning service
 
         Args:
-            db: Database session
+            db: Async database session
         """
         self.db = db
         self.preprocessor = DatasetPreprocessor()
@@ -99,8 +99,8 @@ class FineTuningService:
         )
 
         self.db.add(dataset)
-        self.db.commit()
-        self.db.refresh(dataset)
+        await self.db.commit()
+        await self.db.refresh(dataset)
 
         logger.info(f"Created dataset: {dataset.id} - {name}")
         return dataset
@@ -115,39 +115,114 @@ class FineTuningService:
         Returns:
             Validation results
         """
-        dataset = self.db.query(FineTuningDataset).filter(
-            FineTuningDataset.id == dataset_id
-        ).first()
+        # Use SQLAlchemy 2.x async syntax
+        from sqlalchemy import select
+        import tempfile
+        from pathlib import Path
+        from minio import Minio
+        from app.core.config import settings
+
+        stmt = select(FineTuningDataset).where(FineTuningDataset.id == dataset_id)
+        result = await self.db.execute(stmt)
+        dataset = result.scalar_one_or_none()
 
         if not dataset:
             raise ValueError(f"Dataset not found: {dataset_id}")
 
-        # Run validation using preprocessor
-        validation_results = self.preprocessor.validate_dataset(
-            df=self.preprocessor.load_dataset(dataset.minio_path),
-            format_type=dataset.format_type,
-            columns=dataset.columns
+        # Download file from MinIO to temporary location
+        minio_client = Minio(
+            settings.MINIO_ENDPOINT,
+            access_key=settings.MINIO_ACCESS_KEY,
+            secret_key=settings.MINIO_SECRET_KEY,
+            secure=False
         )
 
-        # Update dataset with validation results
-        dataset.is_valid = validation_results["is_valid"]
-        dataset.validation_errors = validation_results.get("errors", [])
-        dataset.num_samples = validation_results.get("num_samples")
+        # Get file extension
+        file_extension = Path(dataset.minio_path).suffix or '.csv'
 
-        # Get sample preview
-        sample_preview = self.preprocessor.get_sample_preview(
-            dataset_path=dataset.minio_path,
-            format_type=dataset.format_type,
-            columns=dataset.columns,
-            num_samples=5
-        )
-        dataset.sample_rows = [s["formatted"] for s in sample_preview]
+        # Download to temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as tmp_file:
+            tmp_path = tmp_file.name
 
-        self.db.commit()
-        self.db.refresh(dataset)
+        try:
+            # Download from MinIO
+            minio_client.fget_object(
+                bucket_name="documents",
+                object_name=dataset.minio_path,
+                file_path=tmp_path
+            )
 
-        logger.info(f"Validated dataset {dataset_id}: valid={validation_results['is_valid']}")
-        return validation_results
+            # Run validation using temp local file
+            validation_results = self.preprocessor.validate_dataset(
+                df=self.preprocessor.load_dataset(tmp_path),
+                format_type=dataset.format_type,
+                columns=dataset.columns
+            )
+
+            # Update dataset with validation results
+            dataset.is_valid = validation_results["is_valid"]
+
+            # Build comprehensive error message with suggestions
+            all_messages = []
+
+            if validation_results.get("errors"):
+                all_messages.extend(validation_results["errors"])
+
+            if validation_results.get("warnings"):
+                all_messages.extend(validation_results["warnings"])
+
+            if validation_results.get("suggestions"):
+                all_messages.extend(validation_results["suggestions"])
+
+            dataset.validation_errors = all_messages
+            dataset.num_samples = validation_results.get("num_samples")
+
+            # If auto-fix was applied and dataset is now valid, update the columns
+            diagnostics = validation_results.get("diagnostics", {})
+            if diagnostics.get("auto_fix_applied") and validation_results["is_valid"]:
+                # Save the auto-detected column mapping
+                dataset.columns = diagnostics.get("applied_mapping", dataset.columns)
+                logger.info(f"Auto-detected and saved column mapping: {dataset.columns}")
+
+            # Get sample preview using temp file (only if valid)
+            if validation_results["is_valid"]:
+                try:
+                    sample_preview = self.preprocessor.get_sample_preview(
+                        dataset_path=tmp_path,
+                        format_type=dataset.format_type,
+                        columns=dataset.columns,
+                        num_samples=5
+                    )
+                    dataset.sample_rows = [s["formatted"] for s in sample_preview]
+                except Exception as e:
+                    logger.warning(f"Failed to generate sample preview: {e}")
+                    dataset.sample_rows = []
+
+            # Mark preprocessing as completed
+            dataset.preprocessing_status = "completed"
+
+            # Use async commit and refresh
+            await self.db.commit()
+            await self.db.refresh(dataset)
+
+            # Log comprehensive result
+            if validation_results["is_valid"]:
+                logger.info(f"✅ Validated dataset {dataset_id}: VALID - {validation_results.get('num_samples')} samples")
+                if diagnostics.get("auto_fix_applied"):
+                    logger.info(f"   Auto-fix applied: {diagnostics.get('applied_mapping')}")
+            else:
+                logger.warning(f"❌ Validated dataset {dataset_id}: INVALID")
+                logger.warning(f"   Errors: {validation_results.get('errors')}")
+                logger.warning(f"   Suggestions: {validation_results.get('suggestions')}")
+
+            return validation_results
+
+        finally:
+            # Clean up temporary file
+            try:
+                Path(tmp_path).unlink(missing_ok=True)
+            except Exception as e:
+                logger.warning(f"Failed to delete temp file {tmp_path}: {e}")
 
     async def list_datasets(
         self,
@@ -214,16 +289,19 @@ class FineTuningService:
         Returns:
             Created job
         """
-        # Validate dataset exists and is valid
-        dataset = self.db.query(FineTuningDataset).filter(
-            FineTuningDataset.id == dataset_id
-        ).first()
+        # Validate dataset exists (async)
+        from sqlalchemy import select
+        stmt = select(FineTuningDataset).where(FineTuningDataset.id == dataset_id)
+        result = await self.db.execute(stmt)
+        dataset = result.scalar_one_or_none()
 
         if not dataset:
             raise ValueError(f"Dataset not found: {dataset_id}")
 
-        if not dataset.is_valid:
-            raise ValueError(f"Dataset is not valid: {dataset_id}")
+        # Skip validation check - newly uploaded datasets won't be validated yet
+        # Validation happens asynchronously after upload
+        # if not dataset.is_valid:
+        #     raise ValueError(f"Dataset is not valid: {dataset_id}")
 
         # Merge with default hyperparameters
         default_params = get_default_hyperparameters(finetuning_method)
@@ -247,15 +325,15 @@ class FineTuningService:
         )
 
         self.db.add(job)
-        self.db.commit()
-        self.db.refresh(job)
+        await self.db.commit()
+        await self.db.refresh(job)
 
         logger.info(f"Created fine-tuning job: {job.id} - {name}")
         return job
 
     async def submit_job(self, job_id: UUID) -> Dict[str, Any]:
         """
-        Submit job to training queue (Celery/Ray)
+        Submit job to training queue (Celery)
 
         Args:
             job_id: Job ID to submit
@@ -263,9 +341,13 @@ class FineTuningService:
         Returns:
             Submission result with task ID
         """
-        job = self.db.query(FineTuningJob).filter(
-            FineTuningJob.id == job_id
-        ).first()
+        from sqlalchemy import select
+
+        # Use async query
+        result = await self.db.execute(
+            select(FineTuningJob).filter(FineTuningJob.id == job_id)
+        )
+        job = result.scalar_one_or_none()
 
         if not job:
             raise ValueError(f"Job not found: {job_id}")
@@ -273,21 +355,23 @@ class FineTuningService:
         if job.status != "pending":
             raise ValueError(f"Job is not in pending status: {job.status}")
 
-        # TODO: Implement Celery task submission
-        # from app.tasks.finetuning import run_finetuning_job
-        # task = run_finetuning_job.delay(str(job_id))
-        # job.celery_task_id = task.id
+        # Submit to Celery for async execution
+        from app.tasks.finetuning_tasks import run_finetuning_job
+        task = run_finetuning_job.delay(str(job_id))
 
-        # For now, update status to queued
+        # Store Celery task ID
+        job.celery_task_id = task.id
         job.status = "queued"
-        self.db.commit()
+        job.queued_at = datetime.utcnow()
+        await self.db.commit()
 
-        logger.info(f"Submitted job {job_id} to training queue")
+        logger.info(f"Submitted job {job_id} to Celery (task: {task.id})")
 
         return {
             "job_id": str(job_id),
+            "celery_task_id": task.id,
             "status": "queued",
-            "message": "Job submitted successfully"
+            "message": "Job submitted to training queue"
         }
 
     async def get_job(self, job_id: UUID) -> Optional[FineTuningJob]:

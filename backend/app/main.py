@@ -40,6 +40,13 @@ except ImportError:
     logger_temp.warning("⚠ Audit service not available")
     audit_service = None
 
+# Import finetuning metrics to register them in Prometheus
+try:
+    import app.metrics.finetuning_metrics  # noqa: F401 - Import to register Prometheus metrics
+    logger_temp.info("✓ Fine-tuning Prometheus metrics registered")
+except ImportError as e:
+    logger_temp.warning(f"⚠ Fine-tuning metrics not available: {e}")
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,

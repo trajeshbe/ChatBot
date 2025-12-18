@@ -1,56 +1,29 @@
 # Fine-Tuning Runtime Container
+# Extends agent-runtime with fine-tuning specific dependencies
 # Optimized for GPU-accelerated model fine-tuning
-# Based on NVIDIA CUDA for optimal performance
 
-FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04
+FROM chatbot-agent-runtime:llm-enabled
 
-# Prevent interactive prompts
-ENV DEBIAN_FRONTEND=noninteractive
+LABEL maintainer="Enterprise RAG Chatbot Team"
+LABEL description="GPU-accelerated fine-tuning runtime extending agent-runtime"
+LABEL version="2.0.0"
 
-# Set timezone
-ENV TZ=UTC
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    python3.11 \
-    python3.11-dev \
-    python3-pip \
-    git \
-    wget \
-    curl \
-    vim \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set Python 3.11 as default
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
-
-# Upgrade pip
-RUN python3 -m pip install --upgrade pip setuptools wheel
-
-# Install PyTorch with CUDA 12.1 support
-RUN pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 \
-    --index-url https://download.pytorch.org/whl/cu121
-
-# Copy fine-tuning requirements
-COPY requirements-finetuning.txt /tmp/requirements-finetuning.txt
+# Copy minimal fine-tuning requirements (only essential PEFT libraries)
+COPY backend/requirements-finetuning-minimal.txt /tmp/requirements-finetuning-minimal.txt
 
 # Install fine-tuning dependencies
-RUN pip install --no-cache-dir -r /tmp/requirements-finetuning.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-finetuning-minimal.txt
 
-# Create app directory
-RUN mkdir -p /app/trainers
-
-# Copy training scripts
-COPY app/services/finetuning/trainers/ /app/trainers/
-
-# Create workspace directory
-RUN mkdir -p /workspace
+# Verify critical installations
+RUN python -c "import peft; print(f'✅ PEFT version: {peft.__version__}')" && \
+    python -c "import accelerate; print(f'✅ Accelerate version: {accelerate.__version__}')" && \
+    python -c "import bitsandbytes; print('✅ bitsandbytes installed')" && \
+    python -c "import transformers; print(f'✅ Transformers version: {transformers.__version__}')" && \
+    python -c "import torch; print(f'✅ PyTorch version: {torch.__version__}'); print(f'✅ CUDA available: {torch.cuda.is_available()}')" && \
+    python -c "from trl import DPOTrainer, SFTTrainer, PPOTrainer; print('✅ TRL trainers available (SFT, DPO, PPO, GRPO)')"
 
 # Set working directory
-WORKDIR /workspace
+WORKDIR /app
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1

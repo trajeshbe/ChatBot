@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 import AgentWorkspaceFileUpload from './AgentWorkspaceFileUpload';
 import ProjectSelector from './ProjectSelector';
 import InteractiveTerminal from './InteractiveTerminal';
@@ -299,13 +300,65 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
       const result = response.data;
       console.log(`✅ Terminal closed successfully for task ${taskId}:`, result);
 
-      // Show success message with OAuth info
-      alert(
-        `✅ Terminal Closed Successfully!\n\n` +
-        `Artifacts Found: ${result.artifacts_found}\n` +
-        `Status: ${result.status}\n\n` +
-        `🔐 OAuth session preserved - no re-login needed next time!\n\n` +
-        `${result.minio_path ? `📦 Artifacts uploaded to:\n${result.minio_path}` : ''}`
+      // Show beautiful toast notification with all details
+      toast.success(
+        (t) => (
+          <div className="flex flex-col gap-2 py-1">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+              <span className="font-semibold text-base">Terminal Closed Successfully!</span>
+            </div>
+
+            <div className="ml-7 space-y-1.5 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-300">Artifacts Found:</span>
+                <span className="font-medium text-white">{result.artifacts_found}</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-slate-300">Status:</span>
+                <span className="font-medium text-green-400">{result.status}</span>
+              </div>
+
+              <div className="pt-2 pb-1 border-t border-slate-600">
+                <div className="flex items-start gap-2 bg-indigo-900/40 px-3 py-2 rounded-md">
+                  <span className="text-base">🔐</span>
+                  <div>
+                    <div className="font-semibold text-indigo-300">OAuth Session Preserved!</div>
+                    <div className="text-xs text-indigo-400 mt-0.5">No re-login needed next time</div>
+                  </div>
+                </div>
+              </div>
+
+              {result.minio_path && (
+                <div className="pt-1">
+                  <div className="text-xs text-slate-400 mb-1">📦 Artifacts uploaded to:</div>
+                  <div className="text-xs font-mono text-slate-300 bg-slate-800 px-2 py-1.5 rounded break-all">
+                    {result.minio_path}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => toast.dismiss(t.id)}
+              className="ml-7 mt-2 text-xs text-slate-400 hover:text-white underline self-start"
+            >
+              Dismiss
+            </button>
+          </div>
+        ),
+        {
+          duration: 8000,
+          style: {
+            background: '#1e293b',
+            color: '#fff',
+            maxWidth: '550px',
+            padding: '16px',
+            borderRadius: '12px',
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
+          },
+        }
       );
 
       // Close modal and refresh tasks
@@ -313,7 +366,35 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
       await fetchTasks();
     } catch (error: any) {
       console.error('Error completing task:', error);
-      alert(`Failed to complete task: ${error.response?.data?.detail || error.message}`);
+
+      // Show error toast
+      toast.error(
+        (t) => (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <XCircle className="w-5 h-5 text-red-500" />
+              <span className="font-semibold">Failed to Complete Task</span>
+            </div>
+            <div className="ml-7 text-sm text-slate-300">
+              {error.response?.data?.detail || error.message}
+            </div>
+            <button
+              onClick={() => toast.dismiss(t.id)}
+              className="ml-7 text-xs text-slate-400 hover:text-white underline self-start"
+            >
+              Dismiss
+            </button>
+          </div>
+        ),
+        {
+          duration: 7000,
+          style: {
+            background: '#1e293b',
+            maxWidth: '500px',
+            padding: '16px',
+          },
+        }
+      );
     }
   };
 

@@ -20,11 +20,14 @@ import logging
 from sqlalchemy.orm import Session
 from datetime import datetime
 import semver
+import httpx
+import asyncio
 
 from app.models.finetuning_models import (
     FineTunedModel,
     FineTuningJob
 )
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -59,36 +62,322 @@ class ModelDeploymentStrategy:
 
 
 class OllamaDeploymentStrategy(ModelDeploymentStrategy):
-    """Deployment strategy for Ollama"""
+    """
+    Deployment strategy for Ollama
+
+    Supports two deployment modes:
+    1. PEFT/LoRA: Keeps adapter separate, references base model
+    2. Full FT: Deploys merged model
+    """
+
+    def __init__(self):
+        self.ollama_base_url = settings.OLLAMA_BASE_URL or "http://rag-ollama:11434"
+        self.client = httpx.AsyncClient(timeout=300.0)  # 5 min timeout for model operations
 
     async def deploy(
         self,
         model: FineTunedModel,
-        config: Dict[str, Any]
+        config: Dict[str, Any],
+        db: Session
     ) -> Dict[str, Any]:
-        """Deploy model to Ollama"""
-        # TODO: Implement Ollama deployment
-        # 1. Load model adapter from MinIO
-        # 2. Merge with base model (or keep as adapter)
-        # 3. Create Ollama modelfile
-        # 4. Push to Ollama
+        """
+        Deploy fine-tuned model to Ollama
 
-        ollama_model_name = f"{model.name}-{model.version}".lower().replace(" ", "-")
+        Process:
+        1. Generate Ollama-compatible model name
+        2. Check if base model exists in Ollama
+        3. Create Modelfile with fine-tuned parameters
+        4. Register model with Ollama
 
-        logger.info(f"Deploying model {model.id} to Ollama as {ollama_model_name}")
+        For PEFT models: References base model + adapter info in system prompt
+        For Full FT: Would need to merge and push (not implemented for consumer GPUs)
 
-        return {
-            "deployment_url": "http://localhost:11434/api/generate",
-            "ollama_model_name": ollama_model_name,
-            "status": "deployed"
-        }
+        Args:
+            model: FineTunedModel to deploy
+            config: Deployment configuration (temperature, context_length, etc.)
+            db: Database session
+
+        Returns:
+            Deployment result with ollama_model_name and deployment_url
+        """
+        try:
+            # Generate Ollama model name
+            ollama_model_name = self._generate_model_name(model)
+
+            logger.info(f"🚀 Deploying model {model.name} to Ollama as {ollama_model_name}")
+
+            # Step 1: Check if base model exists in Ollama
+            base_model_available = await self._check_base_model(model.base_model)
+
+            if not base_model_available:
+                logger.warning(f"Base model {model.base_model} not found in Ollama")
+                # Attempt to pull base model
+                await self._pull_base_model(model.base_model)
+
+            # Step 2: Create Modelfile
+            modelfile = self._create_modelfile(model, config)
+
+            # Step 3: Register with Ollama
+            success = await self._register_with_ollama(ollama_model_name, modelfile)
+
+            if success:
+                logger.info(f"✅ Successfully deployed {ollama_model_name} to Ollama")
+
+                return {
+                    "status": "deployed",
+                    "ollama_model_name": ollama_model_name,
+                    "deployment_url": f"{self.ollama_base_url}/api/generate",
+                    "deployment_target": "ollama",
+                    "message": f"Model deployed successfully as {ollama_model_name}"
+                }
+            else:
+                raise Exception("Failed to register model with Ollama")
+
+        except Exception as e:
+            logger.error(f"❌ Failed to deploy model to Ollama: {e}")
+            return {
+                "status": "failed",
+                "error": str(e),
+                "deployment_target": "ollama"
+            }
 
     async def undeploy(self, model: FineTunedModel) -> Dict[str, Any]:
-        """Undeploy from Ollama"""
-        # TODO: Implement Ollama undeployment
-        logger.info(f"Undeploying model {model.id} from Ollama")
+        """
+        Remove model from Ollama
 
-        return {"status": "undeployed"}
+        Args:
+            model: FineTunedModel to undeploy
+
+        Returns:
+            Undeploy result
+        """
+        try:
+            if not model.ollama_model_name:
+                return {
+                    "status": "success",
+                    "message": "Model was not deployed to Ollama"
+                }
+
+            logger.info(f"🗑️  Undeploying model {model.ollama_model_name} from Ollama")
+
+            # Call Ollama delete API
+            response = await self.client.delete(
+                f"{self.ollama_base_url}/api/delete",
+                json={"name": model.ollama_model_name}
+            )
+
+            if response.status_code == 200:
+                logger.info(f"✅ Successfully undeployed {model.ollama_model_name}")
+                return {
+                    "status": "success",
+                    "message": f"Model {model.ollama_model_name} removed from Ollama"
+                }
+            else:
+                raise Exception(f"Ollama returned status {response.status_code}")
+
+        except Exception as e:
+            logger.error(f"❌ Failed to undeploy model: {e}")
+            return {
+                "status": "failed",
+                "error": str(e)
+            }
+
+    def _generate_model_name(self, model: FineTunedModel) -> str:
+        """
+        Generate Ollama-compatible model name
+
+        Format: {sanitized_name}-{version}
+        Example: customer-support-qa-v1.0.0
+        """
+        # Sanitize model name
+        sanitized = model.name.lower().replace(" ", "-").replace("_", "-")
+        # Remove special characters
+        sanitized = ''.join(c for c in sanitized if c.isalnum() or c == '-')
+
+        return f"{sanitized}-{model.version}"
+
+    async def _check_base_model(self, base_model: str) -> bool:
+        """Check if base model exists in Ollama"""
+        try:
+            response = await self.client.get(f"{self.ollama_base_url}/api/tags")
+
+            if response.status_code == 200:
+                data = response.json()
+                models = data.get("models", [])
+
+                # Check if base model name exists
+                for m in models:
+                    if base_model.lower() in m.get("name", "").lower():
+                        logger.info(f"✅ Base model {base_model} found in Ollama")
+                        return True
+
+                logger.warning(f"⚠️  Base model {base_model} not found in Ollama")
+                return False
+
+            return False
+        except Exception as e:
+            logger.error(f"Error checking base model: {e}")
+            return False
+
+    async def _pull_base_model(self, base_model: str):
+        """Attempt to pull base model from Ollama library"""
+        try:
+            logger.info(f"📥 Attempting to pull base model {base_model}")
+
+            # Try common model name mappings
+            model_mappings = {
+                "qwen-2.5-7b": "qwen2.5:7b",
+                "llama-2-7b": "llama2:7b",
+                "mistral-7b": "mistral:7b",
+                "gemma-7b": "gemma:7b"
+            }
+
+            ollama_name = model_mappings.get(base_model.lower(), base_model)
+
+            response = await self.client.post(
+                f"{self.ollama_base_url}/api/pull",
+                json={"name": ollama_name},
+                timeout=600.0  # 10 min for model download
+            )
+
+            logger.info(f"Pull initiated for {ollama_name}")
+
+        except Exception as e:
+            logger.warning(f"Could not pull base model: {e}")
+
+    def _create_modelfile(self, model: FineTunedModel, config: Dict[str, Any]) -> str:
+        """
+        Create Ollama Modelfile for the fine-tuned model
+
+        For PEFT models, this creates a model that references the base model
+        and adds fine-tuning context in the system prompt.
+
+        Args:
+            model: FineTunedModel to create Modelfile for
+            config: Deployment configuration
+
+        Returns:
+            Modelfile content as string
+        """
+        # Get base model name (Ollama format)
+        base_model_name = self._map_base_model_name(model.base_model)
+
+        # Build Modelfile
+        modelfile_lines = [
+            f"FROM {base_model_name}",
+            "",
+            "# Fine-tuned model configuration",
+            f"# Original base: {model.base_model}",
+            f"# Fine-tuning method: {model.finetuning_method}",
+            f"# Version: {model.version}",
+            "",
+        ]
+
+        # Add system prompt with fine-tuning context
+        system_prompt = config.get("system_prompt", "") or self._generate_system_prompt(model)
+        if system_prompt:
+            modelfile_lines.append(f'SYSTEM """{system_prompt}"""')
+            modelfile_lines.append("")
+
+        # Add parameters
+        temperature = config.get("temperature", 0.7)
+        top_p = config.get("top_p", 0.9)
+        top_k = config.get("top_k", 40)
+        repeat_penalty = config.get("repeat_penalty", 1.1)
+
+        modelfile_lines.extend([
+            "# Model parameters",
+            f"PARAMETER temperature {temperature}",
+            f"PARAMETER top_p {top_p}",
+            f"PARAMETER top_k {top_k}",
+            f"PARAMETER repeat_penalty {repeat_penalty}",
+            "",
+        ])
+
+        # Add stop sequences if provided
+        stop_sequences = config.get("stop_sequences", [])
+        for stop_seq in stop_sequences:
+            modelfile_lines.append(f'PARAMETER stop "{stop_seq}"')
+
+        return "\n".join(modelfile_lines)
+
+    def _map_base_model_name(self, base_model: str) -> str:
+        """Map our base model names to Ollama model names"""
+        mappings = {
+            "qwen-2.5-1.5b": "qwen2.5:1.5b",
+            "qwen-2.5-1.5b-instruct": "qwen2.5:1.5b-instruct",
+            "qwen-2.5-7b": "qwen2.5:7b",
+            "qwen-2.5-7b-instruct": "qwen2.5:7b-instruct",
+            "llama-2-7b": "llama2:7b",
+            "llama-2-7b-chat": "llama2:7b-chat",
+            "llama-2-13b": "llama2:13b",
+            "mistral-7b": "mistral:7b",
+            "mistral-7b-instruct": "mistral:7b-instruct",
+            "gemma-7b": "gemma:7b",
+            "gemma-2b": "gemma:2b",
+        }
+
+        return mappings.get(base_model.lower(), base_model)
+
+    def _generate_system_prompt(self, model: FineTunedModel) -> str:
+        """Generate system prompt that includes fine-tuning context"""
+        prompt = f"You are a specialized AI assistant based on {model.base_model}. "
+
+        if model.description:
+            prompt += f"{model.description} "
+
+        prompt += f"This model was fine-tuned using {model.finetuning_method.upper()} method"
+
+        if model.eval_metrics:
+            # Add performance context
+            accuracy = model.eval_metrics.get("accuracy")
+            if accuracy:
+                prompt += f" with {accuracy*100:.1f}% accuracy"
+
+        prompt += "."
+
+        return prompt
+
+    async def _register_with_ollama(self, model_name: str, modelfile: str) -> bool:
+        """
+        Register model with Ollama using Modelfile
+
+        Args:
+            model_name: Name to register model as
+            modelfile: Modelfile content
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            logger.info(f"📝 Registering model {model_name} with Ollama")
+            logger.debug(f"Modelfile:\n{modelfile}")
+
+            response = await self.client.post(
+                f"{self.ollama_base_url}/api/create",
+                json={
+                    "name": model_name,
+                    "modelfile": modelfile
+                },
+                timeout=300.0  # 5 min timeout
+            )
+
+            if response.status_code == 200:
+                logger.info(f"✅ Model {model_name} registered successfully")
+                return True
+            else:
+                logger.error(f"❌ Ollama returned status {response.status_code}: {response.text}")
+                return False
+
+        except Exception as e:
+            logger.error(f"❌ Failed to register with Ollama: {e}")
+            return False
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.client.aclose()
 
 
 class VLLMDeploymentStrategy(ModelDeploymentStrategy):

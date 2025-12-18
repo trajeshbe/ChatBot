@@ -1,6 +1,6 @@
 # CLAUDE.md - AI Assistant Development Guide
 
-> **Last Updated**: 2025-11-14
+> **Last Updated**: 2025-12-17
 > **Purpose**: Comprehensive guide for AI assistants working with this codebase
 
 ---
@@ -32,6 +32,7 @@ This is an **Enterprise RAG (Retrieval-Augmented Generation) Chatbot** that comb
 - **Web Scraping**: Intelligent content extraction from URLs with Playwright
 - **Vector Search**: Semantic search using PostgreSQL + pgvector (384-dimensional embeddings)
 - **Multiple LLM Support**: OpenAI, Anthropic Claude, Ollama (local), vLLM
+- **Model Fine-Tuning**: Distributed LLM fine-tuning with Celery task queue, GPU allocation, and checkpoint management
 - **Memory Hierarchy**: Short-term (session) and long-term (all documents) memory
 - **Semantic Caching**: Redis VSS for query result caching
 - **Real-time Observability**: OpenTelemetry, Grafana, Tempo, Loki
@@ -67,8 +68,12 @@ ChatBot/
 │   │   │   ├── llm_service.py        # LLM client management
 │   │   │   ├── rag_service.py        # RAG query pipeline
 │   │   │   ├── scraper_service.py    # Web scraping
-│   │   │   └── audit_service.py      # Audit logging
+│   │   │   ├── audit_service.py      # Audit logging
+│   │   │   └── finetuning/           # Fine-tuning services
+│   │   ├── tasks/             # Celery task definitions
+│   │   │   └── finetuning_tasks.py   # Distributed training tasks
 │   │   ├── utils/             # Helper utilities
+│   │   ├── celery_app.py      # Celery configuration
 │   │   ├── main.py            # Application entry point
 │   │   └── main_enhanced.py   # Enhanced version with RBAC
 │   ├── migrations/            # Alembic database migrations
@@ -191,7 +196,10 @@ ChatBot/
 - **trafilatura 1.6.3**: Content extraction
 
 #### Workflow & Orchestration
-- **Prefect 3.0.0**: Workflow orchestration
+- **Prefect 3.0.0**: Workflow orchestration for document processing pipelines
+- **Celery 5.3.4**: Distributed task queue for async LLM fine-tuning jobs
+- **pynvml 11.5.0**: NVIDIA GPU monitoring and allocation
+- **Optuna 3.5.0**: Hyperparameter optimization with Bayesian TPE
 
 #### Observability
 - **OpenTelemetry API/SDK 1.25.0**: Distributed tracing
@@ -793,6 +801,67 @@ GET /api/v1/admin/sessions
 GET /api/v1/admin/audit-logs?limit=100&offset=0
 GET /api/v1/admin/usage-metrics?start_date=2024-01-01&end_date=2024-12-31
 GET /api/v1/sessions/{session_id}
+```
+
+#### Fine-Tuning Endpoints
+```
+# List all fine-tuning jobs
+GET /api/v1/finetuning/jobs
+
+# Get job details
+GET /api/v1/finetuning/jobs/{job_id}
+
+# Create new fine-tuning job
+POST /api/v1/finetuning/jobs
+Content-Type: application/json
+
+Body:
+{
+  "name": "model1",
+  "base_model": "meta-llama/Llama-2-7b-hf",
+  "dataset_id": "uuid",
+  "finetuning_method": "PEFT",
+  "training_objective": "instruction_following",
+  "hyperparameters": {
+    "num_epochs": 3,
+    "batch_size": 4,
+    "learning_rate": 2e-4,
+    "gpu_count": 1,
+    "min_gpu_memory_gb": 6
+  }
+}
+
+# Submit job for training (queues job in Celery)
+POST /api/v1/finetuning/jobs/{job_id}/submit
+
+Response:
+{
+  "job_id": "uuid",
+  "celery_task_id": "task-uuid",
+  "status": "queued",
+  "message": "Job submitted to training queue"
+}
+
+# Cancel running job
+POST /api/v1/finetuning/jobs/{job_id}/cancel
+
+# Get GPU status
+GET /api/v1/finetuning/gpu/status
+
+Response:
+{
+  "available_gpus": 1,
+  "total_gpus": 1,
+  "gpus": [
+    {
+      "index": 0,
+      "name": "NVIDIA GeForce RTX 5060 Laptop GPU",
+      "memory_total_gb": 8.0,
+      "memory_free_gb": 7.2,
+      "allocated_to": null
+    }
+  ]
+}
 ```
 
 ### GraphQL API (Strawberry)

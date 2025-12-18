@@ -127,6 +127,7 @@ class HyperparametersBase(BaseModel):
     gradient_accumulation_steps: int = Field(4, description="Gradient accumulation steps", ge=1)
     warmup_steps: int = Field(100, description="Number of warmup steps", ge=0)
     max_seq_length: int = Field(2048, description="Maximum sequence length", ge=1)
+    min_gpu_memory_gb: float = Field(6.0, description="Minimum GPU memory required (GB)", ge=1, le=80)
 
 
 class PEFTHyperparameters(HyperparametersBase):
@@ -279,6 +280,18 @@ class FineTuningJobDetailResponse(BaseModel):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     training_duration_seconds: Optional[int] = None
+
+    # Training progress fields
+    progress: Optional[float] = None
+    current_epoch: Optional[int] = None
+    current_step: Optional[int] = None
+    total_steps: Optional[int] = None
+    train_loss: Optional[float] = None
+    eval_loss: Optional[float] = None
+
+    # Resource tracking
+    gpu_type: Optional[str] = None
+    gpu_count: Optional[int] = None
 
     class Config:
         orm_mode = True
@@ -510,6 +523,8 @@ class DatasetDetailResponse(BaseModel):
     num_samples: Optional[int] = None
     file_size_bytes: Optional[int] = None
     validation_errors: Optional[List[str]] = None
+    is_valid: Optional[bool] = None  # Validation status flag
+    sample_rows: Optional[List[str]] = None  # Quality preview samples
     meta_info: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime

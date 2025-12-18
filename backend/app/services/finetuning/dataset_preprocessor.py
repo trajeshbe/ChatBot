@@ -322,7 +322,7 @@ class DatasetPreprocessor:
         columns: Dict[str, str]
     ) -> Dict[str, Any]:
         """
-        Validate dataset structure and content
+        Enhanced validation with auto-detection and preprocessing
 
         Args:
             df: DataFrame to validate
@@ -330,10 +330,13 @@ class DatasetPreprocessor:
             columns: Column mapping
 
         Returns:
-            Validation results dictionary
+            Validation results dictionary with diagnostics and suggestions
         """
         errors = []
         warnings = []
+        suggestions = []
+        auto_fix_applied = False
+        original_columns = columns.copy()
 
         # Check format type is supported
         if format_type not in self._formatters:
@@ -341,7 +344,76 @@ class DatasetPreprocessor:
             return {
                 "is_valid": False,
                 "errors": errors,
-                "warnings": warnings
+                "warnings": warnings,
+                "suggestions": [f"Supported formats: {', '.join(self._formatters.keys())}"]
+            }
+
+        # Get expected column names for this format
+        expected_cols = self._get_expected_columns(format_type)
+        actual_cols = list(df.columns)
+
+        logger.info(f"Validating dataset: format={format_type}, expected_cols={expected_cols}, actual_cols={actual_cols}")
+
+        # Auto-detect and fix column mapping if empty or missing
+        if not columns or len(columns) == 0:
+            logger.info("No column mapping provided, attempting auto-detection")
+            detected_mapping = self._auto_detect_columns(df, format_type, expected_cols)
+
+            if detected_mapping:
+                columns = detected_mapping
+                auto_fix_applied = True
+                suggestions.append(f"✅ Auto-detected column mapping: {detected_mapping}")
+                logger.info(f"Auto-detected columns: {detected_mapping}")
+            else:
+                errors.append(f"❌ Could not auto-detect column mapping")
+                errors.append(f"   Expected columns for '{format_type}': {expected_cols}")
+                errors.append(f"   Available columns in CSV: {actual_cols}")
+                suggestions.append(f"💡 Please map your CSV columns to the expected format:")
+                suggestions.append(f"   - Expected: {expected_cols}")
+                suggestions.append(f"   - Your CSV has: {actual_cols}")
+
+                # Suggest fuzzy matches
+                fuzzy_suggestions = self._suggest_column_mapping(actual_cols, expected_cols)
+                if fuzzy_suggestions:
+                    suggestions.append(f"💡 Suggested mapping based on column names:")
+                    for expected, suggested in fuzzy_suggestions.items():
+                        suggestions.append(f"   - {expected} → {suggested}")
+
+                return {
+                    "is_valid": False,
+                    "errors": errors,
+                    "warnings": warnings,
+                    "suggestions": suggestions,
+                    "diagnostics": {
+                        "format_type": format_type,
+                        "expected_columns": expected_cols,
+                        "actual_columns": actual_cols,
+                        "provided_mapping": original_columns
+                    }
+                }
+
+        # Verify mapped columns exist in DataFrame
+        missing_cols = []
+        for col_name, col_key in columns.items():
+            if col_key not in df.columns:
+                missing_cols.append(col_key)
+
+        if missing_cols:
+            errors.append(f"❌ Mapped columns not found in CSV: {missing_cols}")
+            errors.append(f"   Available columns: {actual_cols}")
+            suggestions.append(f"💡 Check your column mapping - these columns don't exist in the CSV")
+            return {
+                "is_valid": False,
+                "errors": errors,
+                "warnings": warnings,
+                "suggestions": suggestions,
+                "diagnostics": {
+                    "format_type": format_type,
+                    "expected_columns": expected_cols,
+                    "actual_columns": actual_cols,
+                    "provided_mapping": columns,
+                    "missing_columns": missing_cols
+                }
             }
 
         # Get formatter class and instantiate
@@ -349,47 +421,214 @@ class DatasetPreprocessor:
         try:
             formatter = formatter_class(**columns)
         except Exception as e:
-            errors.append(f"Failed to initialize formatter: {str(e)}")
+            errors.append(f"❌ Failed to initialize formatter: {str(e)}")
             return {
                 "is_valid": False,
                 "errors": errors,
-                "warnings": warnings
+                "warnings": warnings,
+                "suggestions": suggestions
             }
 
-        # Validate each row
+        # Validate each row with detailed error tracking
         invalid_rows = []
+        empty_value_rows = []
+        error_examples = []
+
         for idx, row in df.iterrows():
-            if not formatter.validate(row.to_dict()):
+            row_dict = row.to_dict()
+
+            # Check if row has the required columns
+            is_valid = formatter.validate(row_dict)
+
+            if not is_valid:
                 invalid_rows.append(idx)
 
-        if invalid_rows:
-            errors.append(f"Invalid rows found: {len(invalid_rows)}/{len(df)}")
-            if len(invalid_rows) <= 10:
-                errors.append(f"Invalid row indices: {invalid_rows}")
+                # Track specific reasons for invalidity
+                if idx < 5:  # Only collect first 5 examples
+                    row_errors = []
+                    for col_name, col_key in columns.items():
+                        value = row_dict.get(col_key)
+                        if pd.isna(value) or value == "" or value is None:
+                            row_errors.append(f"{col_name} ({col_key}) is empty")
 
-        # Check for empty values
+                    if row_errors:
+                        empty_value_rows.append(idx)
+                        error_examples.append({
+                            "row": int(idx),
+                            "issues": row_errors,
+                            "data": {k: str(row_dict.get(v, ""))[:50] for k, v in columns.items()}
+                        })
+
+        # Build detailed error messages
+        if invalid_rows:
+            errors.append(f"❌ Invalid rows found: {len(invalid_rows)}/{len(df)} rows failed validation")
+
+            if error_examples:
+                errors.append(f"   Example errors from first {len(error_examples)} invalid rows:")
+                for example in error_examples:
+                    errors.append(f"   • Row {example['row']}: {', '.join(example['issues'])}")
+
+            if len(empty_value_rows) > 0:
+                suggestions.append(f"💡 {len(empty_value_rows)} rows have empty values in required columns")
+                suggestions.append(f"   Please fill in all required fields or remove incomplete rows")
+
+        # Check for empty values in columns
         for col_name, col_key in columns.items():
             if col_key in df.columns:
                 empty_count = df[col_key].isna().sum()
                 if empty_count > 0:
-                    warnings.append(f"Column '{col_key}' has {empty_count} empty values")
+                    warnings.append(f"⚠️  Column '{col_key}' (mapped from '{col_name}') has {empty_count} empty values")
+                    suggestions.append(f"💡 Consider filling or removing rows with empty '{col_key}' values")
 
-        # Size check
+        # Size checks
         if len(df) < 10:
-            warnings.append(f"Dataset is very small ({len(df)} samples). May not be enough for training.")
+            warnings.append(f"⚠️  Dataset is very small ({len(df)} samples)")
+            suggestions.append(f"💡 Minimum 10-20 samples recommended. Consider adding more data for better training.")
         elif len(df) < 100:
-            warnings.append(f"Dataset is small ({len(df)} samples). Consider adding more data.")
+            warnings.append(f"⚠️  Dataset is small ({len(df)} samples)")
+            suggestions.append(f"💡 50-100+ samples recommended for better model performance.")
 
         is_valid = len(errors) == 0
 
-        return {
+        result = {
             "is_valid": is_valid,
             "errors": errors,
             "warnings": warnings,
+            "suggestions": suggestions,
             "num_samples": len(df),
             "valid_samples": len(df) - len(invalid_rows),
-            "invalid_samples": len(invalid_rows)
+            "invalid_samples": len(invalid_rows),
+            "diagnostics": {
+                "format_type": format_type,
+                "expected_columns": expected_cols,
+                "actual_columns": actual_cols,
+                "applied_mapping": columns,
+                "auto_fix_applied": auto_fix_applied
+            }
         }
+
+        if error_examples:
+            result["diagnostics"]["error_examples"] = error_examples
+
+        return result
+
+    def _get_expected_columns(self, format_type: str) -> List[str]:
+        """Get list of expected column names for a format type"""
+        column_map = {
+            "qa": ["question", "answer"],
+            "instruction": ["instruction", "response", "input"],  # input is optional
+            "classification": ["text", "label"],
+            "summarization": ["document", "summary"],
+            "preference": ["prompt", "chosen", "rejected"]
+        }
+        return column_map.get(format_type, [])
+
+    def _auto_detect_columns(
+        self,
+        df: pd.DataFrame,
+        format_type: str,
+        expected_cols: List[str]
+    ) -> Optional[Dict[str, str]]:
+        """
+        Attempt to auto-detect column mapping based on column names
+
+        Returns column mapping dict or None if detection fails
+        """
+        actual_cols_lower = {col.lower(): col for col in df.columns}
+        detected = {}
+
+        # Format-specific detection logic
+        if format_type == "qa":
+            # Look for question/answer columns
+            # QAFormatter expects 'question_col' and 'answer_col' parameters
+            if "question" in actual_cols_lower:
+                detected["question_col"] = actual_cols_lower["question"]
+            elif "q" in actual_cols_lower:
+                detected["question_col"] = actual_cols_lower["q"]
+            elif "query" in actual_cols_lower:
+                detected["question_col"] = actual_cols_lower["query"]
+
+            if "answer" in actual_cols_lower:
+                detected["answer_col"] = actual_cols_lower["answer"]
+            elif "a" in actual_cols_lower:
+                detected["answer_col"] = actual_cols_lower["a"]
+            elif "response" in actual_cols_lower:
+                detected["answer_col"] = actual_cols_lower["response"]
+
+        elif format_type == "instruction":
+            # Try to map question/answer to instruction/response
+            if "instruction" in actual_cols_lower:
+                detected["instruction_col"] = actual_cols_lower["instruction"]
+            elif "question" in actual_cols_lower:
+                detected["instruction_col"] = actual_cols_lower["question"]
+            elif "prompt" in actual_cols_lower:
+                detected["instruction_col"] = actual_cols_lower["prompt"]
+
+            if "response" in actual_cols_lower:
+                detected["response_col"] = actual_cols_lower["response"]
+            elif "answer" in actual_cols_lower:
+                detected["response_col"] = actual_cols_lower["answer"]
+            elif "output" in actual_cols_lower:
+                detected["response_col"] = actual_cols_lower["output"]
+
+            # Optional input field
+            if "input" in actual_cols_lower:
+                detected["input_col"] = actual_cols_lower["input"]
+
+        elif format_type == "classification":
+            if "text" in actual_cols_lower:
+                detected["text_col"] = actual_cols_lower["text"]
+            elif "content" in actual_cols_lower:
+                detected["text_col"] = actual_cols_lower["content"]
+
+            if "label" in actual_cols_lower:
+                detected["label_col"] = actual_cols_lower["label"]
+            elif "category" in actual_cols_lower:
+                detected["label_col"] = actual_cols_lower["category"]
+
+        elif format_type == "summarization":
+            if "document" in actual_cols_lower:
+                detected["document_col"] = actual_cols_lower["document"]
+            elif "text" in actual_cols_lower:
+                detected["document_col"] = actual_cols_lower["text"]
+
+            if "summary" in actual_cols_lower:
+                detected["summary_col"] = actual_cols_lower["summary"]
+
+        elif format_type == "preference":
+            if "prompt" in actual_cols_lower:
+                detected["prompt_col"] = actual_cols_lower["prompt"]
+            if "chosen" in actual_cols_lower:
+                detected["chosen_col"] = actual_cols_lower["chosen"]
+            if "rejected" in actual_cols_lower:
+                detected["rejected_col"] = actual_cols_lower["rejected"]
+
+        # Return mapping only if we found all required columns
+        required_count = len([col for col in expected_cols if col != "input"])  # input is optional
+        if len(detected) >= required_count:
+            logger.info(f"Successfully auto-detected {len(detected)} columns: {detected}")
+            return detected
+
+        logger.warning(f"Auto-detection incomplete: found {len(detected)}/{required_count} required columns")
+        return None
+
+    def _suggest_column_mapping(
+        self,
+        actual_cols: List[str],
+        expected_cols: List[str]
+    ) -> Dict[str, str]:
+        """Suggest possible column mappings based on fuzzy matching"""
+        suggestions = {}
+        actual_cols_lower = {col.lower(): col for col in actual_cols}
+
+        for expected in expected_cols:
+            # Simple fuzzy matching - look for partial matches
+            for actual_lower, actual_original in actual_cols_lower.items():
+                if expected in actual_lower or actual_lower in expected:
+                    suggestions[expected] = actual_original
+                    break
+
+        return suggestions
 
     def process(
         self,

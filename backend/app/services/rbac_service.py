@@ -53,6 +53,67 @@ class RBACService:
         """
         return model_has_permission(self.db, user_id, module_code, permission_type)
 
+    async def check_permission_async(
+        self,
+        user_id: uuid.UUID,
+        module_code: str,
+        permission_type: str = "read"
+    ) -> bool:
+        """
+        Async version: Check if user has a specific permission for a module
+
+        Args:
+            user_id: User UUID
+            module_code: Module code (e.g., 'rag_chat' or 'model_finetuning')
+            permission_type: 'read', 'write', 'delete', 'execute', or 'share'
+
+        Returns:
+            bool: True if user has permission
+        """
+        # Get module by code
+        stmt = select(Module).where(Module.code == module_code, Module.is_active == True)
+        result = await self.db.execute(stmt)
+        module = result.scalar_one_or_none()
+
+        if not module:
+            return False
+
+        # Get user roles
+        stmt = select(UserRole).where(UserRole.user_id == user_id)
+        result = await self.db.execute(stmt)
+        user_roles = result.scalars().all()
+
+        if not user_roles:
+            return False
+
+        # Get permissions for those roles and this module
+        role_ids = [ur.role_id for ur in user_roles]
+        stmt = select(RoleModulePermission).where(
+            and_(
+                RoleModulePermission.role_id.in_(role_ids),
+                RoleModulePermission.module_id == module.id
+            )
+        )
+        result = await self.db.execute(stmt)
+        permissions = result.scalars().all()
+
+        # Check if any role has the required permission
+        permission_map = {
+            "read": "can_read",
+            "write": "can_write",
+            "delete": "can_delete",
+            "share": "can_share",
+            "execute": "can_write",  # Map execute to write for now
+        }
+
+        attr_name = permission_map.get(permission_type, "can_read")
+
+        for perm in permissions:
+            if getattr(perm, attr_name, False):
+                return True
+
+        return False
+
     def get_user_module_permissions(self, user_id: uuid.UUID) -> Dict[str, Dict[str, bool]]:
         """
         Get all module permissions for a user

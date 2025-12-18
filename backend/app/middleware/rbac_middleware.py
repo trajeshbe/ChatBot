@@ -11,6 +11,8 @@ from uuid import UUID
 from fastapi import Request, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.core.database import get_db
 from app.services.rbac_service import RBACService
@@ -28,30 +30,52 @@ security = HTTPBearer(auto_error=False)
 async def get_current_user(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> Optional[User]:
     """
     Get current authenticated user from request.
 
-    This is a placeholder implementation. In production, you would:
-    1. Verify JWT token from credentials.credentials
-    2. Extract user_id from token
-    3. Look up user in database
-    4. Cache user in request.state for reuse
-
-    For now, we'll check for a user_id in session or headers.
+    Verifies JWT token from Authorization header and returns the user.
     """
     # Check if user is already set in request state (by another middleware)
     if hasattr(request.state, "user"):
         return request.state.user
 
-    # TODO: Implement proper JWT token verification
-    # For now, check for user_id in headers (development only!)
+    # Verify JWT token from Authorization header
+    if credentials:
+        from app.core.security import verify_token
+
+        # Extract token from credentials
+        token = credentials.credentials
+
+        # Verify token and get user_id
+        user_id_str = verify_token(token)
+        if user_id_str:
+            try:
+                user_id = UUID(user_id_str)
+                # Use async query
+                stmt = select(User).where(User.id == user_id)
+                result = await db.execute(stmt)
+                user = result.scalar_one_or_none()
+
+                if user and user.is_active:
+                    # Cache in request state
+                    request.state.user = user
+                    request.state.db = db
+                    return user
+            except (ValueError, AttributeError):
+                pass
+
+    # Fallback: Check for user_id in headers (development/testing only)
     user_id_header = request.headers.get("X-User-ID")
     if user_id_header:
         try:
             user_id = UUID(user_id_header)
-            user = db.query(User).filter(User.id == user_id).first()
+            # Use async query
+            stmt = select(User).where(User.id == user_id)
+            result = await db.execute(stmt)
+            user = result.scalar_one_or_none()
+
             if user and user.is_active:
                 # Cache in request state
                 request.state.user = user
@@ -59,12 +83,6 @@ async def get_current_user(
                 return user
         except (ValueError, AttributeError):
             pass
-
-    # Check session (if session middleware is enabled)
-    session_id = request.headers.get("X-Session-ID")
-    if session_id:
-        # TODO: Look up user from session
-        pass
 
     return None
 
@@ -134,12 +152,12 @@ class RequirePermission:
     async def __call__(
         self,
         user: User = Depends(require_authentication),
-        db: Session = Depends(get_db),
+        db: AsyncSession = Depends(get_db),
     ) -> bool:
         """Check permission and raise exception if denied."""
         rbac = RBACService(db)
 
-        has_permission = rbac.check_permission(
+        has_permission = await rbac.check_permission_async(
             user_id=user.id,
             module_code=self.module_code,
             permission_type=self.permission_type,

@@ -33,7 +33,7 @@ class AgentSandboxManager:
         try:
             self.docker_client = docker.from_env()
             self.image_name = "chatbot-agent-runtime:latest"
-            self.network_name = "chatbot_default"  # Use existing docker-compose network
+            self.network_name = "chatbot_rag-network"  # Use existing docker-compose network (changed from chatbot_default)
 
             # Container resource limits
             self.resource_limits = {

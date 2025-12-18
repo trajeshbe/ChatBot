@@ -44,7 +44,10 @@ export default function DatasetManager({ onRefresh }: DatasetManagerProps) {
   const loadDatasets = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`${API_BASE}/api/v1/finetuning/datasets`)
+      const token = localStorage.getItem('access_token')
+      const response = await fetch(`${API_BASE}/api/v1/finetuning/datasets`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      })
       if (response.ok) {
         const data = await response.json()
         setDatasets(data.datasets || [])
@@ -123,8 +126,10 @@ export default function DatasetManager({ onRefresh }: DatasetManagerProps) {
     }
 
     try {
+      const token = localStorage.getItem('access_token')
       const response = await fetch(`${API_BASE}/api/v1/finetuning/datasets/${id}`, {
         method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
       })
 
       if (response.ok) {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ChevronDown, Cpu, Cloud, Zap, Check, RefreshCw } from 'lucide-react'
+import { ChevronDown, Cpu, Cloud, Zap, Check, RefreshCw, Award } from 'lucide-react'
 import axios from 'axios'
 
 interface Model {
@@ -16,6 +16,18 @@ interface Model {
   min_gpu_memory_gb?: number
 }
 
+interface FineTunedModel {
+  id: string
+  name: string
+  provider: string
+  description: string
+  base_model: string
+  deployment_url: string
+  eval_metrics?: any
+  total_inferences?: number
+  avg_latency_ms?: number
+}
+
 interface ModelSelectorProps {
   selectedModel: string | null
   onModelChange: (modelId: string) => void
@@ -29,6 +41,7 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
     local_gpu: [],
     local_cpu: []
   })
+  const [fineTunedModels, setFineTunedModels] = useState<FineTunedModel[]>([])
   const [defaultModel, setDefaultModel] = useState<string | null>(null)
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -44,10 +57,21 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
       if (isRefresh) {
         setRefreshing(true)
       }
+
+      // Fetch standard models
       const response = await axios.get(`${API_URL}/api/v1/models/`)
       setModels(response.data.grouped)
       setDefaultModel(response.data.default)
       setGpuAvailable(response.data.gpu_info?.available || false)
+
+      // Fetch fine-tuned models
+      try {
+        const ftResponse = await axios.get(`${API_URL}/api/v1/finetuning/models/for-chat`)
+        setFineTunedModels(ftResponse.data.finetuned_models || [])
+      } catch (ftError) {
+        console.error('Error fetching fine-tuned models:', ftError)
+        setFineTunedModels([])
+      }
 
       // Set selected model to default if not set
       if (!selectedModel && response.data.default) {
@@ -63,9 +87,27 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
     }
   }
 
-  const getSelectedModelInfo = (): Model | null => {
+  const getSelectedModelInfo = (): Model | FineTunedModel | null => {
     const allModels = [...models.proprietary, ...models.local_gpu, ...models.local_cpu]
-    return allModels.find(m => m.id === (selectedModel || defaultModel)) || null
+    const standardModel = allModels.find(m => m.id === (selectedModel || defaultModel))
+    if (standardModel) return standardModel
+
+    // Check fine-tuned models
+    const ftModel = fineTunedModels.find(m => m.id === (selectedModel || defaultModel))
+    if (ftModel) {
+      // Convert to display format
+      return {
+        ...ftModel,
+        type: 'finetuned',
+        context_length: 0,
+        cost_per_1k_tokens: 0,
+        requires_gpu: ftModel.provider === 'ollama' || ftModel.provider === 'vllm',
+        available: true,
+        recommended: false
+      } as any
+    }
+
+    return null
   }
 
   const getModelIcon = (type: string) => {
@@ -76,6 +118,8 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
         return <Zap className="w-4 h-4 text-green-500" />
       case 'local-cpu':
         return <Cpu className="w-4 h-4 text-primary-500" />
+      case 'finetuned':
+        return <Award className="w-4 h-4 text-amber-500" />
       default:
         return <Cpu className="w-4 h-4" />
     }
@@ -303,6 +347,64 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
                       <div className="flex items-center gap-2 mt-1">
                         {getModelBadge(model)}
                         <span className="text-xs text-green-600 dark:text-green-400">Free (Local)</span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Fine-Tuned Models */}
+          {fineTunedModels.length > 0 && (
+            <div className="p-2 border-t border-slate-200 dark:border-slate-700">
+              <div className="px-2 py-1 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                <Award className="w-3 h-3 inline mr-1" />
+                Fine-Tuned Models
+              </div>
+              {fineTunedModels.map((model) => (
+                <button
+                  key={model.id}
+                  onClick={() => {
+                    console.log('🔄 Fine-tuned model selected:', model.name, '(', model.id, ')')
+                    onModelChange(model.id)
+                    setIsOpen(false)
+                  }}
+                  className={`w-full text-left px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors ${
+                    selectedModel === model.id ? 'bg-primary-50 dark:bg-blue-900/20' : ''
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-900 dark:text-white">
+                          {model.name}
+                        </span>
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300">
+                          Fine-Tuned
+                        </span>
+                        {selectedModel === model.id && (
+                          <Check className="w-4 h-4 text-primary-600" />
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                        {model.description}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs px-2 py-0.5 rounded bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300">
+                          {model.provider === 'ollama' ? 'Ollama' : model.provider === 'vllm' ? 'vLLM' : model.provider}
+                        </span>
+                        <span className="text-xs text-green-600 dark:text-green-400">Free (Local)</span>
+                        {model.total_inferences !== undefined && model.total_inferences > 0 && (
+                          <span className="text-xs text-slate-500">
+                            {model.total_inferences} inferences
+                          </span>
+                        )}
+                        {model.avg_latency_ms && (
+                          <span className="text-xs text-slate-500">
+                            {model.avg_latency_ms.toFixed(0)}ms avg
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

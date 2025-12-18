@@ -192,27 +192,84 @@ def main():
 
         # For testing without actual training
         if dataset is None:
-            logger.info("⚠️ No dataset provided, creating mock result")
-            result = {
-                "success": True,
-                "message": "Training setup successful (no dataset)",
-                "status": "completed",
-                "model_info": {
-                    "base_model": config.get("base_model"),
-                    "quantization": config.get("quantization"),
-                    "lora_config": {
-                        "r": config["hyperparameters"].get("lora_r", 16),
-                        "alpha": config["hyperparameters"].get("lora_alpha", 32)
+            logger.info("⚠️ No dataset provided, creating mock training result with merge step")
+
+            # 1. Save adapter weights
+            adapter_dir = output_dir / "adapter_model"
+            adapter_dir.mkdir(parents=True, exist_ok=True)
+            model.save_pretrained(adapter_dir)
+            tokenizer.save_pretrained(adapter_dir)
+            logger.info(f"✅ Adapter saved to {adapter_dir}")
+
+            # 2. CRITICAL: Merge adapters into base model
+            logger.info("🔄 Merging PEFT adapters into base model...")
+            try:
+                from transformers import AutoModelForCausalLM
+                from peft import PeftModel
+
+                # Load base model without quantization (required for merging)
+                base_model_path = config.get("base_model")
+                logger.info(f"Loading base model: {base_model_path}")
+                base_model_full = AutoModelForCausalLM.from_pretrained(
+                    base_model_path,
+                    device_map="auto",
+                    trust_remote_code=True,
+                    torch_dtype=torch.bfloat16
+                )
+
+                # Load PEFT model with adapters
+                logger.info(f"Loading adapters from {adapter_dir}")
+                peft_model = PeftModel.from_pretrained(base_model_full, str(adapter_dir))
+
+                # Merge and unload - THIS IS THE KEY STEP
+                logger.info("Merging adapters into base model...")
+                merged_model = peft_model.merge_and_unload()
+
+                # Save merged model
+                merged_dir = output_dir / "merged_model"
+                merged_dir.mkdir(parents=True, exist_ok=True)
+                merged_model.save_pretrained(merged_dir)
+                tokenizer.save_pretrained(merged_dir)
+
+                logger.info(f"✅ Merged model saved to {merged_dir}")
+
+                # Write result with BOTH paths
+                result = {
+                    "success": True,
+                    "message": "Training setup successful with model merge",
+                    "status": "completed",
+                    "output_dir": str(output_dir),
+                    "adapter_dir": str(adapter_dir),
+                    "merged_dir": str(merged_dir),
+                    "has_merged_model": True,
+                    "model_info": {
+                        "base_model": config.get("base_model"),
+                        "quantization": config.get("quantization"),
+                        "lora_config": {
+                            "r": config["hyperparameters"].get("lora_r", 16),
+                            "alpha": config["hyperparameters"].get("lora_alpha", 32)
+                        }
                     }
                 }
-            }
+
+            except Exception as merge_error:
+                logger.error(f"❌ Failed to merge model: {merge_error}")
+                result = {
+                    "success": True,
+                    "message": "Training completed but merge failed",
+                    "status": "completed_no_merge",
+                    "adapter_dir": str(adapter_dir),
+                    "merged_dir": None,
+                    "has_merged_model": False,
+                    "merge_error": str(merge_error)
+                }
 
             # Write result
             result_file = output_dir / "result.json"
             with open(result_file, 'w') as f:
                 json.dump(result, f, indent=2)
 
-            logger.info("✅ Mock training completed successfully")
+            logger.info("✅ Mock training with merge completed successfully")
             return
 
         # Create trainer

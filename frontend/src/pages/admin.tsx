@@ -12,6 +12,7 @@ import RoleManager from '../components/admin/RoleManager'
 import PermissionMatrix from '../components/admin/PermissionMatrix'
 import UserRoleAssignment from '../components/admin/UserRoleAssignment'
 import FineTuningManager from '../components/finetuning/FineTuningManager'
+import FineTuningGovernanceUI from '../components/finetuning/FineTuningGovernanceUI'
 
 interface User {
   id: string
@@ -1411,8 +1412,8 @@ export default function AdminPage() {
 
               {/* Fine-Tuning Tab */}
               {activeTab === 'finetuning' && (
-                <div>
-                  <FineTuningManager />
+                <div className="h-[calc(100vh-200px)]">
+                  <FineTuningGovernanceUI />
                 </div>
               )}
 

@@ -260,24 +260,28 @@ fairlearn==0.9.0                  # Bias and fairness metrics for ML models
 # ============================================================================
 
 # ----------------------------------------------------------------------------
-# ML/LLM FINE-TUNING (Optional)
-# Used by: app/services/finetuning/*, app/services/finetuning/trainers/*
+# GPU MONITORING & TASK QUEUE (Required for Fine-Tuning Orchestration)
+# Used by: app/services/finetuning/gpu_pool_manager.py, app/tasks/finetuning_tasks.py
 # ----------------------------------------------------------------------------
-# NOTE: Fine-tuning is an optional feature for model customization
-# Core dependencies for fine-tuning LLMs
-transformers==4.38.0            # Hugging Face transformers - model loading and training
-peft==0.10.0                    # Parameter-Efficient Fine-Tuning - LoRA/QLoRA adapters
-trl==0.8.0                      # Transformer Reinforcement Learning - SFT and RLHF
-bitsandbytes==0.43.0            # 4-bit and 8-bit quantization - memory-efficient training
-accelerate==0.29.0              # Distributed training utilities - multi-GPU support
-datasets==2.18.0                # Dataset loading and processing - Hugging Face datasets
-optuna==3.5.0                   # Hyperparameter optimization - Bayesian optimization with TPE
-scipy==1.12.0                   # Scientific computing - required by Optuna
-# GPU monitoring
+# NOTE: Main backend does NOT run training - it only orchestrates jobs
+# Actual training happens in finetuning-runtime container (see requirements-finetuning.txt)
+
+# GPU monitoring (backend needs this to check GPU availability)
 pynvml==11.5.0                  # NVIDIA Management Library - GPU stats and allocation
 
-# MLflow integration for experiment tracking (already included in requirements.txt)
-# mlflow==2.10.2                # Experiment tracking - model registry
+# Distributed task queue (backend needs this to submit training jobs)
+celery==5.3.4                   # Distributed task queue - async fine-tuning job submission
+# Note: Redis backend already included above (redis==5.0.1)
+
+# Hyperparameter optimization (lightweight, used by backend API)
+optuna==3.5.0                   # Hyperparameter optimization - Bayesian optimization with TPE
+scipy==1.12.0                   # Scientific computing - required by Optuna
+
+# Model versioning (used by model registry service)
+semver==3.0.2                   # Semantic versioning - version comparison and validation
+
+# NOTE: transformers/peft/accelerate/trl/bitsandbytes are in requirements-finetuning.txt
+# They are ONLY needed in the finetuning-runtime container, not the main backend
 
 # ----------------------------------------------------------------------------
 # MCP (MODEL CONTEXT PROTOCOL) INTEGRATION (Optional)

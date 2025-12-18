@@ -94,11 +94,10 @@ class MinIOPathBuilder:
 
     @staticmethod
     def build_document_path(
-        role: str,
         department: str,
         team: str,
-        username: str,
         project_name: str,
+        username: str,
         filename: str,
         folder: str = "documents"
     ) -> str:
@@ -106,11 +105,10 @@ class MinIOPathBuilder:
         Build hierarchical MinIO path for a document.
 
         Args:
-            role: User role (admin, user, viewer)
             department: Department name (Technology, Data Operations, etc.)
             team: Team name (Tech Team 1, Data Team 5, etc.)
-            username: User's username (john.doe)
             project_name: Project name (ChatBot RAG, ML Pipeline, etc.)
+            username: User's username (john.doe)
             filename: Original filename (requirements.pdf)
             folder: Folder type (documents, extractions, exports, temp)
 
@@ -119,15 +117,14 @@ class MinIOPathBuilder:
 
         Example:
             >>> build_document_path(
-            ...     role='admin',
             ...     department='Technology',
             ...     team='Tech Team 1',
-            ...     username='john.doe',
             ...     project_name='ChatBot RAG',
+            ...     username='john.doe',
             ...     filename='requirements.pdf',
             ...     folder='documents'
             ... )
-            'admin/technology/tech-team-1/john.doe/chatbot-rag/documents/requirements.pdf'
+            'technology/tech-team-1/chatbot-rag/john.doe/documents/requirements.pdf'
         """
         # Validate folder
         if folder not in MinIOPathBuilder.VALID_FOLDERS:
@@ -135,7 +132,6 @@ class MinIOPathBuilder:
             folder = 'documents'
 
         # Sanitize all components except filename
-        sanitized_role = MinIOPathBuilder.sanitize(role)
         sanitized_dept = MinIOPathBuilder.sanitize(department)
         sanitized_team = MinIOPathBuilder.sanitize(team)
         sanitized_username = MinIOPathBuilder.sanitize(username)
@@ -144,57 +140,56 @@ class MinIOPathBuilder:
         # Filename is kept as-is (preserve original name)
         # MinIO/S3 handles special chars in filenames
 
-        # Build path
-        path = f"{sanitized_role}/{sanitized_dept}/{sanitized_team}/{sanitized_username}/{sanitized_project}/{folder}/{filename}"
+        # Build path: {dept}/{team}/{project}/{username}/{folder}/{filename}
+        path = f"{sanitized_dept}/{sanitized_team}/{sanitized_project}/{sanitized_username}/{folder}/{filename}"
 
         logger.debug(f"Built MinIO path: {path}")
         return path
 
     @staticmethod
     def build_export_path(
-        role: str,
         department: str,
         team: str,
-        username: str,
         project_name: str,
+        username: str,
         filename: str
     ) -> str:
         """Build path for exported files (chat exports, reports, etc.)"""
         return MinIOPathBuilder.build_document_path(
-            role, department, team, username, project_name, filename, folder='exports'
+            department, team, project_name, username, filename, folder='exports'
         )
 
     @staticmethod
     def build_extraction_path(
-        role: str,
         department: str,
         team: str,
-        username: str,
         project_name: str,
+        username: str,
         filename: str
     ) -> str:
         """Build path for extracted data files"""
         return MinIOPathBuilder.build_document_path(
-            role, department, team, username, project_name, filename, folder='extractions'
+            department, team, project_name, username, filename, folder='extractions'
         )
 
     @staticmethod
     def build_temp_path(
-        role: str,
         department: str,
         team: str,
-        username: str,
         project_name: str,
+        username: str,
         filename: str
     ) -> str:
         """Build path for temporary files"""
         return MinIOPathBuilder.build_document_path(
-            role, department, team, username, project_name, filename, folder='temp'
+            department, team, project_name, username, filename, folder='temp'
         )
 
     @staticmethod
     def build_agent_task_path(
-        project_id: str,
+        department: str,
+        team: str,
+        project_name: str,
         username: str,
         task_name: str,
         task_id: str,
@@ -205,7 +200,9 @@ class MinIOPathBuilder:
         Build hierarchical MinIO path for agent task artifacts.
 
         Args:
-            project_id: Project UUID or 'global-project'
+            department: Department name (Technology, Data Operations, etc.)
+            team: Team name (Backend Development, Data Science Team, etc.)
+            project_name: Project name (ChatBot RAG, Construction Intelligence, etc.)
             username: User's username
             task_name: Human-readable task name (e.g., 'sales_analysis_chart')
             task_id: Unique task execution ID (e.g., 'task-a81656d4e7e9')
@@ -217,17 +214,21 @@ class MinIOPathBuilder:
 
         Example:
             >>> build_agent_task_path(
-            ...     project_id='global-project',
+            ...     department='Technology',
+            ...     team='Backend Development',
+            ...     project_name='Construction Intelligence',
             ...     username='admin',
             ...     task_name='sales_analysis_chart',
             ...     task_id='task-a81656d4e7e9',
             ...     subfolder='artifacts',
             ...     filename='revenue_chart.html'
             ... )
-            'projects/global-project/admin/agent-tasks/sales_analysis_chart/task-a81656d4e7e9/artifacts/revenue_chart.html'
+            'technology/backend-development/construction-intelligence/admin/agent-tasks/sales_analysis_chart/task-a81656d4e7e9/artifacts/revenue_chart.html'
         """
         # Sanitize components
-        sanitized_project = MinIOPathBuilder.sanitize(project_id)
+        sanitized_dept = MinIOPathBuilder.sanitize(department)
+        sanitized_team = MinIOPathBuilder.sanitize(team)
+        sanitized_project = MinIOPathBuilder.sanitize(project_name)
         sanitized_username = MinIOPathBuilder.sanitize(username)
         sanitized_task_name = MinIOPathBuilder.sanitize(task_name)
 
@@ -237,9 +238,9 @@ class MinIOPathBuilder:
             logger.warning(f"Invalid subfolder '{subfolder}', defaulting to 'artifacts'")
             subfolder = 'artifacts'
 
-        # Build path
+        # Build path: {dept}/{team}/{project}/{username}/agent-tasks/{task}/{task-id}/{subfolder}/{file}
         path = (
-            f"projects/{sanitized_project}/{sanitized_username}/agent-tasks/"
+            f"{sanitized_dept}/{sanitized_team}/{sanitized_project}/{sanitized_username}/agent-tasks/"
             f"{sanitized_task_name}/{task_id}/{subfolder}/{filename}"
         )
 
@@ -283,6 +284,227 @@ class MinIOPathBuilder:
 
         prefix += "*"
         return prefix
+
+    @staticmethod
+    def build_finetuning_dataset_path(
+        department_name: str,
+        team_name: str,
+        project_name: str,
+        username: str,
+        dataset_name: str,
+        dataset_id: str,
+        filename: str
+    ) -> str:
+        """
+        Build hierarchical MinIO path for fine-tuning dataset.
+
+        Args:
+            department_name: Department name (e.g., 'Technology')
+            team_name: Team name (e.g., 'Backend Development')
+            project_name: Project name (e.g., 'ChatBot RAG')
+            username: User's username (e.g., 'admin')
+            dataset_name: Human-readable dataset name (e.g., 'cloudsync-support-qa')
+            dataset_id: Unique dataset ID (UUID)
+            filename: Original file name
+
+        Returns:
+            Full MinIO path string
+
+        Example:
+            >>> build_finetuning_dataset_path(
+            ...     department_name='Technology',
+            ...     team_name='Backend Development',
+            ...     project_name='ChatBot RAG',
+            ...     username='admin',
+            ...     dataset_name='cloudsync-support-qa',
+            ...     dataset_id='3b8234e1-b542-44ad-9c09-f45059888511',
+            ...     filename='cloudsync_support_qa.jsonl'
+            ... )
+            'Technology/Backend-Development/ChatBot-RAG/admin/finetuning/datasets/cloudsync-support-qa/3b8234e1-b542-44ad-9c09-f45059888511/cloudsync_support_qa.jsonl'
+        """
+        sanitized_department = MinIOPathBuilder.sanitize(department_name)
+        sanitized_team = MinIOPathBuilder.sanitize(team_name)
+        sanitized_project = MinIOPathBuilder.sanitize(project_name)
+        sanitized_username = MinIOPathBuilder.sanitize(username)
+        sanitized_dataset_name = MinIOPathBuilder.sanitize(dataset_name)
+
+        path = (
+            f"{sanitized_department}/{sanitized_team}/{sanitized_project}/"
+            f"{sanitized_username}/finetuning/datasets/{sanitized_dataset_name}/{dataset_id}/{filename}"
+        )
+
+        logger.debug(f"Built fine-tuning dataset MinIO path: {path}")
+        return path
+
+    @staticmethod
+    def build_finetuning_checkpoint_path(
+        department_name: str,
+        team_name: str,
+        project_name: str,
+        job_name: str,
+        job_id: str,
+        checkpoint_type: str,
+        filename: str
+    ) -> str:
+        """
+        Build hierarchical MinIO path for fine-tuning checkpoints.
+
+        Args:
+            department_name: Department name (e.g., 'Technology')
+            team_name: Team name (e.g., 'Backend Development')
+            project_name: Project name (e.g., 'ChatBot RAG')
+            job_name: Human-readable job name
+            job_id: Unique job ID (UUID)
+            checkpoint_type: Type of checkpoint ('adapters', 'full_model', 'optimizer_state')
+            filename: Checkpoint file name
+
+        Returns:
+            Full MinIO path string
+
+        Example:
+            >>> build_finetuning_checkpoint_path(
+            ...     department_name='Technology',
+            ...     team_name='Backend Development',
+            ...     project_name='ChatBot RAG',
+            ...     job_name='qwen-2.5-cloudsync',
+            ...     job_id='c4ad0963-b194-4f85-b816-3fd0fdaaff9d',
+            ...     checkpoint_type='adapters',
+            ...     filename='adapter_model.bin'
+            ... )
+            'Technology/Backend-Development/ChatBot-RAG/finetuning/checkpoints/qwen-2.5-cloudsync/c4ad0963-b194-4f85-b816-3fd0fdaaff9d/adapters/adapter_model.bin'
+        """
+        sanitized_department = MinIOPathBuilder.sanitize(department_name)
+        sanitized_team = MinIOPathBuilder.sanitize(team_name)
+        sanitized_project = MinIOPathBuilder.sanitize(project_name)
+        sanitized_job_name = MinIOPathBuilder.sanitize(job_name)
+
+        # Validate checkpoint type
+        valid_checkpoint_types = ['adapters', 'full_model', 'optimizer_state', 'config']
+        if checkpoint_type not in valid_checkpoint_types:
+            logger.warning(f"Invalid checkpoint type '{checkpoint_type}', defaulting to 'adapters'")
+            checkpoint_type = 'adapters'
+
+        path = (
+            f"{sanitized_department}/{sanitized_team}/{sanitized_project}/"
+            f"finetuning/checkpoints/{sanitized_job_name}/{job_id}/{checkpoint_type}/{filename}"
+        )
+
+        logger.debug(f"Built fine-tuning checkpoint MinIO path: {path}")
+        return path
+
+    @staticmethod
+    def get_finetuning_prefix(
+        project_id: str,
+        username: str,
+        resource_type: Optional[str] = None,
+        resource_name: Optional[str] = None
+    ) -> str:
+        """
+        Get prefix for listing fine-tuning files.
+
+        Args:
+            project_id: Project UUID or 'global-project'
+            username: User's username
+            resource_type: 'datasets', 'checkpoints', or None for all
+            resource_name: Specific dataset/job name or None for all
+
+        Examples:
+            # All fine-tuning resources for user
+            get_finetuning_prefix('global-project', 'admin')
+            → 'projects/global-project/admin/finetuning/*'
+
+            # All datasets
+            get_finetuning_prefix('global-project', 'admin', 'datasets')
+            → 'projects/global-project/admin/finetuning/datasets/*'
+
+            # Specific dataset
+            get_finetuning_prefix('global-project', 'admin', 'datasets', 'cloudsync-support-qa')
+            → 'projects/global-project/admin/finetuning/datasets/cloudsync-support-qa/*'
+        """
+        sanitized_project = MinIOPathBuilder.sanitize(project_id)
+        sanitized_username = MinIOPathBuilder.sanitize(username)
+
+        prefix = f"projects/{sanitized_project}/{sanitized_username}/finetuning/"
+
+        if resource_type:
+            prefix += f"{resource_type}/"
+
+            if resource_name:
+                sanitized_resource_name = MinIOPathBuilder.sanitize(resource_name)
+                prefix += f"{sanitized_resource_name}/"
+
+        prefix += "*"
+        return prefix
+
+    @staticmethod
+    def build_finetuning_checkpoint_with_dataset(
+        department_name: str,
+        team_name: str,
+        project_name: str,
+        username: str,
+        dataset_name: str,
+        job_name: str,
+        job_id: str,
+        checkpoint_stage: str = "final",
+        model_type: str = "merged_model",
+        filename: str = ""
+    ) -> str:
+        """
+        Build hierarchical MinIO path for fine-tuning checkpoints under dataset.
+
+        This creates a dataset-linked organizational hierarchy:
+        documents/{dept}/{team}/{project}/{user}/finetuning/datasets/{dataset}/checkpoints/{job}/{job_id}/{stage}/{type}/{file}
+
+        Args:
+            department_name: Department (e.g., 'Technology')
+            team_name: Team (e.g., 'Backend Development')
+            project_name: Project (e.g., 'global', 'ChatBot RAG')
+            username: User's username (e.g., 'admin')
+            dataset_name: Dataset name (e.g., 'story8', 'cloudsync-qa')
+            job_name: Job name (e.g., 'qwen-story-job')
+            job_id: Unique job ID (UUID)
+            checkpoint_stage: Stage ('final', 'epoch-1', 'epoch-2', 'best')
+            model_type: Type ('adapter_model', 'merged_model')
+            filename: Specific file name (empty for directory path)
+
+        Returns:
+            Full MinIO path string
+
+        Examples:
+            >>> build_finetuning_checkpoint_with_dataset(
+            ...     department_name='Technology',
+            ...     team_name='Backend Development',
+            ...     project_name='global',
+            ...     username='admin',
+            ...     dataset_name='story8',
+            ...     job_name='qwen-story-job',
+            ...     job_id='c4ad0963-b194-4f85-b816-3fd0fdaaff9d',
+            ...     checkpoint_stage='final',
+            ...     model_type='merged_model',
+            ...     filename='model.safetensors'
+            ... )
+            'documents/technology/backend-development/global/admin/finetuning/datasets/story8/checkpoints/qwen-story-job/c4ad0963-b194-4f85-b816-3fd0fdaaff9d/final/merged_model/model.safetensors'
+        """
+        # Sanitize components
+        sanitized_dept = MinIOPathBuilder.sanitize(department_name)
+        sanitized_team = MinIOPathBuilder.sanitize(team_name)
+        sanitized_project = MinIOPathBuilder.sanitize(project_name)
+        sanitized_username = MinIOPathBuilder.sanitize(username)
+        sanitized_dataset = MinIOPathBuilder.sanitize(dataset_name)
+        sanitized_job = MinIOPathBuilder.sanitize(job_name)
+
+        # Build path: documents/{dept}/{team}/{project}/{user}/finetuning/datasets/{dataset}/checkpoints/{job}/{job_id}/{stage}/{type}
+        path = (
+            f"documents/{sanitized_dept}/{sanitized_team}/{sanitized_project}/"
+            f"{sanitized_username}/finetuning/datasets/{sanitized_dataset}/"
+            f"checkpoints/{sanitized_job}/{job_id}/{checkpoint_stage}/{model_type}"
+        )
+
+        if filename:
+            path += f"/{filename}"
+
+        logger.debug(f"Built dataset-linked checkpoint path: {path}")
+        return path
 
     @staticmethod
     def parse_path(minio_path: str) -> PathComponents:

@@ -1369,20 +1369,19 @@ class DocumentService:
             from app.models.database import Document
             import io
 
-            # Get department and team names from database
+            # Get department and team names from USER (not project)
             dept_name, team_name = await self._get_dept_team_names(
-                department_id=project_dict.get('department_id'),
-                team_id=project_dict.get('team_id'),
+                department_id=user_dict.get('department_id'),
+                team_id=user_dict.get('team_id'),
                 db=db
             )
 
-            # Build hierarchical MinIO path
+            # Build hierarchical MinIO path (no role prefix)
             minio_path = MinIOPathBuilder.build_document_path(
-                role=user_dict['role'],
                 department=dept_name,
                 team=team_name,
-                username=user_dict['username'],
                 project_name=project_dict['name'],
+                username=user_dict['username'],
                 filename=filename,
                 folder=folder
             )

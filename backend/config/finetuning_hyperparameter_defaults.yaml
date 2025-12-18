@@ -1,0 +1,400 @@
+# Fine-Tuning Hyperparameter Defaults Configuration
+# This file defines default values, ranges, and presets for all training hyperparameters
+# Used by UI to generate sliders and validation
+
+version: "1.0"
+updated: "2025-12-17"
+
+# ===========================================
+# HYPERPARAMETER DEFINITIONS
+# ===========================================
+
+hyperparameters:
+  # Training Duration
+  num_epochs:
+    type: integer
+    default: 3
+    min: 1
+    max: 10
+    step: 1
+    description: "Number of training epochs"
+    tooltip: "More epochs = better performance but longer training time"
+    ui_type: slider
+
+  # Batch Size
+  batch_size:
+    type: integer
+    default: 4
+    min: 1
+    max: 32
+    step: 1
+    description: "Training batch size"
+    tooltip: "Larger batch = faster training but more GPU memory"
+    ui_type: slider
+
+  # Learning Rate
+  learning_rate:
+    type: float
+    default: 2.0e-4
+    min: 1.0e-6
+    max: 1.0e-3
+    step: 1.0e-5
+    description: "Learning rate"
+    tooltip: "Higher = faster learning but less stable"
+    ui_type: slider
+    display_format: "scientific"  # Show as 2e-4 not 0.0002
+
+  # Gradient Accumulation
+  gradient_accumulation_steps:
+    type: integer
+    default: 1
+    min: 1
+    max: 16
+    step: 1
+    description: "Gradient accumulation steps"
+    tooltip: "Effective batch size = batch_size * gradient_accumulation_steps"
+    ui_type: slider
+
+  # Weight Decay
+  weight_decay:
+    type: float
+    default: 0.01
+    min: 0.0
+    max: 0.1
+    step: 0.001
+    description: "Weight decay (L2 regularization)"
+    tooltip: "Prevents overfitting"
+    ui_type: slider
+
+  # Warmup Ratio
+  warmup_ratio:
+    type: float
+    default: 0.1
+    min: 0.0
+    max: 0.5
+    step: 0.05
+    description: "Learning rate warmup ratio"
+    tooltip: "Fraction of steps for warmup"
+    ui_type: slider
+
+  # Max Sequence Length
+  max_seq_length:
+    type: integer
+    default: 512
+    min: 128
+    max: 4096
+    step: 128
+    description: "Maximum sequence length"
+    tooltip: "Longer sequences need more memory"
+    ui_type: slider
+
+  # LoRA Specific Parameters
+  lora_rank:
+    type: integer
+    default: 8
+    min: 4
+    max: 64
+    step: 4
+    description: "LoRA rank (r)"
+    tooltip: "Higher rank = more parameters but better performance"
+    ui_type: slider
+    applicable_to: ["PEFT"]
+
+  lora_alpha:
+    type: integer
+    default: 16
+    min: 8
+    max: 128
+    step: 8
+    description: "LoRA alpha scaling"
+    tooltip: "Typically 2x the rank"
+    ui_type: slider
+    applicable_to: ["PEFT"]
+
+  lora_dropout:
+    type: float
+    default: 0.05
+    min: 0.0
+    max: 0.3
+    step: 0.05
+    description: "LoRA dropout"
+    tooltip: "Regularization for LoRA layers"
+    ui_type: slider
+    applicable_to: ["PEFT"]
+
+  # Optimization
+  optimizer:
+    type: enum
+    default: "adamw"
+    options:
+      - value: "adamw"
+        label: "AdamW"
+        description: "Adam with weight decay"
+      - value: "adam"
+        label: "Adam"
+        description: "Standard Adam optimizer"
+      - value: "sgd"
+        label: "SGD"
+        description: "Stochastic gradient descent"
+      - value: "adafactor"
+        label: "Adafactor"
+        description: "Memory-efficient optimizer"
+    description: "Optimizer algorithm"
+    ui_type: dropdown
+
+  # Learning Rate Scheduler
+  lr_scheduler_type:
+    type: enum
+    default: "cosine"
+    options:
+      - value: "linear"
+        label: "Linear"
+        description: "Linear decay"
+      - value: "cosine"
+        label: "Cosine"
+        description: "Cosine annealing"
+      - value: "constant"
+        label: "Constant"
+        description: "No decay"
+      - value: "polynomial"
+        label: "Polynomial"
+        description: "Polynomial decay"
+    description: "Learning rate schedule"
+    ui_type: dropdown
+
+  # Mixed Precision
+  fp16:
+    type: boolean
+    default: true
+    description: "Use FP16 mixed precision"
+    tooltip: "Faster training, less memory, slight accuracy loss"
+    ui_type: checkbox
+
+  bf16:
+    type: boolean
+    default: false
+    description: "Use BF16 mixed precision"
+    tooltip: "Better than FP16 for newer GPUs (A100, RTX 40-series)"
+    ui_type: checkbox
+
+  # Gradient Clipping
+  max_grad_norm:
+    type: float
+    default: 1.0
+    min: 0.1
+    max: 5.0
+    step: 0.1
+    description: "Max gradient norm"
+    tooltip: "Prevents exploding gradients"
+    ui_type: slider
+
+  # Evaluation
+  eval_steps:
+    type: integer
+    default: 100
+    min: 10
+    max: 1000
+    step: 10
+    description: "Steps between evaluations"
+    tooltip: "More frequent = better monitoring but slower"
+    ui_type: slider
+
+  # Checkpointing
+  save_steps:
+    type: integer
+    default: 500
+    min: 50
+    max: 2000
+    step: 50
+    description: "Steps between checkpoints"
+    tooltip: "More frequent = more storage used"
+    ui_type: slider
+
+  save_total_limit:
+    type: integer
+    default: 3
+    min: 1
+    max: 10
+    step: 1
+    description: "Max checkpoints to keep"
+    tooltip: "Older checkpoints deleted automatically"
+    ui_type: slider
+
+  # GPU Configuration
+  gpu_count:
+    type: integer
+    default: 1
+    min: 0
+    max: 8
+    step: 1
+    description: "Number of GPUs"
+    tooltip: "Automatically detected from hardware"
+    ui_type: slider
+
+  min_gpu_memory_gb:
+    type: float
+    default: 12.0
+    min: 4.0
+    max: 80.0
+    step: 0.5
+    description: "Minimum GPU memory (GB)"
+    tooltip: "Required free memory per GPU"
+    ui_type: slider
+
+  max_memory_gb:
+    type: float
+    default: 16.0
+    min: 4.0
+    max: 80.0
+    step: 0.5
+    description: "Maximum GPU memory (GB)"
+    tooltip: "Memory limit per GPU"
+    ui_type: slider
+
+# ===========================================
+# PRESET CONFIGURATIONS
+# ===========================================
+
+presets:
+  # Quick Test (Fast, low quality)
+  quick_test:
+    name: "Quick Test"
+    description: "Fast training for testing (not production-ready)"
+    icon: "⚡"
+    hyperparameters:
+      num_epochs: 1
+      batch_size: 2
+      learning_rate: 5.0e-4
+      max_seq_length: 256
+      lora_rank: 4
+      eval_steps: 50
+      save_steps: 100
+
+  # Small Model (7B parameters)
+  small_model:
+    name: "Small Model (< 7B)"
+    description: "Optimal settings for 7B models (Mistral, Llama-2-7B)"
+    icon: "📱"
+    hardware_requirements:
+      min_gpu_memory_gb: 6.0
+      recommended_gpu: "RTX 3060 12GB or better"
+    hyperparameters:
+      num_epochs: 3
+      batch_size: 4
+      learning_rate: 2.0e-4
+      gradient_accumulation_steps: 2
+      max_seq_length: 512
+      lora_rank: 8
+      lora_alpha: 16
+      weight_decay: 0.01
+      fp16: true
+
+  # Medium Model (7B-13B parameters)
+  medium_model:
+    name: "Medium Model (7B-13B)"
+    description: "Settings for 13B models (Llama-2-13B, Vicuna-13B)"
+    icon: "💻"
+    hardware_requirements:
+      min_gpu_memory_gb: 12.0
+      recommended_gpu: "RTX 3090 24GB or A5000"
+    hyperparameters:
+      num_epochs: 3
+      batch_size: 2
+      learning_rate: 1.5e-4
+      gradient_accumulation_steps: 4
+      max_seq_length: 1024
+      lora_rank: 16
+      lora_alpha: 32
+      weight_decay: 0.02
+      fp16: true
+
+  # Large Model (13B+ parameters)
+  large_model:
+    name: "Large Model (13B+)"
+    description: "Settings for 33B+ models (Llama-2-70B, GPT-NeoX-20B)"
+    icon: "🖥️"
+    hardware_requirements:
+      min_gpu_memory_gb: 24.0
+      recommended_gpu: "A100 40GB or H100"
+    hyperparameters:
+      num_epochs: 2
+      batch_size: 1
+      learning_rate: 1.0e-4
+      gradient_accumulation_steps: 8
+      max_seq_length: 2048
+      lora_rank: 32
+      lora_alpha: 64
+      weight_decay: 0.03
+      bf16: true  # Better for large models
+
+  # High Quality (Longer training)
+  high_quality:
+    name: "High Quality"
+    description: "Extended training for production models"
+    icon: "⭐"
+    hyperparameters:
+      num_epochs: 5
+      batch_size: 4
+      learning_rate: 1.5e-4
+      gradient_accumulation_steps: 4
+      max_seq_length: 1024
+      lora_rank: 16
+      lora_alpha: 32
+      weight_decay: 0.02
+      warmup_ratio: 0.1
+      eval_steps: 50
+      save_steps: 250
+
+  # Memory Efficient (Low VRAM)
+  memory_efficient:
+    name: "Memory Efficient"
+    description: "Minimal memory usage for GPUs with <8GB VRAM"
+    icon: "💾"
+    hardware_requirements:
+      min_gpu_memory_gb: 4.0
+      recommended_gpu: "RTX 3060 Ti 8GB"
+    hyperparameters:
+      num_epochs: 3
+      batch_size: 1
+      learning_rate: 2.0e-4
+      gradient_accumulation_steps: 8
+      max_seq_length: 256
+      lora_rank: 4
+      lora_alpha: 8
+      optimizer: "adafactor"  # Memory-efficient
+      fp16: true
+
+# ===========================================
+# VALIDATION RULES
+# ===========================================
+
+validation:
+  # Batch size should be power of 2 for optimal performance
+  batch_size:
+    - rule: "power_of_2"
+      message: "Batch size should be power of 2 (1, 2, 4, 8, 16, 32) for optimal performance"
+      severity: "warning"
+
+  # LoRA alpha typically 2x rank
+  lora_alpha:
+    - rule: "lambda: lora_alpha >= lora_rank * 2"
+      message: "LoRA alpha is typically 2x the rank"
+      severity: "info"
+
+  # FP16 and BF16 mutually exclusive
+  mixed_precision:
+    - rule: "not (fp16 and bf16)"
+      message: "Cannot use both FP16 and BF16 simultaneously"
+      severity: "error"
+
+  # Memory requirements
+  gpu_memory:
+    - rule: "min_gpu_memory_gb <= max_memory_gb"
+      message: "Minimum memory cannot exceed maximum memory"
+      severity: "error"
+
+  # Effective batch size warning
+  effective_batch_size:
+    - rule: "batch_size * gradient_accumulation_steps >= 4"
+      message: "Effective batch size < 4 may cause training instability"
+      severity: "warning"
