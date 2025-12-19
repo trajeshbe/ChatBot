@@ -14,6 +14,7 @@ import base64
 from typing import Dict, Any, Optional
 from pathlib import Path
 import httpx
+from app.services.gpu_resource_manager import get_gpu_manager
 
 logger = logging.getLogger(__name__)
 
@@ -85,12 +86,16 @@ class VisionService:
                 # Handle Ollama models (use UI-selected model directly)
                 else:
                     logger.info(f"🎯 Using UI-selected Ollama vision model: {model_id}")
-                    response = await self._call_ollama_vision(
-                        model=model_id,  # Use UI-selected model
-                        prompt=prompt,
-                        image_data=image_data,
-                        allow_fallback=allow_fallback
-                    )
+
+                    # 🆕 Use GPU resource manager for automatic cleanup
+                    gpu_manager = get_gpu_manager()
+                    async with gpu_manager.gpu_task(model_id, "vision"):
+                        response = await self._call_ollama_vision(
+                            model=model_id,  # Use UI-selected model
+                            prompt=prompt,
+                            image_data=image_data,
+                            allow_fallback=allow_fallback
+                        )
 
                     extracted_text = response.get("response", "")
 
@@ -108,12 +113,15 @@ class VisionService:
                     }
 
             # Fallback to default Ollama vision model if no model_id provided
-            response = await self._call_ollama_vision(
-                model=self.vision_model,  # Use default only if no UI selection
-                prompt=prompt,
-                image_data=image_data,
-                allow_fallback=allow_fallback
-            )
+            # 🆕 Use GPU resource manager for automatic cleanup
+            gpu_manager = get_gpu_manager()
+            async with gpu_manager.gpu_task(self.vision_model, "vision"):
+                response = await self._call_ollama_vision(
+                    model=self.vision_model,  # Use default only if no UI selection
+                    prompt=prompt,
+                    image_data=image_data,
+                    allow_fallback=allow_fallback
+                )
 
             extracted_text = response.get("response", "")
 

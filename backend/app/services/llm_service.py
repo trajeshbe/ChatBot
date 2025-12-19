@@ -1049,7 +1049,22 @@ class LLMService:
             model_id = self._default_model_id
             logger.info(f"🎯 No model specified, using default: {model_id}")
 
+        # Strip "ollama/" prefix if present (chat UI sends "ollama/model-name")
+        if model_id and model_id.startswith("ollama/"):
+            original_id = model_id
+            model_id = model_id.replace("ollama/", "")
+            logger.info(f"🔧 Stripped ollama prefix: {original_id} -> {model_id}")
+
         model_info = self.model_registry.get_model(model_id)
+
+        # If not found and doesn't have :latest tag, try adding it (Ollama models default to :latest)
+        if not model_info and not ":" in model_id:
+            model_id_with_tag = f"{model_id}:latest"
+            model_info = self.model_registry.get_model(model_id_with_tag)
+            if model_info:
+                logger.info(f"🔧 Found model with :latest tag: {model_id} -> {model_id_with_tag}")
+                model_id = model_id_with_tag
+
         if not model_info:
             yield {
                 "type": "error",
@@ -1132,6 +1147,9 @@ class LLMService:
         Returns:
             Dict with content, model, tokens, cost
         """
+        # Import model registry classes at function start to ensure they're in scope
+        from app.models.model_registry import ModelInfo, ModelProvider, ModelType
+
         # DEBUG: Log entry to this method
         logger.info(f"🚀 generate() called with model_id={model_id}, prompt_len={len(prompt)}")
 
@@ -1152,9 +1170,59 @@ class LLMService:
         else:
             logger.info(f"🎯 Model requested: {model_id}")
 
+        # Strip "ollama/" prefix if present (chat UI sends "ollama/model-name")
+        if model_id and model_id.startswith("ollama/"):
+            original_id = model_id
+            model_id = model_id.replace("ollama/", "")
+            logger.info(f"🔧 Stripped ollama prefix: {original_id} -> {model_id}")
+
         model_info = self.model_registry.get_model(model_id)
+
+        # If not found and doesn't have :latest tag, try adding it (Ollama models default to :latest)
+        if not model_info and not ":" in model_id:
+            model_id_with_tag = f"{model_id}:latest"
+            model_info = self.model_registry.get_model(model_id_with_tag)
+            if model_info:
+                logger.info(f"🔧 Found model with :latest tag: {model_id} -> {model_id_with_tag}")
+                model_id = model_id_with_tag
+
+        # If still not found, check if it exists in Ollama dynamically (for fine-tuned models)
         if not model_info:
-            logger.error(f"❌ Model not found in registry: {model_id}")
+            logger.info(f"🔍 Model not in registry, checking Ollama API for: {model_id}")
+            try:
+                ollama_models = await self._get_available_ollama_models()
+                # Check both with and without :latest tag
+                model_names_to_check = [model_id]
+                if not ":" in model_id:
+                    model_names_to_check.append(f"{model_id}:latest")
+
+                for ollama_model in ollama_models:
+                    if ollama_model["name"] in model_names_to_check:
+                        logger.info(f"✅ Found model in Ollama: {ollama_model['name']} ({ollama_model['size_gb']:.2f} GB)")
+                        # Create a dynamic ModelInfo for this Ollama model
+                        model_info = ModelInfo(
+                            id=ollama_model["name"],
+                            name=f"{ollama_model['name']} (Fine-tuned)",
+                            provider=ModelProvider.OLLAMA,
+                            model_type=ModelType.LOCAL_GPU,  # Assume GPU for fine-tuned models
+                            model_path=ollama_model["name"],
+                            context_length=32768,
+                            cost_per_1k_tokens=0.0,
+                            requires_gpu=True,
+                            min_gpu_memory_gb=ollama_model["size_gb"],
+                            description=f"Fine-tuned model deployed to Ollama ({ollama_model['size_gb']:.2f} GB)",
+                            recommended=False,
+                            available=True
+                        )
+                        model_id = ollama_model["name"]
+                        break
+            except Exception as e:
+                logger.error(f"Error checking Ollama API: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+
+        if not model_info:
+            logger.error(f"❌ Model not found in registry or Ollama: {model_id}")
             raise ValueError(f"Model not found: {model_id}")
 
         if not model_info.available:

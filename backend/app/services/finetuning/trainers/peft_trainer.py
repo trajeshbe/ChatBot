@@ -206,24 +206,39 @@ def main():
             try:
                 from transformers import AutoModelForCausalLM
                 from peft import PeftModel
+                import gc
 
                 # Load base model without quantization (required for merging)
                 base_model_path = config.get("base_model")
-                logger.info(f"Loading base model: {base_model_path}")
+                logger.info(f"Loading base model for merge: {base_model_path}")
+
+                # CRITICAL: Load in FP16/BF16 for merge (not quantized)
+                # Use low_cpu_mem_usage to reduce memory footprint
                 base_model_full = AutoModelForCausalLM.from_pretrained(
                     base_model_path,
                     device_map="auto",
                     trust_remote_code=True,
-                    torch_dtype=torch.bfloat16
+                    torch_dtype=torch.bfloat16,
+                    low_cpu_mem_usage=True
                 )
 
                 # Load PEFT model with adapters
                 logger.info(f"Loading adapters from {adapter_dir}")
-                peft_model = PeftModel.from_pretrained(base_model_full, str(adapter_dir))
+                peft_model = PeftModel.from_pretrained(
+                    base_model_full,
+                    str(adapter_dir),
+                    is_trainable=False  # Important: set to False for inference/merge
+                )
 
                 # Merge and unload - THIS IS THE KEY STEP
                 logger.info("Merging adapters into base model...")
                 merged_model = peft_model.merge_and_unload()
+
+                # Clear memory
+                del peft_model
+                del base_model_full
+                gc.collect()
+                torch.cuda.empty_cache()
 
                 # Save merged model
                 merged_dir = output_dir / "merged_model"

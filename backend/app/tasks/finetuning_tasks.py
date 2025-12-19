@@ -189,6 +189,52 @@ def update_job_progress(
         db.rollback()
 
 
+def update_training_stage(
+    db: Session,
+    job_id: UUID,
+    stage: str,
+    stage_details: Optional[Dict[str, Any]] = None
+):
+    """
+    Update the current training pipeline stage
+
+    Args:
+        db: Database session
+        job_id: Job ID
+        stage: New stage (queued, setup, tokenizer_load, model_download, model_load, dataset_prep, training, checkpoint_save, completed, failed)
+        stage_details: Stage-specific metadata (e.g., download progress, current file, substep info)
+    """
+    try:
+        job = db.query(FineTuningJob).filter(
+            FineTuningJob.id == job_id
+        ).first()
+
+        if not job:
+            logger.error(f"Job {job_id} not found for stage update")
+            return
+
+        # Mark previous stage as completed
+        if job.training_stage != stage:
+            job.stage_completed_at = datetime.utcnow()
+
+        # Update to new stage
+        job.training_stage = stage
+        job.stage_started_at = datetime.utcnow()
+
+        # Update stage details if provided
+        if stage_details is not None:
+            job.stage_details = stage_details
+
+        db.commit()
+        logger.info(f"📍 Job {job_id} stage updated: {stage}")
+        if stage_details:
+            logger.debug(f"   Stage details: {stage_details}")
+
+    except Exception as e:
+        logger.error(f"Failed to update training stage: {e}")
+        db.rollback()
+
+
 def save_training_metric(
     db: Session,
     job_id: UUID,
@@ -214,6 +260,220 @@ def save_training_metric(
     except Exception as e:
         logger.error(f"Failed to save training metric: {e}")
         db.rollback()
+
+
+def trigger_automatic_evaluation(
+    db: Session,
+    model_id: str,
+    job: FineTuningJob,
+    num_samples: int = 50
+) -> bool:
+    """
+    Trigger automatic evaluation after model training completes
+
+    Note: Evaluation will only work if model is deployed to Ollama.
+    For now, this logs that evaluation is available but doesn't run it.
+    Full automatic evaluation requires either:
+    1. Auto-deploy to Ollama after training (risky - needs approval first)
+    2. Checkpoint loading for evaluation (not yet implemented)
+
+    Args:
+        db: Database session
+        model_id: UUID of the registered model
+        job: Completed FineTuningJob instance
+        num_samples: Number of samples to evaluate (default: 50 for speed)
+
+    Returns:
+        True if evaluation succeeded, False otherwise
+    """
+    try:
+        from app.models.finetuning_models import FineTunedModel, FineTuningDataset
+        from app.services.finetuning.model_evaluation_service import ModelEvaluationService
+        from minio import Minio
+        from app.core.config import settings
+        import tempfile
+        import uuid
+
+        logger.info(f"🔍 Automatic evaluation requested for model {model_id}")
+
+        # Get model
+        model = db.query(FineTunedModel).filter(
+            FineTunedModel.id == uuid.UUID(model_id)
+        ).first()
+
+        if not model:
+            logger.error(f"Model {model_id} not found for evaluation")
+            return False
+
+        # Check if model is deployed
+        if not model.ollama_model_name:
+            logger.warning(f"⏭️  Model {model.name} is not deployed to Ollama yet.")
+            logger.warning(f"   Automatic evaluation skipped - will be available after deployment.")
+            logger.warning(f"   User can manually evaluate from Evaluations tab after deploying.")
+            return False
+
+        # Get dataset
+        dataset = db.query(FineTuningDataset).filter(
+            FineTuningDataset.id == job.dataset_id
+        ).first()
+
+        if not dataset:
+            logger.error(f"Dataset not found for evaluation")
+            return False
+
+        logger.info(f"📥 Downloading test dataset from MinIO: {dataset.minio_path}")
+
+        # Download dataset from MinIO to temp location
+        minio_client = Minio(
+            endpoint=settings.MINIO_ENDPOINT.replace("http://", "").replace("https://", ""),
+            access_key=settings.MINIO_ACCESS_KEY,
+            secret_key=settings.MINIO_SECRET_KEY,
+            secure=settings.MINIO_ENDPOINT.startswith("https://")
+        )
+
+        # Download dataset
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp_file:
+            tmp_path = tmp_file.name
+
+        # Synchronous call wrapped for async environment
+        def download_sync():
+            minio_client.fget_object(
+                bucket_name="documents",
+                object_name=dataset.minio_path,
+                file_path=tmp_path
+            )
+
+        # Run download in executor
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            executor.submit(download_sync).result()
+
+        logger.info(f"✅ Dataset downloaded to {tmp_path}")
+
+        # Run evaluation
+        logger.info(f"🧪 Running automatic evaluation with {num_samples} samples...")
+
+        eval_service = ModelEvaluationService()
+
+        # Wrap async evaluation in event loop
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            evaluation_result = loop.run_until_complete(
+                eval_service.evaluate_model(
+                    model_path=model.minio_checkpoint_path or "",
+                    test_dataset_path=tmp_path,
+                    task_type=job.training_objective or "text-generation",
+                    num_samples=num_samples,
+                    ollama_model_name=model.ollama_model_name
+                )
+            )
+        finally:
+            loop.close()
+
+        # Store metrics in model
+        model.eval_metrics = evaluation_result.get("metrics", {})
+        db.commit()
+
+        logger.info(f"✅ Automatic evaluation complete for model {model.name}")
+        logger.info(f"   Metrics: {list(evaluation_result.get('metrics', {}).keys())}")
+
+        # Cleanup temp file
+        import os
+        try:
+            os.remove(tmp_path)
+        except:
+            pass
+
+        return True
+
+    except Exception as e:
+        logger.error(f"⚠️  Automatic evaluation failed: {e}")
+        logger.error(traceback.format_exc())
+        # Don't fail the training job if evaluation fails
+        return False
+
+
+def register_finetuned_model(
+    db: Session,
+    job: FineTuningJob,
+    checkpoint_path: str
+) -> Optional[str]:
+    """
+    Automatically register a fine-tuned model after training completes
+
+    This creates an entry in the finetuned_models table with:
+    - Model metadata (name, version, description)
+    - Link to training job
+    - Checkpoint path
+    - Training hyperparameters
+
+    Args:
+        db: Database session
+        job: Completed FineTuningJob instance
+        checkpoint_path: MinIO path to model checkpoints
+
+    Returns:
+        Model ID as string, or None if registration failed
+    """
+    try:
+        from app.models.finetuning_models import FineTunedModel
+        import uuid
+
+        # Generate model name from job name
+        model_name = f"{job.name}_model"
+        version = "v1.0.0"
+
+        # Check if model already exists for this job
+        existing_model = db.query(FineTunedModel).filter(
+            FineTunedModel.job_id == job.id
+        ).first()
+
+        if existing_model:
+            logger.info(f"Model already registered for job {job.id}: {existing_model.id}")
+            return str(existing_model.id)
+
+        # Create new model record
+        model = FineTunedModel(
+            id=uuid.uuid4(),
+            name=model_name,
+            version=version,
+            description=f"Fine-tuned {job.base_model} using {job.finetuning_method} for {job.training_objective}",
+            job_id=job.id,
+            base_model=job.base_model,
+            finetuning_method=job.finetuning_method,
+            minio_checkpoint_path=checkpoint_path,
+            adapter_config=job.hyperparameters,  # Store PEFT/LoRA config
+            eval_metrics={
+                "final_train_loss": job.train_loss,
+                "final_eval_loss": job.eval_loss,
+                "total_steps": job.total_steps,
+                "training_time_seconds": job.training_time_seconds
+            },
+            status="registered",  # Initial status
+            created_by=job.created_by,
+            project_id=job.project_id,
+            total_inferences=0,
+            tags=[job.finetuning_method, job.training_objective]
+        )
+
+        db.add(model)
+        db.commit()
+        db.refresh(model)
+
+        logger.info(f"✅ Model registered: {model.name} (ID: {model.id}, version: {model.version})")
+        logger.info(f"   Base model: {model.base_model}")
+        logger.info(f"   Method: {model.finetuning_method}")
+        logger.info(f"   Checkpoint: {checkpoint_path}")
+
+        return str(model.id)
+
+    except Exception as e:
+        logger.error(f"Failed to register fine-tuned model: {e}")
+        logger.error(traceback.format_exc())
+        db.rollback()
+        return None
 
 
 def upload_checkpoints_to_minio(
@@ -423,6 +683,8 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
 
                 gpu_devices = asyncio.run(gpu_pool.wait_for_gpu(
                     job_id=job_id,
+                    count=gpu_count,
+                    memory_required_gb=min_memory_gb,
                     timeout_seconds=3600  # 1 hour wait
                 ))
 
@@ -444,6 +706,18 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
 
             logger.info(f"Allocated GPUs: {gpu_str} for job {job_id}")
 
+            # Update stage: Setup
+            update_training_stage(
+                db=db,
+                job_id=job_uuid,
+                stage="setup",
+                stage_details={
+                    "gpu_allocated": gpu_str,
+                    "gpu_type": job.gpu_type,
+                    "gpu_count": job.gpu_count
+                }
+            )
+
             # Get trainer script
             trainer_script = TrainerFactory.get_trainer_script(job.finetuning_method)
 
@@ -455,9 +729,9 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
                 "training_objective": job.training_objective,
                 "dataset_id": str(job.dataset_id),
                 "hyperparameters": job.hyperparameters,
-                "output_dir": f"/workspace/output/{job_id}",
-                "checkpoint_dir": f"/workspace/output/{job_id}/checkpoints",
-                "log_dir": f"/workspace/logs/{job_id}"
+                "output_dir": f"/workspace/finetuning/{job_id}/output",
+                "checkpoint_dir": f"/workspace/finetuning/{job_id}/output/checkpoints",
+                "log_dir": f"/workspace/finetuning/{job_id}/logs"
             }
 
             # Initialize sandbox manager
@@ -471,6 +745,19 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
 
             logger.info(f"Launching training container with {memory_limit}GB memory, {timeout_hours}h timeout")
 
+            # Update stage: Training
+            update_training_stage(
+                db=db,
+                job_id=job_uuid,
+                stage="training",
+                stage_details={
+                    "base_model": job.base_model,
+                    "method": job.finetuning_method,
+                    "epochs": job.hyperparameters.get("num_epochs", 3),
+                    "batch_size": job.hyperparameters.get("batch_size", 4)
+                }
+            )
+
             # Execute training
             result = asyncio.run(sandbox_manager.execute_training(
                 job_id=job_id,
@@ -483,6 +770,17 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
 
             logger.info(f"Training completed. Uploading checkpoints to MinIO...")
 
+            # Update stage: Checkpoint Save
+            update_training_stage(
+                db=db,
+                job_id=job_uuid,
+                stage="checkpoint_save",
+                stage_details={
+                    "final_loss": result.get("final_loss"),
+                    "total_steps": result.get("total_steps")
+                }
+            )
+
             # Fetch dataset name for path linkage
             dataset = db.query(FineTuningDataset).filter(
                 FineTuningDataset.id == job.dataset_id
@@ -491,28 +789,21 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
 
             # Fetch user's organizational info (department, team, project) from database
             user = db.query(User).filter(User.id == job.created_by).first() if job.created_by else None
+            username = user.username if user else "admin"
 
-            # Query department name
-            department_name = "Technology"  # Default
-            if user and user.department_id:
-                from app.models.database_enhanced import Department
+            # ========== P1 FIX: Use org context from job record (not user query) ==========
+            # Department name - use from job record if available, otherwise fallback to user query
+            department_name = job.department if job.department else "Technology"
+            if not job.department and user and user.department_id:
+                from app.models.rbac import Department
                 dept = db.query(Department).filter(Department.id == user.department_id).first()
                 if dept:
                     department_name = dept.name
 
-            # Query team name from user_teams table
-            team_name = "Backend Development"  # Default
-            if user:
-                from app.models.database_enhanced import UserTeam, Team
-                user_team = db.query(UserTeam).filter(UserTeam.user_id == user.id).first()
-                if user_team:
-                    team = db.query(Team).filter(Team.id == user_team.team_id).first()
-                    if team:
-                        team_name = team.name
+            # Team name - use from job record if available, otherwise fallback
+            team_name = job.team if job.team else "Backend Development"
 
-            username = user.username if user else "admin"
-
-            # Query project name
+            # Project name - use from job record
             project_name = "global"  # Default
             if job.project_id:
                 from app.models.database_enhanced import Project
@@ -520,8 +811,13 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
                 if project:
                     project_name = project.name
 
+            logger.info(f"📂 MinIO path context for job {job.name}: dept={department_name}, team={team_name}, project={project_name}, user={username}")
+
             # Upload checkpoints to MinIO using dataset-linked organizational path structure
-            checkpoint_dir = training_config["checkpoint_dir"]
+            # Use actual checkpoint path from training result (not config)
+            checkpoint_dir = result.get("checkpoint_path") or training_config["output_dir"]
+            logger.info(f"Checkpoint directory for upload: {checkpoint_dir}")
+
             minio_checkpoint_path = upload_checkpoints_to_minio(
                 job_id=job_id,
                 job_name=job.name,
@@ -550,8 +846,47 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
             job.total_steps = result.get("total_steps")
             db.commit()
 
+            # Update stage: Completed
+            update_training_stage(
+                db=db,
+                job_id=job_uuid,
+                stage="completed",
+                stage_details={
+                    "checkpoint_path": minio_checkpoint_path,
+                    "duration_seconds": (job.training_end_time - job.training_start_time).total_seconds(),
+                    "final_loss": job.train_loss,
+                    "eval_loss": job.eval_loss
+                }
+            )
+
             # Update Prometheus metrics
             update_prometheus_metrics(job)
+
+            # Automatically register the fine-tuned model
+            model_id = None
+            if minio_checkpoint_path:
+                model_id = register_finetuned_model(
+                    db=db,
+                    job=job,
+                    checkpoint_path=minio_checkpoint_path
+                )
+                if model_id:
+                    logger.info(f"📦 Model registered with ID: {model_id}")
+
+                    # Trigger automatic evaluation (if model is deployed)
+                    logger.info(f"🔍 Attempting automatic evaluation...")
+                    evaluation_success = trigger_automatic_evaluation(
+                        db=db,
+                        model_id=model_id,
+                        job=job,
+                        num_samples=50  # Quick evaluation with 50 samples
+                    )
+                    if evaluation_success:
+                        logger.info(f"✅ Automatic evaluation completed successfully")
+                    else:
+                        logger.info(f"⏭️  Automatic evaluation skipped (model not deployed yet)")
+                else:
+                    logger.warning("Model registration failed, but training was successful")
 
             logger.info(f"Job {job_id} completed successfully")
             logger.info(f"Checkpoint saved to: {job.minio_checkpoint_path}")
@@ -560,6 +895,7 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
                 "job_id": job_id,
                 "status": "completed",
                 "checkpoint_path": job.minio_checkpoint_path,
+                "model_id": model_id,  # Include registered model ID
                 "final_loss": job.train_loss,
                 "duration_seconds": (job.training_end_time - job.training_start_time).total_seconds()
             }
@@ -579,6 +915,17 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
                 job.training_end_time = datetime.utcnow()
                 db.commit()
 
+                # Update stage: Failed
+                update_training_stage(
+                    db=db,
+                    job_id=job_uuid,
+                    stage="failed",
+                    stage_details={
+                        "error": str(e),
+                        "failed_at_stage": job.training_stage
+                    }
+                )
+
                 # Update Prometheus metrics
                 update_prometheus_metrics(job)
 
@@ -594,13 +941,11 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
             except Exception as e:
                 logger.error(f"Failed to release GPU: {e}")
 
-        # Cleanup: Remove sandbox
-        if sandbox_manager:
-            try:
-                asyncio.run(sandbox_manager.cleanup(job_id))
-                logger.info(f"Cleaned up sandbox for job {job_id}")
-            except Exception as e:
-                logger.error(f"Failed to cleanup sandbox: {e}")
+        # DON'T cleanup workspace immediately - keep it for deployment
+        # Workspace will be cleaned up by scheduled cleanup_old_workspaces task after 7 days
+        # This allows deployment to use the merged model directly from workspace without re-downloading from MinIO
+        logger.info(f"✅ Training complete. Workspace preserved at /workspace/finetuning/{job_id} for deployment")
+        logger.info(f"   Workspace will be auto-cleaned after 7 days by scheduled task")
 
 
 @celery_app.task(name="app.tasks.finetuning_tasks.cancel_finetuning_job")

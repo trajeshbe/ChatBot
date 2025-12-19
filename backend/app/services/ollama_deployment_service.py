@@ -32,7 +32,7 @@ class OllamaDeploymentService:
 
         Args:
             model_name: Name for the deployed model in Ollama
-            model_path: Path to the fine-tuned model weights (GGUF or safetensors)
+            model_path: Path to the fine-tuned model weights (minio:// URL, local path, or GGUF)
             base_model: Base model to use (e.g., llama2, mistral)
             parameters: Optional model parameters (temperature, top_p, etc.)
 
@@ -40,10 +40,40 @@ class OllamaDeploymentService:
             Deployment result with status and details
         """
         try:
+            # OPTIMIZED: Try workspace first, then download from MinIO as fallback
+            local_model_path = model_path
+            if model_path.startswith("minio://"):
+                # Extract job_id from MinIO path to check workspace
+                # Format: minio://documents/.../job_id/...
+                workspace_path = None
+                try:
+                    import re
+                    job_id_match = re.search(r'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})', model_path)
+                    if job_id_match:
+                        job_id = job_id_match.group(1)
+                        # Check if merged model exists in workspace
+                        workspace_merged = f"/workspace/finetuning/{job_id}/output/merged_model"
+                        if os.path.exists(workspace_merged):
+                            logger.info(f"✅ Using merged model from workspace: {workspace_merged}")
+                            logger.info(f"   (Skipping MinIO download for efficiency)")
+                            local_model_path = workspace_merged
+                        else:
+                            logger.warning(f"⚠️  Workspace not found at {workspace_merged}, falling back to MinIO download")
+                            local_model_path = await self._download_from_minio(model_path)
+                    else:
+                        logger.warning("⚠️  Could not extract job_id from MinIO path, falling back to MinIO download")
+                        local_model_path = await self._download_from_minio(model_path)
+                except Exception as e:
+                    logger.error(f"Error checking workspace: {e}, falling back to MinIO download")
+                    local_model_path = await self._download_from_minio(model_path)
+
+                if not local_model_path:
+                    raise RuntimeError(f"Failed to locate model (checked workspace and MinIO): {model_path}")
+
             # Generate Modelfile
             modelfile_path = await self._generate_modelfile(
                 model_name=model_name,
-                model_path=model_path,
+                model_path=local_model_path,
                 base_model=base_model,
                 parameters=parameters or {}
             )
@@ -67,6 +97,90 @@ class OllamaDeploymentService:
                 "status": "failed",
                 "error": str(e)
             }
+
+    async def _download_from_minio(self, minio_url: str) -> Optional[str]:
+        """
+        Download model checkpoints from MinIO to local temporary directory
+
+        Args:
+            minio_url: MinIO URL in format minio://bucket/path/to/checkpoint
+
+        Returns:
+            Local path to downloaded checkpoint directory, or None if failed
+        """
+        try:
+            from minio import Minio
+            from app.core.config import settings
+            import tempfile
+            import asyncio
+
+            # Parse MinIO URL: minio://bucket/path/to/file
+            if not minio_url.startswith("minio://"):
+                logger.error(f"Invalid MinIO URL: {minio_url}")
+                return None
+
+            # Extract bucket and object path
+            url_parts = minio_url.replace("minio://", "").split("/", 1)
+            if len(url_parts) != 2:
+                logger.error(f"Invalid MinIO URL format: {minio_url}")
+                return None
+
+            bucket_name, object_prefix = url_parts
+
+            # Initialize MinIO client
+            minio_client = Minio(
+                endpoint=settings.MINIO_ENDPOINT.replace("http://", "").replace("https://", ""),
+                access_key=settings.MINIO_ACCESS_KEY,
+                secret_key=settings.MINIO_SECRET_KEY,
+                secure=settings.MINIO_ENDPOINT.startswith("https://")
+            )
+
+            # Create temporary directory for checkpoints
+            temp_dir = Path(tempfile.mkdtemp(prefix="ollama_model_"))
+            logger.info(f"Downloading from MinIO to {temp_dir}")
+
+            # List all objects with the prefix (to get all checkpoint files)
+            objects = minio_client.list_objects(bucket_name, prefix=object_prefix, recursive=True)
+
+            downloaded_files = []
+            for obj in objects:
+                # Skip directories
+                if obj.object_name.endswith("/"):
+                    continue
+
+                # Create local file path maintaining directory structure
+                relative_path = obj.object_name.replace(object_prefix, "").lstrip("/")
+
+                # Handle case where object_prefix is a specific file (relative_path will be empty)
+                if not relative_path:
+                    # Extract filename from the object path
+                    relative_path = Path(obj.object_name).name
+
+                local_file = temp_dir / relative_path
+                local_file.parent.mkdir(parents=True, exist_ok=True)
+
+                # Download file
+                logger.info(f"Downloading {obj.object_name} to {local_file}")
+                await asyncio.to_thread(
+                    minio_client.fget_object,
+                    bucket_name=bucket_name,
+                    object_name=obj.object_name,
+                    file_path=str(local_file)
+                )
+                downloaded_files.append(local_file)
+
+            if not downloaded_files:
+                logger.error(f"No files found at {minio_url}")
+                return None
+
+            logger.info(f"Downloaded {len(downloaded_files)} files from MinIO to {temp_dir}")
+            return str(temp_dir)
+
+        except Exception as e:
+            logger.error(f"Failed to download from MinIO: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
 
     async def _generate_modelfile(
         self,
@@ -92,6 +206,18 @@ class OllamaDeploymentService:
         if "adapter_model" in model_path and "merged_model" not in model_path:
             logger.warning(f"⚠️ Using adapter_model path - this may not work correctly. Prefer using merged_model.")
             use_adapter = True
+
+        # Keep model_path as directory - Ollama needs the whole directory with config files
+        if os.path.isdir(model_path):
+            safetensors_path = os.path.join(model_path, "model.safetensors")
+            config_path = os.path.join(model_path, "config.json")
+            if os.path.exists(safetensors_path) and os.path.exists(config_path):
+                logger.info(f"✅ Found complete HuggingFace model in directory: {model_path}")
+                logger.info(f"   - model.safetensors: {os.path.getsize(safetensors_path) / (1024**3):.2f} GB")
+                logger.info(f"   - config.json: present")
+                # Keep model_path as directory - Ollama expects directory with all model files
+            else:
+                logger.warning(f"⚠️  Directory {model_path} missing required files (model.safetensors or config.json)")
 
         if use_adapter:
             # Legacy: Try to use ADAPTER directive (may not work properly)
@@ -143,7 +269,7 @@ SYSTEM You are a helpful AI assistant.
         modelfile_path: Path
     ) -> Dict[str, Any]:
         """
-        Create model in Ollama using the Modelfile
+        Create model in Ollama using the Modelfile via HTTP API
 
         Args:
             model_name: Name for the model
@@ -153,38 +279,45 @@ SYSTEM You are a helpful AI assistant.
             Creation result
         """
         try:
-            # Execute ollama create command
-            cmd = [
-                "ollama",
-                "create",
-                model_name,
-                "-f",
-                str(modelfile_path)
-            ]
+            import httpx
 
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 minute timeout
-            )
+            # Read the Modelfile content
+            with open(modelfile_path, 'r') as f:
+                modelfile_content = f.read()
 
-            if result.returncode == 0:
-                logger.info(f"Successfully created Ollama model: {model_name}")
-                return {
-                    "success": True,
-                    "stdout": result.stdout,
-                    "stderr": result.stderr
-                }
-            else:
-                logger.error(f"Failed to create Ollama model: {result.stderr}")
-                raise RuntimeError(f"Ollama create failed: {result.stderr}")
+            # Use Ollama HTTP API to create model
+            # Note: OLLAMA_HOST can be set via environment variable
+            ollama_url = os.getenv("OLLAMA_HOST", "http://ollama:11434")
+            create_url = f"{ollama_url}/api/create"
 
-        except subprocess.TimeoutExpired:
+            logger.info(f"Creating Ollama model '{model_name}' via API at {create_url}")
+
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                response = await client.post(
+                    create_url,
+                    json={
+                        "name": model_name,
+                        "modelfile": modelfile_content
+                    },
+                    headers={"Content-Type": "application/json"}
+                )
+
+                if response.status_code == 200:
+                    logger.info(f"✅ Successfully created Ollama model: {model_name}")
+                    return {
+                        "success": True,
+                        "response": response.text
+                    }
+                else:
+                    error_msg = f"Ollama API returned {response.status_code}: {response.text}"
+                    logger.error(f"Failed to create Ollama model: {error_msg}")
+                    raise RuntimeError(error_msg)
+
+        except httpx.TimeoutException:
             logger.error(f"Timeout creating Ollama model: {model_name}")
             raise RuntimeError("Model creation timed out after 5 minutes")
         except Exception as e:
-            logger.error(f"Error executing ollama create: {e}")
+            logger.error(f"Error creating Ollama model via API: {e}", exc_info=True)
             raise
 
     async def list_deployed_models(self) -> Dict[str, Any]:

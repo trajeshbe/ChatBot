@@ -120,6 +120,12 @@ class FineTuningJob(Base):
     status = Column(String(50), default='pending')  # pending, queued, running, completed, failed, cancelled
     progress = Column(Float, default=0.0)  # 0.0 to 1.0
 
+    # Training pipeline stages
+    training_stage = Column(String(50), default='queued')  # queued, setup, tokenizer_load, model_download, model_load, dataset_prep, training, checkpoint_save, completed, failed
+    stage_details = Column(JSON, default={})  # Stage-specific metadata (download progress, current file, etc.)
+    stage_started_at = Column(DateTime(timezone=True), nullable=True)  # When current stage started
+    stage_completed_at = Column(DateTime(timezone=True), nullable=True)  # When current stage completed
+
     # Training metrics (current values)
     current_epoch = Column(Integer, nullable=True)
     current_step = Column(Integer, nullable=True)
@@ -277,6 +283,49 @@ class TrainingMetric(Base):
 
     def __repr__(self):
         return f"<TrainingMetric(job_id={self.job_id}, step={self.step}, train_loss={self.train_loss})>"
+
+
+class ModelApproval(Base):
+    """
+    Model deployment approval workflow
+
+    Tracks approval requests for deploying fine-tuned models to production.
+    Implements governance controls to ensure only reviewed models are deployed.
+
+    Workflow:
+    1. User requests deployment approval
+    2. Admin/Approver reviews model metrics and checkpoints
+    3. Admin approves or rejects with comments
+    4. Approved models can be deployed to Ollama/vLLM
+    """
+    __tablename__ = "model_approvals"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    model_id = Column(UUID(as_uuid=True), ForeignKey("finetuned_models.id", ondelete="CASCADE"), nullable=False)
+
+    # Request details
+    requested_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    requested_at = Column(DateTime(timezone=True), server_default=func.now())
+    request_reason = Column(Text, nullable=True)  # Why deployment is needed
+
+    # Approval/rejection
+    approved_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    status = Column(String(50), default="pending")  # pending, approved, rejected
+    review_comments = Column(Text, nullable=True)
+
+    # Deployment constraints (optional)
+    deployment_environment = Column(String(100), nullable=True)  # "production", "staging", "development"
+    max_concurrent_instances = Column(Integer, nullable=True)
+    resource_limits = Column(JSON, nullable=True)  # {"max_memory_gb": 16, "max_gpu_count": 1}
+
+    # Relationships
+    model = relationship("FineTunedModel", foreign_keys=[model_id])
+    requester = relationship("User", foreign_keys=[requested_by])
+    approver = relationship("User", foreign_keys=[approved_by])
+
+    def __repr__(self):
+        return f"<ModelApproval(id={self.id}, model_id={self.model_id}, status={self.status})>"
 
 
 # Helper functions for type conversion and validation

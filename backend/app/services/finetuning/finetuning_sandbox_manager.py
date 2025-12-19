@@ -123,7 +123,9 @@ class FineTuningSandboxManager(AgentSandboxManager):
         }
 
         for dir_path in dirs.values():
-            dir_path.mkdir(parents=True, exist_ok=True, mode=0o777)  # Full permissions for container access
+            dir_path.mkdir(parents=True, exist_ok=True)
+            # Explicitly set permissions to 777 for container write access
+            os.chmod(dir_path, 0o777)
 
         logger.info(f"📁 Created training workspace: {workspace_base}")
 

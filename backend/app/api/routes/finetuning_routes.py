@@ -520,9 +520,50 @@ async def create_finetuning_job(
 
     Validates dataset, merges hyperparameters with defaults,
     and optionally starts training immediately.
+
+    Now includes organizational context (department, team, project) for proper MinIO path hierarchy.
     """
     try:
+        from app.models.rbac import Department, Team
+        from app.models.database_enhanced import Project
+        from app.services.minio_path_builder import MinIOPathBuilder
+        from uuid import UUID
+
         service = FineTuningService(db)
+
+        # ========== P1 FIX: Capture Organizational Context ==========
+        # 1. Get user's department
+        dept_result = await db.execute(
+            select(Department).where(Department.id == user.department_id)
+        )
+        department = dept_result.scalar_one_or_none()
+        department_name = department.name if department else "Technology"
+
+        # 2. Get user's primary team (default to Backend Development for admin users in Technology)
+        # In production, this should query user_team_memberships or similar
+        team_result = await db.execute(
+            select(Team).where(
+                Team.department_id == user.department_id,
+                Team.name == "Backend Development"
+            )
+        )
+        team = team_result.scalar_one_or_none()
+        team_name = team.name if team else "Backend Development"
+
+        # 3. Get or default to Global project
+        effective_project_id = request.project_id
+        if not effective_project_id:
+            global_proj_result = await db.execute(
+                select(Project).where(Project.name == "Global")
+            )
+            global_project = global_proj_result.scalar_one_or_none()
+            if global_project:
+                effective_project_id = global_project.id
+            else:
+                # Fallback UUID if Global project doesn't exist
+                effective_project_id = UUID("997968df-c164-4697-90d5-3e7a01929dc2")
+
+        logger.info(f"Fine-tuning job organizational context: dept={department_name}, team={team_name}, project_id={effective_project_id}")
 
         # Create job (using correct parameter name)
         job = await service.create_job(
@@ -535,8 +576,10 @@ async def create_finetuning_job(
             quantization=request.quantization if hasattr(request, 'quantization') else "4bit",
             train_split=request.train_split if hasattr(request, 'train_split') else 0.8,
             created_by=user.id,  # Fixed: use created_by instead of user_id
-            project_id=request.project_id,
-            description=request.description if hasattr(request, 'description') else None
+            project_id=effective_project_id,
+            description=request.description if hasattr(request, 'description') else None,
+            department=department_name,
+            team=team_name
         )
 
         # Audit log
@@ -804,6 +847,11 @@ async def get_job(
             total_steps=job.total_steps,
             train_loss=job.train_loss,
             eval_loss=job.eval_loss,
+            # Pipeline stage tracking
+            training_stage=job.training_stage,
+            stage_details=job.stage_details,
+            stage_started_at=job.stage_started_at,
+            stage_completed_at=job.stage_completed_at,
             # Resource tracking
             gpu_type=job.gpu_type,
             gpu_count=job.gpu_count
@@ -1125,6 +1173,681 @@ async def get_model(
     except Exception as e:
         logger.error(f"Failed to get model: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get model: {str(e)}")
+
+
+# ============================================================================
+# MODEL APPROVAL WORKFLOW ENDPOINTS
+# ============================================================================
+
+@router.post("/models/{model_id}/request-approval")
+async def request_model_approval(
+    model_id: str,
+    request_reason: str = Query(..., description="Reason for requesting deployment approval"),
+    deployment_environment: str = Query("production", description="Target environment: production, staging, development"),
+    user: User = Depends(require_authentication),
+    _: None = Depends(RequirePermission("model_finetuning", "write")),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Request approval to deploy a fine-tuned model
+
+    This creates an approval request that admins must review before
+    the model can be deployed to Ollama/vLLM.
+    """
+    try:
+        from app.models.finetuning_models import ModelApproval
+
+        # Check if model exists
+        model_query = select(FineTunedModel).where(FineTunedModel.id == uuid.UUID(model_id))
+        model_result = await db.execute(model_query)
+        model = model_result.scalar_one_or_none()
+
+        if not model:
+            raise HTTPException(status_code=404, detail="Model not found")
+
+        # Check if there's already a pending approval
+        existing_approval_query = select(ModelApproval).where(
+            and_(
+                ModelApproval.model_id == uuid.UUID(model_id),
+                ModelApproval.status == "pending"
+            )
+        )
+        existing_result = await db.execute(existing_approval_query)
+        existing_approval = existing_result.scalar_one_or_none()
+
+        if existing_approval:
+            return {
+                "status": "approval_exists",
+                "approval_id": str(existing_approval.id),
+                "message": "An approval request is already pending for this model",
+                "requested_at": existing_approval.requested_at.isoformat()
+            }
+
+        # Create approval request
+        approval = ModelApproval(
+            id=uuid.uuid4(),
+            model_id=uuid.UUID(model_id),
+            requested_by=user.id,
+            request_reason=request_reason,
+            deployment_environment=deployment_environment,
+            status="pending"
+        )
+
+        db.add(approval)
+        await db.commit()
+        await db.refresh(approval)
+
+        # Audit log
+        await audit_service.log_action(
+            user_id=user.id,
+            action="request_model_approval",
+            details={
+                "model_id": model_id,
+                "model_name": model.name,
+                "approval_id": str(approval.id),
+                "environment": deployment_environment,
+                "reason": request_reason
+            },
+            db=db
+        )
+
+        logger.info(f"Approval requested for model {model_id} by user {user.id}")
+
+        return {
+            "status": "pending",
+            "approval_id": str(approval.id),
+            "model_id": model_id,
+            "model_name": model.name,
+            "requested_at": approval.requested_at.isoformat(),
+            "message": "Approval request created successfully. Admin review required."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to request approval: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to request approval: {str(e)}")
+
+
+@router.get("/approvals/pending")
+async def list_pending_approvals(
+    user: User = Depends(require_authentication),
+    _: None = Depends(RequireAdmin()),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    List all pending model approval requests (Admin only)
+
+    Returns models awaiting deployment approval with full details.
+    """
+    try:
+        from app.models.finetuning_models import ModelApproval
+
+        # Query pending approvals with model and job details
+        query = (
+            select(ModelApproval, FineTunedModel, FineTuningJob, User)
+            .join(FineTunedModel, ModelApproval.model_id == FineTunedModel.id)
+            .outerjoin(FineTuningJob, FineTunedModel.job_id == FineTuningJob.id)
+            .outerjoin(User, ModelApproval.requested_by == User.id)
+            .where(ModelApproval.status == "pending")
+            .order_by(ModelApproval.requested_at.desc())
+        )
+
+        result = await db.execute(query)
+        rows = result.all()
+
+        approvals = []
+        for approval, model, job, requester in rows:
+            approvals.append({
+                "approval_id": str(approval.id),
+                "model_id": str(model.id),
+                "model_name": model.name,
+                "model_version": model.version,
+                "base_model": model.base_model,
+                "finetuning_method": model.finetuning_method,
+                "checkpoint_path": model.minio_checkpoint_path,
+                "eval_metrics": model.eval_metrics,
+                "requested_by": requester.username if requester else "Unknown",
+                "requested_at": approval.requested_at.isoformat(),
+                "request_reason": approval.request_reason,
+                "deployment_environment": approval.deployment_environment,
+                "job_name": job.name if job else None,
+                "training_duration_seconds": job.training_time_seconds if job else None
+            })
+
+        return {
+            "pending_approvals": approvals,
+            "total": len(approvals)
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to list pending approvals: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/approvals/{approval_id}/approve")
+async def approve_model_deployment(
+    approval_id: str,
+    review_comments: str = Query(None, description="Optional comments explaining the approval"),
+    user: User = Depends(require_authentication),
+    _: None = Depends(RequireAdmin()),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Approve a model deployment request (Admin only)
+
+    After approval, the model status is updated and can be deployed to Ollama.
+    """
+    try:
+        from app.models.finetuning_models import ModelApproval
+        from datetime import datetime
+
+        # Get approval request
+        approval_query = select(ModelApproval).where(ModelApproval.id == uuid.UUID(approval_id))
+        approval_result = await db.execute(approval_query)
+        approval = approval_result.scalar_one_or_none()
+
+        if not approval:
+            raise HTTPException(status_code=404, detail="Approval request not found")
+
+        if approval.status != "pending":
+            raise HTTPException(status_code=400, detail=f"Approval already {approval.status}")
+
+        # Update approval
+        approval.status = "approved"
+        approval.approved_by = user.id
+        approval.reviewed_at = datetime.utcnow()
+        approval.review_comments = review_comments
+
+        # Update model status to allow deployment
+        model_query = select(FineTunedModel).where(FineTunedModel.id == approval.model_id)
+        model_result = await db.execute(model_query)
+        model = model_result.scalar_one_or_none()
+
+        if model and model.status == "registered":
+            model.status = "approved"  # Ready for deployment
+
+        await db.commit()
+
+        # Audit log
+        await audit_service.log_action(
+            user_id=user.id,
+            action="approve_model_deployment",
+            details={
+                "approval_id": approval_id,
+                "model_id": str(approval.model_id),
+                "model_name": model.name if model else None,
+                "comments": review_comments
+            },
+            db=db
+        )
+
+        logger.info(f"Model deployment approved: {approval.model_id} by {user.username}")
+
+        return {
+            "status": "approved",
+            "approval_id": approval_id,
+            "model_id": str(approval.model_id),
+            "model_name": model.name if model else None,
+            "approved_by": user.username,
+            "approved_at": approval.reviewed_at.isoformat(),
+            "message": "Model approved for deployment. You can now deploy it to Ollama."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to approve model: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/approvals/{approval_id}/reject")
+async def reject_model_deployment(
+    approval_id: str,
+    review_comments: str = Query(..., description="Reason for rejection"),
+    user: User = Depends(require_authentication),
+    _: None = Depends(RequireAdmin()),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Reject a model deployment request (Admin only)
+
+    The model will remain in registered status and cannot be deployed.
+    """
+    try:
+        from app.models.finetuning_models import ModelApproval
+        from datetime import datetime
+
+        # Get approval request
+        approval_query = select(ModelApproval).where(ModelApproval.id == uuid.UUID(approval_id))
+        approval_result = await db.execute(approval_query)
+        approval = approval_result.scalar_one_or_none()
+
+        if not approval:
+            raise HTTPException(status_code=404, detail="Approval request not found")
+
+        if approval.status != "pending":
+            raise HTTPException(status_code=400, detail=f"Approval already {approval.status}")
+
+        # Update approval
+        approval.status = "rejected"
+        approval.approved_by = user.id
+        approval.reviewed_at = datetime.utcnow()
+        approval.review_comments = review_comments
+
+        await db.commit()
+
+        # Get model name for response
+        model_query = select(FineTunedModel).where(FineTunedModel.id == approval.model_id)
+        model_result = await db.execute(model_query)
+        model = model_result.scalar_one_or_none()
+
+        # Audit log
+        await audit_service.log_action(
+            user_id=user.id,
+            action="reject_model_deployment",
+            details={
+                "approval_id": approval_id,
+                "model_id": str(approval.model_id),
+                "model_name": model.name if model else None,
+                "reason": review_comments
+            },
+            db=db
+        )
+
+        logger.info(f"Model deployment rejected: {approval.model_id} by {user.username}")
+
+        return {
+            "status": "rejected",
+            "approval_id": approval_id,
+            "model_id": str(approval.model_id),
+            "model_name": model.name if model else None,
+            "rejected_by": user.username,
+            "rejected_at": approval.reviewed_at.isoformat(),
+            "reason": review_comments
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to reject model: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/models/{model_id}/approval-status")
+async def get_model_approval_status(
+    model_id: str,
+    user: User = Depends(require_authentication),
+    _: None = Depends(RequirePermission("model_finetuning", "read")),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Check approval status for a model
+
+    Returns current approval status and history for the model.
+    """
+    try:
+        from app.models.finetuning_models import ModelApproval
+
+        # Get model
+        model_query = select(FineTunedModel).where(FineTunedModel.id == uuid.UUID(model_id))
+        model_result = await db.execute(model_query)
+        model = model_result.scalar_one_or_none()
+
+        if not model:
+            raise HTTPException(status_code=404, detail="Model not found")
+
+        # Get approval history
+        approvals_query = (
+            select(ModelApproval, User.c.username)
+            .outerjoin(User, ModelApproval.requested_by == User.c.id)
+            .where(ModelApproval.model_id == uuid.UUID(model_id))
+            .order_by(ModelApproval.requested_at.desc())
+        )
+
+        approvals_result = await db.execute(approvals_query)
+        approvals = approvals_result.all()
+
+        approval_history = []
+        current_status = "no_request"
+        can_deploy = model.status in ["approved", "deployed"]
+
+        for approval, requester_username in approvals:
+            approval_history.append({
+                "approval_id": str(approval.id),
+                "status": approval.status,
+                "requested_by": requester_username or "Unknown",
+                "requested_at": approval.requested_at.isoformat(),
+                "reviewed_at": approval.reviewed_at.isoformat() if approval.reviewed_at else None,
+                "review_comments": approval.review_comments
+            })
+
+            # Use most recent approval status
+            if approval.status == "pending":
+                current_status = "pending"
+            elif approval.status == "approved" and current_status == "no_request":
+                current_status = "approved"
+
+        return {
+            "model_id": model_id,
+            "model_name": model.name,
+            "model_status": model.status,
+            "approval_status": current_status,
+            "can_deploy": can_deploy,
+            "approval_history": approval_history
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get approval status: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# MODEL DEPLOYMENT ENDPOINTS
+# ============================================================================
+
+@router.post("/models/{model_id}/deploy-ollama")
+async def deploy_model_to_ollama(
+    model_id: str,
+    model_name_override: Optional[str] = Query(None, description="Override Ollama model name"),
+    parameters: Optional[str] = Query(None, description="JSON string of model parameters (temperature, top_p, etc.)"),
+    user: User = Depends(require_authentication),
+    _: None = Depends(RequirePermission("model_finetuning", "write")),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Deploy an approved fine-tuned model to Ollama
+
+    Requirements:
+    - Model must be in "approved" status (requires admin approval)
+    - MinIO checkpoint path must exist
+    - Ollama service must be running
+
+    After deployment:
+    - Model status updated to "deployed"
+    - Ollama model name and URL stored
+    - Model becomes available in chat UI dropdown
+    """
+    try:
+        import json
+        from minio import Minio
+        from app.core.config import settings
+
+        # Get model
+        model_query = select(FineTunedModel).where(FineTunedModel.id == uuid.UUID(model_id))
+        model_result = await db.execute(model_query)
+        model = model_result.scalar_one_or_none()
+
+        if not model:
+            raise HTTPException(status_code=404, detail="Model not found")
+
+        # Check approval status
+        if model.status not in ["approved", "deployed"]:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Model must be approved before deployment. Current status: {model.status}. Please request approval first."
+            )
+
+        # Check if already deployed
+        if model.status == "deployed" and model.ollama_model_name:
+            return {
+                "status": "already_deployed",
+                "model_id": model_id,
+                "ollama_model_name": model.ollama_model_name,
+                "deployment_url": model.deployment_url,
+                "message": f"Model already deployed as '{model.ollama_model_name}'"
+            }
+
+        # Check checkpoint path
+        if not model.minio_checkpoint_path:
+            raise HTTPException(status_code=400, detail="Model has no checkpoint path")
+
+        # Download checkpoint from MinIO to temporary location
+        logger.info(f"Downloading checkpoint from MinIO: {model.minio_checkpoint_path}")
+
+        minio_client = Minio(
+            endpoint=settings.MINIO_ENDPOINT.replace("http://", "").replace("https://", ""),
+            access_key=settings.MINIO_ACCESS_KEY,
+            secret_key=settings.MINIO_SECRET_KEY,
+            secure=settings.MINIO_ENDPOINT.startswith("https://")
+        )
+
+        # Create temporary directory for model files
+        import tempfile
+        import os
+        temp_dir = tempfile.mkdtemp(prefix="ollama_deploy_")
+
+        try:
+            # Download all checkpoint files from MinIO
+            # Extract bucket and object path
+            checkpoint_path_parts = model.minio_checkpoint_path.split("/", 1)
+            if len(checkpoint_path_parts) != 2:
+                raise ValueError(f"Invalid MinIO path format: {model.minio_checkpoint_path}")
+
+            bucket_name = checkpoint_path_parts[0]
+            object_prefix = checkpoint_path_parts[1]
+
+            # List all objects with this prefix
+            objects = minio_client.list_objects(bucket_name, prefix=object_prefix, recursive=True)
+
+            downloaded_files = []
+            for obj in objects:
+                local_path = os.path.join(temp_dir, os.path.basename(obj.object_name))
+                minio_client.fget_object(bucket_name, obj.object_name, local_path)
+                downloaded_files.append(local_path)
+                logger.info(f"Downloaded: {obj.object_name} -> {local_path}")
+
+            if not downloaded_files:
+                raise ValueError(f"No checkpoint files found at {model.minio_checkpoint_path}")
+
+            # Find adapter_model.safetensors or similar
+            adapter_file = None
+            for file in downloaded_files:
+                if "adapter_model" in file or "model.safetensors" in file:
+                    adapter_file = file
+                    break
+
+            if not adapter_file:
+                raise ValueError("No adapter model file found in checkpoint")
+
+            # Deploy to Ollama
+            ollama_service = OllamaDeploymentService()
+
+            # Generate Ollama model name
+            ollama_model_name = model_name_override or f"{model.name.lower().replace(' ', '-')}:{model.version}"
+
+            # Parse parameters if provided
+            deploy_params = {}
+            if parameters:
+                try:
+                    deploy_params = json.loads(parameters)
+                except json.JSONDecodeError:
+                    raise HTTPException(status_code=400, detail="Invalid parameters JSON")
+
+            # Deploy
+            logger.info(f"Deploying to Ollama as: {ollama_model_name}")
+            deployment_result = await ollama_service.deploy_model(
+                model_name=ollama_model_name,
+                model_path=adapter_file,
+                base_model=model.base_model,
+                parameters=deploy_params
+            )
+
+            if deployment_result.get("status") != "success":
+                raise Exception(f"Ollama deployment failed: {deployment_result.get('error')}")
+
+            # Update model record
+            model.status = "deployed"
+            model.ollama_model_name = ollama_model_name
+            model.deployment_url = deployment_result.get("deployment_url")
+
+            await db.commit()
+
+            # Audit log
+            await audit_service.log_action(
+                user_id=user.id,
+                action="deploy_model_ollama",
+                details={
+                    "model_id": model_id,
+                    "model_name": model.name,
+                    "ollama_model_name": ollama_model_name,
+                    "deployment_url": model.deployment_url
+                },
+                db=db
+            )
+
+            logger.info(f"✅ Model deployed to Ollama: {ollama_model_name}")
+
+            return {
+                "status": "deployed",
+                "model_id": model_id,
+                "model_name": model.name,
+                "ollama_model_name": ollama_model_name,
+                "deployment_url": model.deployment_url,
+                "message": f"Model successfully deployed to Ollama as '{ollama_model_name}'"
+            }
+
+        finally:
+            # Cleanup temporary files
+            import shutil
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+                logger.info(f"Cleaned up temporary directory: {temp_dir}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to deploy model: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Deployment failed: {str(e)}")
+
+
+@router.post("/models/{model_id}/undeploy")
+async def undeploy_model_from_ollama(
+    model_id: str,
+    user: User = Depends(require_authentication),
+    _: None = Depends(RequirePermission("model_finetuning", "write")),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Remove a deployed model from Ollama
+
+    Updates model status back to "approved" and removes Ollama references.
+    """
+    try:
+        # Get model
+        model_query = select(FineTunedModel).where(FineTunedModel.id == uuid.UUID(model_id))
+        model_result = await db.execute(model_query)
+        model = model_result.scalar_one_or_none()
+
+        if not model:
+            raise HTTPException(status_code=404, detail="Model not found")
+
+        if model.status != "deployed":
+            return {
+                "status": "not_deployed",
+                "message": "Model is not currently deployed"
+            }
+
+        ollama_model_name = model.ollama_model_name
+
+        # Remove from Ollama
+        if ollama_model_name:
+            try:
+                import subprocess
+                result = subprocess.run(
+                    ["ollama", "rm", ollama_model_name],
+                    capture_output=True,
+                    text=True,
+                    check=False
+                )
+                if result.returncode == 0:
+                    logger.info(f"Removed model from Ollama: {ollama_model_name}")
+                else:
+                    logger.warning(f"Failed to remove from Ollama: {result.stderr}")
+            except Exception as e:
+                logger.error(f"Error removing from Ollama: {e}")
+
+        # Update model status
+        model.status = "approved"  # Back to approved, can be re-deployed
+        model.ollama_model_name = None
+        model.deployment_url = None
+
+        await db.commit()
+
+        # Audit log
+        await audit_service.log_action(
+            user_id=user.id,
+            action="undeploy_model_ollama",
+            details={
+                "model_id": model_id,
+                "model_name": model.name,
+                "ollama_model_name": ollama_model_name
+            },
+            db=db
+        )
+
+        return {
+            "status": "undeployed",
+            "model_id": model_id,
+            "message": f"Model '{ollama_model_name}' removed from Ollama"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to undeploy model: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/models/deployed")
+async def list_deployed_models(
+    user: User = Depends(require_authentication),
+    _: None = Depends(RequirePermission("model_finetuning", "read")),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    List all deployed models available for chat
+
+    Returns models with status="deployed" and Ollama model names.
+    This endpoint is used by the chat UI to populate the model dropdown.
+    """
+    try:
+        query = (
+            select(FineTunedModel)
+            .where(FineTunedModel.status == "deployed")
+            .where(FineTunedModel.ollama_model_name.isnot(None))
+            .order_by(FineTunedModel.created_at.desc())
+        )
+
+        result = await db.execute(query)
+        models = result.scalars().all()
+
+        deployed_models = []
+        for model in models:
+            deployed_models.append({
+                "model_id": str(model.id),
+                "name": model.name,
+                "version": model.version,
+                "ollama_model_name": model.ollama_model_name,
+                "base_model": model.base_model,
+                "finetuning_method": model.finetuning_method,
+                "description": model.description,
+                "deployment_url": model.deployment_url,
+                "eval_metrics": model.eval_metrics,
+                "total_inferences": model.total_inferences,
+                "created_at": model.created_at.isoformat()
+            })
+
+        return {
+            "deployed_models": deployed_models,
+            "total": len(deployed_models)
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to list deployed models: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================================
@@ -2840,6 +3563,11 @@ async def list_jobs_public(
                     "training_end_time": j.training_end_time.isoformat() if j.training_end_time else None,
                     "department": j.department,
                     "team": j.team,
+                    # Pipeline stage fields (for stage visualization)
+                    "training_stage": j.training_stage,
+                    "stage_details": j.stage_details,
+                    "stage_started_at": j.stage_started_at.isoformat() if j.stage_started_at else None,
+                    "stage_completed_at": j.stage_completed_at.isoformat() if j.stage_completed_at else None,
                 }
                 for j in jobs_list
             ],
@@ -2868,6 +3596,83 @@ async def list_audit_logs_public(
     except Exception as e:
         logger.error(f"Failed to list audit logs: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/stats-public")
+async def get_finetuning_stats_public(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    **TEMPORARY**: Get fine-tuning dashboard statistics WITHOUT authentication
+    For UI testing only. Use /stats with auth in production.
+
+    Returns:
+    - running_jobs: Number of currently running jobs
+    - pending_approvals: Number of models pending evaluation approval
+    - active_models: Number of deployed models
+    - datasets_ready: Number of validated datasets
+    """
+    try:
+        # Count running jobs
+        running_jobs_query = select(func.count(FineTuningJob.id)).where(
+            FineTuningJob.status == "running"
+        )
+        running_jobs_result = await db.execute(running_jobs_query)
+        running_jobs = running_jobs_result.scalar() or 0
+
+        # Count pending approvals (models in registered state)
+        pending_approvals_query = select(func.count(FineTunedModel.id)).where(
+            FineTunedModel.status == "registered"
+        )
+        pending_approvals_result = await db.execute(pending_approvals_query)
+        pending_approvals = pending_approvals_result.scalar() or 0
+
+        # Count active/deployed models
+        active_models_query = select(func.count(FineTunedModel.id)).where(
+            FineTunedModel.status == "deployed"
+        )
+        active_models_result = await db.execute(active_models_query)
+        active_models = active_models_result.scalar() or 0
+
+        # Count validated datasets
+        datasets_ready_query = select(func.count(FineTuningDataset.id)).where(
+            and_(
+                FineTuningDataset.is_valid == True,
+                FineTuningDataset.preprocessing_status == "completed"
+            )
+        )
+        datasets_ready_result = await db.execute(datasets_ready_query)
+        datasets_ready = datasets_ready_result.scalar() or 0
+
+        return {
+            "running_jobs": running_jobs,
+            "pending_approvals": pending_approvals,
+            "active_models": active_models,
+            "datasets_ready": datasets_ready
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+
+
+@router.get("/gpu/stats-public")
+async def get_gpu_pool_stats_public(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    **TEMPORARY**: Get GPU pool statistics WITHOUT authentication
+    For UI testing only. Use /gpu/stats with auth in production.
+
+    Shows total GPUs, allocations, and active jobs.
+    """
+    try:
+        stats = gpu_pool_manager.get_stats()
+        return stats
+
+    except Exception as e:
+        logger.error(f"Failed to get GPU stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get GPU stats: {str(e)}")
+
 
 @router.get("/jobs-public/{job_id}/metrics")
 async def get_job_metrics_public(
@@ -3020,16 +3825,18 @@ async def approve_model_public(
         if not model:
             raise HTTPException(status_code=404, detail="Model not found")
 
-        # Update model status to deployed
-        model.status = "deployed"
+        # Update model status to approved (not deployed - that happens separately)
+        model.status = "approved"
 
-        # Store approval notes in tags field (no meta_info field in schema)
-        if not model.tags:
-            model.tags = {}
+        # Store approval notes in description or append to tags
+        approval_text = approval_notes.get("approval_notes", "") if isinstance(approval_notes, dict) else str(approval_notes)
 
-        model.tags["approval_notes"] = approval_notes.get("approval_notes", "")
-        model.tags["approved_at"] = datetime.now().isoformat()
-        model.tags["approved_by"] = "test_user"  # No auth, so using placeholder
+        # Append approval info to description
+        approval_info = f"\n\n[APPROVED at {datetime.now().isoformat()} by test_user]\nNotes: {approval_text}"
+        if model.description:
+            model.description += approval_info
+        else:
+            model.description = approval_info.strip()
 
         await db.commit()
         await db.refresh(model)
@@ -3070,13 +3877,15 @@ async def reject_model_public(
         # Update model status to rejected
         model.status = "rejected"
 
-        # Store rejection reason in tags field (no meta_info field in schema)
-        if not model.tags:
-            model.tags = {}
+        # Store rejection reason in description
+        rejection_text = rejection_reason.get("rejection_reason", "") if isinstance(rejection_reason, dict) else str(rejection_reason)
 
-        model.tags["rejection_reason"] = rejection_reason.get("rejection_reason", "")
-        model.tags["rejected_at"] = datetime.now().isoformat()
-        model.tags["rejected_by"] = "test_user"  # No auth, so using placeholder
+        # Append rejection info to description
+        rejection_info = f"\n\n[REJECTED at {datetime.now().isoformat()} by test_user]\nReason: {rejection_text}"
+        if model.description:
+            model.description += rejection_info
+        else:
+            model.description = rejection_info.strip()
 
         await db.commit()
         await db.refresh(model)
@@ -3092,6 +3901,252 @@ async def reject_model_public(
     except Exception as e:
         await db.rollback()
         logger.error(f"Failed to reject model: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# PUBLIC MODELS FOR CHAT ENDPOINT (FOR UI TESTING ONLY - NO AUTHENTICATION)
+# ============================================================================
+
+@router.get("/models-public/for-chat")
+async def get_models_for_chat_public(
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    **TEMPORARY**: Get deployed fine-tuned models for chat UI WITHOUT authentication
+    For UI testing only. Use /models/for-chat with auth in production.
+
+    Returns deployed models formatted for chat UI model selector.
+    """
+    try:
+        query = select(FineTunedModel).where(
+            FineTunedModel.status == "deployed"
+        ).order_by(FineTunedModel.created_at.desc())
+
+        result = await db.execute(query)
+        models = result.scalars().all()
+
+        finetuned_models = []
+        for m in models:
+            # Determine provider and model ID
+            if m.ollama_model_name:
+                provider = "ollama"
+                model_id = f"ollama/{m.ollama_model_name}"
+                name_suffix = " (Ollama)"
+            elif m.vllm_model_name:
+                provider = "vllm"
+                model_id = f"vllm/{m.vllm_model_name}"
+                name_suffix = " (vLLM)"
+            else:
+                continue  # Skip if no deployment name
+
+            finetuned_models.append({
+                "id": model_id,
+                "name": f"{m.name}{name_suffix}",
+                "provider": provider,
+                "description": f"Fine-tuned {m.base_model} - {m.version or 'v1.0'}",
+                "base_model": m.base_model,
+                "deployment_url": m.deployment_url,
+                "eval_metrics": m.eval_metrics,
+                "total_inferences": m.total_inferences or 0,
+                "avg_latency_ms": m.avg_latency_ms
+            })
+
+        logger.info(f"Returning {len(finetuned_models)} deployed models for chat UI")
+
+        return {
+            "finetuned_models": finetuned_models,
+            "count": len(finetuned_models)
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get models for chat: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# PUBLIC DEPLOY ENDPOINT (FOR UI TESTING ONLY - NO AUTHENTICATION)
+# ============================================================================
+
+@router.post("/models-public/{model_id}/deploy")
+async def deploy_model_public(
+    model_id: str,
+    deployment_config: dict,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    **TEMPORARY**: Deploy a fine-tuned model WITHOUT authentication
+    For UI testing only. Use /models/{model_id}/deploy with auth in production.
+
+    Request body: {"deployment_target": "ollama"|"vllm", "deployment_config": {...}}
+    """
+    try:
+        # 🆕 FIX: Import FineTuningJob at the top to avoid UnboundLocalError
+        from app.models.finetuning_models import FineTuningJob, FineTuningDataset
+
+        query = select(FineTunedModel).where(FineTunedModel.id == uuid.UUID(model_id))
+        result = await db.execute(query)
+        model = result.scalar_one_or_none()
+
+        if not model:
+            raise HTTPException(status_code=404, detail="Model not found")
+
+        # Extract deployment target (default to ollama)
+        target = deployment_config.get("deployment_target", "ollama")
+        config = deployment_config.get("deployment_config", {})
+
+        # Generate model name for deployment
+        model_name = config.get("model_name", f"{model.name.replace(' ', '-').lower()}-v1")
+        base_model = config.get("base_model", model.base_model or "llama2")
+        parameters = config.get("parameters", {})
+
+        deployment_result = {}
+
+        if target == "ollama":
+            # Use OllamaDeploymentService for actual deployment
+            ollama_service = OllamaDeploymentService()
+
+            # Get model checkpoint path from job
+            model_path = None
+            if model.job_id:
+                job_query = select(FineTuningJob).where(FineTuningJob.id == model.job_id)
+                job_result = await db.execute(job_query)
+                job = job_result.scalar_one_or_none()
+
+                if job and job.minio_checkpoint_path:
+                    model_path = job.minio_checkpoint_path
+                elif model.minio_checkpoint_path:
+                    model_path = model.minio_checkpoint_path
+
+            if not model_path:
+                # Fallback to constructed path
+                model_path = f"/app/models/{model.name}/adapter_model"
+
+            logger.info(f"Deploying model {model.name} to Ollama as {model_name} from path {model_path}")
+
+            # Deploy to Ollama
+            deployment_result = await ollama_service.deploy_model(
+                model_name=model_name,
+                model_path=model_path,
+                base_model=base_model,
+                parameters=parameters
+            )
+
+            if deployment_result.get("status") == "success":
+                model.ollama_model_name = model_name
+                model.deployment_url = deployment_result.get("deployment_url", "http://localhost:11434")
+                model.status = "deployed"
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Ollama deployment failed: {deployment_result.get('error')}"
+                )
+
+        elif target == "vllm":
+            # TODO: Implement vLLM deployment
+            deployment_url = "http://localhost:8001/v1/completions"
+            model.vllm_model_name = model_name
+            model.deployment_url = deployment_url
+            model.status = "deployed"
+            deployment_result = {
+                "status": "success",
+                "message": "vLLM deployment (simulated)"
+            }
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported target: {target}")
+
+        await db.commit()
+        await db.refresh(model)
+
+        logger.info(f"Model {model_id} deployed successfully to {target} (public endpoint)")
+
+        # ═══════════════════════════════════════════════════════════════════
+        # NEW: Trigger automatic evaluation after deployment
+        # ═══════════════════════════════════════════════════════════════════
+        if target == "ollama" and model.ollama_model_name:
+            logger.info(f"🔍 Triggering automatic evaluation after deployment...")
+            try:
+                # Import evaluation service (FineTuningJob already imported at top)
+                from app.services.finetuning.model_evaluation_service import ModelEvaluationService
+                import tempfile
+
+                # Get associated job to find dataset
+                job_query = select(FineTuningJob).where(FineTuningJob.id == model.job_id)
+                job_result = await db.execute(job_query)
+                job = job_result.scalar_one_or_none()
+
+                if job and job.dataset_id:
+                    # Get dataset
+                    dataset_query = select(FineTuningDataset).where(FineTuningDataset.id == job.dataset_id)
+                    dataset_result = await db.execute(dataset_query)
+                    dataset = dataset_result.scalar_one_or_none()
+
+                    if dataset and dataset.minio_path:
+                        logger.info(f"📥 Downloading dataset for auto-evaluation...")
+
+                        # Download dataset from MinIO
+                        from minio import Minio
+                        from app.core.config import settings
+
+                        minio_client = Minio(
+                            endpoint=settings.MINIO_ENDPOINT.replace("http://", "").replace("https://", ""),
+                            access_key=settings.MINIO_ACCESS_KEY,
+                            secret_key=settings.MINIO_SECRET_KEY,
+                            secure=settings.MINIO_ENDPOINT.startswith("https://")
+                        )
+
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp_file:
+                            tmp_path = tmp_file.name
+
+                        await asyncio.to_thread(
+                            minio_client.fget_object,
+                            bucket_name="documents",
+                            object_name=dataset.minio_path,
+                            file_path=tmp_path
+                        )
+
+                        # Run evaluation with 50 samples (quick evaluation)
+                        eval_service = ModelEvaluationService()
+                        evaluation_result = await eval_service.evaluate_model(
+                            model_path=model.minio_checkpoint_path or "",
+                            test_dataset_path=tmp_path,
+                            task_type=job.training_objective or "text-generation",
+                            num_samples=50,
+                            ollama_model_name=model.ollama_model_name
+                        )
+
+                        # Store metrics
+                        model.eval_metrics = evaluation_result.get("metrics", {})
+                        await db.commit()
+
+                        logger.info(f"✅ Auto-evaluation complete! Metrics: {list(evaluation_result.get('metrics', {}).keys())}")
+
+                        # Cleanup temp file
+                        import os
+                        try:
+                            os.remove(tmp_path)
+                        except:
+                            pass
+
+            except Exception as eval_error:
+                logger.warning(f"⚠️  Auto-evaluation after deployment failed (non-critical): {eval_error}")
+                # Don't fail deployment if evaluation fails
+
+        return {
+            "message": f"Model deployed successfully to {target}",
+            "model_id": str(model.id),
+            "deployment_target": target,
+            "deployment_url": model.deployment_url,
+            "deployed_model_name": model_name,
+            "status": model.status,
+            "deployment_details": deployment_result
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to deploy model: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -3141,16 +4196,18 @@ async def undeploy_model_public(
                 logger.error(f"Failed to delete from Ollama: {ollama_error}")
                 # Continue anyway - update database even if Ollama delete fails
 
-        # Update model status to registered (undeployed but available for re-deployment)
-        model.status = "registered"
+        # Update model status to approved (undeployed but available for re-deployment)
+        # Note: Setting to "approved" instead of "registered" to maintain approval status
+        model.status = "approved"
         model.deployment_url = None
+        model.ollama_model_name = None  # Clear Ollama model name so it won't appear in chat UI
 
-        # Store undeploy info in tags
-        if not model.tags:
-            model.tags = {}
-
-        model.tags["undeployed_at"] = datetime.now().isoformat()
-        model.tags["undeployed_by"] = "test_user"
+        # Store undeploy info in description (tags is a list, not dict)
+        undeploy_note = f"\n\n[Undeployed at {datetime.now().isoformat()} by test_user]"
+        if model.description:
+            model.description += undeploy_note
+        else:
+            model.description = undeploy_note.strip()
 
         await db.commit()
         await db.refresh(model)
@@ -3169,4 +4226,237 @@ async def undeploy_model_public(
     except Exception as e:
         await db.rollback()
         logger.error(f"Failed to undeploy model: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# MODEL EVALUATION AND TESTING ENDPOINTS (PUBLIC - FOR UI TESTING)
+# ============================================================================
+
+@router.post("/models-public/{model_id}/evaluate")
+async def evaluate_model_public(
+    model_id: str,
+    num_samples: int = 100,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    **TEMPORARY**: Evaluate fine-tuned model WITHOUT authentication
+    
+    Computes BLEU, ROUGE, and other metrics on test dataset.
+    For UI testing only.
+    
+    Args:
+        model_id: Model ID to evaluate
+        num_samples: Number of test samples to evaluate (default: 100)
+    
+    Returns:
+        Evaluation results with metrics and sample-by-sample scores
+    """
+    try:
+        from app.services.finetuning.model_evaluation_service import ModelEvaluationService
+        
+        # Get model
+        query = select(FineTunedModel).where(FineTunedModel.id == uuid.UUID(model_id))
+        result = await db.execute(query)
+        model = result.scalar_one_or_none()
+        
+        if not model:
+            raise HTTPException(status_code=404, detail="Model not found")
+        
+        # Get associated job to find dataset
+        job_query = select(FineTuningJob).where(FineTuningJob.id == model.job_id)
+        job_result = await db.execute(job_query)
+        job = job_result.scalar_one_or_none()
+        
+        if not job:
+            raise HTTPException(status_code=404, detail="Associated training job not found")
+        
+        # Get dataset
+        dataset_query = select(FineTuningDataset).where(FineTuningDataset.id == job.dataset_id)
+        dataset_result = await db.execute(dataset_query)
+        dataset = dataset_result.scalar_one_or_none()
+        
+        if not dataset:
+            raise HTTPException(status_code=404, detail="Training dataset not found")
+        
+        # Download dataset from MinIO to temp location
+        from minio import Minio
+        from app.core.config import settings
+        import tempfile
+        
+        minio_client = Minio(
+            endpoint=settings.MINIO_ENDPOINT.replace("http://", "").replace("https://", ""),
+            access_key=settings.MINIO_ACCESS_KEY,
+            secret_key=settings.MINIO_SECRET_KEY,
+            secure=settings.MINIO_ENDPOINT.startswith("https://")
+        )
+        
+        # Download dataset
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp_file:
+            tmp_path = tmp_file.name
+        
+        await asyncio.to_thread(
+            minio_client.fget_object,
+            bucket_name="documents",
+            object_name=dataset.minio_path,
+            file_path=tmp_path
+        )
+        
+        # Run evaluation
+        eval_service = ModelEvaluationService()
+        evaluation_result = await eval_service.evaluate_model(
+            model_path=model.minio_checkpoint_path or "",
+            test_dataset_path=tmp_path,
+            task_type=job.training_objective or "text-generation",
+            num_samples=num_samples,
+            ollama_model_name=model.ollama_model_name  # Pass Ollama model name for inference
+        )
+        
+        # Update model with evaluation metrics
+        model.eval_metrics = evaluation_result.get("metrics", {})
+        await db.commit()
+        
+        logger.info(f"Evaluation completed for model {model_id}")
+        
+        return {
+            "model_id": str(model.id),
+            "model_name": model.name,
+            "status": "completed",
+            **evaluation_result
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Evaluation failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/models-public/{model_id}/evaluation-results")
+async def get_evaluation_results_public(
+    model_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    **TEMPORARY**: Get evaluation results for a model WITHOUT authentication
+    
+    Returns stored evaluation metrics and sample results.
+    For UI testing only.
+    """
+    try:
+        query = select(FineTunedModel).where(FineTunedModel.id == uuid.UUID(model_id))
+        result = await db.execute(query)
+        model = result.scalar_one_or_none()
+        
+        if not model:
+            raise HTTPException(status_code=404, detail="Model not found")
+        
+        return {
+            "model_id": str(model.id),
+            "model_name": model.name,
+            "eval_metrics": model.eval_metrics or {},
+            "has_evaluation": model.eval_metrics is not None
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get evaluation results: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/models-public/{model_id}/test")
+async def test_model_public(
+    model_id: str,
+    request_data: Dict[str, Any],
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    **TEMPORARY**: Test model with custom input WITHOUT authentication
+    
+    Allows manual testing of deployed models in the UI.
+    For UI testing only.
+    
+    Args:
+        model_id: Model ID
+        request_data: {"input": "test question", "max_length": 512}
+    
+    Returns:
+        Generated response from the model
+    """
+    try:
+        import httpx
+        
+        # Get model
+        query = select(FineTunedModel).where(FineTunedModel.id == uuid.UUID(model_id))
+        result = await db.execute(query)
+        model = result.scalar_one_or_none()
+        
+        if not model:
+            raise HTTPException(status_code=404, detail="Model not found")
+        
+        # Check if deployed
+        if model.status != "deployed" or not model.ollama_model_name:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Model must be deployed first. Current status: {model.status}"
+            )
+        
+        # Get input from request
+        input_text = request_data.get("input", "")
+        if not input_text:
+            raise HTTPException(status_code=400, detail="Input text is required")
+        
+        max_length = request_data.get("max_length", 512)
+        temperature = request_data.get("temperature", 0.7)
+        
+        # Call Ollama API
+        ollama_url = os.getenv("OLLAMA_HOST", "http://ollama:11434")
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{ollama_url}/api/generate",
+                json={
+                    "model": model.ollama_model_name,
+                    "prompt": input_text,
+                    "stream": False,
+                    "options": {
+                        "temperature": temperature,
+                        "num_predict": max_length
+                    }
+                }
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Ollama API error: {response.text}"
+                )
+            
+            result_data = response.json()
+            generated_text = result_data.get("response", "")
+        
+        # Update inference count
+        model.total_inferences = (model.total_inferences or 0) + 1
+        model.last_inference_at = datetime.utcnow()
+        await db.commit()
+        
+        return {
+            "model_id": str(model.id),
+            "model_name": model.name,
+            "input": input_text,
+            "generated": generated_text,
+            "settings": {
+                "temperature": temperature,
+                "max_length": max_length
+            },
+            "total_inferences": model.total_inferences
+        }
+        
+    except HTTPException:
+        raise
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Model inference timeout")
+    except Exception as e:
+        logger.error(f"Model test failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

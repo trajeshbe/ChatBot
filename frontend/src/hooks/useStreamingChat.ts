@@ -10,14 +10,29 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 interface StreamingConfig {
   modelId?: string;
   sessionId?: string;
+  projectId?: string;
   maxTokens?: number;
   temperature?: number;
+  // 🆕 RAG configuration - identical to query endpoint
+  unifiedConfig?: string;  // JSON string with complete RAG config
+  topK?: number;
+  similarityThreshold?: number;
+  minSimilarityThreshold?: number;
+  noRelevantDocsThreshold?: number;
+  semanticWeight?: number;
+  keywordWeight?: number;
+  enableEvaluation?: boolean;
+  enabledTools?: string;
+  selectedAgent?: string;
+  conversationHistory?: string;
 }
 
 interface UseStreamingChatReturn {
   streamingContent: string;
   isStreaming: boolean;
   error: string | null;
+  sources: any[];  // 🆕 RAG sources
+  modelUsed: string | null;  // 🆕 Model that was used
   startStreaming: (query: string, config?: StreamingConfig) => void;
   stopStreaming: () => void;
   resetStream: () => void;
@@ -27,6 +42,8 @@ export const useStreamingChat = (apiUrl: string = 'http://localhost:8000'): UseS
   const [streamingContent, setStreamingContent] = useState<string>('');
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [sources, setSources] = useState<any[]>([]);  // 🆕 RAG sources
+  const [modelUsed, setModelUsed] = useState<string | null>(null);  // 🆕 Model used
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -58,6 +75,8 @@ export const useStreamingChat = (apiUrl: string = 'http://localhost:8000'): UseS
     stopStreaming();
     setStreamingContent('');
     setError(null);
+    setSources([]);  // 🆕 Clear sources
+    setModelUsed(null);  // 🆕 Clear model
   }, [stopStreaming]);
 
   /**
@@ -70,20 +89,38 @@ export const useStreamingChat = (apiUrl: string = 'http://localhost:8000'): UseS
     // Reset state
     setStreamingContent('');
     setError(null);
+    setSources([]);  // 🆕 Clear previous sources
+    setModelUsed(null);  // 🆕 Clear previous model
     setIsStreaming(true);
 
-    // Build query parameters
+    // Build query parameters (🆕 now includes unified_config and all RAG params)
+    console.log('🔍 useStreamingChat: config.projectId =', config.projectId);
+
     const params = new URLSearchParams({
       query: query,
       ...(config.modelId && { model_id: config.modelId }),
       ...(config.sessionId && { session_id: config.sessionId }),
+      ...(config.projectId && { project_id: config.projectId }),
       ...(config.maxTokens && { max_tokens: config.maxTokens.toString() }),
-      ...(config.temperature && { temperature: config.temperature.toString() })
+      ...(config.temperature && { temperature: config.temperature.toString() }),
+      // 🆕 RAG configuration parameters
+      ...(config.unifiedConfig && { unified_config: config.unifiedConfig }),
+      ...(config.topK !== undefined && { top_k: config.topK.toString() }),
+      ...(config.similarityThreshold !== undefined && { similarity_threshold: config.similarityThreshold.toString() }),
+      ...(config.minSimilarityThreshold !== undefined && { min_similarity_threshold: config.minSimilarityThreshold.toString() }),
+      ...(config.noRelevantDocsThreshold !== undefined && { no_relevant_docs_threshold: config.noRelevantDocsThreshold.toString() }),
+      ...(config.semanticWeight !== undefined && { semantic_weight: config.semanticWeight.toString() }),
+      ...(config.keywordWeight !== undefined && { keyword_weight: config.keywordWeight.toString() }),
+      ...(config.enableEvaluation !== undefined && { enable_evaluation: config.enableEvaluation.toString() }),
+      ...(config.enabledTools && { enabled_tools: config.enabledTools }),
+      ...(config.selectedAgent && { selected_agent: config.selectedAgent }),
+      ...(config.conversationHistory && { conversation_history: config.conversationHistory })
     });
 
     const streamUrl = `${apiUrl}/api/v1/chat/stream?${params.toString()}`;
 
     console.log('🌊 Starting SSE stream:', streamUrl);
+    console.log('🔍 project_id in params:', params.get('project_id'));
 
     // Create EventSource connection
     const eventSource = new EventSource(streamUrl);
@@ -97,9 +134,28 @@ export const useStreamingChat = (apiUrl: string = 'http://localhost:8000'): UseS
         if (data.type === 'content') {
           // Append content chunk
           setStreamingContent(prev => prev + data.content);
+          if (data.model) {
+            setModelUsed(data.model);
+          }
         }
       } catch (err) {
         console.error('Error parsing SSE message:', err);
+      }
+    });
+
+    // 🆕 Handle sources event (RAG sources sent before content)
+    eventSource.addEventListener('sources', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === 'sources' && data.sources) {
+          console.log('📚 Received RAG sources:', data.sources.length);
+          setSources(data.sources);
+          if (data.model) {
+            setModelUsed(data.model);
+          }
+        }
+      } catch (err) {
+        console.error('Error parsing sources event:', err);
       }
     });
 
@@ -180,6 +236,8 @@ export const useStreamingChat = (apiUrl: string = 'http://localhost:8000'): UseS
     streamingContent,
     isStreaming,
     error,
+    sources,  // 🆕 RAG sources
+    modelUsed,  // 🆕 Model used
     startStreaming,
     stopStreaming,
     resetStream

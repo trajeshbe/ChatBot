@@ -20,7 +20,12 @@ import {
   AlertTriangle,
   TrendingUp,
   Clock,
-  Archive
+  Archive,
+  ExternalLink,
+  Send,
+  ThumbsUp,
+  ThumbsDown,
+  FileBox
 } from 'lucide-react'
 
 interface EvalMetrics {
@@ -40,7 +45,7 @@ interface Model {
   id: string
   name: string
   version?: string
-  status: string
+  status: string  // registered, approved, deployed, archived, deprecated
   base_model: string
   deployment_url?: string
   ollama_model_name?: string
@@ -52,6 +57,19 @@ interface Model {
   deprecated_at?: string
   deprecation_reason?: string
   created_at?: string
+  minio_checkpoint_path?: string  // NEW: MinIO artifact path
+  finetuning_method?: string
+  job_id?: string
+}
+
+interface ApprovalStatus {
+  model_status: string
+  approval_status?: string
+  can_deploy: boolean
+  approval_id?: string
+  requested_at?: string
+  reviewed_at?: string
+  review_comments?: string
 }
 
 interface ModelLifecycleManagerProps {
@@ -69,8 +87,12 @@ export default function ModelLifecycleManager({ models, onRefresh }: ModelLifecy
     target: 'ollama',
     model_name: ''
   })
+  const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus | null>(null)
+  const [approvalReason, setApprovalReason] = useState('')
+  const [reviewComments, setReviewComments] = useState('')
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+  const MINIO_CONSOLE = process.env.NEXT_PUBLIC_MINIO_CONSOLE_URL || 'http://localhost:9001'
 
   useEffect(() => {
     if (models.length > 0 && !selectedModel) {

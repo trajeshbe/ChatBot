@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Target, TrendingUp, BarChart3, GitCompare, Play, Download,
-  AlertCircle, CheckCircle, Clock, Zap, FileText, ArrowRight, Upload, XCircle
+  AlertCircle, CheckCircle, Clock, Zap, FileText, ArrowRight, Upload, XCircle,
+  Eye, Send, Settings, RefreshCw, X
 } from 'lucide-react';
 
 interface EvaluationMetrics {
@@ -39,6 +40,50 @@ interface ComparisonResult {
   tokens_used: number;
 }
 
+interface EvaluationSample {
+  sample_id: number;
+  input: string;
+  reference: string;
+  generated: string;
+  scores: {
+    bleu?: number;
+    rouge?: {
+      rouge1: number;
+      rouge2: number;
+      rougeL: number;
+    };
+    meteor?: number;
+    bertscore?: {
+      precision: number;
+      recall: number;
+      f1: number;
+    };
+  };
+}
+
+interface DetailedEvaluationResults {
+  model_id: string;
+  model_name: string;
+  status: string;
+  timestamp: string;
+  task_type: string;
+  num_samples_evaluated: number;
+  metrics: Record<string, {
+    mean: number;
+    std: number;
+    min: number;
+    max: number;
+    median: number;
+  }>;
+  sample_results: EvaluationSample[];
+  example_samples: {
+    best: EvaluationSample[];
+    worst: EvaluationSample[];
+    median: EvaluationSample[];
+  };
+  metric_descriptions: Record<string, string>;
+}
+
 export default function EvaluationHub({ userRole }: { userRole: string }) {
   const [models, setModels] = useState<FineTunedModel[]>([]);
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
@@ -48,6 +93,21 @@ export default function EvaluationHub({ userRole }: { userRole: string }) {
   const [loading, setLoading] = useState(false);
   const [evaluatingModel, setEvaluatingModel] = useState<string | null>(null);
   const [deployingModel, setDeployingModel] = useState<string | null>(null);
+
+  // Detailed evaluation viewer state
+  const [viewingEvaluation, setViewingEvaluation] = useState<string | null>(null);
+  const [evaluationResults, setEvaluationResults] = useState<DetailedEvaluationResults | null>(null);
+  const [selectedSampleView, setSelectedSampleView] = useState<'all' | 'best' | 'worst' | 'median'>('all');
+
+  // Manual testing state
+  const [testingModel, setTestingModel] = useState<string | null>(null);
+  const [manualTestInput, setManualTestInput] = useState('');
+  const [manualTestOutput, setManualTestOutput] = useState('');
+  const [testingInProgress, setTestingInProgress] = useState(false);
+  const [testSettings, setTestSettings] = useState({
+    temperature: 0.7,
+    max_length: 512
+  });
 
   useEffect(() => {
     fetchModels();
@@ -70,26 +130,25 @@ export default function EvaluationHub({ userRole }: { userRole: string }) {
     }
   };
 
-  const triggerEvaluation = async (modelId: string) => {
+  const triggerEvaluation = async (modelId: string, numSamples: number = 100) => {
     setEvaluatingModel(modelId);
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/finetuning/models/${modelId}/evaluate`, {
+      const response = await fetch(`http://localhost:8000/api/v1/finetuning/models-public/${modelId}/evaluate?num_samples=${numSamples}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          benchmark_dataset: 'default',
-          metrics: ['accuracy', 'perplexity', 'rouge', 'bleu']
-        })
+        }
       });
 
       if (response.ok) {
         const result = await response.json();
-        alert(`Evaluation started! Job ID: ${result.job_id}`);
-        await fetchModels(); // Refresh models
+        setEvaluationResults(result);
+        setViewingEvaluation(modelId);
+        alert(`✅ Evaluation completed! ${result.num_samples_evaluated} samples evaluated.`);
+        await fetchModels(); // Refresh models to update eval_metrics
       } else {
-        alert('Failed to start evaluation');
+        const error = await response.json();
+        alert(`Failed to evaluate: ${error.detail || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error triggering evaluation:', error);
@@ -99,14 +158,70 @@ export default function EvaluationHub({ userRole }: { userRole: string }) {
     }
   };
 
+  const viewEvaluationResults = async (modelId: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/finetuning/models-public/${modelId}/evaluation-results`);
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.has_evaluation) {
+          setEvaluationResults(result);
+          setViewingEvaluation(modelId);
+        } else {
+          alert('No evaluation results available. Please run evaluation first.');
+        }
+      }
+    } catch (error) {
+      console.error('Error loading evaluation results:', error);
+      alert('Error loading evaluation results');
+    }
+  };
+
+  const testModelManually = async (modelId: string) => {
+    if (!manualTestInput.trim()) {
+      alert('Please enter test input');
+      return;
+    }
+
+    setTestingInProgress(true);
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/finetuning/models-public/${modelId}/test`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          input: manualTestInput,
+          temperature: testSettings.temperature,
+          max_length: testSettings.max_length
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setManualTestOutput(result.generated);
+        alert(`✅ Generated response! Total inferences: ${result.total_inferences}`);
+      } else {
+        const error = await response.json();
+        alert(`Test failed: ${error.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error testing model:', error);
+      alert('Error testing model');
+    } finally {
+      setTestingInProgress(false);
+    }
+  };
+
   const deployToOllama = async (modelId: string) => {
-    if (!confirm('Deploy this model to Ollama? This will make it available for inference.')) {
+    const model = models.find(m => m.id === modelId);
+    if (!confirm(`Deploy "${model?.name}" to Ollama? This will make it available for inference in the chat UI.`)) {
       return;
     }
 
     setDeployingModel(modelId);
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/finetuning/models/${modelId}/deploy`, {
+      const response = await fetch(`http://localhost:8000/api/v1/finetuning/models-public/${modelId}/deploy`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -123,7 +238,7 @@ export default function EvaluationHub({ userRole }: { userRole: string }) {
 
       if (response.ok) {
         const result = await response.json();
-        alert(`Model deployed to Ollama successfully!`);
+        alert(`✅ Model deployed to Ollama successfully!\n\nOllama Model: ${result.ollama_model_name || 'N/A'}\n\nYou can now use it in the chat interface.`);
         await fetchModels(); // Refresh to show deployed status
       } else {
         const error = await response.json();
@@ -138,12 +253,13 @@ export default function EvaluationHub({ userRole }: { userRole: string }) {
   };
 
   const undeployFromOllama = async (modelId: string) => {
-    if (!confirm('Undeploy this model from Ollama?')) {
+    const model = models.find(m => m.id === modelId);
+    if (!confirm(`Undeploy "${model?.name}" from Ollama?\n\nThis will remove it from the chat interface.`)) {
       return;
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/finetuning/models/${modelId}/undeploy`, {
+      const response = await fetch(`http://localhost:8000/api/v1/finetuning/models-public/${modelId}/undeploy`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -151,7 +267,7 @@ export default function EvaluationHub({ userRole }: { userRole: string }) {
       });
 
       if (response.ok) {
-        alert('Model undeployed from Ollama successfully!');
+        alert('✅ Model undeployed from Ollama successfully!');
         await fetchModels();
       } else {
         alert('Failed to undeploy model');
@@ -259,6 +375,7 @@ export default function EvaluationHub({ userRole }: { userRole: string }) {
     const badges: Record<string, { color: string; icon: React.ReactNode }> = {
       deployed: { color: 'bg-green-100 text-green-800', icon: <CheckCircle className="w-4 h-4" /> },
       registered: { color: 'bg-blue-100 text-blue-800', icon: <Clock className="w-4 h-4" /> },
+      approved: { color: 'bg-purple-100 text-purple-800', icon: <CheckCircle className="w-4 h-4" /> },
       archived: { color: 'bg-gray-100 text-gray-800', icon: <FileText className="w-4 h-4" /> },
       deprecated: { color: 'bg-red-100 text-red-800', icon: <AlertCircle className="w-4 h-4" /> },
     };
@@ -271,6 +388,22 @@ export default function EvaluationHub({ userRole }: { userRole: string }) {
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </span>
     );
+  };
+
+  const getSamplesToDisplay = (): EvaluationSample[] => {
+    if (!evaluationResults) return [];
+
+    switch (selectedSampleView) {
+      case 'best':
+        return evaluationResults.example_samples?.best || [];
+      case 'worst':
+        return evaluationResults.example_samples?.worst || [];
+      case 'median':
+        return evaluationResults.example_samples?.median || [];
+      case 'all':
+      default:
+        return evaluationResults.sample_results || [];
+    }
   };
 
   return (
@@ -292,6 +425,226 @@ export default function EvaluationHub({ userRole }: { userRole: string }) {
           </button>
         )}
       </div>
+
+      {/* Detailed Evaluation Results Modal */}
+      {viewingEvaluation && evaluationResults && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 overflow-y-auto p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full my-8">
+            {/* Modal Header */}
+            <div className="border-b border-gray-200 p-6 flex items-center justify-between sticky top-0 bg-white rounded-t-lg">
+              <div>
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  <BarChart3 className="w-6 h-6 text-indigo-600" />
+                  Evaluation Results: {evaluationResults.model_name}
+                </h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  {evaluationResults.num_samples_evaluated} samples evaluated • {evaluationResults.task_type}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setViewingEvaluation(null);
+                  setEvaluationResults(null);
+                }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto">
+              {/* Metrics Summary Grid */}
+              <div>
+                <h4 className="text-lg font-semibold mb-4">Evaluation Metrics</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Object.entries(evaluationResults.metrics || {}).map(([metric, stats]) => (
+                    <div key={metric} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <h5 className="font-bold text-gray-900 mb-2">{metric.toUpperCase().replace('_', ' ')}</h5>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Mean:</span>
+                          <span className="font-mono font-semibold">{stats.mean.toFixed(3)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Std Dev:</span>
+                          <span className="font-mono">{stats.std.toFixed(3)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Median:</span>
+                          <span className="font-mono">{stats.median.toFixed(3)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-500">
+                          <span>Range:</span>
+                          <span>{stats.min.toFixed(2)} - {stats.max.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sample View Tabs */}
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-semibold">Evaluation Samples</h4>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setSelectedSampleView('all')}
+                      className={`px-3 py-1 text-sm rounded ${selectedSampleView === 'all' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                    >
+                      All ({evaluationResults.sample_results?.length || 0})
+                    </button>
+                    <button
+                      onClick={() => setSelectedSampleView('best')}
+                      className={`px-3 py-1 text-sm rounded ${selectedSampleView === 'best' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                    >
+                      Best
+                    </button>
+                    <button
+                      onClick={() => setSelectedSampleView('worst')}
+                      className={`px-3 py-1 text-sm rounded ${selectedSampleView === 'worst' ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                    >
+                      Worst
+                    </button>
+                    <button
+                      onClick={() => setSelectedSampleView('median')}
+                      className={`px-3 py-1 text-sm rounded ${selectedSampleView === 'median' ? 'bg-yellow-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                    >
+                      Median
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sample Cards */}
+                <div className="space-y-4 max-h-[500px] overflow-y-auto">
+                  {getSamplesToDisplay().map((sample) => (
+                    <div key={sample.sample_id} className="border border-gray-200 rounded-lg p-4 bg-white">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-medium text-gray-600">Sample #{sample.sample_id}</span>
+                        <div className="flex gap-3 text-sm">
+                          {sample.scores.bleu !== undefined && (
+                            <span className="font-semibold text-blue-600">
+                              BLEU: {sample.scores.bleu.toFixed(3)}
+                            </span>
+                          )}
+                          {sample.scores.rouge && (
+                            <span className="font-semibold text-green-600">
+                              ROUGE-1: {sample.scores.rouge.rouge1.toFixed(3)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div>
+                          <div className="text-xs font-semibold text-gray-700 mb-1">INPUT:</div>
+                          <div className="p-3 bg-blue-50 rounded text-sm text-gray-800">{sample.input}</div>
+                        </div>
+
+                        <div>
+                          <div className="text-xs font-semibold text-gray-700 mb-1">REFERENCE:</div>
+                          <div className="p-3 bg-gray-100 rounded text-sm text-gray-800">{sample.reference}</div>
+                        </div>
+
+                        <div>
+                          <div className="text-xs font-semibold text-gray-700 mb-1">GENERATED:</div>
+                          <div className="p-3 bg-green-50 rounded text-sm text-gray-800">{sample.generated}</div>
+                        </div>
+
+                        <div className="flex gap-4 text-xs text-gray-600 pt-2 border-t border-gray-200">
+                          {Object.entries(sample.scores).map(([metric, score]) => (
+                            <div key={metric}>
+                              <strong className="text-gray-700">{metric}:</strong>{' '}
+                              {typeof score === 'object' ? JSON.stringify(score) : score.toFixed(3)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Manual Testing Section */}
+              {testingModel === viewingEvaluation && (
+                <div className="border-t border-gray-200 pt-6">
+                  <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <Send className="w-5 h-5 text-indigo-600" />
+                    Manual Testing
+                  </h4>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Test Input
+                      </label>
+                      <textarea
+                        value={manualTestInput}
+                        onChange={(e) => setManualTestInput(e.target.value)}
+                        placeholder="Enter your test input..."
+                        rows={4}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div className="flex gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Temperature
+                        </label>
+                        <input
+                          type="number"
+                          value={testSettings.temperature}
+                          onChange={(e) => setTestSettings({...testSettings, temperature: parseFloat(e.target.value)})}
+                          min="0"
+                          max="2"
+                          step="0.1"
+                          className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Max Length
+                        </label>
+                        <input
+                          type="number"
+                          value={testSettings.max_length}
+                          onChange={(e) => setTestSettings({...testSettings, max_length: parseInt(e.target.value)})}
+                          min="128"
+                          max="2048"
+                          step="128"
+                          className="p-2 border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => testModelManually(viewingEvaluation)}
+                      disabled={testingInProgress || !manualTestInput.trim()}
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      <Send className="w-4 h-4" />
+                      {testingInProgress ? 'Generating...' : 'Test Model'}
+                    </button>
+
+                    {manualTestOutput && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Generated Output
+                        </label>
+                        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <p className="whitespace-pre-wrap text-sm text-gray-800">{manualTestOutput}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Test Prompt Input */}
       {selectedModels.size >= 2 && (
@@ -461,7 +814,7 @@ export default function EvaluationHub({ userRole }: { userRole: string }) {
                             {evaluatingModel === model.id ? 'Evaluating...' : 'Evaluate'}
                           </button>
                         )}
-                        {model.status === 'registered' && (
+                        {(model.status === 'registered' || model.status === 'approved') && (
                           <button
                             onClick={() => deployToOllama(model.id)}
                             disabled={deployingModel === model.id}

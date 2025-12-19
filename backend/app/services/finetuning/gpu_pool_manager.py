@@ -149,7 +149,7 @@ class GPUPoolManager:
         self,
         job_id: str,
         count: int = 1,
-        memory_required_gb: float = 12.0
+        memory_required_gb: float = 6.0  # 🆕 Reduced from 12GB to 6GB (safe for 7B models on 8GB GPU)
     ) -> Optional[List[str]]:
         """
         Allocate GPUs for a training job
@@ -287,7 +287,7 @@ class GPUPoolManager:
         self,
         job_id: str,
         count: int = 1,
-        memory_required_gb: float = 12.0,
+        memory_required_gb: float = 6.0,  # 🆕 Reduced from 12GB to 6GB (safe for 7B models on 8GB GPU)
         timeout_seconds: int = 3600
     ) -> Optional[List[str]]:
         """

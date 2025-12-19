@@ -340,6 +340,8 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
     streamingContent,
     isStreaming,
     error: streamingError,
+    sources: streamingSources,  // 🔧 FIX: Capture sources from streaming
+    modelUsed: streamingModel,  // 🔧 FIX: Capture model from streaming
     startStreaming,
     stopStreaming,
     resetStream
@@ -874,7 +876,8 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
             ...prev.slice(0, -1),
             {
               ...lastMessage,
-              content: streamingContent
+              content: streamingContent,
+              sources: streamingSources  // 🔧 FIX: Update sources from stream
             }
           ]
         }
@@ -886,13 +889,14 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
               role: 'assistant' as const,
               content: streamingContent,
               timestamp: new Date(),
-              isStreaming: true  // Flag to indicate this is a streaming message
+              isStreaming: true,  // Flag to indicate this is a streaming message
+              sources: streamingSources  // 🔧 FIX: Add sources from stream
             }
           ]
         }
       })
     }
-  }, [streamingContent, isStreaming])
+  }, [streamingContent, isStreaming, streamingSources])  // 🔧 FIX: Add streamingSources dependency
 
   // 🆕 Finalize streaming message when complete
   useEffect(() => {
@@ -906,7 +910,8 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
             {
               ...lastMessage,
               isStreaming: false,
-              model: selectedModel || undefined  // Add final metadata
+              model: streamingModel || selectedModel || undefined,  // 🔧 FIX: Use streaming model
+              sources: streamingSources  // 🔧 FIX: Ensure sources are in final message
             }
           ]
         }
@@ -917,7 +922,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       resetStream()
       setIsLoading(false)
     }
-  }, [isStreaming, streamingContent, streamingError, selectedModel, resetStream])
+  }, [isStreaming, streamingContent, streamingError, streamingSources, streamingModel, selectedModel, resetStream])  // 🔧 FIX: Add streaming dependencies
 
   // 🆕 Handle streaming errors
   useEffect(() => {
@@ -1199,18 +1204,61 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
     setInput('')
     setIsLoading(true)
 
-    // 🆕 STREAMING MODE
+    // 🆕 STREAMING MODE (NOW WITH FULL RAG SUPPORT!)
     if (enableStreaming) {
       try {
-        console.log('🌊 Starting streaming mode for query:', queryText)
+        console.log('🌊 Starting streaming mode with RAG for query:', queryText)
 
-        // Start streaming
+        // 🆕 Get unified config (same logic as non-streaming)
+        let configToSend = unifiedConfig
+        if (!configToSend && typeof window !== 'undefined') {
+          const savedConfig = localStorage.getItem('userWeightsConfig')
+          if (savedConfig) {
+            try {
+              configToSend = JSON.parse(savedConfig)
+              console.log('📦 Streaming: Loaded config from localStorage')
+            } catch (e) {
+              console.error('Failed to parse localStorage config:', e)
+            }
+          }
+        }
+
+        // Get current RAG config for fallback
+        const currentRagConfig = getCurrentConfig()
+
+        // Get active project ID
+        const globalProject = availableProjects.find(p => p.name.toLowerCase() === 'global')
+        const activeProjectId = selectedProjectId || projectId || globalProject?.id || null
+
+        console.log('🔍 Streaming: selectedProjectId =', selectedProjectId)
+        console.log('🔍 Streaming: projectId =', projectId)
+        console.log('🔍 Streaming: activeProjectId =', activeProjectId)
+
+        // 🆕 Start streaming with FULL RAG configuration (identical to non-streaming!)
         startStreaming(queryText, {
           modelId: selectedModel || undefined,
           sessionId: sessionId || undefined,
+          projectId: activeProjectId || undefined,
           maxTokens: 1024,
-          temperature: 0.7
+          temperature: 0.7,
+          // 🆕 Pass unified config (same as query endpoint)
+          unifiedConfig: configToSend ? JSON.stringify(configToSend) : undefined,
+          // Fallback RAG parameters
+          topK: currentRagConfig.top_k,
+          similarityThreshold: currentRagConfig.similarity_threshold,
+          minSimilarityThreshold: currentRagConfig.min_similarity_threshold,
+          noRelevantDocsThreshold: currentRagConfig.no_relevant_docs_threshold,
+          semanticWeight: currentRagConfig.semantic_weight,
+          keywordWeight: currentRagConfig.keyword_weight,
+          enableEvaluation: currentRagConfig.enableEvaluation,
+          selectedAgent: 'auto'
         })
+
+        console.log('✅ Streaming started with unified config:', !!configToSend)
+        if (configToSend) {
+          console.log('   → Strategy weights:', configToSend.strategy_weights)
+          console.log('   → Top K:', configToSend.rag_settings?.top_k)
+        }
 
         // Note: Streaming content is handled by useEffect hooks below
         // The loading state will be cleared when streaming completes

@@ -251,6 +251,7 @@ class FineTuningJobResponse(BaseModel):
     dataset_id: Optional[UUID] = None
     project_id: Optional[UUID] = None
     error_message: Optional[str] = None
+    training_stage: Optional[str] = None  # Current pipeline stage
 
     class Config:
         orm_mode = True
@@ -288,6 +289,12 @@ class FineTuningJobDetailResponse(BaseModel):
     total_steps: Optional[int] = None
     train_loss: Optional[float] = None
     eval_loss: Optional[float] = None
+
+    # Pipeline stage tracking
+    training_stage: Optional[str] = None  # queued, setup, tokenizer_load, model_download, model_load, dataset_prep, training, checkpoint_save, completed, failed
+    stage_details: Optional[Dict[str, Any]] = None  # Stage-specific metadata (download progress, current file, etc.)
+    stage_started_at: Optional[datetime] = None  # When current stage started
+    stage_completed_at: Optional[datetime] = None  # When current stage completed
 
     # Resource tracking
     gpu_type: Optional[str] = None

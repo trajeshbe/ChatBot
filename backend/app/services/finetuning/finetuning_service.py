@@ -268,7 +268,9 @@ class FineTuningService:
         train_split: float = 0.8,
         created_by: Optional[UUID] = None,
         project_id: Optional[UUID] = None,
-        description: Optional[str] = None
+        description: Optional[str] = None,
+        department: Optional[str] = None,
+        team: Optional[str] = None
     ) -> FineTuningJob:
         """
         Create a fine-tuning job
@@ -320,6 +322,8 @@ class FineTuningService:
             created_by=created_by,
             project_id=project_id,
             description=description,
+            department=department,
+            team=team,
             status="pending",
             progress=0.0
         )

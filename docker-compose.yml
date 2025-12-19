@@ -99,6 +99,7 @@ services:
       - "11434:11434"
     volumes:
       - ollama_models:/root/.ollama
+      - finetuning_workspaces:/workspace/finetuning  # Access to fine-tuned models for deployment
     environment:
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_MODELS=/root/.ollama/models
@@ -162,12 +163,13 @@ services:
     container_name: rag-finetuning-runtime
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
-      HF_HOME: /workspace/temp/.cache/huggingface
-      TRANSFORMERS_CACHE: /workspace/temp/.cache/transformers
+      HF_HOME: /root/.cache/huggingface
+      TRANSFORMERS_CACHE: /root/.cache/transformers
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - finetuning_workspaces:/workspace
+      - huggingface_cache:/root/.cache/huggingface
     deploy:
       resources:
         reservations:
@@ -332,6 +334,19 @@ services:
     networks:
       - rag-network
 
+  # TensorBoard - Training Metrics Visualization
+  tensorboard:
+    image: tensorflow/tensorflow:latest
+    container_name: rag-tensorboard
+    command: tensorboard --logdir=/logs --host=0.0.0.0 --port=6006 --reload_interval=5
+    ports:
+      - "6006:6006"
+    volumes:
+      - finetuning_workspaces:/logs
+    networks:
+      - rag-network
+    restart: unless-stopped
+
   # Apache Flink (for Feast)
   flink-jobmanager:
     image: flink:1.18-scala_2.12-java11
@@ -391,6 +406,7 @@ services:
     volumes:
       - ./backend:/app
       - agent_workspace:/workspace  # Shared with agent-runtime for file uploads
+      - finetuning_workspaces:/workspace/finetuning  # Access to fine-tuned models for deployment
       - /var/run/docker.sock:/var/run/docker.sock  # Mount docker socket for agent task execution
     depends_on:
       - postgres
@@ -399,16 +415,14 @@ services:
       - prefect-server
       - tempo
       - ollama  # Local LLM with better WSL2 support
-    # GPU access: WSL2 nvidia-container-cli runtime broken (cannot detect adapters)
-    # Ollama works because it started 3 days ago when runtime was healthy
-    # New containers cannot start with GPU until WSL2/NVIDIA runtime is fixed
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+    # GPU access enabled - WSL2 NVIDIA runtime working
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     networks:
       - rag-network
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
@@ -442,14 +456,14 @@ services:
       - redis
       - minio
       - backend
-    # GPU access commented out - celery worker launches separate training containers with GPU
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+    # GPU access enabled for GPU detection and allocation
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     networks:
       - rag-network
     command: celery -A app.celery_app worker --loglevel=info --concurrency=2 --max-tasks-per-child=1
@@ -517,3 +531,4 @@ volumes:
   agent_artifacts:
   claude_session:  # Claude CLI OAuth session persistence
   finetuning_workspaces:  # Training workspaces (datasets, checkpoints, logs)
+  huggingface_cache:  # HuggingFace models cache (avoid re-downloading)

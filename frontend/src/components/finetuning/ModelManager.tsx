@@ -18,7 +18,7 @@ interface Model {
   finetuning_method: string
   model_path: string
   adapter_path: string | null
-  deployment_status: string
+  status: string  // Backend returns 'status' not 'deployment_status'
   deployment_target: string | null
   endpoint_url: string | null
   quantization: string
@@ -200,7 +200,7 @@ export default function ModelManager({ onRefresh }: ModelManagerProps) {
                     {model.name}
                   </h4>
                 </div>
-                {getDeploymentStatusBadge(model.deployment_status)}
+                {getDeploymentStatusBadge(model.status)}
               </div>
 
               {/* Details */}
@@ -268,7 +268,7 @@ export default function ModelManager({ onRefresh }: ModelManagerProps) {
 
               {/* Actions */}
               <div className="flex gap-2">
-                {model.deployment_status === 'deployed' ? (
+                {model.status === 'deployed' ? (
                   <button
                     onClick={() => undeployModel(model.id)}
                     className="flex-1 px-3 py-2 bg-orange-600 text-white text-sm rounded-lg hover:bg-orange-700 transition-colors flex items-center justify-center gap-2"

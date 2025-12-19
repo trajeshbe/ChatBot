@@ -453,7 +453,10 @@ class MinIOPathBuilder:
         Build hierarchical MinIO path for fine-tuning checkpoints under dataset.
 
         This creates a dataset-linked organizational hierarchy:
-        documents/{dept}/{team}/{project}/{user}/finetuning/datasets/{dataset}/checkpoints/{job}/{job_id}/{stage}/{type}/{file}
+        {dept}/{team}/{project}/{user}/finetuning/datasets/{dataset}/checkpoints/{job}/{job_id}/{stage}/{type}/{file}
+
+        NOTE: Bucket name (e.g., 'documents') is NOT included in the returned path.
+        It should be added separately when constructing the MinIO URI.
 
         Args:
             department_name: Department (e.g., 'Technology')
@@ -468,7 +471,7 @@ class MinIOPathBuilder:
             filename: Specific file name (empty for directory path)
 
         Returns:
-            Full MinIO path string
+            MinIO object path (without bucket name)
 
         Examples:
             >>> build_finetuning_checkpoint_with_dataset(
@@ -483,7 +486,7 @@ class MinIOPathBuilder:
             ...     model_type='merged_model',
             ...     filename='model.safetensors'
             ... )
-            'documents/technology/backend-development/global/admin/finetuning/datasets/story8/checkpoints/qwen-story-job/c4ad0963-b194-4f85-b816-3fd0fdaaff9d/final/merged_model/model.safetensors'
+            'technology/backend-development/global/admin/finetuning/datasets/story8/checkpoints/qwen-story-job/c4ad0963-b194-4f85-b816-3fd0fdaaff9d/final/merged_model/model.safetensors'
         """
         # Sanitize components
         sanitized_dept = MinIOPathBuilder.sanitize(department_name)
@@ -493,9 +496,11 @@ class MinIOPathBuilder:
         sanitized_dataset = MinIOPathBuilder.sanitize(dataset_name)
         sanitized_job = MinIOPathBuilder.sanitize(job_name)
 
-        # Build path: documents/{dept}/{team}/{project}/{user}/finetuning/datasets/{dataset}/checkpoints/{job}/{job_id}/{stage}/{type}
+        # Build path: {dept}/{team}/{project}/{user}/finetuning/datasets/{dataset}/checkpoints/{job}/{job_id}/{stage}/{type}
+        # Full MinIO URI will be: minio://documents/{dept}/{team}/...
+        # Bucket name "documents" is added separately in URI construction
         path = (
-            f"documents/{sanitized_dept}/{sanitized_team}/{sanitized_project}/"
+            f"{sanitized_dept}/{sanitized_team}/{sanitized_project}/"
             f"{sanitized_username}/finetuning/datasets/{sanitized_dataset}/"
             f"checkpoints/{sanitized_job}/{job_id}/{checkpoint_stage}/{model_type}"
         )

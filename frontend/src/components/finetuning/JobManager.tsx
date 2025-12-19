@@ -63,6 +63,7 @@ export default function JobManager({ onRefresh }: JobManagerProps) {
     finetuning_method: 'peft',
     training_objective: 'instruction',
     quantization: '4bit',
+    project_id: '',  // P2 FIX: Add project_id field (defaults to Global in backend if empty)
   })
 
   // Hyperparameter mode
@@ -316,7 +317,27 @@ export default function JobManager({ onRefresh }: JobManagerProps) {
 
       if (response.ok) {
         const result = await response.json()
-        alert(`✅ Job created successfully!\n\nJob ID: ${result.id}\nStatus: ${result.status}`)
+
+        // UX IMPROVEMENT: Automatically submit the job after creation
+        console.log(`✅ Job created: ${result.id}, auto-submitting for training...`)
+
+        try {
+          // Auto-submit the job
+          const submitResponse = await fetch(`${API_BASE}/api/v1/finetuning/jobs/${result.id}/submit`, {
+            method: 'POST',
+            headers: token ? { Authorization: `Bearer ${token}` } : {}
+          })
+
+          if (submitResponse.ok) {
+            alert(`✅ Job created and submitted for training!\n\nJob ID: ${result.id}\nStatus: Training queued\n\nYou can monitor progress in the Jobs tab.`)
+          } else {
+            alert(`✅ Job created: ${result.id}\n⚠️  Auto-submit failed. Please submit manually from the Jobs tab.`)
+          }
+        } catch (submitError) {
+          console.error('Auto-submit error:', submitError)
+          alert(`✅ Job created: ${result.id}\n⚠️  Auto-submit failed. Please submit manually from the Jobs tab.`)
+        }
+
         setShowCreateForm(false)
         await loadJobs()
         if (onRefresh) onRefresh()
@@ -450,19 +471,22 @@ export default function JobManager({ onRefresh }: JobManagerProps) {
               </div>
             </div>
 
-            {/* Project Selector */}
+            {/* Project Selector - P2 FIX */}
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Project (Optional)
               </label>
               <ProjectSelector
                 value={selectedProjectId}
-                onChange={(projectId) => setSelectedProjectId(projectId)}
+                onChange={(projectId) => {
+                  setSelectedProjectId(projectId)
+                  setFormData({ ...formData, project_id: projectId || '' })  // P2 FIX: Sync with formData
+                }}
                 currentUser={currentUser}
-                placeholder="Select project or leave blank for global..."
+                placeholder="Select project or leave blank for Global..."
               />
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Datasets and checkpoints will be organized by project
+                Training artifacts will be organized under this project. Leave blank to use Global project.
               </p>
             </div>
 
@@ -679,6 +703,29 @@ export default function JobManager({ onRefresh }: JobManagerProps) {
 
       {/* Jobs List */}
       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+        {/* Header with TensorBoard Link */}
+        <div className="px-6 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+              Training Jobs
+            </h3>
+            <a
+              href="http://localhost:6006"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 bg-orange-600 text-white text-xs rounded hover:bg-orange-700 transition-colors inline-flex items-center gap-2"
+              title="Open TensorBoard to view all training metrics"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Open TensorBoard
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
+          </div>
+        </div>
         <div className="divide-y divide-slate-200 dark:divide-slate-700">
           {loading ? (
             <div className="px-6 py-12 text-center">
@@ -772,6 +819,18 @@ export default function JobManager({ onRefresh }: JobManagerProps) {
                         >
                           Monitor
                         </button>
+                        <a
+                          href={`http://localhost:6006/#timeseries&runFilter=${job.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 transition-colors inline-flex items-center gap-1"
+                          title="View training metrics in TensorBoard"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                          </svg>
+                          TensorBoard
+                        </a>
                         <button
                           onClick={() => cancelJob(job.id)}
                           className="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"

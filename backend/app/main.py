@@ -191,12 +191,34 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Could not create default admin user: {e}")
 
+    # 🆕 Start GPU resource manager cleanup monitor
+    try:
+        logger.info("Starting GPU resource manager...")
+        from app.services.gpu_resource_manager import get_gpu_manager
+        gpu_manager = get_gpu_manager()
+        await gpu_manager.start_cleanup_monitor()
+        logger.info("✓ GPU resource manager started")
+    except Exception as e:
+        logger.warning(f"⚠ GPU resource manager initialization failed: {e}")
+
     logger.info("Application startup complete - API is ready")
 
     yield
 
     # Shutdown
     logger.info("Shutting down application...")
+
+    # 🆕 Stop GPU resource manager and free all GPU memory
+    try:
+        from app.services.gpu_resource_manager import get_gpu_manager
+        gpu_manager = get_gpu_manager()
+        logger.info("Freeing GPU resources...")
+        await gpu_manager.unload_all_models()
+        await gpu_manager.stop_cleanup_monitor()
+        logger.info("✓ GPU resources freed")
+    except Exception as e:
+        logger.warning(f"⚠ GPU cleanup failed: {e}")
+
     try:
         await close_db()
         await embedding_service.close()
@@ -625,11 +647,28 @@ async def stream_chat_response(
     query: str,
     model_id: Optional[str] = None,
     session_id: Optional[str] = None,
+    project_id: Optional[str] = None,
     max_tokens: int = 512,
-    temperature: float = 0.7
+    temperature: float = 0.7,
+    # 🆕 Unified configuration - same as /api/v1/query
+    unified_config: Optional[str] = None,
+    # RAG configuration parameters (fallback if unified_config not provided)
+    top_k: Optional[int] = None,
+    similarity_threshold: Optional[float] = None,
+    min_similarity_threshold: Optional[float] = None,
+    no_relevant_docs_threshold: Optional[float] = None,
+    semantic_weight: Optional[float] = None,
+    keyword_weight: Optional[float] = None,
+    enable_evaluation: bool = False,
+    enabled_tools: Optional[str] = None,
+    selected_agent: Optional[str] = 'auto',
+    conversation_history: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
 ):
     """
-    Stream LLM response in real-time using Server-Sent Events (SSE)
+    Stream LLM response in real-time using Server-Sent Events (SSE) with FULL RAG support
+
+    🆕 NOW IDENTICAL TO /api/v1/query - uses same RAG pipeline, just streams the response!
 
     This endpoint provides ChatGPT-like streaming experience where
     the response appears character-by-character.
@@ -638,60 +677,143 @@ async def stream_chat_response(
         query: User question/prompt
         model_id: Optional model to use (uses default if not specified)
         session_id: Optional session ID for conversation history
+        project_id: Optional project ID for document scoping
         max_tokens: Maximum tokens to generate
         temperature: Sampling temperature (0.0-1.0)
+        unified_config: JSON string with complete RAG configuration (all 48 params)
+        top_k: Number of documents to retrieve
+        similarity_threshold: Minimum similarity score for RAG
+        ... (all other RAG params)
 
     Returns:
         EventSourceResponse with streaming content
     """
 
     async def event_generator():
-        """Generate SSE events from LLM streaming response"""
+        """Generate SSE events from LLM streaming response with RAG"""
         try:
-            logger.info(f"🌊 Streaming chat started: query='{query[:50]}...', model={model_id}")
+            logger.info(f"🌊 Streaming chat with RAG started: query='{query[:50]}...', model={model_id}")
+            logger.info(f"🧠 Unified config provided: {unified_config is not None}")
 
-            # Stream from LLM service
-            async for chunk in llm_service.generate_stream(
-                prompt=query,
-                model_id=model_id,
-                max_tokens=max_tokens,
-                temperature=temperature
-            ):
-                if chunk["type"] == "content":
-                    # Send content chunk
-                    yield {
-                        "event": "message",
-                        "data": json.dumps({
-                            "type": "content",
-                            "content": chunk["content"],
-                            "model": chunk.get("model", "unknown")
-                        })
-                    }
-                elif chunk["type"] == "error":
-                    # Send error and stop
-                    yield {
-                        "event": "error",
-                        "data": json.dumps({
-                            "type": "error",
-                            "error": chunk["error"],
-                            "model": chunk.get("model", "unknown")
-                        })
-                    }
-                    return
+            # Parse unified_config (same as query endpoint)
+            unified_config_dict = {}
+            if unified_config:
+                try:
+                    unified_config_dict = json.loads(unified_config)
+                    logger.info(f"✅ Streaming: Parsed unified config with {len(unified_config_dict)} groups")
+                except json.JSONDecodeError as e:
+                    logger.warning(f"⚠️ Failed to parse unified_config: {e}")
 
-            # Send completion event
+            # Parse conversation history
+            parsed_history = None
+            if conversation_history:
+                try:
+                    parsed_history = json.loads(conversation_history)
+                    logger.info(f"📜 Streaming: Received conversation history with {len(parsed_history)} messages")
+                except json.JSONDecodeError:
+                    logger.warning("Streaming: Failed to parse conversation history")
+
+            # 🔧 FIX: Load project_id from session instead of parameter (frontend state may be stale)
+            resolved_project_id = None
+            if session_id:
+                from app.models.database_enhanced import ChatSession
+                from sqlalchemy import select
+                session_query = select(ChatSession).where(ChatSession.session_id == session_id)
+                session_result = await db.execute(session_query)
+                session = session_result.scalar_one_or_none()
+                if session and session.project_id:
+                    resolved_project_id = str(session.project_id)
+                    logger.info(f"📁 Streaming: Using project_id from session: {resolved_project_id}")
+                elif project_id:
+                    resolved_project_id = project_id
+                    logger.info(f"📁 Streaming: Using project_id from parameter: {resolved_project_id}")
+            elif project_id:
+                resolved_project_id = project_id
+                logger.info(f"📁 Streaming: Using project_id from parameter (no session): {resolved_project_id}")
+
+            # Use EnhancedRAGAgent for RAG retrieval (same as query endpoint)
+            from app.agents.enhanced_rag_agent import enhanced_rag_agent
+
+            logger.info(f"🤖 Streaming: Using EnhancedRAGAgent for query: {query[:100]}...")
+
+            # Build user_preferences dict (same format as query endpoint)
+            user_preferences = {
+                "model_id": model_id,
+                "project_id": resolved_project_id,  # 🔧 Use resolved project_id
+                "db": db,
+                "unified_config": unified_config_dict,
+                "conversation_history": parsed_history,
+                "enabled_tools": enabled_tools.split(',') if enabled_tools else [],
+                "selected_agent": selected_agent,
+                # RAG fallback parameters
+                "top_k": top_k,
+                "similarity_threshold": similarity_threshold,
+                "min_similarity_threshold": min_similarity_threshold,
+                "no_relevant_docs_threshold": no_relevant_docs_threshold,
+                "semantic_weight": semantic_weight,
+                "keyword_weight": keyword_weight,
+            }
+
+            # Merge unified_config into user_preferences if provided
+            if unified_config_dict:
+                user_preferences.update(unified_config_dict)
+
+            # Call agent with user_preferences (same as query endpoint)
+            agent_result = await enhanced_rag_agent.run(
+                query=query,
+                session_id=session_id,
+                user_preferences=user_preferences
+            )
+
+            logger.info(f"✅ Streaming: RAG retrieval complete, streaming response now...")
+
+            # Extract the answer to stream
+            answer = agent_result.get("answer", "")
+            sources = agent_result.get("sources", [])
+            model_used = agent_result.get("model", model_id)
+
+            # Send sources first (so UI can show them immediately)
+            if sources:
+                yield {
+                    "event": "sources",
+                    "data": json.dumps({
+                        "type": "sources",
+                        "sources": sources,
+                        "model": model_used
+                    })
+                }
+
+            # Stream the answer character-by-character
+            for i, char in enumerate(answer):
+                yield {
+                    "event": "message",
+                    "data": json.dumps({
+                        "type": "content",
+                        "content": char,
+                        "model": model_used
+                    })
+                }
+                # Small delay for realistic streaming (adjust as needed)
+                import asyncio
+                if i % 5 == 0:  # Every 5 chars
+                    await asyncio.sleep(0.01)
+
+            # Send completion event with metadata
             yield {
                 "event": "done",
                 "data": json.dumps({
                     "type": "done",
-                    "message": "Stream completed successfully"
+                    "message": "Stream completed successfully",
+                    "model": model_used,
+                    "sources_count": len(sources),
+                    "used_rag": len(sources) > 0
                 })
             }
 
-            logger.info("✅ Streaming chat completed successfully")
+            logger.info(f"✅ Streaming chat with RAG completed successfully (sources: {len(sources)})")
 
         except Exception as e:
-            logger.error(f"❌ Streaming error: {e}")
+            logger.error(f"❌ Streaming error: {e}", exc_info=True)
             yield {
                 "event": "error",
                 "data": json.dumps({

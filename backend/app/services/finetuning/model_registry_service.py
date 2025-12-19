@@ -22,6 +22,7 @@ from datetime import datetime
 import semver
 import httpx
 import asyncio
+import os
 
 from app.models.finetuning_models import (
     FineTunedModel,
@@ -115,7 +116,7 @@ class OllamaDeploymentStrategy(ModelDeploymentStrategy):
                 await self._pull_base_model(model.base_model)
 
             # Step 2: Create Modelfile
-            modelfile = self._create_modelfile(model, config)
+            modelfile = await self._create_modelfile(model, config)
 
             # Step 3: Register with Ollama
             success = await self._register_with_ollama(ollama_model_name, modelfile)
@@ -245,12 +246,12 @@ class OllamaDeploymentStrategy(ModelDeploymentStrategy):
         except Exception as e:
             logger.warning(f"Could not pull base model: {e}")
 
-    def _create_modelfile(self, model: FineTunedModel, config: Dict[str, Any]) -> str:
+    async def _create_modelfile(self, model: FineTunedModel, config: Dict[str, Any]) -> str:
         """
         Create Ollama Modelfile for the fine-tuned model
 
-        For PEFT models, this creates a model that references the base model
-        and adds fine-tuning context in the system prompt.
+        P0 FIX: Uses merged model directly from workspace (no MinIO download needed).
+        Workspace is preserved after training for efficient deployment.
 
         Args:
             model: FineTunedModel to create Modelfile for
@@ -259,12 +260,30 @@ class OllamaDeploymentStrategy(ModelDeploymentStrategy):
         Returns:
             Modelfile content as string
         """
-        # Get base model name (Ollama format)
-        base_model_name = self._map_base_model_name(model.base_model)
+        # ========== P0 FIX: Use merged model directly from workspace ==========
+        model_reference = None
+
+        if model.job_id:
+            # Check if merged model exists in workspace
+            workspace_merged_path = f"/workspace/finetuning/{model.job_id}/output/merged_model"
+
+            if os.path.exists(workspace_merged_path):
+                logger.info(f"✅ Using merged fine-tuned model from workspace: {workspace_merged_path}")
+                model_reference = workspace_merged_path
+            else:
+                logger.warning(f"⚠️  Workspace not found at {workspace_merged_path}")
+                logger.warning(f"   This may happen if workspace was cleaned up before deployment")
+                logger.warning(f"   Falling back to base model")
+
+        if not model_reference:
+            # Fallback to base model if workspace doesn't exist
+            base_model_name = self._map_base_model_name(model.base_model)
+            logger.warning(f"⚠️  Using base model: {base_model_name}")
+            model_reference = base_model_name
 
         # Build Modelfile
         modelfile_lines = [
-            f"FROM {base_model_name}",
+            f"FROM {model_reference}",
             "",
             "# Fine-tuned model configuration",
             f"# Original base: {model.base_model}",

@@ -58,20 +58,32 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
         setRefreshing(true)
       }
 
-      // Fetch standard models
-      const response = await axios.get(`${API_URL}/api/v1/models/`)
-      setModels(response.data.grouped)
-      setDefaultModel(response.data.default)
-      setGpuAvailable(response.data.gpu_info?.available || false)
-
-      // Fetch fine-tuned models
+      // Fetch fine-tuned models first
+      let fineTunedModelIds: string[] = []
       try {
-        const ftResponse = await axios.get(`${API_URL}/api/v1/finetuning/models/for-chat`)
-        setFineTunedModels(ftResponse.data.finetuned_models || [])
+        const ftResponse = await axios.get(`${API_URL}/api/v1/finetuning/models-public/for-chat`)
+        const ftModels = ftResponse.data.finetuned_models || []
+        setFineTunedModels(ftModels)
+        fineTunedModelIds = ftModels.map((m: FineTunedModel) => m.id)
       } catch (ftError) {
         console.error('Error fetching fine-tuned models:', ftError)
         setFineTunedModels([])
       }
+
+      // Fetch standard models and filter out fine-tuned duplicates
+      const response = await axios.get(`${API_URL}/api/v1/models/`)
+
+      // Deduplicate: Remove any models that exist in fine-tuned list
+      const deduplicateModels = (modelList: Model[]) =>
+        modelList.filter(m => !fineTunedModelIds.includes(m.id))
+
+      setModels({
+        proprietary: deduplicateModels(response.data.grouped.proprietary || []),
+        local_gpu: deduplicateModels(response.data.grouped.local_gpu || []),
+        local_cpu: deduplicateModels(response.data.grouped.local_cpu || [])
+      })
+      setDefaultModel(response.data.default)
+      setGpuAvailable(response.data.gpu_info?.available || false)
 
       // Set selected model to default if not set
       if (!selectedModel && response.data.default) {

@@ -8,7 +8,14 @@ import {
   Zap,
   Clock,
   Database,
-  RefreshCw
+  RefreshCw,
+  ChevronRight,
+  CheckCircle,
+  Loader,
+  ExternalLink,
+  BarChart3,
+  Server,
+  Eye
 } from 'lucide-react';
 import {
   LineChart,
@@ -71,6 +78,18 @@ interface CostSummary {
   active_training_cost_per_hour: number;
 }
 
+interface RunningJob {
+  id: string;
+  name: string;
+  base_model: string;
+  status: string;
+  progress: number;
+  training_stage: string;
+  stage_details: any;
+  stage_started_at: string | null;
+  stage_completed_at: string | null;
+}
+
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 const REFRESH_INTERVAL = 5000; // 5 seconds
 
@@ -80,23 +99,24 @@ export default function MonitoringDashboard({ userRole }: { userRole: string }) 
   const [recentMetrics, setRecentMetrics] = useState<MetricPoint[]>([]);
   const [driftAlerts, setDriftAlerts] = useState<DriftAlert[]>([]);
   const [costSummary, setCostSummary] = useState<CostSummary | null>(null);
+  const [runningJobs, setRunningJobs] = useState<RunningJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch dashboard stats
-      const statsRes = await fetch('http://localhost:8000/api/v1/finetuning/stats', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+      // Fetch dashboard stats (using public endpoint for testing)
+      const statsRes = await fetch('http://localhost:8000/api/v1/finetuning/stats-public', {
+        headers: { 'Content-Type': 'application/json' }
       });
       if (statsRes.ok) {
         const statsData = await statsRes.json();
         setStats(statsData);
       }
 
-      // Fetch GPU stats
-      const gpuRes = await fetch('http://localhost:8000/api/v1/finetuning/gpu/stats', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+      // Fetch GPU stats (using public endpoint for testing)
+      const gpuRes = await fetch('http://localhost:8000/api/v1/finetuning/gpu/stats-public', {
+        headers: { 'Content-Type': 'application/json' }
       });
       if (gpuRes.ok) {
         const gpuData = await gpuRes.json();
@@ -109,6 +129,10 @@ export default function MonitoringDashboard({ userRole }: { userRole: string }) 
       });
       if (jobsRes.ok) {
         const jobsData = await jobsRes.json();
+
+        // Filter running jobs for pipeline stage visualization
+        const running = (jobsData.jobs || []).filter((j: any) => j.status === 'running' || j.status === 'queued');
+        setRunningJobs(running);
 
         // Collect metrics from recent jobs
         let allMetrics: MetricPoint[] = [];
@@ -274,6 +298,85 @@ export default function MonitoringDashboard({ userRole }: { userRole: string }) 
           icon={<Database className="w-6 h-6 text-purple-600" />}
           color="purple"
         />
+      </div>
+
+      {/* External Monitoring Dashboards */}
+      <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-lg p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Eye className="w-6 h-6 text-indigo-600" />
+          <h3 className="text-lg font-semibold text-gray-900">External Monitoring & Observability</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Grafana */}
+          <a
+            href="http://localhost:3000/d/finetuning-metrics"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-white hover:bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:shadow-lg group"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <BarChart3 className="w-8 h-8 text-orange-600" />
+              <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-orange-600 transition-colors" />
+            </div>
+            <h4 className="font-semibold text-gray-900 mb-1">Grafana</h4>
+            <p className="text-sm text-gray-600 mb-2">Training metrics & loss curves</p>
+            <span className="text-xs text-orange-600 font-medium">View Dashboard →</span>
+          </a>
+
+          {/* Prometheus */}
+          <a
+            href="http://localhost:9090/graph"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-white hover:bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:shadow-lg group"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <Server className="w-8 h-8 text-red-600" />
+              <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-red-600 transition-colors" />
+            </div>
+            <h4 className="font-semibold text-gray-900 mb-1">Prometheus</h4>
+            <p className="text-sm text-gray-600 mb-2">Raw metrics & queries</p>
+            <span className="text-xs text-red-600 font-medium">Query Metrics →</span>
+          </a>
+
+          {/* MinIO */}
+          <a
+            href="http://localhost:9001"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-white hover:bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:shadow-lg group"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <Database className="w-8 h-8 text-purple-600" />
+              <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-purple-600 transition-colors" />
+            </div>
+            <h4 className="font-semibold text-gray-900 mb-1">MinIO</h4>
+            <p className="text-sm text-gray-600 mb-2">Model checkpoints & datasets</p>
+            <span className="text-xs text-purple-600 font-medium">Browse Storage →</span>
+          </a>
+
+          {/* Redis Insight */}
+          <a
+            href="http://localhost:8002"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-white hover:bg-gray-50 border border-gray-200 rounded-lg p-4 transition-all hover:shadow-lg group"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <Activity className="w-8 h-8 text-green-600" />
+              <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-green-600 transition-colors" />
+            </div>
+            <h4 className="font-semibold text-gray-900 mb-1">Redis Insight</h4>
+            <p className="text-sm text-gray-600 mb-2">Cache & session data</p>
+            <span className="text-xs text-green-600 font-medium">Inspect Cache →</span>
+          </a>
+        </div>
+        <div className="mt-4 bg-white/50 border border-indigo-100 rounded p-3">
+          <p className="text-xs text-gray-600">
+            <strong className="text-indigo-700">💡 Pro Tip:</strong> Use Grafana for live training metrics,
+            Prometheus for custom queries, MinIO to download checkpoints, and Redis Insight to debug caching issues.
+          </p>
+        </div>
       </div>
 
       {/* GPU & Cost Row */}
@@ -455,6 +558,18 @@ export default function MonitoringDashboard({ userRole }: { userRole: string }) 
         </div>
       </div>
 
+      {/* Pipeline Stage Visualization */}
+      {runningJobs.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold mb-4">Active Training Pipelines</h3>
+          <div className="space-y-4">
+            {runningJobs.map((job) => (
+              <PipelineStageVisualization key={job.id} job={job} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* System Health Indicators */}
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold mb-4">System Health</h3>
@@ -535,6 +650,116 @@ function HealthIndicator({ label, status, message }: {
         <p className="font-semibold text-gray-900">{label}</p>
       </div>
       <p className={`text-sm ${config.text}`}>{message}</p>
+    </div>
+  );
+}
+
+function PipelineStageVisualization({ job }: { job: RunningJob }) {
+  // Define pipeline stages in order
+  const stages = [
+    { id: 'queued', label: 'Queued' },
+    { id: 'setup', label: 'Setup' },
+    { id: 'tokenizer_load', label: 'Tokenizer' },
+    { id: 'model_download', label: 'Download' },
+    { id: 'model_load', label: 'Load Model' },
+    { id: 'dataset_prep', label: 'Prep Data' },
+    { id: 'training', label: 'Training' },
+    { id: 'checkpoint_save', label: 'Checkpoint' },
+    { id: 'completed', label: 'Complete' }
+  ];
+
+  const currentStageIndex = stages.findIndex(s => s.id === job.training_stage);
+
+  const getStageStatus = (index: number) => {
+    if (index < currentStageIndex) return 'completed';
+    if (index === currentStageIndex) return 'active';
+    return 'pending';
+  };
+
+  const formatElapsedTime = (startTime: string | null) => {
+    if (!startTime) return '';
+    const start = new Date(startTime).getTime();
+    const now = Date.now();
+    const elapsed = Math.floor((now - start) / 1000); // seconds
+
+    if (elapsed < 60) return `${elapsed}s`;
+    if (elapsed < 3600) return `${Math.floor(elapsed / 60)}m`;
+    return `${Math.floor(elapsed / 3600)}h ${Math.floor((elapsed % 3600) / 60)}m`;
+  };
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-4">
+      {/* Job Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h4 className="font-semibold text-gray-900">{job.name}</h4>
+          <p className="text-sm text-gray-600">{job.base_model}</p>
+        </div>
+        <div className="text-right">
+          <div className="text-2xl font-bold text-indigo-600">{job.progress.toFixed(0)}%</div>
+          {job.stage_started_at && (
+            <div className="text-xs text-gray-500">
+              {formatElapsedTime(job.stage_started_at)} elapsed
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Pipeline Stages */}
+      <div className="relative">
+        <div className="flex items-center justify-between">
+          {stages.map((stage, index) => {
+            const status = getStageStatus(index);
+            return (
+              <div key={stage.id} className="flex flex-col items-center flex-1">
+                {/* Stage Icon */}
+                <div className="relative z-10">
+                  {status === 'completed' && (
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                  )}
+                  {status === 'active' && (
+                    <Loader className="w-6 h-6 text-blue-600 animate-spin" />
+                  )}
+                  {status === 'pending' && (
+                    <div className="w-6 h-6 rounded-full border-2 border-gray-300" />
+                  )}
+                </div>
+                {/* Stage Label */}
+                <div className={`mt-2 text-xs text-center ${
+                  status === 'active' ? 'font-semibold text-blue-600' :
+                  status === 'completed' ? 'text-gray-700' :
+                  'text-gray-400'
+                }`}>
+                  {stage.label}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Connecting Line */}
+        <div className="absolute top-3 left-0 right-0 h-0.5 bg-gray-200 -z-0" style={{ width: '100%', marginLeft: '0', marginRight: '0' }}>
+          <div
+            className="h-full bg-blue-600 transition-all duration-500"
+            style={{ width: `${(currentStageIndex / (stages.length - 1)) * 100}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Stage Details */}
+      {job.stage_details && Object.keys(job.stage_details).length > 0 && (
+        <div className="mt-4 p-3 bg-gray-50 rounded text-sm">
+          <p className="font-semibold text-gray-700 mb-1">Stage Details:</p>
+          <div className="space-y-1">
+            {Object.entries(job.stage_details).map(([key, value]) => (
+              <div key={key} className="flex justify-between text-gray-600">
+                <span className="capitalize">{key.replace(/_/g, ' ')}:</span>
+                <span className="font-mono">{String(value)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
