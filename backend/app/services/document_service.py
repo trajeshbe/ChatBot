@@ -50,24 +50,24 @@ logger = logging.getLogger(__name__)
 def sanitize_path_component(component: str) -> str:
     """
     Remove dangerous characters from path components for safe MinIO paths
+    Uses MinIOPathBuilder.sanitize() to ensure lowercase, consistent paths
 
     Args:
         component: Raw path component (e.g., "DevOps Team")
 
     Returns:
-        Sanitized component (e.g., "DevOps-Team")
+        Sanitized component (e.g., "devops-team") - ALWAYS LOWERCASE
+
+    Examples:
+        "Technology" → "technology"
+        "Backend Development" → "backend-development"
+        "DevOps Team" → "devops-team"
     """
     if not component:
         return ""
 
-    # Replace spaces with hyphens
-    sanitized = component.replace(" ", "-")
-
-    # Remove dangerous characters: / \ : * ? " < > | and ..
-    sanitized = re.sub(r'[/\\:*?"<>|]', '', sanitized)
-    sanitized = sanitized.replace('..', '')
-
-    return sanitized.strip()
+    from app.services.minio_path_builder import MinIOPathBuilder
+    return MinIOPathBuilder.sanitize(component)
 
 
 def construct_minio_path(

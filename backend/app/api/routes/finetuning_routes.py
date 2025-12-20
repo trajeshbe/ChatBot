@@ -17,6 +17,7 @@ from sqlalchemy import select, func, and_
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import uuid
+import os
 import logging
 from functools import lru_cache
 
@@ -1752,22 +1753,25 @@ async def undeploy_model_from_ollama(
 
         ollama_model_name = model.ollama_model_name
 
-        # Remove from Ollama
+        # Remove from Ollama via HTTP API (not subprocess - works in containers)
         if ollama_model_name:
             try:
-                import subprocess
-                result = subprocess.run(
-                    ["ollama", "rm", ollama_model_name],
-                    capture_output=True,
-                    text=True,
-                    check=False
-                )
-                if result.returncode == 0:
-                    logger.info(f"Removed model from Ollama: {ollama_model_name}")
-                else:
-                    logger.warning(f"Failed to remove from Ollama: {result.stderr}")
+                import httpx
+                ollama_url = os.getenv("OLLAMA_API_URL", "http://ollama:11434")
+
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    delete_response = await client.delete(
+                        f"{ollama_url}/api/delete",
+                        json={"name": ollama_model_name}
+                    )
+
+                    if delete_response.status_code == 200:
+                        logger.info(f"✅ Removed model from Ollama: {ollama_model_name}")
+                    else:
+                        logger.warning(f"⚠️ Failed to remove from Ollama (HTTP {delete_response.status_code}): {ollama_model_name}")
+
             except Exception as e:
-                logger.error(f"Error removing from Ollama: {e}")
+                logger.error(f"❌ Error removing from Ollama: {e}")
 
         # Update model status
         model.status = "approved"  # Back to approved, can be re-deployed
@@ -1847,6 +1851,100 @@ async def list_deployed_models(
 
     except Exception as e:
         logger.error(f"Failed to list deployed models: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/models/sync-ollama-status")
+async def sync_ollama_model_status(
+    user: User = Depends(require_authentication),
+    _: None = Depends(RequireAdmin()),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Sync database model status with Ollama reality (admin only)
+
+    Checks Ollama for deployed models and updates database status.
+    Handles cases where models were manually deleted from Ollama.
+
+    Returns:
+    - synced: List of models that were synced
+    - undeployed: List of models that were marked as undeployed (deleted from Ollama)
+    """
+    try:
+        import httpx
+
+        ollama_url = os.getenv("OLLAMA_API_URL", "http://ollama:11434")
+
+        # Get list of models from Ollama
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            ollama_response = await client.get(f"{ollama_url}/api/tags")
+
+            if ollama_response.status_code != 200:
+                raise HTTPException(status_code=500, detail="Failed to fetch Ollama models")
+
+            ollama_data = ollama_response.json()
+            ollama_model_names = {model["name"] for model in ollama_data.get("models", [])}
+
+        # Get all deployed models from database
+        query = select(FineTunedModel).where(FineTunedModel.status == "deployed")
+        result = await db.execute(query)
+        deployed_models = result.scalars().all()
+
+        synced = []
+        undeployed = []
+
+        for model in deployed_models:
+            if model.ollama_model_name:
+                # Check if model still exists in Ollama
+                if model.ollama_model_name in ollama_model_names:
+                    # Model exists in Ollama - status is correct
+                    synced.append({
+                        "model_id": str(model.id),
+                        "name": model.name,
+                        "ollama_model_name": model.ollama_model_name,
+                        "status": "deployed"
+                    })
+                else:
+                    # Model deleted from Ollama - update database
+                    logger.warning(f"Model {model.name} ({model.ollama_model_name}) not found in Ollama - marking as approved")
+
+                    model.status = "approved"  # Not deployed anymore
+                    model.ollama_model_name = None
+                    model.deployment_url = None
+
+                    undeployed.append({
+                        "model_id": str(model.id),
+                        "name": model.name,
+                        "ollama_model_name": model.ollama_model_name,
+                        "status": "undeployed"
+                    })
+
+        await db.commit()
+
+        # Audit log
+        await audit_service.log_action(
+            user_id=user.id,
+            action="sync_ollama_model_status",
+            details={
+                "synced_count": len(synced),
+                "undeployed_count": len(undeployed)
+            },
+            db=db
+        )
+
+        return {
+            "message": "Ollama sync complete",
+            "synced": synced,
+            "undeployed": undeployed,
+            "synced_count": len(synced),
+            "undeployed_count": len(undeployed)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to sync Ollama status: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -2242,6 +2340,7 @@ async def delete_job(
 @router.delete("/models/{model_id}")
 async def delete_model(
     model_id: str,
+    force: bool = False,  # Force delete even if deployed
     user: User = Depends(require_authentication),
     _: None = Depends(RequireAdmin()),
     db: AsyncSession = Depends(get_db)
@@ -2249,7 +2348,11 @@ async def delete_model(
     """
     Delete a model (admin only)
 
-    Removes model from registry. Cannot delete deployed models.
+    Removes model from registry and Ollama if deployed.
+
+    Args:
+        model_id: UUID of the model to delete
+        force: If True, undeploy from Ollama before deleting (default: False for safety)
     """
     try:
         # Get model
@@ -2260,13 +2363,41 @@ async def delete_model(
         if not model:
             raise HTTPException(status_code=404, detail="Model not found")
 
-        if model.status == "deployed":
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot delete deployed model. Undeploy first."
-            )
+        ollama_model_name = model.ollama_model_name
+        was_deployed = model.status == "deployed"
 
-        # Delete model
+        # If model is deployed, either force undeploy or reject
+        if was_deployed:
+            if not force:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot delete deployed model. Use force=true to undeploy and delete, or undeploy first."
+                )
+
+            # Force undeploy: Remove from Ollama via HTTP API
+            if ollama_model_name:
+                try:
+                    import httpx
+                    ollama_url = os.getenv("OLLAMA_API_URL", "http://ollama:11434")
+
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        delete_response = await client.delete(
+                            f"{ollama_url}/api/delete",
+                            json={"name": ollama_model_name}
+                        )
+
+                        if delete_response.status_code == 200:
+                            logger.info(f"✅ Removed model from Ollama: {ollama_model_name}")
+                        else:
+                            logger.warning(f"⚠️ Failed to remove from Ollama (HTTP {delete_response.status_code}): {ollama_model_name}")
+                            # Continue anyway - model may already be gone from Ollama
+
+                except Exception as e:
+                    logger.warning(f"⚠️ Error removing from Ollama (continuing with DB deletion): {e}")
+                    # Continue with database deletion even if Ollama removal fails
+                    # This handles the case where user manually deleted from Ollama already
+
+        # Delete model from database
         await db.delete(model)
         await db.commit()
 
@@ -2276,11 +2407,20 @@ async def delete_model(
         await audit_service.log_action(
             user_id=user.id,
             action="delete_finetuned_model",
-            details={"model_id": model_id, "model_name": model.model_name},
+            details={
+                "model_id": model_id,
+                "model_name": model.model_name,
+                "ollama_model_name": ollama_model_name,
+                "was_deployed": was_deployed,
+                "force_undeploy": force
+            },
             db=db
         )
 
-        return {"message": "Model deleted successfully"}
+        return {
+            "message": "Model deleted successfully",
+            "undeployed_from_ollama": was_deployed and ollama_model_name is not None
+        }
 
     except HTTPException:
         raise
@@ -3917,8 +4057,49 @@ async def get_models_for_chat_public(
     For UI testing only. Use /models/for-chat with auth in production.
 
     Returns deployed models formatted for chat UI model selector.
+
+    Auto-syncs with Ollama to remove models that were manually deleted.
     """
     try:
+        import httpx
+
+        # Auto-sync with Ollama before returning models
+        # This handles the case where models were manually deleted from Ollama admin console
+        try:
+            ollama_url = os.getenv("OLLAMA_API_URL", "http://ollama:11434")
+
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                ollama_response = await client.get(f"{ollama_url}/api/tags")
+
+                if ollama_response.status_code == 200:
+                    ollama_data = ollama_response.json()
+                    ollama_model_names = {model["name"] for model in ollama_data.get("models", [])}
+
+                    # Get all deployed models from database
+                    sync_query = select(FineTunedModel).where(FineTunedModel.status == "deployed")
+                    sync_result = await db.execute(sync_query)
+                    deployed_models = sync_result.scalars().all()
+
+                    # Check each deployed model against Ollama reality
+                    models_updated = 0
+                    for model in deployed_models:
+                        if model.ollama_model_name and model.ollama_model_name not in ollama_model_names:
+                            # Model deleted from Ollama - update database
+                            logger.warning(f"🔄 Auto-sync: Model {model.name} ({model.ollama_model_name}) not in Ollama - marking as approved")
+                            model.status = "approved"
+                            model.ollama_model_name = None
+                            model.deployment_url = None
+                            models_updated += 1
+
+                    if models_updated > 0:
+                        await db.commit()
+                        logger.info(f"✅ Auto-synced {models_updated} model(s) that were deleted from Ollama")
+                else:
+                    logger.warning(f"⚠️ Ollama sync failed (HTTP {ollama_response.status_code}) - continuing without sync")
+        except Exception as sync_error:
+            logger.warning(f"⚠️ Ollama auto-sync failed: {sync_error} - continuing without sync")
+
+        # Now fetch updated list of deployed models
         query = select(FineTunedModel).where(
             FineTunedModel.status == "deployed"
         ).order_by(FineTunedModel.created_at.desc())
