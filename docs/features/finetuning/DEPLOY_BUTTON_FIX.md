@@ -286,3 +286,96 @@ docker-compose logs backend --tail=100 | grep -i "deploy\|gguf\|ollama"
 **Fix Applied**: 2025-12-23 17:18 UTC
 **Frontend Restarted**: 2025-12-23 17:18 UTC
 **Status**: ✅ **Ready to deploy**
+
+---
+
+## Deployment Results (Update: 17:35 UTC)
+
+### ✅ Deployment Successful!
+
+After fixing the deploy button, the user clicked deploy and the model was successfully deployed to Ollama!
+
+**Timeline**:
+```
+17:32:40 - User clicked "Merge & Deploy to Ollama" button
+17:32:40 - Backend started deployment process
+17:32:40 - Detected merged model, started GGUF conversion
+17:33:04 - GGUF conversion completed: 2950.4 MB → 3.1 GB
+17:33:04 - Generated Modelfile
+17:33:04 - Creating model in Ollama
+17:33:15 - ✅ Successfully deployed: mayandi-manzil-1-model-vv1.0.0
+17:33:28 - Auto-sync false alarm (tag mismatch bug)
+17:35:00 - Manual verification: Model working!
+```
+
+**Total Deployment Time**: 35 seconds (actual: 24s GGUF + 11s Ollama create)
+
+### Model Verification
+
+**Ollama List**:
+```bash
+$ docker-compose exec ollama ollama list
+NAME                                   ID           SIZE    MODIFIED
+mayandi-manzil-1-model-vv1.0.0:latest fed01cef8b20 3.1 GB  3 minutes ago
+```
+
+**Database Status**:
+```sql
+name:               mayandi_manzil_1_model
+status:             deployed
+ollama_model_name:  mayandi-manzil-1-model-vv1.0.0
+deployment_url:     http://localhost:11434/api/generate
+```
+
+**Inference Test**:
+```bash
+$ curl http://localhost:11434/api/generate -d '{
+  "model": "mayandi-manzil-1-model-vv1.0.0",
+  "prompt": "What is Mayandi_Manzil?"
+}'
+✅ Response generated successfully!
+```
+
+### Known Issue: Auto-Sync Tag Mismatch
+
+**Problem**: Auto-sync checks Ollama models without `:latest` tag, but Ollama returns names with `:latest` suffix.
+
+**Impact**:
+- Deployment succeeded
+- Model is in Ollama and working
+- Auto-sync incorrectly reverted status from 'deployed' to 'approved' (false alarm)
+
+**Workaround**: Manual SQL update to fix status
+```sql
+UPDATE finetuned_models
+SET status='deployed',
+    deployment_url='http://localhost:11434/api/generate',
+    ollama_model_name='mayandi-manzil-1-model-vv1.0.0'
+WHERE name='mayandi_manzil_1_model';
+```
+
+**TODO**: Fix auto-sync logic in `backend/app/api/routes/finetuning_routes.py` to handle `:latest` tag when comparing model names.
+
+### How to Use Your Deployed Model
+
+**Chat UI**:
+1. Navigate to http://localhost:3001
+2. Select model: **mayandi-manzil-1-model-vv1.0.0** from dropdown
+3. Start chatting!
+
+**API**:
+```bash
+curl http://localhost:11434/api/generate -d '{
+  "model": "mayandi-manzil-1-model-vv1.0.0",
+  "prompt": "Your question here",
+  "stream": false
+}'
+```
+
+**Full Details**: See `DEPLOYMENT_SUCCESS.md` for comprehensive deployment guide.
+
+---
+
+**Deployment Status**: 🎉 **COMPLETE & WORKING**
+**Deployed**: 2025-12-23 17:33:15 UTC
+**Verified**: 2025-12-23 17:35:00 UTC

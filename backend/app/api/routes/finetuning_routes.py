@@ -4322,7 +4322,15 @@ async def get_models_for_chat_public(
 
                 if ollama_response.status_code == 200:
                     ollama_data = ollama_response.json()
-                    ollama_model_names = {model["name"] for model in ollama_data.get("models", [])}
+                    # Build set of model names, including both with and without :tag suffix
+                    # This handles the case where DB stores "model-name" but Ollama returns "model-name:latest"
+                    ollama_model_names = set()
+                    for model in ollama_data.get("models", []):
+                        name = model["name"]
+                        ollama_model_names.add(name)  # Add with tag (e.g., "model:latest")
+                        # Also add without tag for comparison (e.g., "model")
+                        if ':' in name:
+                            ollama_model_names.add(name.split(':')[0])
 
                     # Get all deployed models from database
                     sync_query = select(FineTunedModel).where(FineTunedModel.status == "deployed")

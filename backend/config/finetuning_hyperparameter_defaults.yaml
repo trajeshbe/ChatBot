@@ -364,6 +364,29 @@ presets:
       optimizer: "adafactor"  # Memory-efficient
       fp16: true
 
+  # Small Dataset Intensive (Best for <200 samples)
+  small_dataset_intensive:
+    name: "Small Dataset Intensive"
+    description: "Optimized for datasets <200 samples - aggressive training for maximum learning"
+    icon: "🎯"
+    hardware_requirements:
+      min_gpu_memory_gb: 8.0
+      recommended_gpu: "RTX 3060 12GB or better"
+    hyperparameters:
+      num_epochs: 10  # More epochs to learn from limited data
+      batch_size: 2   # Small batch for better gradient estimation
+      learning_rate: 1.0e-4  # Lower LR for stability with more epochs
+      gradient_accumulation_steps: 4  # Effective batch = 8
+      max_seq_length: 2048  # Allow full context
+      lora_rank: 32  # Higher rank for better capacity
+      lora_alpha: 64  # 2x rank
+      lora_dropout: 0.1  # More dropout to prevent overfitting
+      weight_decay: 0.01
+      warmup_ratio: 0.1
+      eval_steps: 25  # Frequent evaluation
+      save_steps: 100
+      fp16: true
+
 # ===========================================
 # VALIDATION RULES
 # ===========================================
