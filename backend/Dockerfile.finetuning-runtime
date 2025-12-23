@@ -9,10 +9,19 @@ LABEL description="GPU-accelerated fine-tuning runtime extending agent-runtime"
 LABEL version="2.0.0"
 
 # Copy minimal fine-tuning requirements (only essential PEFT libraries)
-COPY backend/requirements-finetuning-minimal.txt /tmp/requirements-finetuning-minimal.txt
+COPY requirements-finetuning-minimal.txt /tmp/requirements-finetuning-minimal.txt
 
 # Install fine-tuning dependencies
 RUN pip install --no-cache-dir -r /tmp/requirements-finetuning-minimal.txt
+
+# Install Unsloth (2-5x faster training)
+# Note: Install from git for latest optimizations
+RUN pip install --no-cache-dir "unsloth[cu121] @ git+https://github.com/unslothai/unsloth.git" || \
+    echo "⚠️ Unsloth installation failed, continuing without it (optional dependency)"
+
+# Copy trainer scripts into the image
+# CRITICAL: These scripts must be available for the training containers to execute
+COPY app/services/finetuning/trainers/ /app/app/services/finetuning/trainers/
 
 # Verify critical installations
 RUN python -c "import peft; print(f'✅ PEFT version: {peft.__version__}')" && \
@@ -20,7 +29,8 @@ RUN python -c "import peft; print(f'✅ PEFT version: {peft.__version__}')" && \
     python -c "import bitsandbytes; print('✅ bitsandbytes installed')" && \
     python -c "import transformers; print(f'✅ Transformers version: {transformers.__version__}')" && \
     python -c "import torch; print(f'✅ PyTorch version: {torch.__version__}'); print(f'✅ CUDA available: {torch.cuda.is_available()}')" && \
-    python -c "from trl import DPOTrainer, SFTTrainer, PPOTrainer; print('✅ TRL trainers available (SFT, DPO, PPO, GRPO)')"
+    python -c "from trl import DPOTrainer, SFTTrainer, PPOTrainer; print('✅ TRL trainers available (SFT, DPO, PPO, GRPO)')" && \
+    (python -c "from unsloth import FastLanguageModel; print('✅ Unsloth installed and ready (2-5x faster training!)')" || echo "⚠️ Unsloth not available (optional)")
 
 # Set working directory
 WORKDIR /app
@@ -34,6 +44,11 @@ ENV TRANSFORMERS_CACHE=/workspace/temp/.cache/transformers
 # Healthcheck (for monitoring)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import torch; assert torch.cuda.is_available()" || exit 1
+
+# CRITICAL: Clear the ENTRYPOINT inherited from agent-runtime base image
+# The agent runtime has ENTRYPOINT ["python", "entrypoint_agent.py"]
+# We need to override this to run the trainer directly
+ENTRYPOINT []
 
 # Default command (will be overridden by sandbox manager)
 CMD ["python", "/app/trainers/peft_trainer.py", "--help"]

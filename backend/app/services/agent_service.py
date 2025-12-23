@@ -279,6 +279,25 @@ Task name:"""
             logger.warning(f"⚠️ Invalid engine '{engine}', defaulting to 'default'")
             engine = "default"
 
+        # ✅ FIX: Store team and department for proper MinIO path structure
+        # Extract from organizational_path if derived from documents, otherwise use queried values
+        final_department = None
+        final_team = None
+
+        if organizational_path and request.document_ids:
+            # Path was inherited from document - extract team/dept from it
+            # Format: "technology/itm11/construction-intelligence/admin"
+            path_parts = organizational_path.split('/')
+            if len(path_parts) >= 2:
+                final_department = path_parts[0]  # technology
+                final_team = path_parts[1]  # itm11
+        else:
+            # Path was built from user details - use the queried values
+            final_department = department_name
+            final_team = team_name
+
+        logger.info(f"🏢 Agent task organizational details: dept={final_department}, team={final_team}")
+
         # Create database record
         agent_task = AgentTask(
             task_id=task_id,
@@ -292,6 +311,8 @@ Task name:"""
             timeout_seconds=request.timeout_seconds or 600,
             created_by=user_id,
             project_id=project_id,
+            department=final_department,  # ✅ FIX: Populate department
+            team=final_team,  # ✅ FIX: Populate team
             created_at=datetime.now()  # Set explicitly for immediate response
         )
 

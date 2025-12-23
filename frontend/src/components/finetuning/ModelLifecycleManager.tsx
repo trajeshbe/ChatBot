@@ -25,7 +25,9 @@ import {
   Send,
   ThumbsUp,
   ThumbsDown,
-  FileBox
+  FileBox,
+  GitMerge,
+  Loader
 } from 'lucide-react'
 
 interface EvalMetrics {
@@ -45,7 +47,7 @@ interface Model {
   id: string
   name: string
   version?: string
-  status: string  // registered, approved, deployed, archived, deprecated
+  status: string  // registered, adapter_only, merging, merged, approved, deployed, archived, deprecated
   base_model: string
   deployment_url?: string
   ollama_model_name?: string
@@ -57,7 +59,11 @@ interface Model {
   deprecated_at?: string
   deprecation_reason?: string
   created_at?: string
-  minio_checkpoint_path?: string  // NEW: MinIO artifact path
+  minio_checkpoint_path?: string  // MinIO adapter checkpoint path
+  merged_model_path?: string  // Path to merged model
+  merge_duration_seconds?: number
+  merge_requested_at?: string
+  merge_error_message?: string
   finetuning_method?: string
   job_id?: string
 }
@@ -90,6 +96,8 @@ export default function ModelLifecycleManager({ models, onRefresh }: ModelLifecy
   const [approvalStatus, setApprovalStatus] = useState<ApprovalStatus | null>(null)
   const [approvalReason, setApprovalReason] = useState('')
   const [reviewComments, setReviewComments] = useState('')
+  const [merging, setMerging] = useState(false)
+  const [pollingMerge, setPollingMerge] = useState(false)
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
   const MINIO_CONSOLE = process.env.NEXT_PUBLIC_MINIO_CONSOLE_URL || 'http://localhost:9001'
@@ -176,6 +184,68 @@ export default function ModelLifecycleManager({ models, onRefresh }: ModelLifecy
       setLoading(false)
     }
   }
+
+  const requestMerge = async (modelId: string) => {
+    if (!selectedModel) return
+
+    if (!confirm(`Merge LoRA adapter with base model?\n\nThis will take 5-15 minutes.`)) {
+      return
+    }
+
+    try {
+      setMerging(true)
+      const response = await fetch(`${API_BASE}/api/v1/finetuning/models/${modelId}/merge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          base_model_name: selectedModel.base_model,
+          force_cpu: false
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        alert(`✅ Merge started!\n\nTask ID: ${data.task_id}\nEstimated time: 5-15 minutes`)
+        setPollingMerge(true)
+        if (onRefresh) onRefresh()
+      } else {
+        const error = await response.json()
+        alert(`Merge failed: ${error.detail}`)
+      }
+    } catch (error) {
+      console.error('Merge error:', error)
+      alert('Failed to request merge')
+    } finally {
+      setMerging(false)
+    }
+  }
+
+  // Poll merge status
+  useEffect(() => {
+    if (!selectedModel || !pollingMerge) return
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/finetuning/models/${selectedModel.id}/merge-status`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.status === 'merged' || data.status === 'merge_failed') {
+            setPollingMerge(false)
+            if (onRefresh) onRefresh()
+            if (data.status === 'merged') {
+              alert('✅ Merge completed successfully!')
+            } else {
+              alert(`❌ Merge failed: ${data.merge_error_message}`)
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error polling merge status:', error)
+      }
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [selectedModel, pollingMerge])
 
   const renderMetricCard = (label: string, value: any, unit: string = '', goodThreshold?: number) => {
     const numValue = typeof value === 'number' ? value : parseFloat(value)
@@ -322,6 +392,62 @@ export default function ModelLifecycleManager({ models, onRefresh }: ModelLifecy
                   Model Deployment
                 </h3>
 
+                {/* Merge Status Warning */}
+                {!['merged', 'deployed'].includes(selectedModel.status) && (
+                  <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="font-medium text-yellow-900 dark:text-yellow-200 mb-1">
+                          Model must be merged before deployment
+                        </p>
+                        <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-3">
+                          LoRA adapters need to be merged with the base model first. This process takes 5-15 minutes.
+                        </p>
+                        {selectedModel.status === 'adapter_only' || selectedModel.status === 'registered' ? (
+                          <button
+                            onClick={() => requestMerge(selectedModel.id)}
+                            disabled={merging}
+                            className="flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-slate-400 text-white rounded-lg font-medium transition-colors"
+                          >
+                            {merging ? (
+                              <>
+                                <Loader className="w-4 h-4 animate-spin" />
+                                Starting Merge...
+                              </>
+                            ) : (
+                              <>
+                                <GitMerge className="w-4 h-4" />
+                                Request Merge
+                              </>
+                            )}
+                          </button>
+                        ) : selectedModel.status === 'merging' ? (
+                          <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-300">
+                            <Loader className="w-4 h-4 animate-spin" />
+                            <span className="text-sm">Merge in progress... (5-15 minutes)</span>
+                          </div>
+                        ) : selectedModel.status === 'merge_failed' ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+                              <XCircle className="w-4 h-4" />
+                              <span className="text-sm">Merge failed: {selectedModel.merge_error_message || 'Unknown error'}</span>
+                            </div>
+                            <button
+                              onClick={() => requestMerge(selectedModel.id)}
+                              disabled={merging}
+                              className="flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-slate-400 text-white rounded-lg font-medium transition-colors"
+                            >
+                              <GitMerge className="w-4 h-4" />
+                              Retry Merge
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {selectedModel.status === 'deployed' ? (
                   <div className="space-y-4">
                     <div className="flex items-center space-x-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
@@ -341,8 +467,18 @@ export default function ModelLifecycleManager({ models, onRefresh }: ModelLifecy
                       </p>
                     </div>
                   </div>
-                ) : (
+                ) : selectedModel.status === 'merged' ? (
                   <div className="space-y-4">
+                    <div className="flex items-center space-x-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                      <CheckCircle className="w-6 h-6 text-green-600" />
+                      <div className="flex-1">
+                        <p className="font-medium text-green-900 dark:text-green-100">Merge completed successfully</p>
+                        <p className="text-sm text-green-700 dark:text-green-300">
+                          Model is ready for deployment to Ollama
+                        </p>
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">

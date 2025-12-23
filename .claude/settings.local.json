@@ -39,7 +39,8 @@
       "Bash(__NEW_LINE__ echo '⏳ Waiting for test completion...' echo for i in {1..6})",
       "Bash(do sleep 30 if ! ps -p 81905)",
       "Bash(/dev/null)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(mv:*)"
     ],
     "deny": [],
     "ask": []

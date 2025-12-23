@@ -75,11 +75,12 @@ langgraph==0.2.16             # Agent workflow graphs - DAG orchestration
 # DOCUMENT PROCESSING (Required)
 # Used by: app/services/document_service.py
 # ----------------------------------------------------------------------------
-docling==2.62.0             # Advanced document parsing for PDF, HTML, DOCX, PPTX (upgraded for better compatibility)
-numpy<2.0,>=1.26.4          # Numerical computing - required by langchain, deepsearch-glm, docling
-opencv-python<4.10,>=4.9    # Computer vision - used by docling for image processing in documents
+# docling==2.57.0             # TEMPORARILY DISABLED - dependency conflict with docling-core[chunking]
+                              # Will work with PyMuPDF + pypdf2 for now
+numpy<2.0,>=1.26.4          # Numerical computing - required by langchain, deepsearch-glm
+opencv-python<4.10,>=4.9    # Computer vision - image processing in documents
 PyMuPDF==1.23.26            # PDF processing with image/table detection - used by ContentAnalyzer for intelligent embeddings
-pypdf2==3.0.1               # PDF text extraction - processes PDF uploads (fallback)
+pypdf2==3.0.1               # PDF text extraction - processes PDF uploads
 python-docx==1.1.2          # Word document parsing - processes DOCX uploads (updated for docling 2.0.0 compatibility: requires >=1.1.2)
 python-pptx==1.0.2          # PowerPoint parsing - processes PPTX uploads (updated for docling 2.0.0 compatibility: requires >=1.0.2)
 openpyxl>=3.1.5             # Excel file parsing - processes XLSX uploads (upgraded for docling 2.62.0 compatibility: requires >=3.1.5)
@@ -280,8 +281,20 @@ scipy==1.12.0                   # Scientific computing - required by Optuna
 # Model versioning (used by model registry service)
 semver==3.0.2                   # Semantic versioning - version comparison and validation
 
-# NOTE: transformers/peft/accelerate/trl/bitsandbytes are in requirements-finetuning.txt
-# They are ONLY needed in the finetuning-runtime container, not the main backend
+# ----------------------------------------------------------------------------
+# MODEL MERGING DEPENDENCIES (Required for ModelMergeService)
+# Used by: app/services/finetuning/model_merge_service.py, app/tasks/auto_merge.py
+# ----------------------------------------------------------------------------
+# These are needed in backend because merge happens in celery-worker (backend container)
+# Both auto-merge (after training) and manual merge (UI button) use ModelMergeService
+
+peft>=0.18.0                    # Parameter-Efficient Fine-Tuning - LoRA adapter merging (0.18.0+ for ALoRA support)
+transformers>=4.40.0            # HuggingFace Transformers - model loading and merging (Qwen2 support needs 4.37+)
+accelerate>=1.0.0               # Accelerate - device_map support (compatible with docling >=1.0.0)
+torch>=2.2.2                    # PyTorch - model operations (compatible with docling-ibm-models >=2.2.2)
+
+# NOTE: Full finetuning stack (trl/bitsandbytes/deepspeed) remains in requirements-finetuning.txt
+# Only core merge dependencies above are needed in backend
 
 # ----------------------------------------------------------------------------
 # MCP (MODEL CONTEXT PROTOCOL) INTEGRATION (Optional)

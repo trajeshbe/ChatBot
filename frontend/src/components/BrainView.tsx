@@ -15,7 +15,7 @@ import {
   X,
   Activity,
   MessageSquare,
-  Tool,
+  Wrench,
   FileText,
   Zap,
   CheckCircle,
@@ -84,7 +84,7 @@ export const BrainView: React.FC<BrainViewProps> = ({ debugContext, isOpen, onTo
   const tabs = [
     { id: 'routing', label: 'Routing', icon: Activity },
     { id: 'history', label: 'History', icon: MessageSquare },
-    { id: 'tools', label: 'Tools', icon: Tool },
+    { id: 'tools', label: 'Tools', icon: Wrench },
     { id: 'documents', label: 'Docs', icon: FileText },
     { id: 'performance', label: 'Perf', icon: Zap },
   ];
@@ -159,7 +159,7 @@ export const BrainView: React.FC<BrainViewProps> = ({ debugContext, isOpen, onTo
                       <span>Routing decisions and strategy selection</span>
                     </li>
                     <li className="flex items-center gap-2">
-                      <Tool className="w-4 h-4 text-purple-500" />
+                      <Wrench className="w-4 h-4 text-purple-500" />
                       <span>Tools executed (query-time + document processing)</span>
                     </li>
                     <li className="flex items-center gap-2">

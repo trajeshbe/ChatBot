@@ -196,6 +196,12 @@ class FineTunedModel(Base):
     minio_checkpoint_path = Column(String(512), nullable=True)
     adapter_config = Column(JSON, nullable=True)  # PEFT adapter configuration
 
+    # Merge tracking (migration 023)
+    merged_model_path = Column(Text, nullable=True)  # Path to merged model (workspace or MinIO)
+    merge_duration_seconds = Column(Integer, nullable=True)  # Duration of merge operation
+    merge_requested_at = Column(DateTime(timezone=True), nullable=True)  # When merge was requested
+    merge_error_message = Column(Text, nullable=True)  # Error message if merge failed
+
     # Evaluation metrics
     eval_metrics = Column(JSON, nullable=True)  # accuracy, perplexity, ROUGE, BLEU, etc.
 

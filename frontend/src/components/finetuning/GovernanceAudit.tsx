@@ -12,6 +12,7 @@ import {
   ChevronUp,
   AlertCircle
 } from 'lucide-react';
+import MergeAndDeployButton from './MergeAndDeployButton';
 
 interface PendingModel {
   id: string;
@@ -71,12 +72,18 @@ export default function GovernanceAudit({ userRole }: { userRole: string }) {
 
   const fetchPendingApprovals = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/finetuning/models-public?status=registered', {
+      // Fetch all models that need action: registered, approved, merge_failed
+      // Don't filter by status to show all actionable models
+      const response = await fetch('http://localhost:8000/api/v1/finetuning/models-public', {
         headers: { 'Content-Type': 'application/json' }
       });
       if (response.ok) {
         const data = await response.json();
-        setPendingModels(data.models || []);
+        // Filter client-side to show only models that can be deployed
+        const actionableModels = (data.models || []).filter((model: PendingModel) =>
+          ['registered', 'approved', 'adapter_only', 'completed', 'merge_failed', 'merged'].includes(model.status)
+        );
+        setPendingModels(actionableModels);
       }
     } catch (error) {
       console.error('Error fetching pending approvals:', error);
@@ -251,7 +258,7 @@ export default function GovernanceAudit({ userRole }: { userRole: string }) {
         <div className="border-b border-gray-200 px-6 py-4">
           <div className="flex items-center gap-2">
             <Clock className="w-5 h-5 text-orange-600" />
-            <h3 className="text-lg font-semibold">Pending Model Approvals</h3>
+            <h3 className="text-lg font-semibold">Models Ready for Deployment</h3>
             <span className="ml-2 bg-orange-100 text-orange-800 px-2 py-1 rounded text-sm font-semibold">
               {pendingModels.length}
             </span>
@@ -306,40 +313,76 @@ export default function GovernanceAudit({ userRole }: { userRole: string }) {
                   )}
 
                   {/* Approval Actions */}
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Approval Notes (required)
-                      </label>
-                      <textarea
-                        value={approvalNote}
-                        onChange={(e) => setApprovalNote(e.target.value)}
-                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
-                        rows={2}
-                        placeholder="Provide approval notes or feedback..."
+                  <div className="space-y-4">
+                    {/* One-Click Merge & Deploy */}
+                    <div className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                      <div className="flex items-start gap-3 mb-3">
+                        <AlertCircle className="w-5 h-5 text-indigo-600 dark:text-indigo-400 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-indigo-900 dark:text-indigo-200 mb-1">
+                            ⚡ Quick Deployment
+                          </p>
+                          <p className="text-xs text-indigo-700 dark:text-indigo-300">
+                            Approve → Merge → Deploy to Ollama in one click (takes 5-15 min)
+                          </p>
+                        </div>
+                      </div>
+                      <MergeAndDeployButton
+                        model={{
+                          id: model.id,
+                          name: model.name,
+                          version: model.version,
+                          status: model.status,
+                          base_model: model.base_model
+                        }}
+                        compact={true}
+                        onComplete={async () => {
+                          await fetchPendingApprovals();
+                          await fetchAuditLogs();
+                        }}
+                        onError={(error) => {
+                          alert(`Deployment failed: ${error}`);
+                        }}
                       />
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => approveModel(model.id)}
-                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => {
-                          const reason = prompt('Rejection reason:');
-                          if (reason) {
-                            setRejectionReason(reason);
-                            rejectModel(model.id);
-                          }
-                        }}
-                        className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-                      >
-                        <XCircle className="w-4 h-4" />
-                        Reject
-                      </button>
+
+                    {/* Traditional Approval Workflow */}
+                    <div className="pt-4 border-t border-gray-200">
+                      <p className="text-xs text-gray-500 mb-3 uppercase tracking-wide">Or use traditional approval:</p>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Approval Notes (required)
+                        </label>
+                        <textarea
+                          value={approvalNote}
+                          onChange={(e) => setApprovalNote(e.target.value)}
+                          className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                          rows={2}
+                          placeholder="Provide approval notes or feedback..."
+                        />
+                      </div>
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          onClick={() => approveModel(model.id)}
+                          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => {
+                            const reason = prompt('Rejection reason:');
+                            if (reason) {
+                              setRejectionReason(reason);
+                              rejectModel(model.id);
+                            }
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          Reject
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

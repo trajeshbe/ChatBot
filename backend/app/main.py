@@ -1595,6 +1595,16 @@ except ImportError as e:
 except Exception as e:
     logger.warning(f"Could not register Fine-Tuning router: {e}")
 
+# HuggingFace Models Registry API
+try:
+    from app.api.routes import huggingface_models
+    app.include_router(huggingface_models.router)
+    logger.info("✓ HuggingFace Models API router registered (model listing, filtering, recommendations)")
+except ImportError as e:
+    logger.warning(f"HuggingFace Models API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register HuggingFace Models router: {e}")
+
 # Playwright test routes (for debugging)
 try:
     from app.api.routes import playwright_test_routes

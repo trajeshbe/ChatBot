@@ -20,6 +20,175 @@ class OllamaDeploymentService:
         self.ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
         self.models_dir = Path("/app/models")  # Base directory for model files
 
+    async def _merge_adapter_to_base(
+        self,
+        adapter_path: str,
+        base_model: str,
+        output_path: str
+    ) -> bool:
+        """
+        Merge LoRA adapter into base model
+
+        Args:
+            adapter_path: Path to adapter weights
+            base_model: Base model identifier (e.g., Qwen/Qwen2.5-1.5B-Instruct)
+            output_path: Where to save merged model
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            logger.info(f"🔄 Merging adapter into base model...")
+            logger.info(f"   Adapter: {adapter_path}")
+            logger.info(f"   Base: {base_model}")
+            logger.info(f"   Output: {output_path}")
+
+            import torch
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+            from peft import PeftModel
+            import gc
+
+            # Load base model
+            logger.info("Loading base model (this may take 2-3 minutes)...")
+            base_model_obj = AutoModelForCausalLM.from_pretrained(
+                base_model,
+                torch_dtype=torch.bfloat16,
+                device_map="auto",
+                trust_remote_code=True,
+                low_cpu_mem_usage=True
+            )
+
+            # Load adapter
+            logger.info("Loading adapter...")
+            peft_model = PeftModel.from_pretrained(
+                base_model_obj,
+                adapter_path,
+                is_trainable=False
+            )
+
+            # Merge
+            logger.info("Merging (this may take 2-3 minutes)...")
+            merged_model = peft_model.merge_and_unload()
+
+            # Cleanup memory
+            del peft_model, base_model_obj
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            # Save merged model
+            logger.info(f"Saving merged model to {output_path}...")
+            Path(output_path).mkdir(parents=True, exist_ok=True)
+            merged_model.save_pretrained(output_path)
+
+            # Save tokenizer
+            tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=True)
+            tokenizer.save_pretrained(output_path)
+
+            logger.info("✅ Merge completed successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Merge failed: {e}", exc_info=True)
+            return False
+
+    async def _convert_to_gguf(
+        self,
+        model_path: str,
+        output_path: str,
+        quantization: str = "q4_K_M"
+    ) -> Optional[str]:
+        """
+        Convert HuggingFace model to GGUF format
+
+        Args:
+            model_path: Path to HuggingFace model
+            output_path: Output directory for GGUF file
+            quantization: Quantization type (q4_K_M, q5_K_M, q8_0, etc.)
+
+        Returns:
+            Path to GGUF file if successful, None otherwise
+        """
+        try:
+            logger.info(f"🔄 Converting to GGUF format...")
+            logger.info(f"   Input: {model_path}")
+            logger.info(f"   Quantization: {quantization}")
+
+            import subprocess
+            import tempfile
+
+            # Check if llama.cpp is available
+            llama_cpp_dir = Path("/tmp/llama.cpp")
+
+            if not llama_cpp_dir.exists():
+                logger.info("📥 Cloning llama.cpp...")
+                result = subprocess.run(
+                    ["git", "clone", "https://github.com/ggerganov/llama.cpp", str(llama_cpp_dir)],
+                    capture_output=True,
+                    text=True,
+                    timeout=300
+                )
+                if result.returncode != 0:
+                    logger.error(f"Failed to clone llama.cpp: {result.stderr}")
+                    return None
+
+                # Install requirements
+                logger.info("📦 Installing llama.cpp requirements...")
+                subprocess.run(
+                    ["pip", "install", "-q", "-r", str(llama_cpp_dir / "requirements.txt")],
+                    timeout=300
+                )
+
+            # Convert to GGUF
+            Path(output_path).mkdir(parents=True, exist_ok=True)
+            gguf_file = Path(output_path) / f"model-{quantization}.gguf"
+
+            logger.info(f"Converting to GGUF (this may take 5-10 minutes)...")
+
+            # Note: convert_hf_to_gguf.py only supports f32,f16,bf16,q8_0,tq1_0,tq2_0,auto
+            # K-quants (q4_K_M, q5_K_M) require 2-step process: convert to f16, then quantize
+            # For now, we use f16 directly (works but larger ~2.9GB vs ~900MB)
+            # TODO: Add llama-quantize step for K-quants after initial conversion
+
+            if quantization in ["q4_K_M", "q5_K_M", "q6_K"]:
+                logger.warning(f"⚠️  K-quant {quantization} not yet supported, using f16 (~2.9GB)")
+                logger.warning(f"   TODO: Implement 2-step quantization with llama-quantize")
+                outtype = "f16"
+                gguf_file = Path(output_path) / "model-f16.gguf"  # Use actual type in filename
+            else:
+                outtype = quantization
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(llama_cpp_dir / "convert_hf_to_gguf.py"),
+                    model_path,
+                    "--outfile", str(gguf_file),
+                    "--outtype", outtype
+                ],
+                capture_output=True,
+                text=True,
+                timeout=900,  # 15 minutes max
+                cwd=str(llama_cpp_dir)
+            )
+
+            if result.returncode != 0:
+                logger.error(f"GGUF conversion failed: {result.stderr}")
+                logger.error(f"Stdout: {result.stdout}")
+                return None
+
+            if gguf_file.exists():
+                size_mb = gguf_file.stat().st_size / (1024 ** 2)
+                logger.info(f"✅ GGUF created: {size_mb:.1f} MB at {gguf_file}")
+                return str(gguf_file)
+            else:
+                logger.error("GGUF file not created")
+                return None
+
+        except Exception as e:
+            logger.error(f"❌ GGUF conversion failed: {e}", exc_info=True)
+            return None
+
     async def deploy_model(
         self,
         model_name: str,
@@ -28,18 +197,22 @@ class OllamaDeploymentService:
         parameters: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Deploy a fine-tuned model to Ollama
+        Deploy a fine-tuned model to Ollama with automatic merge + GGUF conversion
 
         Args:
             model_name: Name for the deployed model in Ollama
-            model_path: Path to the fine-tuned model weights (minio:// URL, local path, or GGUF)
-            base_model: Base model to use (e.g., llama2, mistral)
+            model_path: Path to the fine-tuned model weights (minio:// URL, local path, adapter, or GGUF)
+            base_model: Base model to use (e.g., Qwen/Qwen2.5-1.5B-Instruct)
             parameters: Optional model parameters (temperature, top_p, etc.)
 
         Returns:
             Deployment result with status and details
         """
         try:
+            logger.info(f"🚀 Deploying model {model_name} to Ollama")
+            logger.info(f"   Model path: {model_path}")
+            logger.info(f"   Base model: {base_model}")
+
             # OPTIMIZED: Try workspace first, then download from MinIO as fallback
             local_model_path = model_path
             if model_path.startswith("minio://"):
@@ -70,7 +243,87 @@ class OllamaDeploymentService:
                 if not local_model_path:
                     raise RuntimeError(f"Failed to locate model (checked workspace and MinIO): {model_path}")
 
-            # Generate Modelfile
+            # STEP 1: Check if this is an adapter that needs merging
+            adapter_config_path = Path(local_model_path) / "adapter_config.json"
+            merged_model_path = None
+            gguf_path = None
+
+            if adapter_config_path.exists():
+                logger.info("📦 Detected LoRA adapter - merge required for Ollama")
+
+                # Check if merged model already exists
+                job_dir = Path(local_model_path).parent.parent  # Go up from adapter_model/
+                potential_merged = job_dir / "output" / "merged_model"
+
+                if potential_merged.exists() and (potential_merged / "config.json").exists():
+                    logger.info(f"✅ Found existing merged model at {potential_merged}")
+                    merged_model_path = str(potential_merged)
+                else:
+                    # Need to merge
+                    logger.info("🔄 Merged model not found, starting merge process...")
+                    merged_output = job_dir / "output" / "merged_model"
+
+                    merge_success = await self._merge_adapter_to_base(
+                        adapter_path=local_model_path,
+                        base_model=base_model,
+                        output_path=str(merged_output)
+                    )
+
+                    if not merge_success:
+                        raise RuntimeError("Failed to merge adapter into base model")
+
+                    merged_model_path = str(merged_output)
+
+                # STEP 2: Convert merged model to GGUF
+                logger.info("🔄 Converting merged model to GGUF for Ollama...")
+                gguf_output_dir = job_dir / "output" / "gguf"
+
+                # Check if GGUF already exists
+                existing_gguf = list(Path(gguf_output_dir).glob("*.gguf")) if gguf_output_dir.exists() else []
+                if existing_gguf:
+                    logger.info(f"✅ Found existing GGUF at {existing_gguf[0]}")
+                    gguf_path = str(existing_gguf[0])
+                else:
+                    gguf_path = await self._convert_to_gguf(
+                        model_path=merged_model_path,
+                        output_path=str(gguf_output_dir),
+                        quantization="q4_K_M"
+                    )
+
+                    if not gguf_path:
+                        raise RuntimeError("Failed to convert model to GGUF format")
+
+                # Use GGUF for Ollama deployment
+                local_model_path = gguf_path
+                logger.info(f"✅ Using GGUF model: {gguf_path}")
+
+            elif str(local_model_path).endswith(".gguf"):
+                logger.info("✅ Model is already in GGUF format")
+                gguf_path = local_model_path
+
+            else:
+                # Check if it's a HuggingFace merged model
+                config_path = Path(local_model_path) / "config.json"
+                if config_path.exists():
+                    logger.info("📦 Detected HuggingFace model - GGUF conversion required for Ollama")
+
+                    # Convert to GGUF
+                    job_dir = Path(local_model_path).parent
+                    gguf_output_dir = job_dir / "gguf"
+
+                    gguf_path = await self._convert_to_gguf(
+                        model_path=local_model_path,
+                        output_path=str(gguf_output_dir),
+                        quantization="q4_K_M"
+                    )
+
+                    if not gguf_path:
+                        raise RuntimeError("Failed to convert model to GGUF format")
+
+                    local_model_path = gguf_path
+                    logger.info(f"✅ Using GGUF model: {gguf_path}")
+
+            # Generate Modelfile for GGUF
             modelfile_path = await self._generate_modelfile(
                 model_name=model_name,
                 model_path=local_model_path,
@@ -88,6 +341,8 @@ class OllamaDeploymentService:
                 "status": "success",
                 "model_name": model_name,
                 "deployment_url": f"{self.ollama_host}/api/generate",
+                "merged_model_path": merged_model_path,
+                "gguf_path": gguf_path,
                 "details": result
             }
 
@@ -194,52 +449,22 @@ class OllamaDeploymentService:
 
         Args:
             model_name: Name for the model
-            model_path: Path to model weights
+            model_path: Path to model weights (GGUF or HuggingFace directory)
             base_model: Base model identifier
             parameters: Model parameters
 
         Returns:
             Path to generated Modelfile
         """
-        # Check if model_path contains merged_model (use it) or adapter_model (skip ADAPTER directive)
-        use_adapter = False
-        if "adapter_model" in model_path and "merged_model" not in model_path:
-            logger.warning(f"⚠️ Using adapter_model path - this may not work correctly. Prefer using merged_model.")
-            use_adapter = True
+        # Check if GGUF file
+        is_gguf = str(model_path).endswith(".gguf")
 
-        # Keep model_path as directory - Ollama needs the whole directory with config files
-        if os.path.isdir(model_path):
-            safetensors_path = os.path.join(model_path, "model.safetensors")
-            config_path = os.path.join(model_path, "config.json")
-            if os.path.exists(safetensors_path) and os.path.exists(config_path):
-                logger.info(f"✅ Found complete HuggingFace model in directory: {model_path}")
-                logger.info(f"   - model.safetensors: {os.path.getsize(safetensors_path) / (1024**3):.2f} GB")
-                logger.info(f"   - config.json: present")
-                # Keep model_path as directory - Ollama expects directory with all model files
-            else:
-                logger.warning(f"⚠️  Directory {model_path} missing required files (model.safetensors or config.json)")
+        if is_gguf:
+            logger.info(f"✅ Generating Modelfile for GGUF: {model_path}")
+            gguf_size = Path(model_path).stat().st_size / (1024**2)
+            logger.info(f"   GGUF size: {gguf_size:.1f} MB")
 
-        if use_adapter:
-            # Legacy: Try to use ADAPTER directive (may not work properly)
-            modelfile_content = f"""# Modelfile for {model_name}
-FROM {base_model}
-
-# Load fine-tuned adapter weights (LEGACY - may not work)
-ADAPTER {model_path}
-
-# Model parameters
-PARAMETER temperature {parameters.get('temperature', 0.7)}
-PARAMETER top_p {parameters.get('top_p', 0.9)}
-PARAMETER top_k {parameters.get('top_k', 40)}
-PARAMETER num_ctx {parameters.get('num_ctx', 2048)}
-
-# System prompt (optional)
-SYSTEM You are a helpful AI assistant.
-"""
-        else:
-            # Preferred: Use merged model directly (FROM points to merged model)
-            modelfile_content = f"""# Modelfile for {model_name}
-# Using merged fine-tuned model directly
+            modelfile_content = f"""# Modelfile for {model_name} (GGUF Fine-tuned)
 FROM {model_path}
 
 # Model parameters
@@ -248,10 +473,35 @@ PARAMETER top_p {parameters.get('top_p', 0.9)}
 PARAMETER top_k {parameters.get('top_k', 40)}
 PARAMETER num_ctx {parameters.get('num_ctx', 2048)}
 
-# System prompt (optional)
-SYSTEM You are a helpful AI assistant.
+# System prompt
+SYSTEM You are a helpful assistant that provides accurate information about companies and products.
 """
-        logger.info(f"✅ Generated Modelfile (using {'ADAPTER' if use_adapter else 'FROM merged model'})")
+        else:
+            # HuggingFace directory
+            if os.path.isdir(model_path):
+                safetensors_path = os.path.join(model_path, "model.safetensors")
+                config_path = os.path.join(model_path, "config.json")
+                if os.path.exists(safetensors_path) and os.path.exists(config_path):
+                    logger.info(f"✅ Found complete HuggingFace model in directory: {model_path}")
+                    logger.info(f"   - model.safetensors: {os.path.getsize(safetensors_path) / (1024**3):.2f} GB")
+                    logger.info(f"   - config.json: present")
+                else:
+                    logger.warning(f"⚠️  Directory {model_path} missing required files")
+
+            modelfile_content = f"""# Modelfile for {model_name} (HuggingFace merged model)
+FROM {model_path}
+
+# Model parameters
+PARAMETER temperature {parameters.get('temperature', 0.7)}
+PARAMETER top_p {parameters.get('top_p', 0.9)}
+PARAMETER top_k {parameters.get('top_k', 40)}
+PARAMETER num_ctx {parameters.get('num_ctx', 2048)}
+
+# System prompt
+SYSTEM You are a helpful assistant that provides accurate information about companies and products.
+"""
+
+        logger.info(f"✅ Generated Modelfile ({'GGUF' if is_gguf else 'HuggingFace'})")
 
         # Write Modelfile
         modelfile_path = self.models_dir / f"{model_name}.Modelfile"
@@ -269,55 +519,89 @@ SYSTEM You are a helpful AI assistant.
         modelfile_path: Path
     ) -> Dict[str, Any]:
         """
-        Create model in Ollama using the Modelfile via HTTP API
+        Create model in Ollama using the Modelfile via Docker exec + CLI
+
+        This approach is more reliable than the HTTP API which has issues
+        parsing the Modelfile content. We write the Modelfile to a temp location
+        in the Ollama container and use `ollama create -f`.
 
         Args:
             model_name: Name for the model
-            modelfile_path: Path to Modelfile
+            modelfile_path: Path to Modelfile (in backend container)
 
         Returns:
             Creation result
         """
         try:
-            import httpx
-
             # Read the Modelfile content
             with open(modelfile_path, 'r') as f:
                 modelfile_content = f.read()
 
-            # Use Ollama HTTP API to create model
-            # Note: OLLAMA_HOST can be set via environment variable
-            ollama_url = os.getenv("OLLAMA_HOST", "http://ollama:11434")
-            create_url = f"{ollama_url}/api/create"
+            # Write Modelfile to temp location in Ollama container
+            temp_modelfile = f"/tmp/{model_name}.Modelfile"
 
-            logger.info(f"Creating Ollama model '{model_name}' via API at {create_url}")
+            logger.info(f"Creating Ollama model '{model_name}' via Docker exec")
+            logger.info(f"   Modelfile: {temp_modelfile}")
 
-            async with httpx.AsyncClient(timeout=300.0) as client:
-                response = await client.post(
-                    create_url,
-                    json={
-                        "name": model_name,
-                        "modelfile": modelfile_content
-                    },
-                    headers={"Content-Type": "application/json"}
+            # Write Modelfile to Ollama container
+            write_cmd = [
+                "docker", "exec", "-i", "rag-ollama",
+                "sh", "-c", f"cat > {temp_modelfile}"
+            ]
+
+            write_result = subprocess.run(
+                write_cmd,
+                input=modelfile_content.encode(),
+                capture_output=True,
+                timeout=30
+            )
+
+            if write_result.returncode != 0:
+                raise RuntimeError(f"Failed to write Modelfile: {write_result.stderr.decode()}")
+
+            logger.info(f"✅ Modelfile written to Ollama container")
+
+            # Create model using ollama CLI
+            create_cmd = [
+                "docker", "exec", "rag-ollama",
+                "ollama", "create", model_name,
+                "-f", temp_modelfile
+            ]
+
+            logger.info(f"🚀 Creating model in Ollama (this may take 1-2 minutes)...")
+
+            create_result = subprocess.run(
+                create_cmd,
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minutes
+            )
+
+            if create_result.returncode == 0:
+                logger.info(f"✅ Successfully created Ollama model: {model_name}")
+                logger.info(f"   Output: {create_result.stdout.strip()}")
+
+                # Clean up temp Modelfile
+                subprocess.run(
+                    ["docker", "exec", "rag-ollama", "rm", "-f", temp_modelfile],
+                    capture_output=True,
+                    timeout=10
                 )
 
-                if response.status_code == 200:
-                    logger.info(f"✅ Successfully created Ollama model: {model_name}")
-                    return {
-                        "success": True,
-                        "response": response.text
-                    }
-                else:
-                    error_msg = f"Ollama API returned {response.status_code}: {response.text}"
-                    logger.error(f"Failed to create Ollama model: {error_msg}")
-                    raise RuntimeError(error_msg)
+                return {
+                    "success": True,
+                    "response": create_result.stdout
+                }
+            else:
+                error_msg = f"Ollama create failed: {create_result.stderr}"
+                logger.error(f"Failed to create Ollama model: {error_msg}")
+                raise RuntimeError(error_msg)
 
-        except httpx.TimeoutException:
+        except subprocess.TimeoutExpired:
             logger.error(f"Timeout creating Ollama model: {model_name}")
             raise RuntimeError("Model creation timed out after 5 minutes")
         except Exception as e:
-            logger.error(f"Error creating Ollama model via API: {e}", exc_info=True)
+            logger.error(f"Error creating Ollama model: {e}", exc_info=True)
             raise
 
     async def list_deployed_models(self) -> Dict[str, Any]:

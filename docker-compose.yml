@@ -447,6 +447,7 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       FINETUNING_WORKSPACE_BASE: /workspace/finetuning
+      FINETUNING_AUTO_MERGE: ${FINETUNING_AUTO_MERGE:-true}
     volumes:
       - ./backend:/app
       - finetuning_workspaces:/workspace/finetuning

@@ -10,6 +10,7 @@ Supported formats:
 - Instruction: Instruction-Response pairs
 - Preference: Prompt with chosen/rejected (for RLHF)
 - Summarization: Document-Summary pairs
+- Chat: OpenAI/Anthropic chat format with messages (role/content pairs)
 
 Extension mechanism:
 - Add new objective types by registering preprocessor functions
@@ -235,6 +236,70 @@ class PreferenceFormatter(DatasetFormatter):
         )
 
 
+class ChatFormatter(DatasetFormatter):
+    """
+    Formatter for Chat datasets (OpenAI/Anthropic chat format)
+
+    Expects data in format:
+    {"messages": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}
+
+    This is the standard format for instruction tuning models.
+    """
+
+    def __init__(self, messages_col: str = "messages"):
+        self.messages_col = messages_col
+
+    def format(self, example: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        For chat datasets, we return the messages as-is
+        because the trainer handles the chat template formatting
+        """
+        messages = example[self.messages_col]
+
+        # If messages is a string (JSON), parse it
+        if isinstance(messages, str):
+            import json
+            messages = json.loads(messages)
+
+        return {"messages": messages}
+
+    def validate(self, example: Dict[str, Any]) -> bool:
+        """
+        Validate that example has messages field with proper structure
+        """
+        if self.messages_col not in example:
+            return False
+
+        messages = example[self.messages_col]
+
+        # Handle JSON string
+        if isinstance(messages, str):
+            try:
+                import json
+                messages = json.loads(messages)
+            except:
+                return False
+
+        # Must be a list
+        if not isinstance(messages, list):
+            return False
+
+        # Must have at least one message
+        if len(messages) == 0:
+            return False
+
+        # Each message must have role and content
+        for msg in messages:
+            if not isinstance(msg, dict):
+                return False
+            if "role" not in msg or "content" not in msg:
+                return False
+            if not msg["role"] or not msg["content"]:
+                return False
+
+        return True
+
+
 class DatasetPreprocessor:
     """
     Flexible dataset preprocessor with extensible formatters
@@ -260,7 +325,8 @@ class DatasetPreprocessor:
             "classification": ClassificationFormatter,
             "instruction": InstructionFormatter,
             "summarization": SummarizationFormatter,
-            "preference": PreferenceFormatter
+            "preference": PreferenceFormatter,
+            "chat": ChatFormatter
         }
 
         logger.info("Initialized DatasetPreprocessor with default formatters")
@@ -519,7 +585,8 @@ class DatasetPreprocessor:
             "instruction": ["instruction", "response", "input"],  # input is optional
             "classification": ["text", "label"],
             "summarization": ["document", "summary"],
-            "preference": ["prompt", "chosen", "rejected"]
+            "preference": ["prompt", "chosen", "rejected"],
+            "chat": ["messages"]
         }
         return column_map.get(format_type, [])
 
@@ -602,6 +669,11 @@ class DatasetPreprocessor:
                 detected["chosen_col"] = actual_cols_lower["chosen"]
             if "rejected" in actual_cols_lower:
                 detected["rejected_col"] = actual_cols_lower["rejected"]
+
+        elif format_type == "chat":
+            # Look for messages column
+            if "messages" in actual_cols_lower:
+                detected["messages_col"] = actual_cols_lower["messages"]
 
         # Return mapping only if we found all required columns
         required_count = len([col for col in expected_cols if col != "input"])  # input is optional
@@ -760,6 +832,10 @@ def infer_format_type(df: pd.DataFrame) -> Optional[str]:
         Inferred format type or None
     """
     columns = set(col.lower() for col in df.columns)
+
+    # Chat detection (check first as it's very specific)
+    if "messages" in columns:
+        return "chat"
 
     # QA detection
     if ("question" in columns and "answer" in columns):

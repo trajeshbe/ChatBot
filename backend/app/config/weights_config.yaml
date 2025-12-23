@@ -10,7 +10,8 @@
 
 strategy_weights:
   # Conversation-only mode (uses ONLY conversation history, no document RAG)
-  conversation_only: 0.50
+  # Default: 0.30 - Low value ensures document retrieval is prioritized
+  conversation_only: 0.30
 
   # Short-term memory (session documents only) - highest priority
   rag_short_term: 0.48

@@ -13,6 +13,7 @@ Usage:
 import argparse
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -60,7 +61,8 @@ def setup_training(config: dict):
     quantization = config.get("quantization", "4bit")
     hyperparams = config.get("hyperparameters", {})
 
-    dataset_path = config.get("dataset_path", "/workspace/input/dataset")
+    # ✅ FIX: Use DATASET_PATH environment variable (set by sandbox manager)
+    dataset_path = os.getenv("DATASET_PATH", config.get("dataset_path", "/workspace/input/dataset"))
     output_dir = config.get("output_dir", "/workspace/output")
 
     logger.info(f"🎯 Base Model: {base_model}")
@@ -119,11 +121,50 @@ def setup_training(config: dict):
 
     # 6. Load dataset
     logger.info(f"Loading dataset from {dataset_path}...")
-    # TODO: Implement dataset loading based on format
-    # For now, assume preprocessed dataset
     try:
         dataset = load_dataset("json", data_files=f"{dataset_path}/train.json")
         logger.info(f"✅ Loaded {len(dataset['train'])} training samples")
+
+        # Check if dataset needs tokenization (has 'messages' column)
+        if "messages" in dataset["train"].column_names:
+            logger.info("🔄 Dataset has 'messages' column - applying tokenization...")
+
+            def tokenize_messages(examples):
+                """Tokenize chat messages using the model's chat template"""
+                tokenized_texts = []
+                for messages in examples["messages"]:
+                    # Apply chat template to format messages
+                    formatted_text = tokenizer.apply_chat_template(
+                        messages,
+                        tokenize=False,
+                        add_generation_prompt=False
+                    )
+                    tokenized_texts.append(formatted_text)
+
+                # Tokenize all formatted texts
+                model_inputs = tokenizer(
+                    tokenized_texts,
+                    max_length=hyperparams.get("max_length", 512),
+                    truncation=True,
+                    padding=False  # Will be handled by data collator
+                )
+
+                # Copy input_ids to labels for causal LM training
+                model_inputs["labels"] = model_inputs["input_ids"].copy()
+
+                return model_inputs
+
+            # Apply tokenization to dataset
+            dataset = dataset.map(
+                tokenize_messages,
+                batched=True,
+                remove_columns=dataset["train"].column_names,
+                desc="Tokenizing dataset"
+            )
+            logger.info(f"✅ Tokenized {len(dataset['train'])} samples")
+        else:
+            logger.info("Dataset already tokenized (has input_ids)")
+
     except Exception as e:
         logger.warning(f"Could not load dataset: {e}")
         logger.info("Using dummy dataset for testing")
@@ -137,7 +178,7 @@ def setup_training(config: dict):
         gradient_accumulation_steps=hyperparams.get("gradient_accumulation_steps", 4),
         learning_rate=hyperparams.get("learning_rate", 2e-4),
         fp16=True,
-        logging_dir=f"{output_dir}/logs",
+        logging_dir=config.get("log_dir", "/workspace/logs"),
         logging_steps=hyperparams.get("logging_steps", 10),
         save_steps=hyperparams.get("save_steps", 100),
         save_total_limit=3,
@@ -204,9 +245,9 @@ def main():
             # 2. CRITICAL: Merge adapters into base model
             logger.info("🔄 Merging PEFT adapters into base model...")
             try:
-                from transformers import AutoModelForCausalLM
                 from peft import PeftModel
                 import gc
+                # AutoModelForCausalLM already imported at top
 
                 # Load base model without quantization (required for merging)
                 base_model_path = config.get("base_model")
@@ -287,29 +328,100 @@ def main():
             logger.info("✅ Mock training with merge completed successfully")
             return
 
+        # REAL TRAINING - Now enabled!
+        from transformers import Trainer, DataCollatorForSeq2Seq
+
+        # Create data collator for dynamic padding
+        data_collator = DataCollatorForSeq2Seq(
+            tokenizer=tokenizer,
+            model=model,
+            padding=True
+        )
+
         # Create trainer
-        # from transformers import Trainer
-        # trainer = Trainer(
-        #     model=model,
-        #     args=training_args,
-        #     train_dataset=dataset["train"],
-        # )
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            train_dataset=dataset["train"],
+            data_collator=data_collator
+        )
 
-        # logger.info("🚀 Starting training...")
-        # trainer.train()
+        logger.info("=" * 80)
+        logger.info("🚀 Starting REAL training (NOT mock)...")
+        logger.info("=" * 80)
 
-        # logger.info("💾 Saving model...")
-        # model.save_pretrained(output_dir)
-        # tokenizer.save_pretrained(output_dir)
+        # Train the model
+        train_result = trainer.train()
+
+        logger.info("=" * 80)
+        logger.info("✅ Training completed!")
+        logger.info(f"   Final loss: {train_result.training_loss:.4f}")
+        logger.info("=" * 80)
+
+        # Save trained model
+        logger.info("💾 Saving trained adapter weights...")
+        adapter_dir = output_dir / "adapter_model"
+        adapter_dir.mkdir(parents=True, exist_ok=True)
+        model.save_pretrained(adapter_dir)
+        tokenizer.save_pretrained(adapter_dir)
+        logger.info(f"✅ Adapter saved to {adapter_dir}")
+
+        # Optional: Merge adapters into base model
+        try:
+            logger.info("🔄 Merging trained adapters into base model...")
+            from peft import PeftModel
+            import gc
+
+            # Load base model for merging (AutoModelForCausalLM already imported at top)
+            base_model_path = config.get("base_model")
+            base_model_full = AutoModelForCausalLM.from_pretrained(
+                base_model_path,
+                device_map="auto",
+                trust_remote_code=True,
+                torch_dtype=torch.bfloat16,
+                low_cpu_mem_usage=True
+            )
+
+            # Load PEFT model with trained adapters
+            peft_model = PeftModel.from_pretrained(
+                base_model_full,
+                str(adapter_dir),
+                is_trainable=False
+            )
+
+            # Merge and unload
+            merged_model = peft_model.merge_and_unload()
+
+            # Clear memory
+            del peft_model
+            del base_model_full
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            # Save merged model
+            merged_dir = output_dir / "merged_model"
+            merged_dir.mkdir(parents=True, exist_ok=True)
+            merged_model.save_pretrained(merged_dir)
+            tokenizer.save_pretrained(merged_dir)
+
+            logger.info(f"✅ Merged model saved to {merged_dir}")
+
+        except Exception as merge_error:
+            logger.warning(f"⚠️  Merge failed (adapter weights still saved): {merge_error}")
+            merged_dir = None
 
         # Write final result
         result = {
             "success": True,
             "status": "completed",
             "output_dir": str(output_dir),
+            "adapter_dir": str(adapter_dir),
+            "merged_dir": str(merged_dir) if merged_dir else None,
             "final_metrics": {
-                "epochs_completed": config["hyperparameters"].get("num_epochs", 3),
-                # Add real metrics here
+                "epochs_completed": training_args.num_train_epochs,
+                "final_loss": float(train_result.training_loss),
+                "training_steps": train_result.global_step
             }
         }
 
@@ -318,7 +430,7 @@ def main():
             json.dump(result, f, indent=2)
 
         logger.info("=" * 80)
-        logger.info("✅ Training Completed Successfully!")
+        logger.info("✅ REAL Training Completed Successfully!")
         logger.info("=" * 80)
 
     except Exception as e:

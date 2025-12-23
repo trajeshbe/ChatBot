@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import {
   Database, Layers, Zap, Target, GitBranch, Rocket,
   Activity, Shield, ChevronRight, User, Settings,
-  TrendingUp, AlertCircle
+  TrendingUp, AlertCircle, GitMerge
 } from 'lucide-react';
 import ModelCatalog from './ModelCatalog';
 import DatasetInspector from './DatasetInspector';
 import TrainingJobsManager from './TrainingJobsManager';
 import EvaluationHub from './EvaluationHub';
 import AdapterVersions from './AdapterVersions';
+import ModelMergeManager from './ModelMergeManager';
 import DeploymentManager from './DeploymentManager';
 import MonitoringDashboard from './MonitoringDashboard';
 import GovernanceAudit from './GovernanceAudit';
@@ -80,6 +81,13 @@ export default function FineTuningGovernanceUI() {
       label: 'Adapters & Versions',
       icon: <GitBranch className="w-5 h-5" />,
       component: AdapterVersions,
+      roles: ['admin', 'ml_engineer'],
+    },
+    {
+      id: 'merge',
+      label: 'Merge Models',
+      icon: <GitMerge className="w-5 h-5" />,
+      component: ModelMergeManager,
       roles: ['admin', 'ml_engineer'],
     },
     {
@@ -334,6 +342,10 @@ function getRoleBasedDescription(section: string, role: string): string {
     adapters: {
       admin: 'Manage adapter versions, lineage, and storage',
       ml_engineer: 'Track adapter experiments with Git-like versioning',
+    },
+    merge: {
+      admin: 'Merge LoRA adapters with base models for deployment',
+      ml_engineer: 'Request merge operations and monitor merge progress',
     },
     deployment: {
       admin: 'Manage deployments, rollbacks, and canary releases',

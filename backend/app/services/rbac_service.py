@@ -70,6 +70,15 @@ class RBACService:
         Returns:
             bool: True if user has permission
         """
+        # Admin bypass: Admin users have all permissions
+        from app.models.database_enhanced import User as UserModel, UserRole as UserRoleEnum
+        stmt_user = select(UserModel).where(UserModel.id == user_id)
+        result_user = await self.db.execute(stmt_user)
+        user = result_user.scalar_one_or_none()
+
+        if user and user.role == UserRoleEnum.ADMIN:
+            return True
+
         # Get module by code
         stmt = select(Module).where(Module.code == module_code, Module.is_active == True)
         result = await self.db.execute(stmt)

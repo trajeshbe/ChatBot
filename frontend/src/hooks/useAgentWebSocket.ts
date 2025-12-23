@@ -11,7 +11,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
  * Event types streamed from the WebSocket
  */
 export interface AgentEvent {
-  type: 'connection' | 'status_update' | 'thinking' | 'tool_use' | 'tool_result' | 'artifact' | 'completed' | 'error';
+  type: 'connection' | 'status_update' | 'thinking' | 'tool_use' | 'tool_result' | 'artifact' | 'completed' | 'error' | 'terminal_output';
   timestamp: string;
   [key: string]: any;
 }

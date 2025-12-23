@@ -26,6 +26,10 @@ interface AgentTask {
   error_details?: any;
   created_at: string;
   minio_base_path?: string;  // 🆕 MinIO base path for artifacts folder link
+  meta_info?: {
+    engine?: string;
+    [key: string]: any;
+  };
 }
 
 interface Document {
@@ -458,6 +462,7 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
           <h2 className="text-xs font-semibold mb-2 text-slate-700 dark:text-slate-300">📤 Upload Files to Agent Workspace</h2>
           <div className="scale-90 origin-top max-h-48 pb-2">
             <AgentWorkspaceFileUpload
+              sessionId={sessionId || 'default'}  // ✅ Pass sessionId (required)
               projectId={selectedProjectId}  // ✅ Pass selected project from parent
               currentUser={currentUser}
               onUploadComplete={() => {
@@ -952,7 +957,7 @@ export const AgentTaskMonitor: React.FC<AgentTaskMonitorProps> = ({ currentUser 
                 history.forEach((msg: any, idx: number) => {
                   if (msg.role === 'assistant' && msg.content?.startsWith('TOOL_CALL: execute_python')) {
                     try {
-                      const argsMatch = msg.content.match(/ARGS: ({.*})/s);
+                      const argsMatch = msg.content.match(/ARGS: ({[\s\S]*?})/);
                       if (argsMatch) {
                         const args = JSON.parse(argsMatch[1]);
                         if (args.code) {

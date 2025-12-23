@@ -2,12 +2,17 @@
 # Extends chatbot-agent-runtime:llm-enabled with only essential fine-tuning libraries
 # Date: 2025-12-18
 # Updated: Added DPO and GRPO support
+# Updated: 2025-12-20 - Added Unsloth for 2-5x faster training
 
 # Core PEFT dependencies (only install what's missing from agent-runtime)
 peft>=0.7.0
 accelerate>=0.24.0
 bitsandbytes>=0.41.0
 trl>=0.7.0  # Includes DPO trainer
+
+# Unsloth (2-5x faster training, 70% less memory)
+# Note: Installed separately via git in Dockerfile due to special build requirements
+# unsloth[cu121] @ git+https://github.com/unslothai/unsloth.git
 
 # Ensure compatible versions (don't conflict with existing packages)
 transformers>=4.36.0
@@ -20,5 +25,5 @@ scipy>=1.11.0
 # trl already includes DPOTrainer, no additional packages needed
 
 # Optional: Experiment tracking (lightweight versions)
-# tensorboard  # Already in agent-runtime
+tensorboard>=2.14.0  # Required for TensorBoardCallback in transformers
 # wandb  # Optional

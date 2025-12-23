@@ -13,11 +13,12 @@ All endpoints enforce RBAC permissions for enterprise security.
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, text
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import uuid
 import os
+import asyncio
 import logging
 from functools import lru_cache
 
@@ -354,7 +355,7 @@ async def list_datasets(
             conditions.append(FineTuningDataset.format_type == format_type)
 
         if status:
-            conditions.append(FineTuningDataset.status == status)
+            conditions.append(FineTuningDataset.preprocessing_status == status)
 
         if conditions:
             query = query.where(and_(*conditions))
@@ -372,6 +373,21 @@ async def list_datasets(
         result = await db.execute(query)
         datasets = result.scalars().all()
 
+        # Helper to convert sample_rows to strings (handles both str and dict)
+        def format_sample_rows(rows):
+            if not rows:
+                return None
+            result = []
+            for row in rows:
+                if isinstance(row, dict):
+                    # Chat format - serialize to JSON string
+                    import json
+                    result.append(json.dumps(row))
+                else:
+                    # Already a string
+                    result.append(str(row))
+            return result
+
         return DatasetListResponse(
             datasets=[
                 DatasetDetailResponse(
@@ -385,7 +401,7 @@ async def list_datasets(
                     file_size_bytes=d.file_size,
                     validation_errors=d.validation_errors,
                     is_valid=d.is_valid,  # Validation status flag
-                    sample_rows=d.sample_rows,  # Quality preview samples
+                    sample_rows=format_sample_rows(d.sample_rows),  # Convert dicts to strings
                     meta_info={"minio_path": d.minio_path} if d.minio_path else {},
                     created_at=d.uploaded_at,
                     updated_at=d.uploaded_at  # No separate updated_at field
@@ -418,6 +434,19 @@ async def get_dataset(
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset not found")
 
+        # Convert sample_rows to strings (handles both str and dict)
+        def format_sample_rows(rows):
+            if not rows:
+                return None
+            result = []
+            for row in rows:
+                if isinstance(row, dict):
+                    import json
+                    result.append(json.dumps(row))
+                else:
+                    result.append(str(row))
+            return result
+
         return DatasetDetailResponse(
             id=str(dataset.id),
             name=dataset.name,
@@ -429,7 +458,7 @@ async def get_dataset(
             file_size_bytes=dataset.file_size,
             validation_errors=dataset.validation_errors,
             is_valid=dataset.is_valid,  # Validation status flag
-            sample_rows=dataset.sample_rows,  # Quality preview samples
+            sample_rows=format_sample_rows(dataset.sample_rows),  # Convert dicts to strings
             meta_info={"minio_path": dataset.minio_path} if dataset.minio_path else {},
             created_at=dataset.uploaded_at,
             updated_at=dataset.uploaded_at  # No separate updated_at field
@@ -540,16 +569,18 @@ async def create_finetuning_job(
         department = dept_result.scalar_one_or_none()
         department_name = department.name if department else "Technology"
 
-        # 2. Get user's primary team (default to Backend Development for admin users in Technology)
-        # In production, this should query user_team_memberships or similar
-        team_result = await db.execute(
-            select(Team).where(
-                Team.department_id == user.department_id,
-                Team.name == "Backend Development"
-            )
-        )
-        team = team_result.scalar_one_or_none()
-        team_name = team.name if team else "Backend Development"
+        # 2. Get user's primary team from user_teams junction table
+        team_query = text("""
+            SELECT t.name
+            FROM teams t
+            JOIN user_teams ut ON t.id = ut.team_id
+            WHERE ut.user_id = :user_id
+            ORDER BY ut.assigned_at DESC
+            LIMIT 1
+        """)
+        team_result = await db.execute(team_query, {"user_id": str(user.id)})
+        team_row = team_result.first()
+        team_name = team_row[0] if team_row else "General"
 
         # 3. Get or default to Global project
         effective_project_id = request.project_id
@@ -989,6 +1020,224 @@ async def register_model(
     except Exception as e:
         logger.error(f"Failed to register model: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to register model: {str(e)}")
+
+
+# =============================================================================
+# LoRA Adapter Merge Endpoints (JIRA: FINETUNE-002)
+# =============================================================================
+
+@router.post("/models/{model_id}/merge")
+async def merge_lora_adapters(
+    model_id: str,
+    base_model_name: str = "Qwen/Qwen2.5-1.5B-Instruct",
+    force_cpu: bool = False,
+    user: User = Depends(require_authentication),
+    _: None = Depends(RequirePermission("model_finetuning", "write")),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Trigger LoRA adapter merge for a fine-tuned model.
+
+    This endpoint triggers a background Celery task to merge LoRA adapters
+    with the base model. The merge process typically takes 5-15 minutes.
+
+    The merged model will be saved to:
+        /workspace/finetuning/{job_id}/output/merged_model/
+
+    This path is optimized for deployment - OllamaDeploymentService checks
+    the workspace FIRST before downloading from MinIO.
+
+    **JIRA**: FINETUNE-002
+    **Status Flow**: adapter_only → merging → merged
+
+    Args:
+        model_id: ID of the fine-tuned model
+        base_model_name: HuggingFace base model (default: Qwen/Qwen2.5-1.5B-Instruct)
+        force_cpu: Force CPU-only merge for testing
+
+    Returns:
+        Task ID and initial status
+
+    Example:
+        POST /api/v1/finetuning/models/abc-123/merge
+        Response: {"task_id": "celery-task-id", "status": "merging", "message": "Merge started"}
+    """
+    from app.tasks.finetuning_tasks import merge_lora_model_task
+
+    try:
+        logger.info(f"Merge request for model {model_id} by user {user.username}")
+
+        # Check if model exists
+        result = await db.execute(
+            text("SELECT id, status, minio_checkpoint_path FROM finetuned_models WHERE id = :model_id"),
+            {"model_id": model_id}
+        )
+        model = result.fetchone()
+
+        if not model:
+            raise HTTPException(status_code=404, detail=f"Model {model_id} not found")
+
+        # Check if model is ready for merge
+        # Allow: registered, approved, adapter_only, completed, merge_failed (for retry)
+        if model.status not in ["registered", "approved", "adapter_only", "completed", "merge_failed"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Model status '{model.status}' cannot be merged. Must be 'registered', 'approved', 'adapter_only', or 'completed'"
+            )
+
+        if not model.minio_checkpoint_path:
+            raise HTTPException(
+                status_code=400,
+                detail="Model has no checkpoint path. Cannot merge."
+            )
+
+        # Trigger Celery background task
+        task = merge_lora_model_task.delay(
+            model_id=model_id,
+            base_model_name=base_model_name,
+            force_cpu=force_cpu
+        )
+
+        logger.info(f"✅ Merge task triggered: {task.id} for model {model_id}")
+
+        return {
+            "task_id": task.id,
+            "model_id": model_id,
+            "status": "merging",
+            "message": f"Merge task started. Expected duration: 5-15 minutes. Check /models/{model_id}/merge-status for progress."
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to trigger merge for model {model_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to trigger merge: {str(e)}")
+
+
+@router.get("/models/{model_id}/merge-status")
+async def get_merge_status(
+    model_id: str,
+    user: User = Depends(require_authentication),
+    _: None = Depends(RequirePermission("model_finetuning", "read")),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get merge status for a fine-tuned model.
+
+    Returns current merge status, progress, and metadata.
+
+    **JIRA**: FINETUNE-002
+
+    Args:
+        model_id: ID of the fine-tuned model
+
+    Returns:
+        Merge status information
+
+    Status Values:
+        - adapter_only: Not merged yet
+        - merging: Merge in progress
+        - merged: Merge complete, ready for deployment
+        - merge_failed: Merge failed (check error_message)
+        - deployed: Already deployed to Ollama
+
+    Example:
+        GET /api/v1/finetuning/models/abc-123/merge-status
+        Response:
+        {
+            "model_id": "abc-123",
+            "status": "merged",
+            "merged_model_path": "/workspace/finetuning/uuid/output/merged_model",
+            "merge_duration_seconds": 642,
+            "merge_requested_at": "2025-12-22T10:30:00Z",
+            "merge_error_message": null
+        }
+    """
+    from app.services.finetuning.model_merge_service import ModelMergeService
+
+    try:
+        # Get database session (convert async to sync for service)
+        # Create sync session
+        from sqlalchemy.orm import sessionmaker
+        from app.core.database import sync_engine
+
+        SessionLocal = sessionmaker(bind=sync_engine, autocommit=False, autoflush=False)
+        sync_db = SessionLocal()
+
+        try:
+            merge_service = ModelMergeService(sync_db)
+
+            # Import asyncio to run async method
+            import asyncio
+            status = asyncio.run(merge_service.get_merge_status(model_id))
+
+            return status
+
+        finally:
+            sync_db.close()
+
+    except Exception as e:
+        logger.error(f"Failed to get merge status for model {model_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get merge status: {str(e)}")
+
+
+@router.get("/models-public/{model_id}/merge-status")
+async def get_merge_status_public(
+    model_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get merge status for a fine-tuned model (public endpoint for polling).
+
+    No authentication required for status checking to avoid CORS issues
+    when polling from browser during merge process.
+
+    Returns current merge status, progress, and metadata.
+
+    Args:
+        model_id: ID of the fine-tuned model
+
+    Returns:
+        Merge status information
+
+    Status Values:
+        - adapter_only/registered/approved: Not merged yet
+        - merging: Merge in progress
+        - merged: Merge complete, ready for deployment
+        - merge_failed: Merge failed (check error_message)
+        - deployed: Already deployed to Ollama
+
+    Example:
+        GET /api/v1/finetuning/models-public/abc-123/merge-status
+    """
+    try:
+        # Query database directly to avoid importing heavy dependencies
+        from sqlalchemy import select
+        from app.models.finetuning_models import FineTunedModel
+
+        result = await db.execute(
+            select(FineTunedModel).where(FineTunedModel.id == model_id)
+        )
+        model = result.scalar_one_or_none()
+
+        if not model:
+            raise HTTPException(status_code=404, detail=f"Model {model_id} not found")
+
+        # Return merge status information
+        return {
+            "model_id": str(model.id),
+            "status": model.status,
+            "merged_model_path": model.merged_model_path,
+            "merge_duration_seconds": model.merge_duration_seconds,
+            "merge_requested_at": model.merge_requested_at.isoformat() if model.merge_requested_at else None,
+            "merge_error_message": model.merge_error_message
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get merge status for model {model_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get merge status: {str(e)}")
 
 
 @router.post("/models/{model_id}/deploy")
@@ -4187,40 +4436,32 @@ async def deploy_model_public(
             # Use OllamaDeploymentService for actual deployment
             ollama_service = OllamaDeploymentService()
 
-            # Get model checkpoint path from job
-            model_path = None
-            if model.job_id:
-                job_query = select(FineTuningJob).where(FineTuningJob.id == model.job_id)
-                job_result = await db.execute(job_query)
-                job = job_result.scalar_one_or_none()
+            # Construct adapter path from job workspace
+            adapter_path = f"/workspace/finetuning/{str(model.job_id)}/output/adapter_model"
 
-                if job and job.minio_checkpoint_path:
-                    model_path = job.minio_checkpoint_path
-                elif model.minio_checkpoint_path:
-                    model_path = model.minio_checkpoint_path
+            logger.info(f"🚀 Deploying model {model.name} to Ollama as {model_name}")
+            logger.info(f"   Adapter path: {adapter_path}")
+            logger.info(f"   Base model: {base_model}")
 
-            if not model_path:
-                # Fallback to constructed path
-                model_path = f"/app/models/{model.name}/adapter_model"
-
-            logger.info(f"Deploying model {model.name} to Ollama as {model_name} from path {model_path}")
-
-            # Deploy to Ollama
+            # Deploy to Ollama with merge + GGUF conversion
             deployment_result = await ollama_service.deploy_model(
                 model_name=model_name,
-                model_path=model_path,
+                model_path=adapter_path,
                 base_model=base_model,
                 parameters=parameters
             )
 
             if deployment_result.get("status") == "success":
-                model.ollama_model_name = model_name
-                model.deployment_url = deployment_result.get("deployment_url", "http://localhost:11434")
+                model.ollama_model_name = deployment_result.get("model_name", model_name)
+                model.deployment_url = deployment_result.get("deployment_url", "http://ollama:11434/api/generate")
                 model.status = "deployed"
+                logger.info(f"✅ Model {model.name} deployed successfully to Ollama")
             else:
+                error_msg = deployment_result.get('error', 'Unknown deployment error')
+                logger.error(f"❌ Ollama deployment failed: {error_msg}")
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Ollama deployment failed: {deployment_result.get('error')}"
+                    detail=f"Ollama deployment failed: {error_msg}"
                 )
 
         elif target == "vllm":
@@ -4641,3 +4882,128 @@ async def test_model_public(
     except Exception as e:
         logger.error(f"Model test failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# JOB LOGS ENDPOINT (for Pipeline Visualization)
+# ============================================================================
+
+@router.get("/jobs/{job_id}/logs")
+async def get_job_logs(
+    job_id: str,
+    lines: int = Query(100, description="Number of log lines to return"),
+    stage: Optional[str] = Query(None, description="Filter by stage: preprocessing, training, evaluation"),
+    user: User = Depends(require_authentication),
+    _: None = Depends(RequirePermission("model_finetuning", "read")),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get training job logs (including preprocessing logs)
+
+    Returns:
+    - Recent logs from Celery worker (preprocessing, workspace setup)
+    - Container logs (model loading, training progress)
+    - Highlighted preprocessing steps (auto-detection, column mapping, etc.)
+    """
+    try:
+        import subprocess
+        import re
+
+        # Verify job exists
+        result = await db.execute(
+            select(FineTuningJob).where(FineTuningJob.id == uuid.UUID(job_id))
+        )
+        job = result.scalar_one_or_none()
+
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        logs = []
+        preprocessing_highlights = []
+
+        # 1. Get Celery worker logs (preprocessing)
+        try:
+            celery_logs = subprocess.check_output(
+                ["docker-compose", "logs", "--tail", str(lines), "celery"],
+                cwd="/mnt/c/AIML/ClaudeCode/chatbot/ChatBot",
+                timeout=5
+            ).decode('utf-8')
+
+            # Filter for this job's logs
+            job_celery_logs = [
+                line for line in celery_logs.split('\n')
+                if job_id in line or job.name in line
+            ]
+
+            # Extract preprocessing highlights
+            preprocessing_patterns = {
+                'dataset_download': r'📦 Downloading.*from MinIO',
+                'preprocessing_start': r'🔄 Preprocessing dataset',
+                'samples_loaded': r'📊 Loaded (\d+) samples',
+                'objective_detected': r'📝 Training objective: (\w+) → Format type: (\w+)',
+                'auto_detection': r'🔍 Auto-detecting columns',
+                'column_mapping': r'✅ Auto-detected column mapping: ({.*})',
+                'fallback_mapping': r'✅ Fallback mapping successful: ({.*})',
+                'train_saved': r'✅ Preprocessed dataset saved.*\((\d+) train samples\)',
+                'validation_saved': r'✅ Validation set saved.*\((\d+) samples\)'
+            }
+
+            for log_line in job_celery_logs:
+                logs.append({"source": "celery", "line": log_line})
+
+                # Extract highlights
+                for key, pattern in preprocessing_patterns.items():
+                    match = re.search(pattern, log_line)
+                    if match:
+                        preprocessing_highlights.append({
+                            "type": key,
+                            "message": log_line.strip(),
+                            "data": match.groups() if match.groups() else None
+                        })
+
+        except subprocess.TimeoutExpired:
+            logs.append({"source": "celery", "line": "⚠️  Celery logs timeout"})
+        except Exception as e:
+            logs.append({"source": "celery", "line": f"⚠️  Could not fetch Celery logs: {str(e)}"})
+
+        # 2. Get training container logs (if container exists)
+        try:
+            container_name = f"finetuning-{job_id}"
+            container_logs = subprocess.check_output(
+                ["docker", "logs", "--tail", str(lines), container_name],
+                timeout=5
+            ).decode('utf-8')
+
+            for log_line in container_logs.split('\n'):
+                if log_line.strip():
+                    logs.append({"source": "training", "line": log_line})
+
+        except subprocess.CalledProcessError:
+            # Container doesn't exist yet or has stopped
+            logs.append({"source": "training", "line": "Training container not found or stopped"})
+        except subprocess.TimeoutExpired:
+            logs.append({"source": "training", "line": "⚠️  Container logs timeout"})
+        except Exception as e:
+            logs.append({"source": "training", "line": f"⚠️  Could not fetch container logs: {str(e)}"})
+
+        # 3. Filter by stage if requested
+        if stage:
+            if stage == "preprocessing":
+                logs = [log for log in logs if log["source"] == "celery" or "preprocessing" in log["line"].lower()]
+            elif stage == "training":
+                logs = [log for log in logs if log["source"] == "training" or "training" in log["line"].lower() or "epoch" in log["line"].lower()]
+
+        return {
+            "job_id": job_id,
+            "job_name": job.name,
+            "status": job.status,
+            "logs": logs[-lines:],  # Return last N lines
+            "preprocessing_highlights": preprocessing_highlights,
+            "total_lines": len(logs)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get job logs: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get job logs: {str(e)}")

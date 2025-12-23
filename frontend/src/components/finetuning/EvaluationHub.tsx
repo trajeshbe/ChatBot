@@ -4,6 +4,7 @@ import {
   AlertCircle, CheckCircle, Clock, Zap, FileText, ArrowRight, Upload, XCircle,
   Eye, Send, Settings, RefreshCw, X
 } from 'lucide-react';
+import MergeAndDeployButton from './MergeAndDeployButton';
 
 interface EvaluationMetrics {
   accuracy?: number;
@@ -814,16 +815,24 @@ export default function EvaluationHub({ userRole }: { userRole: string }) {
                             {evaluatingModel === model.id ? 'Evaluating...' : 'Evaluate'}
                           </button>
                         )}
-                        {(model.status === 'registered' || model.status === 'approved') && (
-                          <button
-                            onClick={() => deployToOllama(model.id)}
-                            disabled={deployingModel === model.id}
-                            className="flex items-center gap-1 px-3 py-1 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
-                            title="Deploy to Ollama"
-                          >
-                            <Upload className="w-3 h-3" />
-                            {deployingModel === model.id ? 'Deploying...' : 'Deploy to Ollama'}
-                          </button>
+                        {/* Unified Merge & Deploy Button for non-deployed models */}
+                        {(model.status === 'registered' || model.status === 'approved' || model.status === 'adapter_only' || model.status === 'merged') && (
+                          <MergeAndDeployButton
+                            model={{
+                              id: model.id,
+                              name: model.name,
+                              version: model.version,
+                              status: model.status,
+                              base_model: model.base_model
+                            }}
+                            compact={true}
+                            onComplete={async () => {
+                              await fetchModels(); // Refresh models list
+                            }}
+                            onError={(error) => {
+                              alert(`Deployment workflow failed: ${error}`);
+                            }}
+                          />
                         )}
                         {model.status === 'deployed' && model.ollama_model_name && (
                           <div className="flex items-center gap-2">
@@ -839,9 +848,18 @@ export default function EvaluationHub({ userRole }: { userRole: string }) {
                             </button>
                           </div>
                         )}
+                        {model.eval_metrics && (
+                          <button
+                            onClick={() => viewEvaluationResults(model.id)}
+                            className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                          >
+                            <Eye className="w-3 h-3" />
+                            View Results
+                          </button>
+                        )}
                         <button
                           onClick={() => alert(`View details for ${model.name}`)}
-                          className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                          className="flex items-center gap-1 px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700"
                         >
                           <ArrowRight className="w-3 h-3" />
                           Details

@@ -208,17 +208,33 @@ def compute_group_advantages(
     return normalized_advantages
 
 
-def compute_reward(response: str, reward_model=None) -> float:
+def compute_reward(
+    response: str,
+    reward_model=None,
+    prompt: str = "",
+    ground_truth: str = None,
+    metadata: dict = None,
+    use_multi_reward: bool = True,
+    metrics_emitter=None,
+    batch_idx: int = 0,
+    response_idx: int = 0,
+    step: int = None
+) -> tuple:
     """
     Compute reward for a response
 
     Args:
         response: Model-generated response
         reward_model: Optional trained reward model
+        prompt: Original prompt/question
+        ground_truth: Optional correct answer
+        metadata: Optional metadata (domain, difficulty, etc.)
+        use_multi_reward: Whether to use multi-reward framework (default: True)
 
     Returns:
         Reward score
     """
+    # Method 1: Use trained reward model if provided
     if reward_model:
         import torch
         from transformers import AutoTokenizer
@@ -227,28 +243,198 @@ def compute_reward(response: str, reward_model=None) -> float:
         inputs = tokenizer(response, return_tensors="pt", truncation=True, max_length=512)
         with torch.no_grad():
             reward = reward_model(**inputs).logits[0, 0].item()
-        return reward
-    else:
-        # Rule-based reward
-        reward = 0.0
+        return (reward, {}, [])  # Return tuple for consistency
 
-        # Length reward
-        if 50 < len(response) < 500:
-            reward += 0.5
+    # Method 2: Use multi-reward framework (NEW)
+    if use_multi_reward:
+        try:
+            from app.services.finetuning.rewards import create_default_calculator
+            from app.services.finetuning.rewards.utils import extract_reasoning_steps
 
-        # Politeness
-        if any(word in response.lower() for word in ["thank", "please", "appreciate"]):
-            reward += 0.3
+            # Create reward calculator
+            calculator = create_default_calculator()
 
-        # Safety penalty
-        if any(word in response.lower() for word in ["hate", "violence", "harm", "kill"]):
-            reward -= 2.0
+            # Extract reasoning steps from response
+            reasoning_steps = extract_reasoning_steps(response)
 
-        # Coherence (simple check)
-        if response.count('.') > 0 and response.count('?') < 5:
-            reward += 0.2
+            # Compute total reward with breakdown
+            total_reward, breakdown = calculator.compute_detailed_rewards(
+                prompt=prompt,
+                response=response,
+                ground_truth=ground_truth,
+                reasoning_steps=reasoning_steps,
+                metadata=metadata
+            )
 
-        return reward
+            # Log breakdown for visibility
+            logger.info(f"🎯 Multi-Reward Breakdown:")
+            for reward_name, details in breakdown.items():
+                if details["applicable"]:
+                    logger.info(
+                        f"  • {reward_name}: score={details['score']:.3f}, "
+                        f"weight={details['weight']:.1f}, "
+                        f"contribution={details['contribution']:.3f}"
+                    )
+
+            logger.info(f"📊 Total Reward: {total_reward:.3f}")
+
+            # Emit metrics if emitter provided
+            if metrics_emitter is not None:
+                try:
+                    metrics_emitter.emit_reward_breakdown(
+                        total_reward=total_reward,
+                        breakdown=breakdown,
+                        batch_idx=batch_idx,
+                        response_idx=response_idx,
+                        reasoning_steps=reasoning_steps,
+                        step=step
+                    )
+                except Exception as e:
+                    logger.warning(f"Metrics emission failed: {e}")
+
+            return (total_reward, breakdown, reasoning_steps)
+
+        except ImportError as e:
+            logger.warning(f"Multi-reward framework not available: {e}, using fallback")
+            # Fall through to legacy rule-based reward
+
+    # Method 3: Legacy rule-based reward (FALLBACK)
+    reward = 0.0
+
+    # Length reward
+    if 50 < len(response) < 500:
+        reward += 0.5
+
+    # Politeness
+    if any(word in response.lower() for word in ["thank", "please", "appreciate"]):
+        reward += 0.3
+
+    # Safety penalty
+    if any(word in response.lower() for word in ["hate", "violence", "harm", "kill"]):
+        reward -= 2.0
+
+    # Coherence (simple check)
+    if response.count('.') > 0 and response.count('?') < 5:
+        reward += 0.2
+
+    return (reward, {}, [])  # Return tuple for consistency
+
+
+def format_reasoning_prompt(prompt: str, system_message: str = None) -> str:
+    """
+    Format prompt to encourage reasoning-style responses
+
+    Args:
+        prompt: User question/prompt
+        system_message: Optional system message for instruction
+
+    Returns:
+        Formatted prompt string
+    """
+    if system_message is None:
+        system_message = (
+            "You are a helpful assistant that provides step-by-step reasoning. "
+            "When answering questions, break down your thought process into clear steps. "
+            "Use numbered steps and logical connectors like 'therefore', 'because', etc."
+        )
+
+    formatted = f"{system_message}\n\nQuestion: {prompt}\n\nLet me solve this step by step:\n"
+    return formatted
+
+
+def parse_reasoning_dataset(dataset, reasoning_format: str = "auto") -> list:
+    """
+    Parse and format reasoning dataset for GRPO training
+
+    Supports multiple formats:
+    - Standard: {prompt, chosen, rejected}
+    - Reasoning: {prompt, reasoning, answer, ground_truth}
+    - SFT: {input, output}
+
+    Args:
+        dataset: Dataset to parse
+        reasoning_format: Format type ("auto", "standard", "reasoning", "sft")
+
+    Returns:
+        List of formatted examples with reasoning metadata
+    """
+    from app.services.finetuning.rewards.utils import (
+        parse_cot_response,
+        extract_reasoning_steps
+    )
+
+    formatted_examples = []
+
+    for example in dataset:
+        # Auto-detect format
+        if reasoning_format == "auto":
+            if "reasoning" in example or "reasoning_steps" in example:
+                reasoning_format = "reasoning"
+            elif "chosen" in example:
+                reasoning_format = "standard"
+            else:
+                reasoning_format = "sft"
+
+        # Parse based on format
+        if reasoning_format == "reasoning":
+            # Already in reasoning format
+            formatted_example = {
+                "prompt": example.get("prompt", example.get("input", "")),
+                "reasoning_steps": example.get("reasoning", example.get("reasoning_steps", [])),
+                "answer": example.get("answer", ""),
+                "ground_truth": example.get("ground_truth"),
+                "domain": example.get("domain", "general")
+            }
+
+        elif reasoning_format == "standard":
+            # Standard RLHF format (chosen/rejected)
+            prompt = example.get("prompt", "")
+            chosen = example.get("chosen", "")
+
+            # Try to extract reasoning from chosen response
+            parsed = parse_cot_response(chosen)
+
+            formatted_example = {
+                "prompt": prompt,
+                "reasoning_steps": parsed["reasoning_steps"],
+                "answer": parsed["answer"] or chosen,
+                "ground_truth": example.get("ground_truth"),
+                "domain": example.get("domain", "general"),
+                "chosen": chosen,  # Keep original for comparison
+                "rejected": example.get("rejected")
+            }
+
+        else:  # "sft"
+            # SFT format (input/output)
+            input_text = example.get("input", example.get("prompt", ""))
+            output_text = example.get("output", example.get("response", ""))
+
+            # Extract reasoning if present
+            parsed = parse_cot_response(output_text)
+
+            formatted_example = {
+                "prompt": input_text,
+                "reasoning_steps": parsed["reasoning_steps"],
+                "answer": parsed["answer"] or output_text,
+                "ground_truth": None,
+                "domain": example.get("domain", "general")
+            }
+
+        formatted_examples.append(formatted_example)
+
+    logger.info(
+        f"📊 Parsed {len(formatted_examples)} examples from {reasoning_format} format"
+    )
+
+    # Log sample for verification
+    if formatted_examples:
+        sample = formatted_examples[0]
+        logger.info(f"Sample parsed example:")
+        logger.info(f"  Prompt: {sample['prompt'][:100]}...")
+        logger.info(f"  Reasoning steps: {len(sample.get('reasoning_steps', []))}")
+        logger.info(f"  Answer: {sample.get('answer', '')[:50]}...")
+
+    return formatted_examples
 
 
 def main():
@@ -311,8 +497,38 @@ def main():
         # GRPO Training loop
         logger.info("🚀 Starting RLHF-GRPO training...")
 
+        # Initialize metrics emitter
+        try:
+            from app.services.finetuning.rewards.metrics_emitter import RewardMetricsEmitter
+            from app.services.finetuning.rewards import create_default_calculator
+
+            job_id = config.get("job_id", f"grpo_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+            job_name = config.get("job_name", "GRPO Training")
+
+            metrics_emitter = RewardMetricsEmitter(
+                job_id=job_id,
+                job_name=job_name,
+                enable_prometheus=True,
+                enable_websocket=True,
+                enable_tensorboard=True,
+                enable_database=False  # Optional
+            )
+
+            # Emit reward weights at start
+            calculator = create_default_calculator()
+            weights = {rf.name: rf.weight for rf in calculator.reward_functions}
+            metrics_emitter.emit_reward_weights(weights)
+
+            logger.info(f"✅ Metrics emitter initialized for job {job_id}")
+
+        except Exception as e:
+            logger.warning(f"Metrics emitter initialization failed: {e}")
+            metrics_emitter = None
+
         optimizer = torch.optim.AdamW(model.parameters(), lr=grpo_config["learning_rate"])
         model.train()
+
+        global_step = 0
 
         for epoch in range(grpo_config["num_epochs"]):
             logger.info(f"Epoch {epoch + 1}/{grpo_config['num_epochs']}")
@@ -342,8 +558,72 @@ def main():
                     responses.append(response)
                     response_tensors.append(outputs[0])
 
-                # Compute rewards for group
-                rewards = [compute_reward(r, reward_model) for r in responses]
+                # Compute rewards for group (with multi-reward support)
+                # Extract ground truth and metadata from batch if available
+                ground_truth = batch.get("ground_truth") or batch.get("answer") or batch.get("chosen")
+                metadata = {
+                    "domain": batch.get("domain", "general"),
+                    "difficulty": batch.get("difficulty", "medium")
+                }
+
+                # Compute rewards with new multi-reward framework
+                reward_results = [
+                    compute_reward(
+                        response=r,
+                        reward_model=reward_model,
+                        prompt=prompt,
+                        ground_truth=ground_truth,
+                        metadata=metadata,
+                        use_multi_reward=True,  # Enable multi-reward system
+                        metrics_emitter=metrics_emitter,
+                        batch_idx=batch_idx,
+                        response_idx=i,
+                        step=global_step + i
+                    )
+                    for i, r in enumerate(responses)
+                ]
+
+                # Extract rewards from tuples (reward, breakdown, reasoning_steps)
+                rewards = [r[0] for r in reward_results]
+                breakdowns = [r[1] for r in reward_results]
+                all_reasoning_steps = [r[2] for r in reward_results]
+
+                # Emit batch aggregates if metrics emitter available
+                if metrics_emitter and breakdowns:
+                    try:
+                        avg_total_reward = sum(rewards) / len(rewards)
+
+                        # Calculate average rewards per reward function
+                        avg_rewards = {}
+                        for reward_name in breakdowns[0].keys():
+                            applicable_scores = [
+                                bd[reward_name]["score"]
+                                for bd in breakdowns
+                                if bd.get(reward_name, {}).get("applicable", False)
+                            ]
+                            if applicable_scores:
+                                avg_rewards[reward_name] = sum(applicable_scores) / len(applicable_scores)
+
+                        # Calculate reasoning quality metrics
+                        step_counts = [len(steps) for steps in all_reasoning_steps if steps]
+                        avg_steps_count = sum(step_counts) / len(step_counts) if step_counts else 0
+
+                        tokens_per_step = []
+                        for steps in all_reasoning_steps:
+                            if steps:
+                                for step in steps:
+                                    tokens_per_step.append(len(step.split()))
+                        avg_tokens_per_step = sum(tokens_per_step) / len(tokens_per_step) if tokens_per_step else 0
+
+                        metrics_emitter.emit_batch_aggregates(
+                            batch_idx=batch_idx,
+                            avg_total_reward=avg_total_reward,
+                            avg_rewards=avg_rewards,
+                            avg_steps_count=avg_steps_count,
+                            avg_tokens_per_step=avg_tokens_per_step
+                        )
+                    except Exception as e:
+                        logger.warning(f"Batch aggregate emission failed: {e}")
 
                 # Compute group-based advantages (GRPO innovation)
                 advantages = compute_group_advantages(responses, rewards)
@@ -357,7 +637,9 @@ def main():
 
                 # Add logging
                 if batch_idx % 10 == 0:
-                    logger.info(f"Batch {batch_idx}: Rewards={rewards}, Advantages={advantages}")
+                    logger.info(f"Batch {batch_idx}: Avg Reward={sum(rewards)/len(rewards):.3f}, Advantages={[round(a, 3) for a in advantages]}")
+
+                global_step += len(responses)
 
                 loss.backward()
                 optimizer.step()
@@ -380,6 +662,14 @@ def main():
         result_file = output_dir / "result.json"
         with open(result_file, 'w') as f:
             json.dump(result, f, indent=2)
+
+        # Close TensorBoard writer
+        if metrics_emitter is not None:
+            try:
+                metrics_emitter.close()
+                logger.info("✅ Metrics emitter closed")
+            except:
+                pass
 
         logger.info("=" * 80)
         logger.info("✅ RLHF-GRPO Training Completed Successfully!")

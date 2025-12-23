@@ -23,11 +23,13 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, AsyncIterator
 from datetime import datetime
 import shutil
+import traceback
 
 from minio import Minio
 from minio.error import S3Error
 
 from app.services.agent_sandbox_manager import AgentSandboxManager
+from app.services.finetuning.training_log_streamer import TrainingLogStreamer
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -49,11 +51,11 @@ class FineTuningSandboxManager(AgentSandboxManager):
         super().__init__()
 
         # Override image for fine-tuning (dedicated image with PEFT dependencies)
-        self.finetuning_image = "chatbot-finetuning-runtime:latest"
+        # Use environment variable to support proper versioning and prevent image conflicts
+        self.finetuning_image = os.getenv("FINETUNING_TRAINER_IMAGE", "chatbot-finetuning-trainer:v1.0.4")
 
         # Path to backend code (for mounting trainer scripts)
         # Use host's backend directory, not container's /app
-        import os
         self.backend_path = os.getenv("BACKEND_CODE_PATH", "/mnt/c/AIML/ClaudeCode/chatbot/ChatBot/backend")
 
         # Training-specific resource limits (much higher than agent tasks)
@@ -72,7 +74,8 @@ class FineTuningSandboxManager(AgentSandboxManager):
                 secret_key=settings.MINIO_SECRET_KEY,
                 secure=settings.MINIO_SECURE
             )
-            self.minio_bucket = settings.MINIO_BUCKET_NAME or "rag-documents"
+            # ✅ FIX: Use documents bucket where datasets are actually uploaded
+            self.minio_bucket = "documents"
 
             # Ensure bucket exists
             if not self.minio_client.bucket_exists(self.minio_bucket):
@@ -86,6 +89,44 @@ class FineTuningSandboxManager(AgentSandboxManager):
             self.minio_bucket = None
 
         logger.info("🔥 Fine-tuning sandbox manager initialized")
+
+    def _log_debug(self, job_id: str, message: str):
+        """
+        Add timestamped debug message to job's debug_log array in database
+
+        SYNCHRONOUS version for Celery tasks (no async/await)
+        This allows us to trace the training pipeline even after container removal
+        """
+        try:
+            from sqlalchemy import create_engine, text
+            from app.core.config import settings
+
+            # Create synchronous engine (already in psycopg2 format)
+            database_url = settings.SYNC_SQLALCHEMY_DATABASE_URI
+            engine = create_engine(database_url)
+
+            with engine.connect() as conn:
+                # Get current timestamp
+                timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                log_entry = f"[{timestamp}] {message}"
+
+                # Update job's debug_log array using PostgreSQL array append
+                conn.execute(
+                    text("""
+                        UPDATE finetuning_jobs
+                        SET debug_log = array_append(debug_log, :log_entry)
+                        WHERE id = :job_id
+                    """),
+                    {"job_id": job_id, "log_entry": log_entry}
+                )
+                conn.commit()
+
+            # Also log to console for immediate visibility
+            logger.info(f"[{job_id[:8]}] {message}")
+
+        except Exception as e:
+            # Don't fail training if logging fails
+            logger.warning(f"Debug logging failed: {e}")
 
     async def create_training_workspace(
         self,
@@ -131,35 +172,45 @@ class FineTuningSandboxManager(AgentSandboxManager):
 
         # Copy dataset if provided
         if dataset_path:
-            await self._copy_dataset_to_workspace(dataset_path, dirs["input"])
+            await self._copy_dataset_to_workspace(dataset_path, dirs["input"], job_id)
 
         return dirs
 
     async def _copy_dataset_to_workspace(
         self,
         dataset_minio_path: str,
-        input_dir: Path
+        input_dir: Path,
+        job_id: str
     ):
         """
-        Download dataset from MinIO to training workspace
+        Download dataset from MinIO to training workspace and preprocess it for training
 
         Args:
-            dataset_minio_path: Path to dataset in MinIO (e.g., "datasets/my_dataset.jsonl")
+            dataset_minio_path: Path to dataset in MinIO (e.g., "technology/itm11/global/admin/finetuning/datasets/.../file.jsonl")
             input_dir: Local workspace input directory
+            job_id: Training job ID for debug logging
 
         Raises:
             ValueError: If MinIO client not initialized
             S3Error: If download fails
+            FileNotFoundError: If downloaded file not found after download
         """
         if not self.minio_client:
             raise ValueError("MinIO client not initialized")
 
         try:
-            logger.info(f"📦 Downloading dataset from MinIO: {dataset_minio_path}")
+            self._log_debug(job_id, "📦 Starting dataset download from MinIO")
+            self._log_debug(job_id, f"   Bucket: {self.minio_bucket}")
+            self._log_debug(job_id, f"   Object: {dataset_minio_path}")
+
+            logger.info(f"📦 Starting dataset download from MinIO")
+            logger.info(f"   Bucket: {self.minio_bucket}")
+            logger.info(f"   Object path: {dataset_minio_path}")
 
             # Extract filename from MinIO path
             filename = Path(dataset_minio_path).name
             local_path = input_dir / filename
+            logger.info(f"   Local target: {local_path}")
 
             # Download from MinIO synchronously (minio-py doesn't support async)
             await asyncio.to_thread(
@@ -169,15 +220,320 @@ class FineTuningSandboxManager(AgentSandboxManager):
                 file_path=str(local_path)
             )
 
-            logger.info(f"✅ Downloaded dataset to {local_path} ({local_path.stat().st_size} bytes)")
+            # Verify download succeeded
+            if not local_path.exists():
+                raise FileNotFoundError(f"Download completed but file not found: {local_path}")
+
+            file_size = local_path.stat().st_size
+            self._log_debug(job_id, f"✅ Downloaded dataset: {filename} ({file_size:,} bytes)")
+            logger.info(f"✅ Downloaded dataset: {filename} ({file_size:,} bytes)")
+
+            # Verify file content (read first line to ensure it's readable)
+            try:
+                with open(local_path, 'r') as f:
+                    first_line = f.readline()
+                    preview = first_line[:100] + "..." if len(first_line) > 100 else first_line
+                    self._log_debug(job_id, f"   Preview: {preview}")
+                    logger.info(f"   First line preview: {preview}")
+            except Exception as read_error:
+                self._log_debug(job_id, f"⚠️ Could not read file: {read_error}")
+                logger.warning(f"⚠️  Could not read file content: {read_error}")
+
             return local_path
 
         except S3Error as e:
-            logger.error(f"❌ MinIO download failed: {e}")
+            self._log_debug(job_id, f"❌ MinIO download failed: {e}")
+            logger.error(f"❌ MinIO download failed!")
+            logger.error(f"   Bucket: {self.minio_bucket}")
+            logger.error(f"   Object: {dataset_minio_path}")
+            logger.error(f"   Error: {e}")
             raise
         except Exception as e:
+            self._log_debug(job_id, f"❌ Download failed: {e}")
             logger.error(f"❌ Failed to download dataset: {e}")
+            logger.error(f"   Bucket: {self.minio_bucket}")
+            logger.error(f"   Object: {dataset_minio_path}")
             raise
+
+    async def _preprocess_dataset_for_training(
+        self,
+        dataset_file_path: Path,
+        input_dir: Path,
+        training_objective: str = "instruction"
+    ):
+        """
+        Preprocess downloaded dataset and save as train.json for the trainer
+
+        The trainer expects a directory with train.json inside, not a direct file path.
+        This method processes the raw dataset (CSV/JSONL) and saves it in the expected format.
+
+        Args:
+            dataset_file_path: Path to downloaded raw dataset file
+            input_dir: Input directory where train.json should be created
+            training_objective: Training objective (qa, instruction, classification, etc.)
+
+        Raises:
+            ValueError: If preprocessing fails
+        """
+        try:
+            logger.info(f"🔄 Preprocessing dataset: {dataset_file_path}")
+
+            # Import here to avoid circular dependencies
+            from app.services.finetuning.dataset_preprocessor import DatasetPreprocessor
+            import json
+            import pandas as pd
+
+            # Check if file is already in messages format (direct pass-through)
+            # This is for JSONL files with a "messages" column containing chat conversations
+            if dataset_file_path.suffix == '.jsonl':
+                # Try to detect messages format
+                with open(dataset_file_path, 'r') as f:
+                    first_line = json.loads(f.readline())
+                    if 'messages' in first_line:
+                        logger.info("📱 Detected 'messages' format - using direct pass-through")
+                        # Load all lines and save directly as train.json
+                        train_data = []
+                        with open(dataset_file_path, 'r') as f:
+                            for line in f:
+                                train_data.append(json.loads(line))
+
+                        # Split into train/validation (90/10)
+                        split_idx = int(len(train_data) * 0.9)
+                        train_split = train_data[:split_idx]
+                        val_split = train_data[split_idx:]
+
+                        # Save as train.json
+                        train_json_path = input_dir / "train.json"
+                        with open(train_json_path, 'w') as f:
+                            json.dump(train_split, f, indent=2)
+                        logger.info(f"✅ Saved messages-format dataset to {train_json_path} ({len(train_split)} train samples)")
+
+                        # Save validation.json if we have validation samples
+                        if val_split:
+                            val_json_path = input_dir / "validation.json"
+                            with open(val_json_path, 'w') as f:
+                                json.dump(val_split, f, indent=2)
+                            logger.info(f"✅ Validation set saved to {val_json_path} ({len(val_split)} samples)")
+
+                        return  # Done!
+
+            # Create preprocessor
+            preprocessor = DatasetPreprocessor()
+
+            # Load the raw dataset
+            df = preprocessor.load_dataset(str(dataset_file_path))
+            logger.info(f"📊 Loaded {len(df)} samples from dataset")
+
+            # Use training_objective to determine format type
+            # Map training_objective to DatasetPreprocessor format types
+            objective_to_format = {
+                "qa": "qa",
+                "question_answering": "qa",
+                "instruction": "instruction",
+                "instruction_following": "instruction",
+                "classification": "classification",
+                "text_classification": "classification",
+                "summarization": "summarization",
+                "preference": "preference",
+                "rlhf": "preference"
+            }
+            format_type = objective_to_format.get(training_objective.lower(), "instruction")
+            logger.info(f"📝 Training objective: {training_objective} → Format type: {format_type}")
+
+            # Auto-detect column mapping using the DatasetPreprocessor's built-in auto-detection
+            # This is more robust than manual detection and handles many edge cases
+            logger.info(f"🔍 Auto-detecting columns for format type: {format_type}")
+
+            # Use empty columns dict to trigger auto-detection in validate_dataset
+            validation_result = preprocessor.validate_dataset(df, format_type, columns={})
+
+            if not validation_result["is_valid"]:
+                # Auto-detection failed, log detailed error
+                logger.error(f"❌ Dataset validation failed:")
+                for error in validation_result.get("errors", []):
+                    logger.error(f"   {error}")
+
+                # Try to provide helpful suggestions
+                for suggestion in validation_result.get("suggestions", []):
+                    logger.info(f"   {suggestion}")
+
+                # Try intelligent fallback: use first N columns based on format type
+                logger.warning(f"⚠️  Attempting fallback column mapping...")
+                columns = self._fallback_column_mapping(df, format_type)
+
+                if not columns:
+                    raise ValueError(
+                        f"Dataset validation failed: Could not auto-detect column mapping. "
+                        f"Available columns in CSV: {list(df.columns)}. "
+                        f"Expected columns for '{format_type}': {preprocessor._get_expected_columns(format_type)}"
+                    )
+
+                logger.info(f"✅ Using fallback column mapping: {columns}")
+            else:
+                # Auto-detection succeeded
+                columns = validation_result["diagnostics"]["applied_mapping"]
+                logger.info(f"✅ Auto-detected column mapping: {columns}")
+
+            # Process the dataset
+            processed = preprocessor.process(
+                dataset_path=str(dataset_file_path),
+                format_type=format_type,
+                columns=columns,
+                train_split=0.9,  # Use 90% for training
+                shuffle=True
+            )
+
+            # Save as train.json in HuggingFace datasets format
+            train_json_path = input_dir / "train.json"
+            train_data = []
+            for text in processed["train"]:
+                train_data.append({"text": text})
+
+            with open(train_json_path, 'w') as f:
+                json.dump(train_data, f, indent=2)
+
+            logger.info(f"✅ Preprocessed dataset saved to {train_json_path} ({len(train_data)} train samples)")
+
+            # Also save validation set if needed
+            if processed["validation"]:
+                val_json_path = input_dir / "validation.json"
+                val_data = []
+                for text in processed["validation"]:
+                    val_data.append({"text": text})
+
+                with open(val_json_path, 'w') as f:
+                    json.dump(val_data, f, indent=2)
+
+                logger.info(f"✅ Validation set saved to {val_json_path} ({len(val_data)} samples)")
+
+        except Exception as e:
+            logger.error(f"❌ Dataset preprocessing failed: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise ValueError(f"Failed to preprocess dataset: {e}")
+
+    def _fallback_column_mapping(self, df, format_type: str) -> Optional[Dict[str, str]]:
+        """
+        Intelligent fallback for column mapping when auto-detection fails
+
+        Tries multiple strategies:
+        1. Case-insensitive matching
+        2. Partial substring matching
+        3. Position-based fallback (first N columns)
+
+        Args:
+            df: DataFrame to map
+            format_type: Target format type
+
+        Returns:
+            Column mapping dict or None if no fallback possible
+        """
+        import pandas as pd
+        from typing import Optional, Dict
+
+        logger.info(f"🔍 Attempting intelligent fallback for format: {format_type}")
+
+        cols = list(df.columns)
+        cols_lower = {col.lower(): col for col in cols}
+
+        # Strategy 1: Enhanced fuzzy matching with common synonyms
+        synonyms = {
+            "qa": {
+                "question_col": ["question", "q", "query", "input", "prompt", "user", "user_query"],
+                "answer_col": ["answer", "a", "response", "output", "assistant", "reply", "answer_text"]
+            },
+            "instruction": {
+                "instruction_col": ["instruction", "question", "prompt", "input", "query", "task"],
+                "response_col": ["response", "answer", "output", "completion", "reply", "assistant"]
+            },
+            "classification": {
+                "text_col": ["text", "content", "sentence", "document", "input"],
+                "label_col": ["label", "category", "class", "tag", "target"]
+            },
+            "summarization": {
+                "document_col": ["document", "text", "article", "content", "source"],
+                "summary_col": ["summary", "abstract", "synopsis", "tldr"]
+            },
+            "preference": {
+                "prompt_col": ["prompt", "question", "instruction", "input"],
+                "chosen_col": ["chosen", "preferred", "positive", "winner"],
+                "rejected_col": ["rejected", "negative", "loser"]
+            }
+        }
+
+        if format_type not in synonyms:
+            logger.warning(f"No fallback strategy for format: {format_type}")
+            return None
+
+        mapping = {}
+        expected_fields = synonyms[format_type]
+
+        # Try to match each expected field
+        for field_name, possible_names in expected_fields.items():
+            matched = False
+            for possible in possible_names:
+                # Direct case-insensitive match
+                if possible.lower() in cols_lower:
+                    mapping[field_name] = cols_lower[possible.lower()]
+                    matched = True
+                    break
+
+                # Partial match (column contains synonym)
+                for col_lower, col_original in cols_lower.items():
+                    if possible in col_lower or col_lower in possible:
+                        mapping[field_name] = col_original
+                        matched = True
+                        break
+
+                if matched:
+                    break
+
+        # Strategy 2: Position-based fallback if we have enough columns
+        required_fields = [f for f in expected_fields.keys() if "input" not in f]  # input_col is optional
+
+        if len(mapping) < len(required_fields) and len(cols) >= len(required_fields):
+            logger.warning(f"⚠️  Fuzzy matching incomplete ({len(mapping)}/{len(required_fields)}), using position-based fallback")
+
+            # Map first N columns to required fields
+            mapping = {}
+            for i, field_name in enumerate(required_fields):
+                if i < len(cols):
+                    mapping[field_name] = cols[i]
+                    logger.info(f"   Mapping column {i} ('{cols[i]}') → {field_name}")
+
+        if len(mapping) >= len(required_fields):
+            logger.info(f"✅ Fallback mapping successful: {mapping}")
+            return mapping
+
+        logger.error(f"❌ Fallback failed: mapped {len(mapping)}/{len(required_fields)} required fields")
+        return None
+
+    def _infer_format_type(self, columns: list) -> str:
+        """
+        Infer the training format type from dataset columns
+
+        Args:
+            columns: List of column names
+
+        Returns:
+            Format type string (qa, instruction, classification, etc.)
+        """
+        cols_lower = set(col.lower() for col in columns)
+
+        # QA detection
+        if "question" in cols_lower and "answer" in cols_lower:
+            return "qa"
+
+        # Instruction detection
+        if "instruction" in cols_lower and "response" in cols_lower:
+            return "instruction"
+
+        # Classification detection
+        if "text" in cols_lower and "label" in cols_lower:
+            return "classification"
+
+        # Default to instruction (most flexible)
+        logger.warning(f"Could not infer format from columns: {columns}, defaulting to 'instruction'")
+        return "instruction"
 
     async def execute_training(
         self,
@@ -235,19 +591,175 @@ class FineTuningSandboxManager(AgentSandboxManager):
         gpu_devices = ",".join(gpu_devices_list)
         logger.info(f"✅ Allocated GPU {gpu_devices} to job {job_id}")
 
-        # Create workspace
-        workspace = await self.create_training_workspace(job_id)
+        # ✅ FIX: Validate dataset exists in MinIO BEFORE starting training
+        dataset_minio_path = config.get("dataset_minio_path")
+        if dataset_minio_path:
+            self._log_debug(job_id, "🔍 Validating dataset exists in MinIO")
+            logger.info(f"🔍 Validating dataset exists in MinIO before training...")
+            try:
+                stat = await asyncio.to_thread(
+                    self.minio_client.stat_object,
+                    bucket_name=self.minio_bucket,
+                    object_name=dataset_minio_path
+                )
+                self._log_debug(job_id, f"✅ Dataset found: {dataset_minio_path} ({stat.size:,} bytes)")
+                logger.info(f"✅ Dataset found in MinIO: {dataset_minio_path}")
+                logger.info(f"   Size: {stat.size:,} bytes")
+                logger.info(f"   Last modified: {stat.last_modified}")
+            except Exception as e:
+                self._log_debug(job_id, f"❌ Dataset NOT found: {dataset_minio_path}")
+                logger.error(f"❌ Dataset NOT found in MinIO!")
+                logger.error(f"   Bucket: {self.minio_bucket}")
+                logger.error(f"   Object: {dataset_minio_path}")
+                logger.error(f"   Error: {e}")
+
+                # Release GPU before returning
+                await gpu_pool_manager.release_gpu(job_id)
+
+                return {
+                    "success": False,
+                    "error": f"Dataset not found in MinIO: {dataset_minio_path}. Error: {str(e)}",
+                    "job_id": job_id
+                }
+
+        # Create workspace with dataset download
+        # Use dataset_minio_path for download (MinIO object path)
+        # dataset_path contains the local filesystem path for the trainer
+        workspace = await self.create_training_workspace(job_id, dataset_path=dataset_minio_path)
+
+        # ✅ FIX #3: Preprocess the dataset with comprehensive verification
+        if dataset_minio_path:
+            # List ALL files in input directory for debugging
+            dataset_files = list(workspace["input"].glob("*"))
+            self._log_debug(job_id, f"📁 Files in input directory: {[f.name for f in dataset_files]}")
+            logger.info(f"📁 Files in input directory after download: {[f.name for f in dataset_files]}")
+
+            if not dataset_files:
+                self._log_debug(job_id, f"❌ No files found in input directory!")
+                logger.error(f"❌ No files found in input directory after dataset download!")
+                logger.error(f"   Dataset path: {dataset_minio_path}")
+                logger.error(f"   Input directory: {workspace['input']}")
+
+                # Release GPU before returning
+                await gpu_pool_manager.release_gpu(job_id)
+
+                return {
+                    "success": False,
+                    "error": f"Dataset download failed - no files in input directory after downloading {dataset_minio_path}",
+                    "job_id": job_id
+                }
+
+            # Filter to find the dataset file (exclude train.json which we'll create)
+            dataset_file = None
+            for f in dataset_files:
+                if f.suffix in ['.csv', '.jsonl', '.json'] and 'train.json' not in f.name:
+                    dataset_file = f
+                    break
+
+            if not dataset_file:
+                self._log_debug(job_id, f"❌ Could not find dataset file!")
+                logger.error(f"❌ Could not find dataset file in input directory!")
+                logger.error(f"   Files present: {[f.name for f in dataset_files]}")
+                logger.error(f"   Looking for: .csv, .jsonl, or .json files (excluding train.json)")
+
+                # Release GPU before returning
+                await gpu_pool_manager.release_gpu(job_id)
+
+                return {
+                    "success": False,
+                    "error": f"Dataset file not found after download. Files present: {[f.name for f in dataset_files]}",
+                    "job_id": job_id
+                }
+
+            self._log_debug(job_id, f"✅ Found dataset file: {dataset_file.name} ({dataset_file.stat().st_size:,} bytes)")
+            logger.info(f"✅ Found dataset file: {dataset_file.name} ({dataset_file.stat().st_size:,} bytes)")
+
+            # Preprocess the dataset
+            training_objective = config.get("training_objective", "instruction")
+            self._log_debug(job_id, f"🔄 Preprocessing dataset (objective: {training_objective})")
+            logger.info(f"🔄 Preprocessing dataset for training_objective: {training_objective}")
+
+            try:
+                await self._preprocess_dataset_for_training(
+                    dataset_file,
+                    workspace["input"],
+                    training_objective
+                )
+
+                # ✅ VERIFY: Check that train.json was created
+                train_json = workspace["input"] / "train.json"
+                if not train_json.exists():
+                    self._log_debug(job_id, f"❌ Preprocessing failed - train.json not created!")
+                    logger.error(f"❌ Preprocessing failed - train.json not created!")
+                    logger.error(f"   Dataset file: {dataset_file}")
+                    logger.error(f"   Expected output: {train_json}")
+
+                    # Release GPU before returning
+                    await gpu_pool_manager.release_gpu(job_id)
+
+                    return {
+                        "success": False,
+                        "error": "Dataset preprocessing failed - train.json not created",
+                        "job_id": job_id
+                    }
+
+                train_json_size = train_json.stat().st_size
+                self._log_debug(job_id, f"✅ Preprocessing complete: train.json ({train_json_size:,} bytes)")
+                logger.info(f"✅ Preprocessing complete: train.json created ({train_json_size:,} bytes)")
+
+                # Try to count samples (for informational logging)
+                try:
+                    with open(train_json, 'r') as f:
+                        data = json.load(f)
+                        if isinstance(data, list):
+                            self._log_debug(job_id, f"   Dataset contains {len(data)} samples")
+                            logger.info(f"   Dataset contains {len(data)} samples")
+                        elif isinstance(data, dict):
+                            logger.info(f"   Dataset keys: {list(data.keys())}")
+                except Exception as count_error:
+                    logger.warning(f"⚠️  Could not count samples: {count_error}")
+
+            except Exception as e:
+                self._log_debug(job_id, f"❌ Preprocessing failed: {e}")
+                logger.error(f"❌ Dataset preprocessing failed with error!")
+                logger.error(f"   Dataset file: {dataset_file}")
+                logger.error(f"   Training objective: {training_objective}")
+                logger.error(f"   Error: {e}")
+
+                # Release GPU before returning
+                await gpu_pool_manager.release_gpu(job_id)
+
+                return {
+                    "success": False,
+                    "error": f"Dataset preprocessing failed: {str(e)}",
+                    "job_id": job_id
+                }
+
+        # ✅ FIX #7: Override dataset_path AND log every step to debug why it's not persisting
+        logger.info(f"🔍 DEBUG FIX #7: BEFORE override, config['dataset_path'] = {config.get('dataset_path')}")
+        config["dataset_path"] = f"/workspace/finetuning/{job_id}/input"
+        logger.info(f"🔍 DEBUG FIX #7: AFTER override, config['dataset_path'] = {config['dataset_path']}")
 
         # Save training config
         config_file = workspace["input"] / "training_config.json"
+        logger.info(f"🔍 DEBUG FIX #7: About to write config to {config_file}")
         with open(config_file, 'w') as f:
             json.dump(config, f, indent=2)
+        logger.info(f"🔍 DEBUG FIX #7: Config file written successfully")
+
+        # Verify what was actually written
+        with open(config_file, 'r') as f:
+            written_config = json.load(f)
+            logger.info(f"🔍 DEBUG FIX #7: VERIFICATION - File contains dataset_path = {written_config.get('dataset_path')}")
+            if written_config.get('dataset_path') != f"/workspace/finetuning/{job_id}/input":
+                logger.error(f"❌ DEBUG FIX #7: MISMATCH! We set it to /workspace/finetuning/{job_id}/input but file has {written_config.get('dataset_path')}")
 
         # Build environment variables
         env_vars = {
             "JOB_ID": job_id,
             "CUDA_VISIBLE_DEVICES": gpu_devices,
             "PYTHONUNBUFFERED": "1",
+            "DATASET_PATH": f"/workspace/finetuning/{job_id}/input",  # ✅ FIX: Explicit dataset path
             "TRAINING_CONFIG": "/workspace/input/training_config.json",
             "OUTPUT_DIR": "/workspace/output",
             "LOG_DIR": "/workspace/logs",
@@ -269,6 +781,7 @@ class FineTuningSandboxManager(AgentSandboxManager):
         # Launch container with GPU
         container = None
         try:
+            self._log_debug(job_id, f"🚀 Starting training container")
             logger.info(f"🐳 Creating GPU container with image {self.finetuning_image}")
 
             # GPU device requests (NVIDIA Docker runtime)
@@ -304,11 +817,9 @@ class FineTuningSandboxManager(AgentSandboxManager):
                     "chatbot_finetuning_workspaces": {  # Docker volume name from docker-compose.yml
                         'bind': '/workspace/finetuning',
                         'mode': 'rw'
-                    },
-                    self.backend_path: {
-                        'bind': '/app',
-                        'mode': 'ro'  # Read-only for security
                     }
+                    # ✅ FIX: Removed backend mount - use trainers baked into finetuning-runtime image
+                    # This prevents agent runtime code from overwriting finetuning trainer code
                 },
 
                 # Override default entrypoint to run trainer directly
@@ -327,11 +838,46 @@ class FineTuningSandboxManager(AgentSandboxManager):
                 stdin_open=False,
             )
 
+            self._log_debug(job_id, f"✅ Container started: {container.short_id}")
             logger.info(f"✅ Training container {container.short_id} started")
+
+            # Create log file path
+            log_file = workspace["logs"] / "training.log"
+
+            # Create database update callback for real-time progress tracking
+            async def update_job_progress(**kwargs):
+                """Update job progress in database in real-time"""
+                try:
+                    from app.models.finetuning_models import FineTuningJob
+                    from app.core.database import get_async_session_maker
+                    from sqlalchemy import update
+
+                    SessionLocal = get_async_session_maker()
+                    async with SessionLocal() as db:
+                        stmt = update(FineTuningJob).where(
+                            FineTuningJob.id == job_id
+                        ).values(**kwargs)
+                        await db.execute(stmt)
+                        await db.commit()
+                        logger.debug(f"Updated job {job_id} progress: {kwargs}")
+                except Exception as e:
+                    logger.error(f"Failed to update job progress: {e}")
+
+            # Start log streamer in background
+            log_streamer = TrainingLogStreamer(
+                container=container,
+                log_file=log_file,
+                job_id=job_id,
+                db_callback=update_job_progress
+            )
+
+            # Launch log streaming as background task
+            log_task = asyncio.create_task(log_streamer.stream_logs())
+
+            logger.info(f"📡 Log streaming started for job {job_id}")
 
             # Wait for completion (with timeout)
             timeout_seconds = timeout_hours * 3600
-
             logger.info(f"⏳ Waiting for training to complete (timeout: {timeout_hours}h)...")
 
             exit_status = await asyncio.to_thread(
@@ -339,14 +885,12 @@ class FineTuningSandboxManager(AgentSandboxManager):
                 timeout=timeout_seconds
             )
 
-            # Get logs
-            logs = await asyncio.to_thread(container.logs, stdout=True, stderr=True)
-            logs_text = logs.decode('utf-8')
+            # Stop log streaming
+            log_streamer.stop()
+            await log_task
 
-            # Save logs
-            log_file = workspace["logs"] / "training.log"
-            with open(log_file, 'w') as f:
-                f.write(logs_text)
+            # Read logs from file (now contains all logs written in real-time)
+            logs_text = log_file.read_text() if log_file.exists() else ""
 
             logger.info(f"📋 Training completed with exit code: {exit_status['StatusCode']}")
 
@@ -389,6 +933,11 @@ class FineTuningSandboxManager(AgentSandboxManager):
 
         except asyncio.TimeoutError:
             logger.error(f"❌ Training timeout after {timeout_hours} hours")
+            # Stop log streaming
+            if 'log_streamer' in locals():
+                log_streamer.stop()
+            if 'log_task' in locals():
+                await log_task
             if container:
                 await asyncio.to_thread(container.kill)
             return {

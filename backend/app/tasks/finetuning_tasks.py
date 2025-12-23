@@ -24,6 +24,7 @@ from celery import Task
 from minio import Minio
 from minio.error import S3Error
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import text
 
 from app.celery_app import celery_app
 from app.core.database import sync_engine
@@ -721,6 +722,20 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
             # Get trainer script
             trainer_script = TrainerFactory.get_trainer_script(job.finetuning_method)
 
+            # Get dataset path from MinIO if dataset_id is provided
+            dataset_minio_path = None
+            dataset_local_path = None
+            if job.dataset_id:
+                dataset = db.query(FineTuningDataset).filter_by(id=job.dataset_id).first()
+                if dataset and dataset.minio_path:
+                    dataset_minio_path = dataset.minio_path
+                    logger.info(f"✅ Found dataset in MinIO: {dataset_minio_path}")
+
+                    # ✅ FIX #6: Use correct workspace path with job_id
+                    # Dataset will be preprocessed and saved as train.json
+                    dataset_local_path = f"/workspace/finetuning/{job_id}/input"
+                    logger.info(f"📁 Dataset will be preprocessed and available at: {dataset_local_path}/train.json")
+
             # Prepare training configuration
             training_config = {
                 "job_id": job_id,
@@ -728,6 +743,8 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
                 "finetuning_method": job.finetuning_method,
                 "training_objective": job.training_objective,
                 "dataset_id": str(job.dataset_id),
+                "dataset_path": dataset_local_path,  # ✅ FIX: Local filesystem path, not MinIO path
+                "dataset_minio_path": dataset_minio_path,  # Keep MinIO path for download
                 "hyperparameters": job.hyperparameters,
                 "output_dir": f"/workspace/finetuning/{job_id}/output",
                 "checkpoint_dir": f"/workspace/finetuning/{job_id}/output/checkpoints",
@@ -800,8 +817,21 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
                 if dept:
                     department_name = dept.name
 
-            # Team name - use from job record if available, otherwise fallback
-            team_name = job.team if job.team else "Backend Development"
+            # Team name - use from job record if available, otherwise query user's actual team
+            team_name = job.team if job.team else "General"
+            if not job.team and user:
+                # Query user's actual team from user_teams table
+                team_result = db.execute(text("""
+                    SELECT t.name
+                    FROM teams t
+                    JOIN user_teams ut ON t.id = ut.team_id
+                    WHERE ut.user_id = :user_id
+                    ORDER BY ut.assigned_at DESC
+                    LIMIT 1
+                """), {"user_id": str(user.id)})
+                team_row = team_result.first()
+                if team_row:
+                    team_name = team_row[0]
 
             # Project name - use from job record
             project_name = "global"  # Default
@@ -885,6 +915,46 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
                         logger.info(f"✅ Automatic evaluation completed successfully")
                     else:
                         logger.info(f"⏭️  Automatic evaluation skipped (model not deployed yet)")
+
+                    # ========== AUTO-MERGE LORA ADAPTERS ==========
+                    # Merge LoRA adapters with base model immediately after training
+                    # This makes the model ready for deployment without manual merge step
+                    from app.tasks.auto_merge import auto_merge_lora_adapters, should_auto_merge
+
+                    if should_auto_merge():
+                        logger.info(f"🔄 Starting auto-merge for model {model_id}")
+
+                        # Get adapter checkpoint path
+                        adapter_final_path = result.get("final_checkpoint_path") or f"/workspace/finetuning/{job_id}/output/final"
+
+                        # Run auto-merge
+                        merge_result = auto_merge_lora_adapters(
+                            job_id=job_id,
+                            adapter_path=adapter_final_path,
+                            base_model_name=job.base_model,
+                            workspace_path=Path(f"/workspace/finetuning/{job_id}"),
+                            force_cpu=False  # Use GPU if available
+                        )
+
+                        if merge_result and merge_result["status"] == "success":
+                            logger.info(f"✅ Auto-merge completed in {merge_result['duration_seconds']:.1f}s")
+                            logger.info(f"📍 Merged model: {merge_result['merged_path']}")
+
+                            # Update model record with merged path and status
+                            from app.models.finetuning_models import FineTunedModel
+                            model = db.query(FineTunedModel).filter(FineTunedModel.id == model_id).first()
+                            if model:
+                                model.merged_model_path = merge_result["merged_path"]
+                                model.status = "merged"  # Change from registered/adapter_only to merged
+                                model.merge_duration_seconds = merge_result["duration_seconds"]
+                                db.commit()
+                                logger.info(f"✅ Model status updated to 'merged' (ready for deployment)")
+                        else:
+                            logger.warning(f"⚠️  Auto-merge failed or skipped. Model saved as adapters only.")
+                            logger.info(f"   User can manually merge later from UI")
+                    else:
+                        logger.info(f"⏭️  Auto-merge disabled (FINETUNING_AUTO_MERGE=false)")
+                    # ===============================================
                 else:
                     logger.warning("Model registration failed, but training was successful")
 
@@ -1059,3 +1129,93 @@ def cleanup_old_workspaces(days_old: int = 7) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Workspace cleanup failed: {e}")
         raise
+
+
+@celery_app.task(name="merge_lora_model", bind=True)
+def merge_lora_model_task(
+    self,
+    model_id: str,
+    base_model_name: str = "Qwen/Qwen2.5-1.5B-Instruct",
+    force_cpu: bool = False
+):
+    """
+    Celery task for merging LoRA adapters with base model.
+
+    This is a background task that can run for 5-15 minutes.
+    Must be asynchronous to avoid blocking the API.
+
+    JIRA: FINETUNE-002
+
+    Args:
+        model_id: ID of the fine-tuned model
+        base_model_name: HuggingFace base model name
+        force_cpu: Force CPU-only merge (for testing)
+
+    Returns:
+        Dict with merge status, path, and duration
+
+    Critical Integration Point:
+        Saves merged model to /workspace/finetuning/{job_id}/output/merged_model
+        OllamaDeploymentService checks this path FIRST (workspace-first optimization)
+    """
+    from app.services.finetuning.model_merge_service import ModelMergeService
+
+    logger.info(f"🔄 [CELERY] Starting merge task for model {model_id}")
+    logger.info(f"   Task ID: {self.request.id}")
+    logger.info(f"   Base model: {base_model_name}")
+
+    # Create database session for this task
+    db = SessionLocal()
+
+    try:
+        # Create merge service
+        merge_service = ModelMergeService(db)
+
+        # Run merge (this is async in the service, but Celery tasks are sync)
+        import asyncio
+        result = asyncio.run(
+            merge_service.merge_lora_adapters(
+                model_id=model_id,
+                base_model_name=base_model_name,
+                force_cpu=force_cpu
+            )
+        )
+
+        if result["status"] == "success":
+            logger.info(f"✅ [CELERY] Merge task completed successfully")
+            logger.info(f"   Model ID: {model_id}")
+            logger.info(f"   Duration: {result['duration_seconds']}s")
+            logger.info(f"   Output: {result['merged_model_path']}")
+        else:
+            logger.error(f"❌ [CELERY] Merge task failed: {result.get('error')}")
+
+        return result
+
+    except Exception as e:
+        logger.error(f"❌ [CELERY] Merge task exception: {e}", exc_info=True)
+
+        # Update database with error status
+        from sqlalchemy import update
+        from app.models.database import FineTunedModel
+
+        stmt = (
+            update(FineTunedModel)
+            .where(FineTunedModel.id == model_id)
+            .values(
+                status="merge_failed",
+                merge_error_message=str(e)
+            )
+        )
+
+        db.execute(stmt)
+        db.commit()
+
+        return {
+            "status": "error",
+            "model_id": model_id,
+            "error": str(e),
+            "message": f"Merge task failed: {e}"
+        }
+
+    finally:
+        db.close()

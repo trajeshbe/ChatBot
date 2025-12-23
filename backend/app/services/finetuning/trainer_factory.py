@@ -6,6 +6,7 @@ Routes training jobs to the appropriate trainer implementation based on fine-tun
 Supported methods:
 - peft: LoRA/QLoRA with PEFT
 - sft: Supervised Fine-Tuning with TRL
+- unsloth: Unsloth optimized LoRA (2-5x faster, 70% less memory)
 - rlhf-ppo: RLHF with Proximal Policy Optimization
 - rlhf-grpo: RLHF with Group Relative Policy Optimization
 """
@@ -28,6 +29,7 @@ class TrainerFactory:
     TRAINER_SCRIPTS = {
         "peft": "peft_trainer.py",
         "sft": "sft_trainer.py",
+        "unsloth": "unsloth_trainer.py",
         "rlhf-ppo": "rlhf_ppo_trainer.py",
         "rlhf-grpo": "rlhf_grpo_trainer.py",
     }
@@ -78,8 +80,8 @@ class TrainerFactory:
         hyperparams = config["hyperparameters"]
 
         # Method-specific validation
-        if finetuning_method == "peft":
-            # PEFT requires LoRA parameters
+        if finetuning_method == "peft" or finetuning_method == "unsloth":
+            # PEFT and Unsloth require LoRA parameters
             required_peft = ["lora_r", "lora_alpha"]
             for key in required_peft:
                 if key not in hyperparams:
@@ -130,6 +132,20 @@ class TrainerFactory:
                 "lora_alpha": 32,
                 "lora_dropout": 0.05,
                 "target_modules": ["q_proj", "v_proj", "k_proj", "o_proj"]
+            },
+            "unsloth": {
+                "learning_rate": 2e-4,
+                "num_epochs": 3,
+                "batch_size": 4,
+                "gradient_accumulation_steps": 4,
+                "warmup_steps": 100,
+                "logging_steps": 10,
+                "save_steps": 100,
+                "lora_r": 16,
+                "lora_alpha": 32,
+                "lora_dropout": 0.05,
+                "max_seq_length": 2048,
+                "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
             },
             "sft": {
                 "learning_rate": 2e-4,
@@ -279,6 +295,7 @@ def get_estimated_training_time(
     # Base time estimates (very rough)
     base_times = {
         "peft": 2.0,  # PEFT is fastest
+        "unsloth": 0.5,  # Unsloth is 2-5x faster than PEFT
         "sft": 4.0,   # SFT is moderate
         "rlhf-ppo": 8.0,  # RLHF is slowest
         "rlhf-grpo": 6.0  # GRPO is faster than PPO

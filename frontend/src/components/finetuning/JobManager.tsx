@@ -12,6 +12,7 @@ import { Play, Pause, StopCircle, Settings, Sliders, Sparkles, TrendingUp, Clock
 import ProjectSelector from '../ProjectSelector'
 import GPUConfiguration from './GPUConfiguration'
 import HyperparameterConfiguration from './HyperparameterConfiguration'
+import TrainingPipelineVisualizer from './TrainingPipelineVisualizer'
 
 interface Job {
   id: string
@@ -229,7 +230,9 @@ export default function JobManager({ onRefresh }: JobManagerProps) {
             warmup_steps: 100,
             lora_r: 16,
             lora_alpha: 32,
-            lora_dropout: 0.05
+            lora_dropout: 0.05,
+            target_modules: ["q_proj", "v_proj"],
+            max_seq_length: 2048
           }
         } else if (method === 'sft') {
           return {
@@ -256,10 +259,12 @@ export default function JobManager({ onRefresh }: JobManagerProps) {
       let hyperparameters = getDefaultHyperparameters(formData.finetuning_method)
 
       if (hyperparamMode === 'manual') {
-        // Use hyperparameters from the new HyperparameterConfiguration component
-        hyperparameters = Object.keys(hyperparameterConfig).length > 0
-          ? hyperparameterConfig
-          : manualHyperparams // Fallback to legacy if component hasn't loaded
+        // Merge hyperparameters: defaults + component overrides
+        // This ensures required fields like lora_r are always included
+        hyperparameters = {
+          ...getDefaultHyperparameters(formData.finetuning_method), // Start with full defaults
+          ...(Object.keys(hyperparameterConfig).length > 0 ? hyperparameterConfig : manualHyperparams) // Override with user selections
+        }
       } else if (hyperparamMode === 'recommended') {
         // Try to get recommended hyperparameters from backend
         try {
@@ -303,16 +308,20 @@ export default function JobManager({ onRefresh }: JobManagerProps) {
 
       console.log('Creating job with hyperparameters:', hyperparameters)
 
+      // FIX: Convert empty project_id string to null for UUID validation
+      const jobData = {
+        ...formData,
+        project_id: formData.project_id || null,  // Convert empty string to null
+        hyperparameters,
+      }
+
       const response = await fetch(`${API_BASE}/api/v1/finetuning/jobs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({
-          ...formData,
-          hyperparameters,
-        }),
+        body: JSON.stringify(jobData),
       })
 
       if (response.ok) {
@@ -343,7 +352,11 @@ export default function JobManager({ onRefresh }: JobManagerProps) {
         if (onRefresh) onRefresh()
       } else {
         const error = await response.json()
-        alert(`❌ Job creation failed: ${error.detail || 'Unknown error'}`)
+        console.error('Job creation validation error:', error)
+        const errorMsg = typeof error.detail === 'string'
+          ? error.detail
+          : JSON.stringify(error.detail || error, null, 2)
+        alert(`❌ Job creation failed:\n\n${errorMsg}`)
       }
     } catch (error) {
       console.error('Error creating job:', error)
@@ -918,6 +931,15 @@ export default function JobManager({ onRefresh }: JobManagerProps) {
             <div className="flex-1 overflow-y-auto p-6">
               {/* Job Info */}
               <div className="space-y-6">
+                {/* Training Pipeline Visualizer */}
+                <div>
+                  <TrainingPipelineVisualizer
+                    jobId={jobDetailsView.id}
+                    jobStatus={jobDetailsView.status}
+                    onRefresh={loadJobs}
+                  />
+                </div>
+
                 {/* Status & Basic Info */}
                 <div>
                   <h4 className="text-sm font-medium text-slate-900 dark:text-white mb-3">Status</h4>

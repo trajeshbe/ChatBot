@@ -1,0 +1,201 @@
+# HuggingFace Models Registry
+# Configuration for available base models for fine-tuning
+# Last Updated: 2025-12-20
+
+models:
+  # ============================================================================
+  # Qwen Models - Alibaba's Language Models
+  # ============================================================================
+
+  - id: "Qwen/Qwen2.5-1.5B-Instruct"
+    display_name: "Qwen 2.5 1.5B Instruct"
+    architecture: "qwen2.5"
+    size_params: 1500000000
+    size_gb: 2.9
+    quantization_support: ["4bit", "8bit"]
+    recommended_vram_gb: 4
+    license: "Apache-2.0"
+    use_cases: ["instruction", "qa", "chat", "summarization"]
+    tags: ["small", "fast", "efficient", "multilingual"]
+    description: "Compact model optimized for instruction following and chat. Great for limited VRAM."
+    huggingface_url: "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct"
+
+  - id: "Qwen/Qwen2.5-7B-Instruct"
+    display_name: "Qwen 2.5 7B Instruct"
+    architecture: "qwen2.5"
+    size_params: 7000000000
+    size_gb: 14
+    quantization_support: ["4bit", "8bit"]
+    recommended_vram_gb: 12
+    license: "Apache-2.0"
+    use_cases: ["instruction", "qa", "chat", "reasoning", "summarization"]
+    tags: ["medium", "quality", "multilingual", "reasoning"]
+    description: "High-quality model with strong reasoning capabilities. Balanced speed and quality."
+    huggingface_url: "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct"
+
+  # ============================================================================
+  # Mistral Models - Mistral AI's Open Models
+  # ============================================================================
+
+  - id: "mistralai/Mistral-7B-Instruct-v0.2"
+    display_name: "Mistral 7B Instruct v0.2"
+    architecture: "mistral"
+    size_params: 7000000000
+    size_gb: 14
+    quantization_support: ["4bit", "8bit"]
+    recommended_vram_gb: 12
+    license: "Apache-2.0"
+    use_cases: ["instruction", "qa", "chat", "reasoning"]
+    tags: ["medium", "quality", "versatile"]
+    description: "High-performance instruction-tuned model with strong generalization."
+    huggingface_url: "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2"
+
+  # ============================================================================
+  # Llama Models - Meta's Open Foundation Models
+  # ============================================================================
+
+  - id: "meta-llama/Llama-2-7b-hf"
+    display_name: "Llama 2 7B"
+    architecture: "llama2"
+    size_params: 7000000000
+    size_gb: 13
+    quantization_support: ["4bit", "8bit"]
+    recommended_vram_gb: 12
+    license: "Llama-2"
+    use_cases: ["instruction", "qa", "chat"]
+    tags: ["medium", "versatile", "popular"]
+    description: "Meta's foundation model. Requires Llama 2 license agreement."
+    huggingface_url: "https://huggingface.co/meta-llama/Llama-2-7b-hf"
+
+  - id: "meta-llama/Llama-2-7b-chat-hf"
+    display_name: "Llama 2 7B Chat"
+    architecture: "llama2"
+    size_params: 7000000000
+    size_gb: 13
+    quantization_support: ["4bit", "8bit"]
+    recommended_vram_gb: 12
+    license: "Llama-2"
+    use_cases: ["chat", "instruction", "qa"]
+    tags: ["medium", "chat", "optimized"]
+    description: "Chat-optimized version of Llama 2 7B. Better for conversational tasks."
+    huggingface_url: "https://huggingface.co/meta-llama/Llama-2-7b-chat-hf"
+
+  # ============================================================================
+  # Unsloth Pre-Quantized Models (Faster Training)
+  # ============================================================================
+
+  - id: "unsloth/qwen2.5-1.5b-instruct-bnb-4bit"
+    display_name: "Qwen 2.5 1.5B Instruct (Unsloth 4-bit)"
+    architecture: "qwen2.5"
+    size_params: 1500000000
+    size_gb: 1.2
+    quantization_support: ["none"]  # Already quantized
+    recommended_vram_gb: 3
+    license: "Apache-2.0"
+    use_cases: ["instruction", "qa", "chat"]
+    tags: ["small", "fast", "unsloth", "pre-quantized", "optimized"]
+    description: "Pre-quantized Qwen 2.5 1.5B for 2-5x faster training with Unsloth."
+    huggingface_url: "https://huggingface.co/unsloth/qwen2.5-1.5b-instruct-bnb-4bit"
+
+  - id: "unsloth/qwen2.5-7b-instruct-bnb-4bit"
+    display_name: "Qwen 2.5 7B Instruct (Unsloth 4-bit)"
+    architecture: "qwen2.5"
+    size_params: 7000000000
+    size_gb: 4.5
+    quantization_support: ["none"]
+    recommended_vram_gb: 8
+    license: "Apache-2.0"
+    use_cases: ["instruction", "qa", "chat", "reasoning"]
+    tags: ["medium", "fast", "unsloth", "pre-quantized", "optimized"]
+    description: "Pre-quantized Qwen 2.5 7B for 2-5x faster training with Unsloth."
+    huggingface_url: "https://huggingface.co/unsloth/qwen2.5-7b-instruct-bnb-4bit"
+
+  - id: "unsloth/mistral-7b-instruct-v0.2-bnb-4bit"
+    display_name: "Mistral 7B Instruct (Unsloth 4-bit)"
+    architecture: "mistral"
+    size_params: 7000000000
+    size_gb: 4.5
+    quantization_support: ["none"]
+    recommended_vram_gb: 8
+    license: "Apache-2.0"
+    use_cases: ["instruction", "qa", "chat"]
+    tags: ["medium", "fast", "unsloth", "pre-quantized", "optimized"]
+    description: "Pre-quantized Mistral 7B for 2-5x faster training with Unsloth."
+    huggingface_url: "https://huggingface.co/unsloth/mistral-7b-instruct-v0.2-bnb-4bit"
+
+# ============================================================================
+# Recommendations by GPU/VRAM
+# ============================================================================
+
+recommendations:
+  # For small GPUs (<8GB VRAM) - RTX 3060 12GB, GTX 1660 Ti
+  small_gpu:
+    - "Qwen/Qwen2.5-1.5B-Instruct"
+    - "unsloth/qwen2.5-1.5b-instruct-bnb-4bit"
+
+  # For medium GPUs (8-16GB VRAM) - RTX 3080, RTX A4000, RTX 4070
+  medium_gpu:
+    - "unsloth/qwen2.5-7b-instruct-bnb-4bit"
+    - "Qwen/Qwen2.5-7B-Instruct"
+    - "unsloth/mistral-7b-instruct-v0.2-bnb-4bit"
+    - "mistralai/Mistral-7B-Instruct-v0.2"
+
+  # For large GPUs (>16GB VRAM) - RTX 4090, A5000, A100
+  large_gpu:
+    - "meta-llama/Llama-2-13b-hf"
+    - "mistralai/Mixtral-8x7B-Instruct-v0.1"
+
+  # For fastest training (Unsloth optimized)
+  fastest_training:
+    - "unsloth/qwen2.5-1.5b-instruct-bnb-4bit"
+    - "unsloth/qwen2.5-7b-instruct-bnb-4bit"
+    - "unsloth/mistral-7b-instruct-v0.2-bnb-4bit"
+
+  # For best quality (larger models)
+  best_quality:
+    - "Qwen/Qwen2.5-7B-Instruct"
+    - "mistralai/Mistral-7B-Instruct-v0.2"
+    - "meta-llama/Llama-2-7b-chat-hf"
+
+# ============================================================================
+# Training Method Compatibility
+# ============================================================================
+
+training_methods:
+  peft_lora:
+    description: "Standard LoRA fine-tuning with PEFT"
+    compatible_with_all: true
+    recommended_for:
+      - "Qwen/Qwen2.5-1.5B-Instruct"
+      - "Qwen/Qwen2.5-7B-Instruct"
+      - "mistralai/Mistral-7B-Instruct-v0.2"
+
+  unsloth:
+    description: "Unsloth optimized training (2-5x faster)"
+    compatible_models:
+      - "unsloth/qwen2.5-1.5b-instruct-bnb-4bit"
+      - "unsloth/qwen2.5-7b-instruct-bnb-4bit"
+      - "unsloth/mistral-7b-instruct-v0.2-bnb-4bit"
+      - "Qwen/Qwen2.5-1.5B-Instruct"  # Can use with standard models too
+      - "Qwen/Qwen2.5-7B-Instruct"
+      - "mistralai/Mistral-7B-Instruct-v0.2"
+    recommended_for:
+      - "unsloth/qwen2.5-1.5b-instruct-bnb-4bit"
+      - "unsloth/qwen2.5-7b-instruct-bnb-4bit"
+
+  sft:
+    description: "Supervised fine-tuning with TRL"
+    compatible_with_all: true
+    recommended_for:
+      - "Qwen/Qwen2.5-7B-Instruct"
+      - "mistralai/Mistral-7B-Instruct-v0.2"
+
+# ============================================================================
+# Metadata
+# ============================================================================
+
+metadata:
+  version: "1.0.0"
+  last_updated: "2025-12-20"
+  total_models: 8
+  description: "Registry of available HuggingFace models for fine-tuning"
