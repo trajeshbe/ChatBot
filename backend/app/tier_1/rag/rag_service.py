@@ -20,9 +20,9 @@ from app.tier_1.embeddings.intelligent_embedding_service import intelligent_embe
 from app.tier_1.document_processing.document_service import document_service
 from app.tier_1.nlp_processing.query_classifier import query_classifier
 from app.tier_1.evaluation.quality_metrics import quality_metrics_service
-from app.services.security_guardrails import check_query_safety  # 🆕 Security filters
-from app.services.reranker_service import rerank_chunks  # 🆕 Cross-encoder reranker
-from app.services.query_reformulation_service import reformulate_query  # 🆕 Query reformulation
+from app.tier_1.platform_services.security_guardrails import check_query_safety  # 🆕 Security filters
+from app.tier_1.embeddings.reranker_service import rerank_chunks  # 🆕 Cross-encoder reranker
+from app.tier_1.rag.query_reformulation_service import reformulate_query  # 🆕 Query reformulation
 from app.tier_1.infrastructure.config import settings
 import time
 import uuid
