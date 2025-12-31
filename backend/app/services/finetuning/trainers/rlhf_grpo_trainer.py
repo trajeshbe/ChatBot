@@ -648,6 +648,48 @@ def main():
         model.save_pretrained(output_dir)
         tokenizer.save_pretrained(output_dir)
 
+        # Run evaluation if eval dataset exists
+        eval_metrics = {}
+        eval_loss = None
+
+        logger.info("📊 Running post-training evaluation...")
+        try:
+            # Check if validation dataset exists
+            val_dataset_path = Path(config.get("dataset_path", "/workspace/input/dataset")) / "validation.json"
+
+            if val_dataset_path.exists():
+                logger.info(f"✅ Found validation dataset: {val_dataset_path}")
+
+                # Import evaluation service
+                import sys
+                sys.path.insert(0, '/app')  # Add backend to path
+                from app.services.finetuning.model_evaluation_service import ModelEvaluationService
+
+                eval_service = ModelEvaluationService()
+
+                # Run evaluation (synchronously using asyncio.run)
+                import asyncio
+                eval_result = asyncio.run(eval_service.evaluate_model(
+                    model_path=str(output_dir),
+                    test_dataset_path=str(val_dataset_path),
+                    task_type=config.get("training_objective", "text-generation"),
+                    num_samples=min(100, config.get("eval_samples", 100)),
+                    metrics=None  # Auto-detect based on task type
+                ))
+
+                if eval_result.get("status") == "completed":
+                    eval_metrics = eval_result.get("metrics", {})
+                    eval_loss = eval_metrics.get("perplexity")  # Use perplexity as eval loss proxy
+                    logger.info(f"✅ Evaluation complete: {eval_metrics}")
+                else:
+                    logger.warning(f"⚠️ Evaluation failed: {eval_result.get('error', 'Unknown error')}")
+            else:
+                logger.info(f"ℹ️ No validation dataset found at {val_dataset_path}, skipping evaluation")
+
+        except Exception as e:
+            logger.warning(f"⚠️ Evaluation failed: {e}", exc_info=True)
+            # Continue despite evaluation failure
+
         # Write final result
         result = {
             "success": True,
@@ -655,8 +697,10 @@ def main():
             "output_dir": str(output_dir),
             "final_metrics": {
                 "epochs_completed": grpo_config["num_epochs"],
-                "group_size": grpo_config["group_size"]
-            }
+                "group_size": grpo_config["group_size"],
+                "eval_loss": eval_loss,
+            },
+            "eval_metrics": eval_metrics,  # BLEU, ROUGE, METEOR, BERTScore, etc.
         }
 
         result_file = output_dir / "result.json"

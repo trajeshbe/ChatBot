@@ -149,105 +149,76 @@ Task name:"""
         task_name = await self._generate_task_name(request.task_description)
         logger.info(f"📝 Generated task name: '{task_name}' for task {task_id}")
 
-        # 🆕 Build MinIO base path - inherit organizational structure from source documents
+        # 🆕 Build MinIO base path - use current user's organizational structure
         from app.services.minio_path_builder import MinIOPathBuilder
         from app.models.database import Document
         from uuid import UUID
 
-        # Try to extract organizational path from source documents
+        # ✅ FIX: Always use current user's team, not outdated document paths
+        # Build organizational path from user's current team association
         organizational_path = None
-        if request.document_ids:
+        from app.models.database_enhanced import User, Project
+        from sqlalchemy import text
+
+        username = "unknown"
+        department_name = "Global"
+        team_name = "General"
+        project_name = "Default"
+
+        # Get user details
+        if user_id:
             try:
-                # Get first document to extract organizational path
-                first_doc_id = UUID(request.document_ids[0])
-                doc_result = await self.db.execute(
-                    select(Document).where(Document.id == first_doc_id)
+                result = await self.db.execute(
+                    select(User).where(User.id == user_id)
                 )
-                first_doc = doc_result.scalar_one_or_none()
-                if first_doc and first_doc.minio_path:
-                    # Extract organizational path (everything before /documents/ or /agent-tasks/ or /finetuning/)
-                    # Example: "Technology/Backend-Development/Construction-Intelligence/admin/documents/sales2.txt"
-                    # Extract: "Technology/Backend-Development/Construction-Intelligence/admin"
-                    # Then SANITIZE to ensure lowercase
-                    for delimiter in ['/documents/', '/agent-tasks/', '/finetuning/', '/extractions/', '/exports/']:
-                        if delimiter in first_doc.minio_path:
-                            parts = first_doc.minio_path.split(delimiter)
-                            if parts:
-                                # Sanitize each component to ensure lowercase and consistency
-                                old_path = parts[0]
-                                path_components = old_path.split('/')
-                                organizational_path = '/'.join([
-                                    MinIOPathBuilder.sanitize(comp) for comp in path_components if comp
-                                ])
-                                logger.info(f"📁 Inherited and sanitized organizational path from document: {old_path} → {organizational_path}")
-                                break
+                user = result.scalar_one_or_none()
+                if user:
+                    username = user.username
+
+                    # Get user's department name
+                    if user.department_id:
+                        dept_query = text("SELECT name FROM departments WHERE id = :dept_id")
+                        dept_result = await self.db.execute(dept_query, {"dept_id": str(user.department_id)})
+                        dept_row = dept_result.first()
+                        if dept_row:
+                            department_name = dept_row[0]
+
+                    # Get user's team name
+                    team_query = text("""
+                        SELECT t.name
+                        FROM teams t
+                        JOIN user_teams ut ON t.id = ut.team_id
+                        WHERE ut.user_id = :user_id
+                        ORDER BY ut.assigned_at DESC
+                        LIMIT 1
+                    """)
+                    team_result = await self.db.execute(team_query, {"user_id": str(user.id)})
+                    team_row = team_result.first()
+                    if team_row:
+                        team_name = team_row[0]
             except Exception as e:
-                logger.warning(f"Failed to extract organizational path from documents: {e}")
+                logger.warning(f"Failed to get user details: {e}")
 
-        # Fallback to user-based organizational structure if no path found from documents
-        if not organizational_path:
-            from app.models.database_enhanced import User, Project
-            from sqlalchemy import text
+        # Get project name
+        if project_id:
+            try:
+                result = await self.db.execute(
+                    select(Project).where(Project.id == project_id)
+                )
+                project = result.scalar_one_or_none()
+                if project:
+                    project_name = project.name
+            except Exception as e:
+                logger.warning(f"Failed to get project name: {e}")
 
-            username = "unknown"
-            department_name = "Global"
-            team_name = "General"
-            project_name = "Default"
-
-            # Get user details
-            if user_id:
-                try:
-                    result = await self.db.execute(
-                        select(User).where(User.id == user_id)
-                    )
-                    user = result.scalar_one_or_none()
-                    if user:
-                        username = user.username
-
-                        # Get user's department name
-                        if user.department_id:
-                            dept_query = text("SELECT name FROM departments WHERE id = :dept_id")
-                            dept_result = await self.db.execute(dept_query, {"dept_id": str(user.department_id)})
-                            dept_row = dept_result.first()
-                            if dept_row:
-                                department_name = dept_row[0]
-
-                        # Get user's team name
-                        team_query = text("""
-                            SELECT t.name
-                            FROM teams t
-                            JOIN user_teams ut ON t.id = ut.team_id
-                            WHERE ut.user_id = :user_id
-                            ORDER BY ut.assigned_at DESC
-                            LIMIT 1
-                        """)
-                        team_result = await self.db.execute(team_query, {"user_id": str(user.id)})
-                        team_row = team_result.first()
-                        if team_row:
-                            team_name = team_row[0]
-                except Exception as e:
-                    logger.warning(f"Failed to get user details: {e}")
-
-            # Get project name
-            if project_id:
-                try:
-                    result = await self.db.execute(
-                        select(Project).where(Project.id == project_id)
-                    )
-                    project = result.scalar_one_or_none()
-                    if project:
-                        project_name = project.name
-                except Exception as e:
-                    logger.warning(f"Failed to get project name: {e}")
-
-            # Build organizational path: {dept}/{team}/{project}/{username}
-            organizational_path = (
-                f"{MinIOPathBuilder.sanitize(department_name)}/"
-                f"{MinIOPathBuilder.sanitize(team_name)}/"
-                f"{MinIOPathBuilder.sanitize(project_name)}/"
-                f"{MinIOPathBuilder.sanitize(username)}"
-            )
-            logger.info(f"📁 Using user-based organizational path: {organizational_path}")
+        # Build organizational path: {dept}/{team}/{project}/{username}
+        organizational_path = (
+            f"{MinIOPathBuilder.sanitize(department_name)}/"
+            f"{MinIOPathBuilder.sanitize(team_name)}/"
+            f"{MinIOPathBuilder.sanitize(project_name)}/"
+            f"{MinIOPathBuilder.sanitize(username)}"
+        )
+        logger.info(f"📁 Using user-based organizational path: {organizational_path}")
 
         # Build MinIO base path with organizational structure
         minio_base_path = (

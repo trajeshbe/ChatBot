@@ -15,11 +15,14 @@ hyperparameters:
     type: integer
     default: 3
     min: 1
-    max: 10
+    max: 50  # ✅ Increased from 10 to 50 for extended training scenarios
     step: 1
     description: "Number of training epochs"
-    tooltip: "More epochs = better performance but longer training time"
+    tooltip: "More epochs = better performance but longer training time. WARNING: >15 epochs may overfit on small datasets (<500 samples). Use early stopping for datasets >10k samples."
     ui_type: slider
+    validation:
+      warning_threshold: 15  # Warn if >15 epochs (overfitting risk)
+      error_threshold: 50    # Hard limit at 50
 
   # Batch Size
   batch_size:
@@ -233,17 +236,17 @@ hyperparameters:
 
   min_gpu_memory_gb:
     type: float
-    default: 12.0
+    default: 6.0
     min: 4.0
     max: 80.0
     step: 0.5
     description: "Minimum GPU memory (GB)"
-    tooltip: "Required free memory per GPU"
+    tooltip: "Required free memory per GPU. Set to 6GB for RTX 5060/3060 8GB, 12GB for RTX 3090, 24GB for A100"
     ui_type: slider
 
   max_memory_gb:
     type: float
-    default: 16.0
+    default: 8.0
     min: 4.0
     max: 80.0
     step: 0.5
@@ -386,6 +389,75 @@ presets:
       eval_steps: 25  # Frequent evaluation
       save_steps: 100
       fp16: true
+
+  # 🆕 Large Dataset Deep Training (20 epochs for >10k samples)
+  large_dataset_deep:
+    name: "Large Dataset Deep"
+    description: "Deep training for datasets >10k samples with early stopping"
+    icon: "📊"
+    hardware_requirements:
+      min_gpu_memory_gb: 12.0
+      recommended_gpu: "RTX 3090 24GB or A100"
+    hyperparameters:
+      num_epochs: 20  # Extended training for large datasets
+      batch_size: 8
+      learning_rate: 1.0e-4  # Lower LR for stability
+      gradient_accumulation_steps: 2
+      max_seq_length: 2048
+      lora_rank: 16
+      lora_alpha: 32
+      lora_dropout: 0.05
+      weight_decay: 0.02
+      warmup_ratio: 0.1
+      eval_steps: 100  # Evaluate every 100 steps for early stopping
+      save_steps: 500
+      fp16: true
+
+  # 🆕 Reasoning Model Training (30 epochs for DeepSeek-R1, o1-style)
+  reasoning_model:
+    name: "Reasoning Model"
+    description: "Extended training for reasoning models (DeepSeek-R1, o1-style) with chain-of-thought"
+    icon: "🧠"
+    hardware_requirements:
+      min_gpu_memory_gb: 16.0
+      recommended_gpu: "A100 40GB or H100"
+    hyperparameters:
+      num_epochs: 30  # Reasoning models need more epochs
+      batch_size: 4
+      learning_rate: 5.0e-5  # Very low LR for stable reasoning learning
+      gradient_accumulation_steps: 4
+      max_seq_length: 4096  # Long context for reasoning chains
+      lora_rank: 32
+      lora_alpha: 64
+      lora_dropout: 0.1
+      weight_decay: 0.03
+      warmup_ratio: 0.15  # Longer warmup for stability
+      eval_steps: 200
+      save_steps: 1000
+      bf16: true  # Better precision for reasoning
+
+  # 🆕 GRPO Extended Training (50 epochs for reinforcement learning)
+  grpo_extended:
+    name: "GRPO Extended"
+    description: "Extended reinforcement learning with GRPO for complex reward optimization"
+    icon: "🎓"
+    hardware_requirements:
+      min_gpu_memory_gb: 20.0
+      recommended_gpu: "A100 80GB or H100"
+    hyperparameters:
+      num_epochs: 50  # GRPO/RLHF needs many epochs
+      batch_size: 2
+      learning_rate: 1.0e-5  # Very low LR for RL stability
+      gradient_accumulation_steps: 8  # Effective batch = 16
+      max_seq_length: 2048
+      lora_rank: 32
+      lora_alpha: 64
+      lora_dropout: 0.05
+      weight_decay: 0.01
+      warmup_ratio: 0.2  # Long warmup for RL
+      eval_steps: 500
+      save_steps: 2000
+      bf16: true
 
 # ===========================================
 # VALIDATION RULES

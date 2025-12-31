@@ -8,8 +8,14 @@
 import { useState, useEffect } from 'react'
 import { Sliders, Info, AlertTriangle, CheckCircle, RotateCcw } from 'lucide-react'
 
+interface HyperparameterOption {
+  value: string
+  label: string
+  description?: string
+}
+
 interface HyperparameterConfig {
-  type: 'integer' | 'float' | 'string' | 'boolean'
+  type: 'integer' | 'float' | 'string' | 'boolean' | 'enum'
   default: any
   min?: number
   max?: number
@@ -18,7 +24,7 @@ interface HyperparameterConfig {
   tooltip?: string
   ui_type: 'slider' | 'dropdown' | 'checkbox' | 'text'
   display_format?: 'scientific' | 'percentage' | 'decimal'
-  options?: string[]
+  options?: HyperparameterOption[]  // ✅ FIX: Changed from string[] to object[]
   applicable_to?: string[]
   validation?: {
     warning_threshold?: number
@@ -242,8 +248,8 @@ export default function HyperparameterConfiguration({
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               {param.options?.map((option) => (
-                <option key={option} value={option}>
-                  {option}
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>

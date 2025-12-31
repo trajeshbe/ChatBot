@@ -13,10 +13,10 @@ Migration: backend/migrations/019_add_finetuning_tables.sql
 
 from sqlalchemy import (
     Column, String, DateTime, Integer, Text, ForeignKey,
-    Boolean, Float, JSON, BigInteger
+    Boolean, Float, JSON, BigInteger, ARRAY
 )
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.sql import func, text
 from sqlalchemy.orm import relationship
 import uuid
 
@@ -132,6 +132,8 @@ class FineTuningJob(Base):
     total_steps = Column(Integer, nullable=True)
     train_loss = Column(Float, nullable=True)
     eval_loss = Column(Float, nullable=True)
+    eval_metrics = Column(JSONB, server_default=text("'{}'::jsonb"))  # Comprehensive eval metrics (BLEU, ROUGE, METEOR, BERTScore, perplexity)
+    custom_metrics = Column(JSONB, server_default=text("'{}'::jsonb"))  # Custom/domain-specific metrics
 
     # Results
     final_model_name = Column(String(255), nullable=True)
@@ -140,6 +142,7 @@ class FineTuningJob(Base):
 
     # Training logs
     logs = Column(Text, nullable=True)
+    debug_log = Column(ARRAY(Text), server_default=text("ARRAY[]::text[]"))  # Array of JSON-encoded timestamped debug messages
     error_message = Column(Text, nullable=True)
 
     # Resource usage
@@ -203,7 +206,7 @@ class FineTunedModel(Base):
     merge_error_message = Column(Text, nullable=True)  # Error message if merge failed
 
     # Evaluation metrics
-    eval_metrics = Column(JSON, nullable=True)  # accuracy, perplexity, ROUGE, BLEU, etc.
+    eval_metrics = Column(JSONB, nullable=True)  # accuracy, perplexity, ROUGE, BLEU, etc.
 
     # Deployment
     status = Column(String(50), default='registered')  # registered, deployed, archived, deprecated

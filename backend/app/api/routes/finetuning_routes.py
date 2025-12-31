@@ -2470,7 +2470,10 @@ async def get_hyperparameter_config():
     from pathlib import Path
 
     try:
-        config_path = Path(__file__).parent.parent.parent / "config" / "finetuning_hyperparameter_defaults.yaml"
+        # ✅ FIX: Path calculation - need 4 parents to get from /app/app/api/routes/ to /app/
+        # __file__ = /app/app/api/routes/finetuning_routes.py
+        # .parent.parent.parent.parent = /app/
+        config_path = Path(__file__).parent.parent.parent.parent / "config" / "finetuning_hyperparameter_defaults.yaml"
 
         if not config_path.exists():
             raise FileNotFoundError(f"Hyperparameter config file not found: {config_path}")

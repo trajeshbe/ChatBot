@@ -15,7 +15,7 @@ import json
 import logging
 import os
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional
 from uuid import UUID
@@ -135,7 +135,7 @@ class FineTuningTask(Task):
                 if job:
                     job.status = "failed"
                     job.error_message = str(exc)
-                    job.training_end_time = datetime.utcnow()
+                    job.training_end_time = datetime.now(timezone.utc)
                     db.commit()
                     logger.error(f"Training job {job_id} failed: {exc}")
 
@@ -233,6 +233,62 @@ def update_training_stage(
 
     except Exception as e:
         logger.error(f"Failed to update training stage: {e}")
+        db.rollback()
+
+
+def add_debug_log(
+    db: Session,
+    job_id: UUID,
+    stage: str,
+    message: str,
+    log_level: str = "INFO",
+    metadata: Optional[Dict[str, Any]] = None
+):
+    """
+    Add a timestamped debug log entry to the job's debug_log array
+
+    Args:
+        db: Database session
+        job_id: Job ID
+        stage: Pipeline stage (training, merge, convert, deploy, evaluation)
+        message: Log message
+        log_level: Log level (INFO, WARNING, ERROR)
+        metadata: Optional metadata dict
+    """
+    try:
+        job = db.query(FineTuningJob).filter(
+            FineTuningJob.id == job_id
+        ).first()
+
+        if not job:
+            logger.error(f"Job {job_id} not found for debug log")
+            return
+
+        # Create log entry
+        log_entry = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "stage": stage,
+            "level": log_level,
+            "message": message
+        }
+
+        if metadata:
+            log_entry["metadata"] = metadata
+
+        # Append to debug_log array (PostgreSQL text[] array - stores JSON strings)
+        if job.debug_log is None:
+            job.debug_log = []
+
+        # Encode log entry as JSON string before adding to text array
+        current_logs = list(job.debug_log) if job.debug_log else []
+        current_logs.append(json.dumps(log_entry))
+        job.debug_log = current_logs
+
+        db.commit()
+        logger.debug(f"📝 Debug log added for job {job_id}: [{stage}] {message}")
+
+    except Exception as e:
+        logger.error(f"Failed to add debug log: {e}")
         db.rollback()
 
 
@@ -785,7 +841,30 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
                 timeout_hours=timeout_hours
             ))
 
-            logger.info(f"Training completed. Uploading checkpoints to MinIO...")
+            # ✅ FIX: Check if training actually succeeded before proceeding
+            if not result.get("success", False):
+                error_msg = result.get("error", "Unknown training error")
+                logger.error(f"❌ Training failed: {error_msg}")
+
+                add_debug_log(
+                    db=db,
+                    job_id=job_uuid,
+                    stage="training",
+                    message=f"Training failed: {error_msg}",
+                    log_level="ERROR",
+                    metadata={"error": error_msg, "result": result}
+                )
+
+                job.status = "failed"
+                job.error_message = error_msg
+                job.training_end_time = datetime.now(timezone.utc)
+                db.commit()
+
+                logger.error(f"❌ Training job {job.name} marked as failed")
+                return
+
+            # Only proceed if training succeeded
+            logger.info(f"✅ Training succeeded. Uploading checkpoints to MinIO...")
 
             # Update stage: Checkpoint Save
             update_training_stage(
@@ -868,12 +947,51 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
 
             # Training completed successfully
             job.status = "completed"
-            job.training_end_time = datetime.utcnow()
+            job.training_end_time = datetime.now(timezone.utc)
             job.progress = 100.0
             job.minio_checkpoint_path = minio_checkpoint_path
-            job.train_loss = result.get("final_loss") or job.train_loss
-            job.eval_loss = result.get("final_eval_loss") or job.eval_loss
+
+            # Extract training metrics from result
+            final_metrics = result.get("final_metrics", {})
+            job.train_loss = final_metrics.get("train_loss") or result.get("final_loss") or job.train_loss
+            job.eval_loss = final_metrics.get("eval_loss") or result.get("final_eval_loss") or job.eval_loss
             job.total_steps = result.get("total_steps")
+
+            # Store comprehensive evaluation metrics (BLEU, ROUGE, METEOR, BERTScore, etc.)
+            eval_metrics = result.get("eval_metrics", {})
+            if eval_metrics:
+                job.eval_metrics = eval_metrics
+                logger.info(f"📊 Stored evaluation metrics: {list(eval_metrics.keys())}")
+
+                # Log evaluation completion
+                add_debug_log(
+                    db=db,
+                    job_id=job_uuid,
+                    stage="evaluation",
+                    message=f"Post-training evaluation completed with {len(eval_metrics)} metrics",
+                    metadata={
+                        "metrics": list(eval_metrics.keys()),
+                        "eval_loss": job.eval_loss,
+                        "metric_values": {k: v for k, v in eval_metrics.items() if isinstance(v, (int, float))}
+                    }
+                )
+
+            # Log training completion
+            training_duration = (job.training_end_time - job.training_start_time).total_seconds() if job.training_start_time else None
+            add_debug_log(
+                db=db,
+                job_id=job_uuid,
+                stage="training",
+                message=f"Training completed successfully in {training_duration:.1f}s" if training_duration else "Training completed successfully",
+                metadata={
+                    "final_train_loss": job.train_loss,
+                    "final_eval_loss": job.eval_loss,
+                    "total_steps": job.total_steps,
+                    "duration_seconds": training_duration,
+                    "checkpoint_path": minio_checkpoint_path
+                }
+            )
+
             db.commit()
 
             # Update stage: Completed
@@ -927,6 +1045,15 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
                         # Get adapter checkpoint path
                         adapter_final_path = result.get("final_checkpoint_path") or f"/workspace/finetuning/{job_id}/output/final"
 
+                        # Log merge start
+                        add_debug_log(
+                            db=db,
+                            job_id=UUID(job_id),
+                            stage="merge",
+                            message=f"Starting LoRA adapter merge with base model: {job.base_model}",
+                            metadata={"adapter_path": adapter_final_path}
+                        )
+
                         # Run auto-merge
                         merge_result = auto_merge_lora_adapters(
                             job_id=job_id,
@@ -940,6 +1067,19 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
                             logger.info(f"✅ Auto-merge completed in {merge_result['duration_seconds']:.1f}s")
                             logger.info(f"📍 Merged model: {merge_result['merged_path']}")
 
+                            # Log merge success
+                            add_debug_log(
+                                db=db,
+                                job_id=UUID(job_id),
+                                stage="merge",
+                                message=f"Merge completed successfully in {merge_result['duration_seconds']:.1f}s",
+                                metadata={
+                                    "merged_path": merge_result["merged_path"],
+                                    "duration_seconds": merge_result["duration_seconds"],
+                                    "source": merge_result.get("source", "post_training_merge")
+                                }
+                            )
+
                             # Update model record with merged path and status
                             from app.models.finetuning_models import FineTunedModel
                             model = db.query(FineTunedModel).filter(FineTunedModel.id == model_id).first()
@@ -947,11 +1087,22 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
                                 model.merged_model_path = merge_result["merged_path"]
                                 model.status = "merged"  # Change from registered/adapter_only to merged
                                 model.merge_duration_seconds = merge_result["duration_seconds"]
+                                model.merge_requested_at = datetime.utcnow()
                                 db.commit()
                                 logger.info(f"✅ Model status updated to 'merged' (ready for deployment)")
                         else:
                             logger.warning(f"⚠️  Auto-merge failed or skipped. Model saved as adapters only.")
                             logger.info(f"   User can manually merge later from UI")
+
+                            # Log merge failure
+                            add_debug_log(
+                                db=db,
+                                job_id=UUID(job_id),
+                                stage="merge",
+                                message="Merge failed or skipped - model saved as adapters only",
+                                log_level="WARNING",
+                                metadata={"merge_result": merge_result if merge_result else None}
+                            )
                     else:
                         logger.info(f"⏭️  Auto-merge disabled (FINETUNING_AUTO_MERGE=false)")
                     # ===============================================
@@ -982,7 +1133,7 @@ def run_finetuning_job(self, job_id: str) -> Dict[str, Any]:
             if job:
                 job.status = "failed"
                 job.error_message = str(e)
-                job.training_end_time = datetime.utcnow()
+                job.training_end_time = datetime.now(timezone.utc)
                 db.commit()
 
                 # Update stage: Failed
@@ -1046,7 +1197,7 @@ def cancel_finetuning_job(job_id: str, celery_task_id: str) -> Dict[str, Any]:
 
             if job:
                 job.status = "cancelled"
-                job.training_end_time = datetime.utcnow()
+                job.training_end_time = datetime.now(timezone.utc)
                 db.commit()
 
                 # Update Prometheus metrics

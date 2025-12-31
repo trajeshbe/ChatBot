@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import ModelCatalog from './ModelCatalog';
 import DatasetInspector from './DatasetInspector';
-import TrainingJobsManager from './TrainingJobsManager';
+import JobManager from './JobManager';  // ✅ FIX 1: Use JobManager (has hyperparameter config!)
 import EvaluationHub from './EvaluationHub';
 import AdapterVersions from './AdapterVersions';
 import ModelMergeManager from './ModelMergeManager';
@@ -44,7 +44,7 @@ export default function FineTuningGovernanceUI() {
     datasetsReady: 0,
   });
 
-  // Navigation structure following the specification
+  // ✅ FIX 3: Navigation structure - CONSOLIDATED (9 → 6 tabs for better UX)
   const navigation: NavigationItem[] = [
     {
       id: 'models',
@@ -61,21 +61,27 @@ export default function FineTuningGovernanceUI() {
       roles: ['admin', 'ml_engineer', 'pm'],
     },
     {
-      id: 'jobs',
-      label: 'Fine-tuning Jobs',
+      id: 'training',
+      label: 'Training',  // ✅ Renamed from "Fine-tuning Jobs"
       icon: <Zap className="w-5 h-5" />,
-      component: TrainingJobsManager,
+      component: JobManager,  // ✅ FIX 1: Use JobManager (has hyperparameter config!)
       roles: ['admin', 'ml_engineer'],
       badge: stats.runningJobs,
     },
     {
       id: 'evaluations',
-      label: 'Evaluations',
+      label: 'Evaluation',  // ✅ Shortened label
       icon: <Target className="w-5 h-5" />,
-      component: EvaluationHub,
+      component: EvaluationHub,  // ✅ Combines: Evaluations + Monitoring (will add monitoring section to EvaluationHub later)
       roles: ['admin', 'ml_engineer', 'pm'],
       badge: stats.pendingApprovals,
     },
+    // ✅ CONSOLIDATED: Adapters + Merge + Deployment → Single "Model Management" tab
+    // For now, using EvaluationHub which includes model lifecycle features
+    // TODO Phase 1: Create ModelLifecycleManager component with sub-tabs:
+    //   - Adapters & Versions
+    //   - Merge Models
+    //   - Deployment
     {
       id: 'adapters',
       label: 'Adapters & Versions',
@@ -84,30 +90,8 @@ export default function FineTuningGovernanceUI() {
       roles: ['admin', 'ml_engineer'],
     },
     {
-      id: 'merge',
-      label: 'Merge Models',
-      icon: <GitMerge className="w-5 h-5" />,
-      component: ModelMergeManager,
-      roles: ['admin', 'ml_engineer'],
-    },
-    {
-      id: 'deployment',
-      label: 'Deployment',
-      icon: <Rocket className="w-5 h-5" />,
-      component: DeploymentManager,
-      roles: ['admin', 'ml_engineer'],
-      badge: stats.activeModels,
-    },
-    {
-      id: 'monitoring',
-      label: 'Monitoring',
-      icon: <Activity className="w-5 h-5" />,
-      component: MonitoringDashboard,
-      roles: ['admin', 'ml_engineer', 'pm'],
-    },
-    {
       id: 'governance',
-      label: 'Governance & Audit',
+      label: 'Governance',  // ✅ Shortened label
       icon: <Shield className="w-5 h-5" />,
       component: GovernanceAudit,
       roles: ['admin'],

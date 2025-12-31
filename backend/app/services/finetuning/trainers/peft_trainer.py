@@ -125,9 +125,9 @@ def setup_training(config: dict):
         dataset = load_dataset("json", data_files=f"{dataset_path}/train.json")
         logger.info(f"✅ Loaded {len(dataset['train'])} training samples")
 
-        # Check if dataset needs tokenization (has 'messages' column)
+        # Check if dataset needs tokenization
         if "messages" in dataset["train"].column_names:
-            logger.info("🔄 Dataset has 'messages' column - applying tokenization...")
+            logger.info("🔄 Dataset has 'messages' column - applying chat template tokenization...")
 
             def tokenize_messages(examples):
                 """Tokenize chat messages using the model's chat template"""
@@ -159,11 +159,40 @@ def setup_training(config: dict):
                 tokenize_messages,
                 batched=True,
                 remove_columns=dataset["train"].column_names,
-                desc="Tokenizing dataset"
+                desc="Tokenizing messages dataset"
             )
-            logger.info(f"✅ Tokenized {len(dataset['train'])} samples")
+            logger.info(f"✅ Tokenized {len(dataset['train'])} samples (chat format)")
+
+        # ✅ FIX: Handle "text" column format (from CSV Question/Answer datasets)
+        elif "text" in dataset["train"].column_names:
+            logger.info("🔄 Dataset has 'text' column - applying direct tokenization...")
+
+            def tokenize_text(examples):
+                """Tokenize text directly"""
+                # Tokenize the text
+                model_inputs = tokenizer(
+                    examples["text"],
+                    max_length=hyperparams.get("max_length", 512),
+                    truncation=True,
+                    padding=False  # Will be handled by data collator
+                )
+
+                # Copy input_ids to labels for causal LM training
+                model_inputs["labels"] = model_inputs["input_ids"].copy()
+
+                return model_inputs
+
+            # Apply tokenization to dataset
+            dataset = dataset.map(
+                tokenize_text,
+                batched=True,
+                remove_columns=dataset["train"].column_names,
+                desc="Tokenizing text dataset"
+            )
+            logger.info(f"✅ Tokenized {len(dataset['train'])} samples (text format)")
+
         else:
-            logger.info("Dataset already tokenized (has input_ids)")
+            logger.info("Dataset already tokenized (has input_ids/attention_mask)")
 
     except Exception as e:
         logger.warning(f"Could not load dataset: {e}")
@@ -411,6 +440,51 @@ def main():
             logger.warning(f"⚠️  Merge failed (adapter weights still saved): {merge_error}")
             merged_dir = None
 
+        # Run evaluation if eval dataset exists
+        eval_metrics = {}
+        eval_loss = None
+
+        logger.info("📊 Running post-training evaluation...")
+        try:
+            # Check if validation dataset exists
+            val_dataset_path = Path(config.get("dataset_path", "/workspace/input/dataset")) / "validation.json"
+
+            if val_dataset_path.exists():
+                logger.info(f"✅ Found validation dataset: {val_dataset_path}")
+
+                # Import evaluation service
+                import sys
+                sys.path.insert(0, '/app')  # Add backend to path
+                from app.services.finetuning.model_evaluation_service import ModelEvaluationService
+
+                eval_service = ModelEvaluationService()
+
+                # Evaluate merged model (or adapter if merge failed)
+                eval_model_path = str(merged_dir) if merged_dir else str(adapter_dir)
+
+                # Run evaluation (synchronously using asyncio.run)
+                import asyncio
+                eval_result = asyncio.run(eval_service.evaluate_model(
+                    model_path=eval_model_path,
+                    test_dataset_path=str(val_dataset_path),
+                    task_type=config.get("training_objective", "text-generation"),
+                    num_samples=min(100, config.get("eval_samples", 100)),
+                    metrics=None  # Auto-detect based on task type
+                ))
+
+                if eval_result.get("status") == "completed":
+                    eval_metrics = eval_result.get("metrics", {})
+                    eval_loss = eval_metrics.get("perplexity")  # Use perplexity as eval loss proxy
+                    logger.info(f"✅ Evaluation complete: {eval_metrics}")
+                else:
+                    logger.warning(f"⚠️ Evaluation failed: {eval_result.get('error', 'Unknown error')}")
+            else:
+                logger.info(f"ℹ️ No validation dataset found at {val_dataset_path}, skipping evaluation")
+
+        except Exception as e:
+            logger.warning(f"⚠️ Evaluation failed: {e}", exc_info=True)
+            # Continue despite evaluation failure
+
         # Write final result
         result = {
             "success": True,
@@ -421,8 +495,11 @@ def main():
             "final_metrics": {
                 "epochs_completed": training_args.num_train_epochs,
                 "final_loss": float(train_result.training_loss),
-                "training_steps": train_result.global_step
-            }
+                "training_steps": train_result.global_step,
+                "train_loss": float(train_result.training_loss),
+                "eval_loss": eval_loss,
+            },
+            "eval_metrics": eval_metrics,  # BLEU, ROUGE, METEOR, BERTScore, etc.
         }
 
         result_file = output_dir / "result.json"

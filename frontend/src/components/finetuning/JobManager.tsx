@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
-import { Play, Pause, StopCircle, Settings, Sliders, Sparkles, TrendingUp, Clock, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
+import { Play, Pause, StopCircle, Settings, Sliders, Sparkles, TrendingUp, Clock, CheckCircle, XCircle, AlertTriangle, FileText, Activity } from 'lucide-react'
 import ProjectSelector from '../ProjectSelector'
 import GPUConfiguration from './GPUConfiguration'
 import HyperparameterConfiguration from './HyperparameterConfiguration'
@@ -114,7 +114,8 @@ export default function JobManager({ onRefresh }: JobManagerProps) {
     setLoading(true)
     try {
       const token = localStorage.getItem('access_token')
-      const response = await fetch(`${API_BASE}/api/v1/finetuning/jobs`, {
+      // Request all jobs with maximum limit (100 is backend max)
+      const response = await fetch(`${API_BASE}/api/v1/finetuning/jobs?limit=100`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       })
       if (response.ok) {
@@ -231,7 +232,7 @@ export default function JobManager({ onRefresh }: JobManagerProps) {
             lora_r: 16,
             lora_alpha: 32,
             lora_dropout: 0.05,
-            target_modules: ["q_proj", "v_proj"],
+            target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
             max_seq_length: 2048
           }
         } else if (method === 'sft') {
@@ -1029,6 +1030,113 @@ export default function JobManager({ onRefresh }: JobManagerProps) {
                           </p>
                         </div>
                       )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Evaluation Metrics (if available) */}
+                {jobDetailsView.eval_metrics && Object.keys(jobDetailsView.eval_metrics).length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4" />
+                      Evaluation Metrics
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {Object.entries(jobDetailsView.eval_metrics).map(([key, value]) => {
+                        if (typeof value === 'number') {
+                          return (
+                            <div key={key} className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4">
+                              <p className="text-xs text-slate-500 dark:text-slate-400 uppercase mb-1">
+                                {key.replace(/_/g, ' ')}
+                              </p>
+                              <p className="text-lg font-bold text-slate-900 dark:text-white">
+                                {typeof value === 'number' ? value.toFixed(4) : value}
+                              </p>
+                            </div>
+                          )
+                        }
+                        return null
+                      })}
+                    </div>
+                    {/* Show non-numeric metrics */}
+                    {Object.entries(jobDetailsView.eval_metrics).filter(([_, v]) => typeof v !== 'number').length > 0 && (
+                      <details className="mt-4">
+                        <summary className="text-xs text-slate-500 dark:text-slate-400 cursor-pointer hover:text-slate-700 dark:hover:text-slate-300">
+                          View additional metrics
+                        </summary>
+                        <pre className="mt-2 text-xs bg-slate-100 dark:bg-slate-800 p-4 rounded overflow-x-auto">
+                          {JSON.stringify(
+                            Object.fromEntries(
+                              Object.entries(jobDetailsView.eval_metrics).filter(([_, v]) => typeof v !== 'number')
+                            ),
+                            null,
+                            2
+                          )}
+                        </pre>
+                      </details>
+                    )}
+                  </div>
+                )}
+
+                {/* Pipeline Logs (if available) */}
+                {jobDetailsView.debug_log && Array.isArray(jobDetailsView.debug_log) && jobDetailsView.debug_log.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                      <Activity className="w-4 h-4" />
+                      Pipeline Logs ({jobDetailsView.debug_log.length})
+                    </h4>
+                    <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 max-h-96 overflow-y-auto">
+                      <div className="space-y-2">
+                        {jobDetailsView.debug_log.map((logStr: string, index: number) => {
+                          // Parse JSON string to object (debug_log is stored as text[] in database)
+                          const log = typeof logStr === 'string' ? JSON.parse(logStr) : logStr;
+                          return (
+                            <div
+                              key={index}
+                              className={`
+                                border-l-4 pl-3 py-2 rounded-r
+                                ${log.level === 'ERROR' ? 'border-red-500 bg-red-50 dark:bg-red-900/20' : ''}
+                                ${log.level === 'WARNING' ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' : ''}
+                                ${log.level === 'INFO' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}
+                              `}
+                            >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className={`
+                                    text-xs font-medium px-2 py-0.5 rounded
+                                    ${log.level === 'ERROR' ? 'bg-red-200 text-red-800 dark:bg-red-800 dark:text-red-200' : ''}
+                                    ${log.level === 'WARNING' ? 'bg-yellow-200 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-200' : ''}
+                                    ${log.level === 'INFO' ? 'bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-200' : ''}
+                                  `}>
+                                    {log.level}
+                                  </span>
+                                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase">
+                                    {log.stage}
+                                  </span>
+                                  <span className="text-xs text-slate-500 dark:text-slate-500">
+                                    {new Date(log.timestamp).toLocaleString()}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-slate-700 dark:text-slate-300">
+                                  {log.message}
+                                </p>
+                                {log.metadata && Object.keys(log.metadata).length > 0 && (
+                                  <details className="mt-2">
+                                    <summary className="text-xs text-slate-500 dark:text-slate-400 cursor-pointer hover:text-slate-700 dark:hover:text-slate-300">
+                                      View metadata
+                                    </summary>
+                                    <pre className="mt-2 text-xs bg-slate-100 dark:bg-slate-800 p-2 rounded overflow-x-auto">
+                                      {JSON.stringify(log.metadata, null, 2)}
+                                    </pre>
+                                  </details>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 )}

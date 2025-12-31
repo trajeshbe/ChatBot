@@ -401,6 +401,7 @@ services:
       ENABLE_TRACING: ${ENABLE_TRACING:-true}
       USE_VLLM: ${USE_VLLM:-false}
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright  # Use base image browsers (chromium-1140)
+      FINETUNING_TRAINER_IMAGE: ${FINETUNING_TRAINER_IMAGE:-chatbot-finetuning-trainer:v1.0.5}
     ports:
       - "8000:8000"
     volumes:
@@ -447,6 +448,7 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       FINETUNING_WORKSPACE_BASE: /workspace/finetuning
+      FINETUNING_TRAINER_IMAGE: ${FINETUNING_TRAINER_IMAGE:-chatbot-finetuning-trainer:v1.0.5}
       FINETUNING_AUTO_MERGE: ${FINETUNING_AUTO_MERGE:-true}
     volumes:
       - ./backend:/app

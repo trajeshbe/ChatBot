@@ -52,7 +52,8 @@ class FineTuningSandboxManager(AgentSandboxManager):
 
         # Override image for fine-tuning (dedicated image with PEFT dependencies)
         # Use environment variable to support proper versioning and prevent image conflicts
-        self.finetuning_image = os.getenv("FINETUNING_TRAINER_IMAGE", "chatbot-finetuning-trainer:v1.0.4")
+        # v1.0.5: Added text column handling for story datasets (2025-12-24)
+        self.finetuning_image = os.getenv("FINETUNING_TRAINER_IMAGE", "chatbot-finetuning-trainer:v1.0.5")
 
         # Path to backend code (for mounting trainer scripts)
         # Use host's backend directory, not container's /app

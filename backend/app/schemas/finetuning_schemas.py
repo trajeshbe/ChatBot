@@ -136,8 +136,8 @@ class PEFTHyperparameters(HyperparametersBase):
     lora_alpha: int = Field(32, description="LoRA alpha (scaling factor)", ge=1)
     lora_dropout: float = Field(0.05, description="LoRA dropout", ge=0, le=1)
     target_modules: List[str] = Field(
-        ["q_proj", "v_proj"],
-        description="Target modules for LoRA"
+        ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+        description="Target modules for LoRA (attention + MLP layers)"
     )
 
 

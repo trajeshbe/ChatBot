@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise RAG Platform - Three-Tier Architecture</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #e4e4e7;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .subtitle {
+            text-align: center;
+            color: #a1a1aa;
+            margin-bottom: 40px;
+            font-size: 1.1rem;
+        }
+        .diagram-section {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .diagram-section h2 {
+            color: #3b82f6;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .diagram-section h2::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(180deg, #3b82f6, #8b5cf6);
+            border-radius: 2px;
+        }
+        .mermaid {
+            background: rgba(255,255,255,0.02);
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+        .tier1 { background: #22c55e; }
+        .tier2 { background: #3b82f6; }
+        .tier3 { background: #8b5cf6; }
+        .data { background: #f59e0b; }
+        .infra { background: #ef4444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Enterprise RAG Platform</h1>
+        <p class="subtitle">Three-Tier Architecture for Accelerated Customer Implementations</p>
+
+        <div class="diagram-section">
+            <h2>High-Level Architecture Overview</h2>
+            <div class="mermaid">
+flowchart TB
+    subgraph TIER3["🎨 TIER 3: Customer Bespoke Layer"]
+        direction LR
+        B1[Branding & Theme]
+        B2[Domain Prompts]
+        B3[Custom Integrations]
+        B4[Business Logic]
+        B5[Extraction Schemas]
+    end
+
+    subgraph TIER2["🔧 TIER 2: Use-Case Modules"]
+        direction TB
+        subgraph CoreModules["Core Modules"]
+            M1[core-rag]
+            M2[data-extraction]
+            M3[nlp-processing]
+        end
+        subgraph AdvancedModules["Advanced Modules"]
+            M4[analytics-engine]
+            M5[query-engine]
+        end
+        subgraph DomainModules["Domain Verticals"]
+            M6[financial]
+            M7[supply-chain]
+            M8[mining]
+        end
+    end
+
+    subgraph TIER1["⚙️ TIER 1: Core Platform"]
+        direction TB
+        subgraph API["API Layer"]
+            A1[FastAPI Core]
+            A2[GraphQL Schema]
+            A3[Auth/RBAC]
+        end
+        subgraph Data["Data Layer"]
+            D1[(PostgreSQL + pgvector)]
+            D2[(Redis + RediSearch)]
+            D3[(MinIO Storage)]
+        end
+        subgraph LLM["LLM Layer"]
+            L1[vLLM / llama.cpp]
+            L2[Embeddings]
+            L3[LangGraph]
+        end
+        subgraph Infra["Infrastructure"]
+            I1[Kubernetes]
+            I2[Istio Mesh]
+            I3[Argo CD]
+            I4[Observability]
+        end
+    end
+
+    TIER3 --> TIER2
+    TIER2 --> TIER1
+    
+    style TIER3 fill:#8b5cf6,stroke:#7c3aed,color:#fff
+    style TIER2 fill:#3b82f6,stroke:#2563eb,color:#fff
+    style TIER1 fill:#22c55e,stroke:#16a34a,color:#fff
+            </div>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Module Registry & Loading Flow</h2>
+            <div class="mermaid">
+sequenceDiagram
+    participant App as Application Startup
+    participant CR as Customer Config
+    participant MR as Module Registry
+    participant Mod as Module Instance
+    participant API as API Router
+
+    App->>CR: Load customer config
+    CR-->>App: CustomerConfig
+    App->>MR: Get enabled modules
+    
+    loop For each module
+        MR->>MR: Check dependencies
+        MR->>Mod: Import & Initialize
+        Mod->>Mod: Load services
+        Mod->>Mod: Create LangGraph nodes
+        Mod-->>MR: Module ready
+        MR->>API: Register routes
+        MR->>API: Register GraphQL types
+    end
+    
+    App->>API: Start server
+    Note over App,API: Platform ready with customer-specific modules
+            </div>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Use Case to Module Mapping</h2>
+            <div class="mermaid">
+graph LR
+    subgraph UseCases["Customer Use Cases"]
+        UC1[Website Chatbot]
+        UC2[Data Extraction]
+        UC3[Content Enrichment]
+        UC4[AI Query Engine]
+        UC5[Financial Analysis]
+        UC6[Supply Chain]
+    end
+
+    subgraph Modules["Module Composition"]
+        M1[core-rag]
+        M2[data-extraction]
+        M3[nlp-processing]
+        M4[analytics-engine]
+        M5[query-engine]
+        M6[domain-financial]
+        M7[domain-supply-chain]
+    end
+
+    UC1 --> M1
+    UC2 --> M1
+    UC2 --> M2
+    UC3 --> M1
+    UC3 --> M3
+    UC4 --> M1
+    UC4 --> M5
+    UC5 --> M1
+    UC5 --> M2
+    UC5 --> M4
+    UC5 --> M6
+    UC6 --> M1
+    UC6 --> M2
+    UC6 --> M4
+    UC6 --> M7
+
+    style UC1 fill:#fbbf24,stroke:#f59e0b,color:#000
+    style UC2 fill:#fbbf24,stroke:#f59e0b,color:#000
+    style UC3 fill:#fbbf24,stroke:#f59e0b,color:#000
+    style UC4 fill:#fbbf24,stroke:#f59e0b,color:#000
+    style UC5 fill:#fbbf24,stroke:#f59e0b,color:#000
+    style UC6 fill:#fbbf24,stroke:#f59e0b,color:#000
+            </div>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Customer Deployment Architecture</h2>
+            <div class="mermaid">
+flowchart TB
+    subgraph GitOps["GitOps Repository"]
+        GR[GitHub Repo]
+        HC[Helm Charts]
+        CC[Customer Configs]
+    end
+
+    subgraph ArgoCD["Argo CD"]
+        AOA[App of Apps]
+        AC1[Customer A App]
+        AC2[Customer B App]
+        AC3[Customer C App]
+    end
+
+    subgraph K8s["Kubernetes Cluster"]
+        subgraph NSA["Namespace: customer-a"]
+            PA[Platform + Modules A]
+            DA[(Data A)]
+        end
+        subgraph NSB["Namespace: customer-b"]
+            PB[Platform + Modules B]
+            DB[(Data B)]
+        end
+        subgraph NSC["Namespace: customer-c"]
+            PC[Platform + Modules C]
+            DC[(Data C)]
+        end
+        subgraph Shared["Shared Services"]
+            OBS[Observability]
+            LLM[LLM Inference]
+        end
+    end
+
+    GR --> AOA
+    HC --> AOA
+    CC --> AOA
+    AOA --> AC1
+    AOA --> AC2
+    AOA --> AC3
+    AC1 --> NSA
+    AC2 --> NSB
+    AC3 --> NSC
+    NSA --> Shared
+    NSB --> Shared
+    NSC --> Shared
+
+    style GitOps fill:#4b5563,stroke:#374151
+    style ArgoCD fill:#ef4444,stroke:#dc2626
+    style K8s fill:#3b82f6,stroke:#2563eb
+            </div>
+        </div>
+
+        <div class="diagram-section">
+            <h2>Implementation Timeline</h2>
+            <div class="mermaid">
+gantt
+    title Three-Tier Architecture Implementation
+    dateFormat  YYYY-MM-DD
+    section Phase 1: Foundation
+    Core Platform Refactoring     :p1a, 2025-01-06, 5d
+    Module Registry               :p1b, after p1a, 5d
+    Customer Config System        :p1c, after p1b, 5d
+    
+    section Phase 2: Core Modules
+    Core RAG Module              :p2a, after p1c, 5d
+    Data Extraction Module       :p2b, after p2a, 5d
+    NLP Processing Module        :p2c, after p2b, 5d
+    
+    section Phase 3: Advanced
+    Analytics Engine             :p3a, after p2c, 5d
+    Query Engine                 :p3b, after p3a, 5d
+    Domain Verticals             :p3c, after p3b, 5d
+    
+    section Phase 4: Tooling
+    Deployment Automation        :p4a, after p3c, 5d
+    Customer Onboarding CLI      :p4b, after p4a, 5d
+    
+    section Phase 5: Hardening
+    Testing & Optimization       :p5a, after p4b, 5d
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color tier1"></div>
+                <span>Tier 1: Core Platform (Always Deployed)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color tier2"></div>
+                <span>Tier 2: Use-Case Modules (Selectively Enabled)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color tier3"></div>
+                <span>Tier 3: Customer Bespoke (Per-Customer Config)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color data"></div>
+                <span>Use Cases / Customer Requirements</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color infra"></div>
+                <span>Infrastructure / GitOps</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            themeVariables: {
+                primaryColor: '#3b82f6',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#60a5fa',
+                lineColor: '#60a5fa',
+                secondaryColor: '#8b5cf6',
+                tertiaryColor: '#22c55e',
+                background: '#1a1a2e',
+                mainBkg: '#1a1a2e',
+                secondBkg: '#16213e',
+                nodeBorder: '#60a5fa',
+                clusterBkg: 'rgba(59, 130, 246, 0.1)',
+                clusterBorder: '#3b82f6',
+                titleColor: '#fff',
+                edgeLabelBackground: '#16213e',
+                nodeTextColor: '#fff'
+            },
+            flowchart: {
+                curve: 'basis',
+                padding: 20
+            },
+            gantt: {
+                barHeight: 30,
+                barGap: 8,
+                topPadding: 50,
+                leftPadding: 150,
+                gridLineStartPadding: 50,
+                fontSize: 12,
+                sectionFontSize: 14
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1234,6 +1234,14 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
         console.log('🔍 Streaming: projectId =', projectId)
         console.log('🔍 Streaming: activeProjectId =', activeProjectId)
 
+        // ✅ FIX 2: Build conversation history from recent messages (last 10 messages = 5 exchanges)
+        const conversationHistory = JSON.stringify(
+          messages.slice(-10).map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }))
+        )
+
         // 🆕 Start streaming with FULL RAG configuration (identical to non-streaming!)
         startStreaming(queryText, {
           modelId: selectedModel || undefined,
@@ -1251,7 +1259,8 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
           semanticWeight: currentRagConfig.semantic_weight,
           keywordWeight: currentRagConfig.keyword_weight,
           enableEvaluation: currentRagConfig.enableEvaluation,
-          selectedAgent: 'auto'
+          selectedAgent: 'auto',
+          conversationHistory  // ✅ FIX 2: Pass conversation history for context continuity!
         })
 
         console.log('✅ Streaming started with unified config:', !!configToSend)
