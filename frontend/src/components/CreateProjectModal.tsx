@@ -119,10 +119,9 @@ export default function CreateProjectModal({
 
     const dept = departments.find(d => d.id === selectedDepartmentId)
     const team = teams.find(t => t.id === selectedTeamId)
-    const role = currentUser?.role || 'user'
     const username = currentUser?.username || 'username'
 
-    return `${sanitize(role)}/${sanitize(dept?.name || 'dept')}/${sanitize(team?.name || 'team')}/${sanitize(username)}/${sanitize(projectName)}/`
+    return `${sanitize(dept?.name || 'dept')}/${sanitize(team?.name || 'team')}/${sanitize(projectName)}/${sanitize(username)}/documents/`
   }
 
   const handleCreate = async () => {

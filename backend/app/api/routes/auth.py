@@ -5,10 +5,11 @@ Endpoints for login, logout, registration, and token management
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.core.database import get_db
 from app.services.auth_service import AuthService
-from app.models.database_enhanced import User
+from app.models.database_enhanced import User, UserTeam
 from app.schemas.auth_schemas import (
     LoginRequest,
     LoginResponse,
@@ -21,6 +22,43 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 security = HTTPBearer()
 
 
+async def get_user_primary_team_id(db: AsyncSession, user_id: str) -> str:
+    """
+    Get user's primary team ID from user_teams table
+
+    Args:
+        db: Database session
+        user_id: User UUID
+
+    Returns:
+        Primary team UUID or None
+    """
+    try:
+        from uuid import UUID
+        user_uuid = UUID(user_id)
+
+        # Find primary team
+        stmt = select(UserTeam).where(
+            (UserTeam.user_id == user_uuid) &
+            (UserTeam.is_primary == True)
+        )
+        result = await db.execute(stmt)
+        user_team = result.scalar_one_or_none()
+
+        if user_team:
+            return str(user_team.team_id)
+
+        # If no primary team, get the first team
+        stmt = select(UserTeam).where(UserTeam.user_id == user_uuid)
+        result = await db.execute(stmt)
+        user_team = result.scalar_one_or_none()
+
+        return str(user_team.team_id) if user_team else None
+    except Exception as e:
+        print(f"Error fetching user team: {e}")
+        return None
+
+
 def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
     """Dependency to get AuthService instance"""
     return AuthService(db)
@@ -29,7 +67,8 @@ def get_auth_service(db: AsyncSession = Depends(get_db)) -> AuthService:
 @router.post("/login", response_model=LoginResponse, summary="User login")
 async def login(
     credentials: LoginRequest,
-    auth: AuthService = Depends(get_auth_service)
+    auth: AuthService = Depends(get_auth_service),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Authenticate user and return JWT token
@@ -51,6 +90,9 @@ async def login(
     # Create access token
     access_token = await auth.create_user_token(user)
 
+    # Get user's primary team
+    team_id = await get_user_primary_team_id(db, str(user.id))
+
     return LoginResponse(
         access_token=access_token,
         token_type="bearer",
@@ -62,7 +104,9 @@ async def login(
             role=user.role,
             is_active=user.is_active,
             created_at=user.created_at,
-            last_login=user.last_login
+            last_login=user.last_login,
+            department_id=str(user.department_id) if user.department_id else None,
+            team_id=team_id
         )
     )
 
@@ -70,7 +114,8 @@ async def login(
 @router.post("/register", response_model=UserResponse, summary="Register new user")
 async def register(
     user_data: RegisterRequest,
-    auth: AuthService = Depends(get_auth_service)
+    auth: AuthService = Depends(get_auth_service),
+    db: AsyncSession = Depends(get_db)
 ):
     """Register a new user account"""
     try:
@@ -81,6 +126,9 @@ async def register(
             full_name=user_data.full_name
         )
 
+        # Get user's primary team
+        team_id = await get_user_primary_team_id(db, str(user.id))
+
         return UserResponse(
             id=str(user.id),
             username=user.username,
@@ -89,7 +137,9 @@ async def register(
             role=user.role,
             is_active=user.is_active,
             created_at=user.created_at,
-            last_login=user.last_login
+            last_login=user.last_login,
+            department_id=str(user.department_id) if user.department_id else None,
+            team_id=team_id
         )
     except ValueError as e:
         raise HTTPException(
@@ -101,7 +151,8 @@ async def register(
 @router.get("/me", response_model=UserResponse, summary="Get current user")
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    auth: AuthService = Depends(get_auth_service)
+    auth: AuthService = Depends(get_auth_service),
+    db: AsyncSession = Depends(get_db)
 ):
     """Get current authenticated user information"""
     token = credentials.credentials
@@ -115,6 +166,9 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Get user's primary team
+    team_id = await get_user_primary_team_id(db, str(user.id))
+
     return UserResponse(
         id=str(user.id),
         username=user.username,
@@ -123,7 +177,9 @@ async def get_current_user(
         role=user.role,
         is_active=user.is_active,
         created_at=user.created_at,
-        last_login=user.last_login
+        last_login=user.last_login,
+        department_id=str(user.department_id) if user.department_id else None,
+        team_id=team_id
     )
 
 

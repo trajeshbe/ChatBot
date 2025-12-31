@@ -30,6 +30,8 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
     last_login: Optional[datetime] = None
+    department_id: Optional[str] = None
+    team_id: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -24,11 +24,13 @@ interface Source {
 
 interface Props {
   activeTab: 'chat' | 'upload' | 'scrape'
+  projectId?: string | null
+  ragConfig?: any
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-export default function ChatInterface({ activeTab }: Props) {
+export default function ChatInterface({ activeTab, projectId }: Props) {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
@@ -133,7 +135,7 @@ export default function ChatInterface({ activeTab }: Props) {
   }
 
   if (activeTab === 'upload') {
-    return <FileUpload />
+    return <FileUpload projectId={projectId || undefined} />
   }
 
   if (activeTab === 'scrape') {

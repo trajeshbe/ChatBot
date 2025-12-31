@@ -83,6 +83,10 @@ export default function FileUpload({
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const currentSessionId = getSessionId()
 
+    // ✅ FIX: Use externalProjectId with priority over internal state
+    const projectIdToUse = externalProjectId || selectedProjectId
+    console.log(`📁 [FileUpload.onDrop] Using project ID: ${projectIdToUse} (external: ${externalProjectId}, internal: ${selectedProjectId})`)
+
     for (const file of acceptedFiles) {
       // Check if file is already in the list (client-side duplicate check)
       const isDuplicate = files.some(
@@ -113,8 +117,9 @@ export default function FileUpload({
         const formData = new FormData()
         formData.append('file', file)
         formData.append('session_id', currentSessionId) // 🎯 Pass session ID!
-        if (selectedProjectId) {
-          formData.append('project_id', selectedProjectId) // 🎯 Pass project ID!
+        if (projectIdToUse) {
+          formData.append('project_id', projectIdToUse) // ✅ FIX: Use prioritized project ID!
+          console.log(`📁 [FileUpload] Uploading ${file.name} to project: ${projectIdToUse}`)
         }
 
         const token = localStorage.getItem('access_token')
@@ -207,7 +212,7 @@ export default function FileUpload({
         )
       }
     }
-  }, [files])
+  }, [files, selectedProjectId, externalProjectId])  // ✅ FIX: Add project IDs to dependencies!
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

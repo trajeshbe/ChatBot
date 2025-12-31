@@ -177,28 +177,32 @@ async def health_check():
 async def upload_file(
     request: Request,
     file: UploadFile = File(...),
-    session_id: Optional[str] = Form(None),  # NEW: Session ID
+    session_id: Optional[str] = Form(None),  # Session ID for memory association
+    project_id: Optional[str] = Form(None),  # Project ID for organizational context
     db: AsyncSession = Depends(get_db)
 ):
     """
     Upload a file for processing
 
-    NEW: Associates document with session for short-term memory
+    Associates document with session for short-term memory and project for organization
     """
     start_time = time.time()
     ip_address, user_agent = get_client_info(request)
     user_id = await get_anonymous_user_id(db)
 
+    logger.info(f"📤 Upload request: file={file.filename}, session_id={session_id}, project_id={project_id}")
+
     try:
         # Read file data
         file_data = await file.read()
 
-        # Upload and create document
+        # Upload and create document with project context
         document = await document_service.upload_file(
             file_data=file_data,
             filename=file.filename,
             file_type=file.content_type,
             source_type="upload",
+            project_id=project_id,  # ✅ Pass project_id
             db=db
         )
 
