@@ -40,7 +40,9 @@
       "Bash(do sleep 30 if ! ps -p 81905)",
       "Bash(/dev/null)",
       "Bash(chmod:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(git mv:*)",
+      "Bash(rmdir:*)"
     ],
     "deny": [],
     "ask": []
