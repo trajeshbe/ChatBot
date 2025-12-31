@@ -1,6 +1,6 @@
 # Master Documentation Index
 
-**Last Updated**: 2025-12-23
+**Last Updated**: 2025-12-31
 **Purpose**: Central index for all project documentation
 
 ---
@@ -12,7 +12,43 @@
 | **New Developers** | [CLAUDE.md](../CLAUDE.md) → [CONTRIBUTING.md](../CONTRIBUTING.md) | 30 min |
 | **Fine-Tuning Users** | [docs/features/finetuning/00_README_START_HERE.md](./features/finetuning/00_README_START_HERE.md) | 10 min |
 | **System Status** | [STATUS.md](../STATUS.md) | 5 min |
-| **Debugging Issues** | [docs/debugging/](./debugging/) | Varies |
+| **Debugging Issues** | [docs/debugging/README.md](./debugging/README.md) | Varies |
+| **Query Performance** | [docs/debugging/QWEN_VL_QUERY_TRACE_2025-12-31.md](./debugging/QWEN_VL_QUERY_TRACE_2025-12-31.md) | 15 min |
+
+---
+
+## 🆕 Latest Updates (2025-12-31)
+
+### Documentation Organization
+✅ **16 files moved from root to organized subdirectories**
+
+**Debugging & Traces** (7 files → `docs/debugging/`):
+- ARCHITECTURE_DIAGRAM_QUERY_TRACE.md - Complete vision query trace
+- QWEN_VL_QUERY_TRACE_2025-12-31.md - Qwen VL performance analysis (3m 42s execution)
+- VISION_MODEL_TIMEOUT_ISSUE.md - Vision model timeout investigation
+- PROJECT_ID_LINKAGE_BUGS_ANALYSIS.md - Project linkage bug analysis
+- MINIO_PERSISTENCE_INVESTIGATION_COMPLETE.md - MinIO persistence investigation
+- TRAINER_IMAGE_MISMATCH_ROOT_CAUSE.md - Training image mismatch root cause
+- project_upload_bug_analysis.md - Upload bug stale closure analysis
+
+**Testing** (1 file → `docs/testing/`):
+- FILE_UPLOAD_PROJECT_MAPPING_TEST_REPORT.md - Comprehensive upload mapping tests
+
+**Bug Fixes** (5 files → `docs/fixes/`):
+- PROJECT_UPLOAD_BUG_FIX_COMPLETE.md - React stale closure bug fix
+- DATASET_PREPROCESSING_FIX_COMPLETE.md - Dataset preprocessing fixes
+- TEXT_COLUMN_TRAINER_FIX_COMPLETE.md - Text column trainer fixes
+- UI_FIXES_IMPLEMENTATION_COMPLETE.md - UI bug fixes
+- FINETUNING_UI_ISSUES_AND_FIXES.md - Fine-tuning UI fixes
+
+**Fine-Tuning Planning** (2 files → `docs/features/finetuning/`):
+- FINETUNING_COMPREHENSIVE_IMPLEMENTATION_ROADMAP.md - Implementation roadmap
+- FINETUNING_EVALUATION_AND_LOGGING_IMPLEMENTATION_PLAN.md - Evaluation & logging plan
+
+**Meta** (1 file → `docs/meta/`):
+- DOCUMENTATION_ORGANIZATION_COMPLETE_2025-12-23.md - Organization history
+
+**Root Directory**: ✅ Now contains only 5 essential docs (README, CLAUDE, STATUS, CONTRIBUTING, NEXT_STEPS)
 
 ---
 
@@ -152,16 +188,24 @@ docs/
 
 | Category | Count | Status |
 |----------|-------|--------|
-| Fine-Tuning Docs | 79 | ✅ Current |
 | Root Docs (Core) | 5 | ✅ Current |
+| Fine-Tuning Docs | 81 (+2) | ✅ Current |
+| Debugging Docs | 15 (+7) | ✅ Current |
+| Testing Docs | 5 (+1) | ✅ Current |
+| Fix Reports | 10 (+5) | ✅ Current |
+| Meta Docs | 5 (+1) | ✅ Current |
+| Architecture Docs | ~20 | ✅ Current |
+| Other Active Docs | ~50 | ✅ Current |
+| **Total Active Docs** | **~191** | ✅ Organized |
 | Archived (root) | 4 | 📦 Historical |
 | Archived (tmp) | 113 | 📦 Historical |
-| **Total Active Docs** | **84** | ✅ Organized |
 | **Total Archive** | **117** | 📦 Preserved |
+| **GRAND TOTAL** | **308** | ✅ Fully Organized |
 
-**Last Cleanup**: 2025-12-23
-**Docs Moved**: 117 files organized
-**Root Cleaned**: ✅ Only essential docs remain
+**Last Cleanup**: 2025-12-31
+**Docs Moved (Today)**: 16 files organized
+**Docs Moved (Total)**: 133 files organized
+**Root Cleaned**: ✅ Only 5 essential docs remain
 
 ---
 
@@ -246,22 +290,43 @@ grep -r "search term" docs/features/finetuning/ --include="*.md"
 
 ---
 
-## 🎉 Recent Updates (2025-12-23)
+## 🎉 Recent Updates
 
-### Documentation Organization
-- ✅ Moved 11 fine-tuning docs from root → `docs/features/finetuning/`
-- ✅ Moved 4 old training reports → `docs/archive/root_docs/`
-- ✅ Moved 113 tmp docs → `docs/archive/tmp_docs/`
-- ✅ Created `00_README_START_HERE.md` quick-start guide
-- ✅ Root directory cleaned (only essential docs remain)
+### 2025-12-31 Update
+**✅ 16 additional files organized from root directory**
 
-### Fine-Tuning Success
-- ✅ Mayandi Manzil: 100% accuracy (vs 100% hallucination)
-- ✅ Small Dataset Intensive preset added
-- ✅ All bugs permanently fixed
-- ✅ Complete documentation created
+**New Debugging Documentation**:
+- Complete query tracing with performance analysis
+- Vision model optimization guides (43x performance improvement documented)
+- Upload bug fixes with root cause analysis
+- MinIO persistence investigations
 
-### Documentation Stats
+**New Test & Fix Reports**:
+- Comprehensive upload project mapping tests
+- React stale closure bug fix
+- Fine-tuning UI fixes and improvements
+
+**Impact**:
+- Root directory: 21 files → 5 files (only essentials)
+- Total active docs: 84 → ~191
+- Grand total: 201 → 308 documents
+
+### 2025-12-23 Update
+**✅ Major documentation reorganization (117 files)**
+
+**Fine-Tuning Success**:
+- Mayandi Manzil: 100% accuracy (vs 100% hallucination)
+- Small Dataset Intensive preset added
+- All bugs permanently fixed
+- Complete documentation created
+
+**Documentation Organization**:
+- Moved 11 fine-tuning docs from root → `docs/features/finetuning/`
+- Moved 4 old training reports → `docs/archive/root_docs/`
+- Moved 113 tmp docs → `docs/archive/tmp_docs/`
+- Created `00_README_START_HERE.md` quick-start guide
+
+**Stats**:
 - **Before**: 117 docs scattered across root, /tmp, docs/
 - **After**: 84 active docs organized + 117 archived
 - **Improvement**: Clear structure, easy navigation
@@ -269,6 +334,6 @@ grep -r "search term" docs/features/finetuning/ --include="*.md"
 ---
 
 **Maintained By**: Development Team
-**Last Major Cleanup**: 2025-12-23
-**Total Documents**: 201 (84 active + 117 archived)
+**Last Major Cleanup**: 2025-12-31
+**Total Documents**: 308 (~191 active + 117 archived)
 **Status**: ✅ Fully Organized
