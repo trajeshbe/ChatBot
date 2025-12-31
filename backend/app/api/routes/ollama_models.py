@@ -25,7 +25,7 @@ from fastapi import APIRouter, HTTPException, status, Depends, Body
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.services.ollama_model_service import (
+from app.tier_1.llm.ollama_model_service import (
     OllamaModelService,
     get_ollama_service,
     OllamaModel,

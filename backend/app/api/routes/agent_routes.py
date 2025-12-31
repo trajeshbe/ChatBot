@@ -18,11 +18,11 @@ from typing import Optional, List
 from minio import Minio
 from minio.error import S3Error
 
-from app.core.database import get_db
-from app.core.config import settings
-from app.services.agent_service import AgentOrchestrationService
+from app.tier_1.infrastructure.database import get_db
+from app.tier_1.infrastructure.config import settings
+from app.tier_1.agents.agent_service import AgentOrchestrationService
 from app.api.routes.auth import get_current_user_optional  # 🆕 FIX: Import auth dependency
-from app.services.minio_path_builder import MinIOPathBuilder
+from app.tier_1.infrastructure.minio_path_builder import MinIOPathBuilder
 from app.models.database import Document, AgentTask
 from app.schemas.agent_schemas import (
     AgentTaskCreate,
@@ -282,7 +282,7 @@ async def complete_and_close_terminal(
     - message: Success message
     """
     try:
-        from app.services.terminal_session_manager import close_terminal_session
+        from app.tier_1.agents.terminal_session_manager import close_terminal_session
 
         logger.info(f"✅ Complete & close request for task: {task_id}")
 
@@ -357,7 +357,7 @@ async def scan_task_artifacts(
     - minio_path: MinIO base path where artifacts were uploaded
     """
     try:
-        from app.services.terminal_session_manager import _scan_and_upload_artifacts
+        from app.tier_1.agents.terminal_session_manager import _scan_and_upload_artifacts
 
         logger.info(f"🔍 Manual artifact scan requested for task: {task_id}")
 
@@ -609,7 +609,7 @@ async def list_project_files(
     """
     try:
         # 🆕 Get organizational context from session and user
-        from app.core.security import get_current_user_from_request
+        from app.tier_1.infrastructure.security import get_current_user_from_request
         from app.models.rbac import Department, Team
         from app.models.database_enhanced import UserTeam, ChatSession, Project
 
@@ -900,7 +900,7 @@ async def list_task_artifacts_from_minio(
     """
     try:
         from minio import Minio
-        from app.core.config import settings
+        from app.tier_1.infrastructure.config import settings
 
         # Get task
         service = AgentOrchestrationService(db)
@@ -984,7 +984,7 @@ async def download_artifact_from_minio(
     """
     try:
         from minio import Minio
-        from app.core.config import settings
+        from app.tier_1.infrastructure.config import settings
         from fastapi.responses import StreamingResponse
         import io
 
@@ -1482,7 +1482,7 @@ async def agent_task_terminal_websocket(
             return
 
         # Get task's terminal session manager
-        from app.services.terminal_session_manager import get_terminal_session
+        from app.tier_1.agents.terminal_session_manager import get_terminal_session
 
         session = await get_terminal_session(task_id)
 

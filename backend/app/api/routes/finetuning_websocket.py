@@ -17,9 +17,9 @@ import json
 import logging
 from datetime import datetime
 
-from app.core.database import get_db
+from app.tier_1.infrastructure.database import get_db
 from app.models.finetuning_models import FineTuningJob, TrainingMetric
-from app.services.finetuning.gpu_pool_manager import gpu_pool_manager
+from app.tier_1.finetuning.gpu_pool_manager import gpu_pool_manager
 
 logger = logging.getLogger(__name__)
 

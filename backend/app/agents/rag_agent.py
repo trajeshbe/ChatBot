@@ -5,10 +5,10 @@ from langchain_openai import ChatOpenAI
 from langchain.tools import Tool
 from prefect import flow, task
 import logging
-from app.services.rag_service import rag_service
-from app.services.document_service import document_service
-from app.services.embedding_service import embedding_service
-from app.core.database import AsyncSessionLocal
+from app.tier_1.rag.rag_service import rag_service
+from app.tier_1.document_processing.document_service import document_service
+from app.tier_1.embeddings.embedding_service import embedding_service
+from app.tier_1.infrastructure.database import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +186,7 @@ async def scrape_url_task(url: str, scrape_prompt: str = None):
     logger.info(f"Scraping URL: {url}")
 
     try:
-        from app.services.scraper_service import scraper_service
+        from app.tier_1.data_extraction.scraper_service import scraper_service
         async with AsyncSessionLocal() as db:
             result = await scraper_service.scrape_url(url, scrape_prompt, db)
         logger.info(f"Successfully scraped {url}")

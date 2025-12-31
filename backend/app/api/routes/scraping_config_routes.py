@@ -8,8 +8,8 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 import uuid
 
-from app.core.database import get_db
-from app.services.scraping_config_service import scraping_config_service
+from app.tier_1.infrastructure.database import get_db
+from app.tier_1.data_extraction.scraping_config_service import scraping_config_service
 
 router = APIRouter()
 

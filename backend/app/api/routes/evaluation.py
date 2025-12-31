@@ -17,8 +17,8 @@ from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
 import uuid
 
-from app.core.database import get_db
-from app.services.evaluation_service import evaluation_service, EvaluationMethod, EvaluationConfig as ServiceEvaluationConfig
+from app.tier_1.infrastructure.database import get_db
+from app.tier_1.evaluation.evaluation_service import evaluation_service, EvaluationMethod, EvaluationConfig as ServiceEvaluationConfig
 from app.models.database_enhanced import EvaluationConfig, EvaluationResult, HumanFeedback, EvaluationMetricsBenchmark, ChatSession, User
 
 router = APIRouter(prefix="/api/v1/evaluation", tags=["evaluation"])

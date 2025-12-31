@@ -10,9 +10,9 @@ import tempfile
 from unittest.mock import Mock, patch, AsyncMock
 
 # Import services
-from app.services.ocr_service import OCRService
-from app.services.translation_service import TranslationService
-from app.services.webscraper.automation import FormHandler
+from app.tier_1.document_processing.ocr_service import OCRService
+from app.tier_1.nlp_processing.translation_service import TranslationService
+from app.tier_1.data_extraction.webscraper.automation import FormHandler
 
 
 # ============================================================================

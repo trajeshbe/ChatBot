@@ -331,8 +331,8 @@ class AuditMiddleware(BaseHTTPMiddleware):
     ):
         """Store audit log to PostgreSQL database"""
         try:
-            from app.services.audit_service import audit_service
-            from app.core.database import get_db
+            from app.tier_1.platform_services.audit_service import audit_service
+            from app.tier_1.infrastructure.database import get_db
 
             # Get database session
             async for db in get_db():

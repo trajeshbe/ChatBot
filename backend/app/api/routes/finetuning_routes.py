@@ -22,7 +22,7 @@ import asyncio
 import logging
 from functools import lru_cache
 
-from app.core.database import get_db
+from app.tier_1.infrastructure.database import get_db
 from app.middleware.rbac_middleware import RequirePermission, RequireAdmin, require_authentication, get_current_user
 from app.models.database_enhanced import User
 from app.models.finetuning_models import (
@@ -61,11 +61,11 @@ from app.schemas.finetuning_schemas import (
     # GPU status
     GPUStatusResponse
 )
-from app.services.finetuning.finetuning_service import FineTuningService
-from app.services.finetuning.model_registry_service import ModelRegistryService
-from app.services.finetuning.gpu_pool_manager import gpu_pool_manager
-from app.services.audit_service import audit_service
-from app.services.ollama_deployment_service import OllamaDeploymentService
+from app.tier_1.finetuning.finetuning_service import FineTuningService
+from app.tier_1.finetuning.model_registry_service import ModelRegistryService
+from app.tier_1.finetuning.gpu_pool_manager import gpu_pool_manager
+from app.tier_1.platform_services.audit_service import audit_service
+from app.tier_1.llm.ollama_deployment_service import OllamaDeploymentService
 
 logger = logging.getLogger(__name__)
 
@@ -113,11 +113,11 @@ async def upload_dataset(
         file_content = await file.read()
 
         # Initialize MinIO client
-        from app.core.config import settings
+        from app.tier_1.infrastructure.config import settings
         from minio import Minio
         import io
         from pathlib import Path
-        from app.services.minio_path_builder import MinIOPathBuilder
+        from app.tier_1.infrastructure.minio_path_builder import MinIOPathBuilder
 
         minio_client = Minio(
             settings.MINIO_ENDPOINT,
@@ -230,7 +230,7 @@ async def upload_dataset(
 
         # Trigger automatic validation in background using asyncio
         import asyncio
-        from app.core.database import AsyncSessionLocal
+        from app.tier_1.infrastructure.database import AsyncSessionLocal
 
         async def run_validation():
             """Wrapper to run async validation in background with new DB session"""
@@ -556,7 +556,7 @@ async def create_finetuning_job(
     try:
         from app.models.rbac import Department, Team
         from app.models.database_enhanced import Project
-        from app.services.minio_path_builder import MinIOPathBuilder
+        from app.tier_1.infrastructure.minio_path_builder import MinIOPathBuilder
         from uuid import UUID
 
         service = FineTuningService(db)
@@ -1153,13 +1153,13 @@ async def get_merge_status(
             "merge_error_message": null
         }
     """
-    from app.services.finetuning.model_merge_service import ModelMergeService
+    from app.tier_1.finetuning.model_merge_service import ModelMergeService
 
     try:
         # Get database session (convert async to sync for service)
         # Create sync session
         from sqlalchemy.orm import sessionmaker
-        from app.core.database import sync_engine
+        from app.tier_1.infrastructure.database import sync_engine
 
         SessionLocal = sessionmaker(bind=sync_engine, autocommit=False, autoflush=False)
         sync_db = SessionLocal()
@@ -1823,7 +1823,7 @@ async def deploy_model_to_ollama(
     try:
         import json
         from minio import Minio
-        from app.core.config import settings
+        from app.tier_1.infrastructure.config import settings
 
         # Get model
         model_query = select(FineTunedModel).where(FineTunedModel.id == uuid.UUID(model_id))
@@ -4500,7 +4500,7 @@ async def deploy_model_public(
             logger.info(f"🔍 Triggering automatic evaluation after deployment...")
             try:
                 # Import evaluation service (FineTuningJob already imported at top)
-                from app.services.finetuning.model_evaluation_service import ModelEvaluationService
+                from app.tier_1.finetuning.model_evaluation_service import ModelEvaluationService
                 import tempfile
 
                 # Get associated job to find dataset
@@ -4519,7 +4519,7 @@ async def deploy_model_public(
 
                         # Download dataset from MinIO
                         from minio import Minio
-                        from app.core.config import settings
+                        from app.tier_1.infrastructure.config import settings
 
                         minio_client = Minio(
                             endpoint=settings.MINIO_ENDPOINT.replace("http://", "").replace("https://", ""),
@@ -4686,7 +4686,7 @@ async def evaluate_model_public(
         Evaluation results with metrics and sample-by-sample scores
     """
     try:
-        from app.services.finetuning.model_evaluation_service import ModelEvaluationService
+        from app.tier_1.finetuning.model_evaluation_service import ModelEvaluationService
         
         # Get model
         query = select(FineTunedModel).where(FineTunedModel.id == uuid.UUID(model_id))
@@ -4714,7 +4714,7 @@ async def evaluate_model_public(
         
         # Download dataset from MinIO to temp location
         from minio import Minio
-        from app.core.config import settings
+        from app.tier_1.infrastructure.config import settings
         import tempfile
         
         minio_client = Minio(

@@ -12,29 +12,29 @@ import time
 import re  # 🆕 For URL detection
 import json  # Already imported below but moving here for clarity
 
-from app.core.config import settings
-from app.core.database import init_db, close_db, get_db
+from app.tier_1.infrastructure.config import settings
+from app.tier_1.infrastructure.database import init_db, close_db, get_db
 from app.api.graphql.schema import schema
-from app.services.embedding_service import embedding_service
+from app.tier_1.embeddings.embedding_service import embedding_service
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 # Import consolidated LLM service with multi-model support
-from app.services.llm_service import llm_service
+from app.tier_1.llm.llm_service import llm_service
 logger_temp = logging.getLogger(__name__)
 logger_temp.info("✓ Using LLM Service with multi-model support and Claude integration")
 
-from app.services.document_service import document_service
-from app.services.scraper_service import scraper_service
+from app.tier_1.document_processing.document_service import document_service
+from app.tier_1.data_extraction.scraper_service import scraper_service
 
 # Import consolidated RAG service with memory hierarchy
-from app.services.rag_service import rag_service
+from app.tier_1.rag.rag_service import rag_service
 logger_temp.info("✓ Using RAG Service with memory hierarchy")
 ENHANCED_RAG_AVAILABLE = True  # Always true now (consolidated)
 
 # Import audit service
 try:
-    from app.services.audit_service import audit_service
+    from app.tier_1.platform_services.audit_service import audit_service
     logger_temp.info("✓ Audit service loaded")
 except ImportError:
     logger_temp.warning("⚠ Audit service not available")
@@ -158,8 +158,8 @@ async def lifespan(app: FastAPI):
     try:
         logger.info("Checking for default admin user...")
         from app.models.database_enhanced import User, UserRole
-        from app.core.database import AsyncSessionLocal
-        from app.core.security import get_password_hash  # 🔧 FIX: Use bcrypt hashing
+        from app.tier_1.infrastructure.database import AsyncSessionLocal
+        from app.tier_1.infrastructure.security import get_password_hash  # 🔧 FIX: Use bcrypt hashing
 
         async with AsyncSessionLocal() as session:
             query = select(User).where(User.username == 'admin')
@@ -194,7 +194,7 @@ async def lifespan(app: FastAPI):
     # 🆕 Start GPU resource manager cleanup monitor
     try:
         logger.info("Starting GPU resource manager...")
-        from app.services.gpu_resource_manager import get_gpu_manager
+        from app.tier_1.infrastructure.gpu_resource_manager import get_gpu_manager
         gpu_manager = get_gpu_manager()
         await gpu_manager.start_cleanup_monitor()
         logger.info("✓ GPU resource manager started")
@@ -210,7 +210,7 @@ async def lifespan(app: FastAPI):
 
     # 🆕 Stop GPU resource manager and free all GPU memory
     try:
-        from app.services.gpu_resource_manager import get_gpu_manager
+        from app.tier_1.infrastructure.gpu_resource_manager import get_gpu_manager
         gpu_manager = get_gpu_manager()
         logger.info("Freeing GPU resources...")
         await gpu_manager.unload_all_models()
@@ -356,8 +356,8 @@ async def upload_file(
     """Upload a file for processing and associate with session"""
     import time
     import uuid
-    from app.core.security import get_current_user_from_request
-    from app.services.document_service import construct_minio_path
+    from app.tier_1.infrastructure.security import get_current_user_from_request
+    from app.tier_1.document_processing.document_service import construct_minio_path
 
     start_time = time.time()
     ip_address, user_agent = get_client_info(request)
@@ -1526,7 +1526,7 @@ except Exception as e:
 
 # Also import the enhanced scraper service (with fallback to basic)
 try:
-    from app.services.scraper_service import scraper_service
+    from app.tier_1.data_extraction.scraper_service import scraper_service
     logger.info("✓ Enhanced Scraper Service loaded")
 except ImportError as e:
     logger.warning(f"Enhanced Scraper Service not available: {e}")
@@ -1847,7 +1847,7 @@ async def create_user(
     try:
         from app.models.database_enhanced import User, UserRole, Project, ProjectMember
         from sqlalchemy import select
-        from app.core.security import get_password_hash
+        from app.tier_1.infrastructure.security import get_password_hash
         import uuid as uuid_module
 
         # Get JSON body
@@ -2953,7 +2953,7 @@ async def regenerate_embeddings_endpoint(
     """
     try:
         from app.models.database import Document, DocumentChunk
-        from app.services.embedding_service import embedding_service
+        from app.tier_1.embeddings.embedding_service import embedding_service
         import uuid as uuid_module
 
         logger.info("Starting embedding regeneration via API")
@@ -3518,7 +3518,7 @@ async def _save_evaluation_async(
         import json
 
         # Get a new database session for async task
-        from app.core.database import AsyncSessionLocal
+        from app.tier_1.infrastructure.database import AsyncSessionLocal
         async with AsyncSessionLocal() as eval_db:
             # Calculate overall score from available metrics
             scores = []

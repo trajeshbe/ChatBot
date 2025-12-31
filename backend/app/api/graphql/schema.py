@@ -2,10 +2,10 @@ import strawberry
 from typing import List, Optional
 from datetime import datetime
 import logging
-from app.services.rag_service import rag_service
-from app.services.document_service import document_service
-from app.services.scraper_service import scraper_service
-from app.core.database import AsyncSessionLocal
+from app.tier_1.rag.rag_service import rag_service
+from app.tier_1.document_processing.document_service import document_service
+from app.tier_1.data_extraction.scraper_service import scraper_service
+from app.tier_1.infrastructure.database import AsyncSessionLocal
 from app.agents.rag_agent import rag_agent, document_ingestion_flow, web_scraping_flow
 
 logger = logging.getLogger(__name__)
@@ -311,8 +311,8 @@ class Mutation:
         """Extract building metrics from construction project ZIP file via GraphQL"""
         try:
             from app.agents.construction_metrics import ConstructionMetricsAgent
-            from app.services.llm_service import LLMService
-            from app.services.hybrid_extraction_service import HybridExtractionService
+            from app.tier_1.llm.llm_service import LLMService
+            from app.tier_1.document_processing.hybrid_extraction_service import HybridExtractionService
 
             logger.info(f"GraphQL: Starting construction metrics extraction for: {input.zip_file_path}")
 

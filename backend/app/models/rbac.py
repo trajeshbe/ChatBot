@@ -19,7 +19,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
 
-from app.core.database import Base
+from app.tier_1.infrastructure.database import Base
 
 
 class Role(Base):

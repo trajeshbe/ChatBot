@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from app.services.embedding_service import embedding_service
+from app.tier_1.embeddings.embedding_service import embedding_service
 
 
 @pytest.mark.asyncio

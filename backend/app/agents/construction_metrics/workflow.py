@@ -145,21 +145,21 @@ class ConstructionMetricsAgent:
 
         # Initialize services if not provided
         if self.llm_service is None:
-            from app.services.llm_service import LLMService
+            from app.tier_1.llm.llm_service import LLMService
             self.llm_service = LLMService()
             logger.info("Initialized LLM service")
 
         if self.vision_service is None:
             # Try to use hybrid extraction service which has vision capabilities
             try:
-                from app.services.hybrid_extraction_service import HybridExtractionService
+                from app.tier_1.document_processing.hybrid_extraction_service import HybridExtractionService
                 self.vision_service = HybridExtractionService()
                 logger.info("Initialized Vision service (HybridExtractionService)")
             except ImportError:
                 logger.warning("HybridExtractionService not available")
 
         if self.document_service is None:
-            from app.services.document_service import document_service
+            from app.tier_1.document_processing.document_service import document_service
             self.document_service = document_service
             logger.info("Initialized Document service")
 
@@ -337,7 +337,7 @@ class ConstructionMetricsAgent:
         logger.info("Detecting scale bars in architectural drawings")
 
         try:
-            from app.services.opencv_measurement_service import OpenCVMeasurementService
+            from app.tier_1.cv_processing.opencv_measurement_service import OpenCVMeasurementService
 
             opencv_service = OpenCVMeasurementService()
             scale_bars = {}
@@ -381,7 +381,7 @@ class ConstructionMetricsAgent:
         logger.info("Measuring floor plan areas with OpenCV")
 
         try:
-            from app.services.opencv_measurement_service import OpenCVMeasurementService
+            from app.tier_1.cv_processing.opencv_measurement_service import OpenCVMeasurementService
 
             opencv_service = OpenCVMeasurementService()
             measurements = []

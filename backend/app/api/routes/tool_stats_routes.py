@@ -9,8 +9,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List, Dict
 from datetime import datetime, timedelta
-from app.core.database import get_db
-from app.services.tool_usage_tracker import tool_tracker, ToolCategory
+from app.tier_1.infrastructure.database import get_db
+from app.tier_1.platform_services.tool_usage_tracker import tool_tracker, ToolCategory
 import logging
 
 logger = logging.getLogger(__name__)

@@ -12,12 +12,12 @@ import logging
 import io
 from datetime import datetime
 
-from app.core.database import get_db
+from app.tier_1.infrastructure.database import get_db
 from app.models.prompt_library import OutputTemplate
 from app.models.database_enhanced import User
 from app.schemas.prompt_schemas import ExportRequest, ExportResponse
 from app.api.routes.auth import get_current_user, get_current_user_optional
-from app.services.export_service import export_service
+from app.tier_1.export.export_service import export_service
 
 logger = logging.getLogger(__name__)
 

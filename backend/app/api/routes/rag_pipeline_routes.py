@@ -14,8 +14,8 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 import logging
 
-from app.core.database import get_db
-from app.rag_pipeline import rag_answer, get_metrics_collector
+from app.tier_1.infrastructure.database import get_db
+from app.tier_1.rag.pipeline import rag_answer, get_metrics_collector
 
 logger = logging.getLogger(__name__)
 
@@ -230,7 +230,7 @@ async def pipeline_health_check():
         ```
     """
     try:
-        from app.rag_pipeline import get_rag_settings
+        from app.tier_1.rag.pipeline import get_rag_settings
 
         settings = get_rag_settings()
 

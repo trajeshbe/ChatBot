@@ -9,10 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List
 
-from app.core.database import get_db
-from app.core.security import get_current_user_from_request
-from app.services.scraper_service import scraper_service
-from app.services.scraper_strategies import ScraperConfig, ScraperStrategy
+from app.tier_1.infrastructure.database import get_db
+from app.tier_1.infrastructure.security import get_current_user_from_request
+from app.tier_1.data_extraction.scraper_service import scraper_service
+from app.tier_1.data_extraction.scraper_strategies import ScraperConfig, ScraperStrategy
 from app.schemas.scraper_schemas import (
     ScrapeRequest,
     ScrapeResponse,
@@ -22,7 +22,7 @@ from app.schemas.scraper_schemas import (
     ScraperConfigRequest,
     WebScrapeJobStatus
 )
-from app.core.config import settings
+from app.tier_1.infrastructure.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -141,7 +141,7 @@ async def scrape_url(
         # ============================================================
         # SCRAPING COMPLIANCE CHECK - Check configured policies
         # ============================================================
-        from app.services.scraping_config_service import scraping_config_service
+        from app.tier_1.data_extraction.scraping_config_service import scraping_config_service
 
         compliance_check = await scraping_config_service.check_scraping_allowed(db, str(scrape_request.url))
 
@@ -311,7 +311,7 @@ async def scrape_multiple_urls(
         # ============================================================
         # SCRAPING COMPLIANCE CHECK - Check each URL for compliance
         # ============================================================
-        from app.services.scraping_config_service import scraping_config_service
+        from app.tier_1.data_extraction.scraping_config_service import scraping_config_service
 
         # Check compliance for all URLs before processing
         blocked_urls = []

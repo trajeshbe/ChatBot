@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 import uuid
 from datetime import datetime
 
-from app.core.database import get_db
+from app.tier_1.infrastructure.database import get_db
 from app.api.routes.auth import get_current_user_dependency, get_current_user_optional
 
 # Import models from correct modules

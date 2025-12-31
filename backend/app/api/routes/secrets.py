@@ -11,8 +11,8 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 from uuid import UUID
 
-from app.core.database import get_db
-from app.services.secrets_service import get_secrets_service, SecretsService
+from app.tier_1.infrastructure.database import get_db
+from app.tier_1.platform_services.secrets_service import get_secrets_service, SecretsService
 from app.models.database_enhanced import User, UserRole
 import logging
 

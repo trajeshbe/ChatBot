@@ -22,7 +22,7 @@ async def list_models():
     try:
         # Try to import enhanced service
         try:
-            from app.services.llm_service import llm_service
+            from app.tier_1.llm.llm_service import llm_service
             models_info = llm_service.get_available_models()
             return JSONResponse(content=models_info)
         except ImportError:

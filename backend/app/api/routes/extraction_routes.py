@@ -13,7 +13,7 @@ import logging
 import pandas as pd
 import io
 
-from app.services.webscraper.workflows import ExtractionWorkflow, extract_data_from_urls
+from app.tier_1.data_extraction.webscraper.workflows import ExtractionWorkflow, extract_data_from_urls
 
 logger = logging.getLogger(__name__)
 

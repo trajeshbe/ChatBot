@@ -7,8 +7,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.core.database import get_db
-from app.services.auth_service import AuthService
+from app.tier_1.infrastructure.database import get_db
+from app.tier_1.platform_services.auth_service import AuthService
 from app.models.database_enhanced import User, UserTeam
 from app.schemas.auth_schemas import (
     LoginRequest,

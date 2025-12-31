@@ -589,8 +589,8 @@ class ToolRegistry:
             Dict with 'allowed' boolean and optional 'reason' for denial
         """
         try:
-            from app.services.scraping_config_service import scraping_config_service
-            from app.core.database import AsyncSessionLocal
+            from app.tier_1.data_extraction.scraping_config_service import scraping_config_service
+            from app.tier_1.infrastructure.database import AsyncSessionLocal
 
             async with AsyncSessionLocal() as db:
                 compliance_result = await scraping_config_service.check_scraping_allowed(db, url)
@@ -621,8 +621,8 @@ class ToolRegistry:
             session_id: Optional session ID
         """
         try:
-            from app.services.scraping_config_service import scraping_config_service
-            from app.core.database import AsyncSessionLocal
+            from app.tier_1.data_extraction.scraping_config_service import scraping_config_service
+            from app.tier_1.infrastructure.database import AsyncSessionLocal
 
             async with AsyncSessionLocal() as db:
                 await scraping_config_service.log_scraping_attempt(
@@ -670,8 +670,8 @@ class ToolRegistry:
         🆕 FIXED: Accepts and ignores routing metadata (complexity, available_memory_mb)
                  to prevent parameter mismatch errors
         """
-        from app.services.rag_service import rag_service
-        from app.core.database import AsyncSessionLocal
+        from app.tier_1.rag.rag_service import rag_service
+        from app.tier_1.infrastructure.database import AsyncSessionLocal
 
         # 🎚️ Extract unified_config from kwargs to pass to RAG service
         unified_config = kwargs.get('unified_config')
@@ -872,8 +872,8 @@ class ToolRegistry:
         logger.info(f"✅ Compliance check passed for {url}")
 
         # Proceed with scraping if allowed
-        from app.services.scraper_service import scraper_service
-        from app.core.database import AsyncSessionLocal
+        from app.tier_1.data_extraction.scraper_service import scraper_service
+        from app.tier_1.infrastructure.database import AsyncSessionLocal
 
         async with AsyncSessionLocal() as db:
             result = await scraper_service.scrape_url(
@@ -1145,9 +1145,9 @@ class ToolRegistry:
         """
         import time
         import re
-        from app.services.tool_usage_tracker import tool_tracker, ToolCategory
-        from app.core.database import AsyncSessionLocal
-        from app.core.config import settings
+        from app.tier_1.platform_services.tool_usage_tracker import tool_tracker, ToolCategory
+        from app.tier_1.infrastructure.database import AsyncSessionLocal
+        from app.tier_1.infrastructure.config import settings
 
         # Extract parameters
         query = kwargs.get('query', '')
@@ -1295,7 +1295,7 @@ class ToolRegistry:
             **kwargs: Accept extra parameters from TaskRouter
         """
         try:
-            from app.services.vision_service import get_vision_service
+            from app.tier_1.document_processing.vision_service import get_vision_service
             import os
 
             # Extract project_id from kwargs if not explicitly provided
@@ -1315,7 +1315,7 @@ class ToolRegistry:
                 try:
                     from app.models.database import SessionDocument, Document
                     from sqlalchemy import select
-                    from app.core.config import settings
+                    from app.tier_1.infrastructure.config import settings
                     from uuid import UUID
 
                     # Build query based on available scope (project-based is preferred)
@@ -1650,7 +1650,7 @@ class ToolRegistry:
         """
         try:
             from minio import Minio
-            from app.core.config import settings
+            from app.tier_1.infrastructure.config import settings
             import tempfile
             import os
 
@@ -1824,8 +1824,8 @@ class ToolRegistry:
         """
         try:
             from app.agents.construction_metrics import ConstructionMetricsAgent
-            from app.services.llm_service import LLMService
-            from app.services.hybrid_extraction_service import HybridExtractionService
+            from app.tier_1.llm.llm_service import LLMService
+            from app.tier_1.document_processing.hybrid_extraction_service import HybridExtractionService
 
             logger.info(f"Starting construction metrics extraction for: {zip_file_path}")
 

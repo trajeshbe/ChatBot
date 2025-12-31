@@ -14,7 +14,7 @@ from uuid import UUID, uuid4
 from datetime import datetime
 from sqlalchemy.orm import Session
 
-from app.services.finetuning.finetuning_service import FineTuningService
+from app.tier_1.finetuning.finetuning_service import FineTuningService
 from app.models.finetuning_models import (
     FineTuningJob,
     FineTuningDataset,

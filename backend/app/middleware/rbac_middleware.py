@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.core.database import get_db
-from app.services.rbac_service import RBACService
+from app.tier_1.infrastructure.database import get_db
+from app.tier_1.platform_services.rbac_service import RBACService
 from app.models.database_enhanced import User
 
 
@@ -43,7 +43,7 @@ async def get_current_user(
 
     # Verify JWT token from Authorization header
     if credentials:
-        from app.core.security import verify_token
+        from app.tier_1.infrastructure.security import verify_token
 
         # Extract token from credentials
         token = credentials.credentials

@@ -16,7 +16,7 @@ from typing import Dict, Any, Optional, Tuple
 from enum import Enum
 import logging
 
-from app.services.task_complexity_analyzer import (
+from app.tier_1.nlp_processing.task_complexity_analyzer import (
     task_complexity_analyzer,
     TaskComplexity,
     TaskType
@@ -127,7 +127,7 @@ class HybridAgentRouter:
             logger.info("👤 User selected: Claude CLI Only")
 
             # Check budget for Claude CLI
-            from app.services.api_usage_tracker import api_usage_tracker
+            from app.tier_1.platform_services.api_usage_tracker import api_usage_tracker
             daily_budget_remaining = await api_usage_tracker.get_daily_budget_remaining()
             task_estimated_cost = self._estimate_cost(complexity, task_type, AgentOption.CLAUDE_CLI)
 
@@ -165,7 +165,7 @@ class HybridAgentRouter:
             })
 
         # Step 3: Check API budget (for Claude CLI)
-        from app.services.api_usage_tracker import api_usage_tracker
+        from app.tier_1.platform_services.api_usage_tracker import api_usage_tracker
 
         daily_budget_remaining = await api_usage_tracker.get_daily_budget_remaining()
         task_estimated_cost = self._estimate_cost(complexity, task_type, AgentOption.CLAUDE_CLI)

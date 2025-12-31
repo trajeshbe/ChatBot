@@ -10,8 +10,8 @@ from typing import Optional
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
-from app.services.llm_service import llm_service
+from app.tier_1.infrastructure.database import get_db
+from app.tier_1.llm.llm_service import llm_service
 import logging
 
 logger = logging.getLogger(__name__)

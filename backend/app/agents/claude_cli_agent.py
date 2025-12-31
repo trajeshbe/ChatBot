@@ -24,7 +24,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 import httpx
 
-from app.services.api_usage_tracker import api_usage_tracker
+from app.tier_1.platform_services.api_usage_tracker import api_usage_tracker
 
 logger = logging.getLogger(__name__)
 

@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Any, Dict, Union
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.core.database import get_db
-from app.services.template_extraction_service import (
+from app.tier_1.infrastructure.database import get_db
+from app.tier_1.data_extraction.template_extraction_service import (
     template_extraction_service,
     ExtractionField,
     ExtractionTemplate,
@@ -113,9 +113,9 @@ async def extract_with_custom_template(
             logger.info(f"Using smart mapping for template: {request.name}")
 
             # Import required services
-            from app.services.scraper_service import scraper_service
-            from app.services.llm_service import llm_service  # Use singleton
-            from app.services.webscraper.extractors.llm_extractor import LLMExtractor
+            from app.tier_1.data_extraction.scraper_service import scraper_service
+            from app.tier_1.llm.llm_service import llm_service  # Use singleton
+            from app.tier_1.data_extraction.webscraper.extractors.llm_extractor import LLMExtractor
 
             # Step 1: Scrape the webpage
             scrape_result = await scraper_service.scrape_url(
@@ -444,10 +444,10 @@ async def extract_with_auto_template(
             field_names = [field.get("name") for field in fields_data if field.get("name")]
             user_instructions = f"Extract the following fields: {', '.join(field_names)}"
 
-            from app.services.webscraper.extractors.ultra_smart_extractor import UltraSmartExtractor
-            from app.services.llm_service import llm_service
-            from app.services.scraper_service import scraper_service
-            from app.services.document_service import document_service
+            from app.tier_1.data_extraction.webscraper.extractors.ultra_smart_extractor import UltraSmartExtractor
+            from app.tier_1.llm.llm_service import llm_service
+            from app.tier_1.data_extraction.scraper_service import scraper_service
+            from app.tier_1.document_processing.document_service import document_service
 
             ultra_extractor = UltraSmartExtractor(
                 llm_service=llm_service,
@@ -569,10 +569,10 @@ async def extract_with_preset_template(
                 user_instructions = f"Extract the following fields: {', '.join(field_names)}"
 
                 # Use Ultra-Smart Extractor (same as ultra-smart endpoint)
-                from app.services.webscraper.extractors.ultra_smart_extractor import UltraSmartExtractor
-                from app.services.llm_service import llm_service
-                from app.services.scraper_service import scraper_service
-                from app.services.document_service import document_service
+                from app.tier_1.data_extraction.webscraper.extractors.ultra_smart_extractor import UltraSmartExtractor
+                from app.tier_1.llm.llm_service import llm_service
+                from app.tier_1.data_extraction.scraper_service import scraper_service
+                from app.tier_1.document_processing.document_service import document_service
 
                 # Initialize extractor
                 ultra_extractor = UltraSmartExtractor(
@@ -614,7 +614,7 @@ async def extract_with_preset_template(
                 )
 
             # Convert database template to ExtractionTemplate format
-            from app.services.template_extraction_service import ExtractionTemplate, FieldDefinition
+            from app.tier_1.data_extraction.template_extraction_service import ExtractionTemplate, FieldDefinition
 
             template_fields = []
             for field_data in fields_data:
@@ -917,9 +917,9 @@ async def auto_generate_template(
     """
     try:
         # Import auto-generator service
-        from app.services.webscraper.templates.template_auto_generator import TemplateAutoGenerator
-        from app.services.llm_service import llm_service
-        from app.services.scraper_service import scraper_service
+        from app.tier_1.data_extraction.webscraper.templates.template_auto_generator import TemplateAutoGenerator
+        from app.tier_1.llm.llm_service import llm_service
+        from app.tier_1.data_extraction.scraper_service import scraper_service
 
         # Initialize auto-generator
         auto_gen = TemplateAutoGenerator(
@@ -1071,9 +1071,9 @@ async def smart_extract_without_template(
     """
     try:
         # Import Ultra-Smart Extractor and required services
-        from app.services.webscraper.extractors.ultra_smart_extractor import UltraSmartExtractor
-        from app.services.llm_service import llm_service  # Use singleton
-        from app.services.scraper_service import scraper_service
+        from app.tier_1.data_extraction.webscraper.extractors.ultra_smart_extractor import UltraSmartExtractor
+        from app.tier_1.llm.llm_service import llm_service  # Use singleton
+        from app.tier_1.data_extraction.scraper_service import scraper_service
 
         logger.info(f"🚀 Ultra-Smart extraction from: {request.url}")
         logger.info(f"📝 Instructions: {request.user_instructions}")
@@ -1218,9 +1218,9 @@ async def smart_map_to_custom_template(
     """
     try:
         # Import required services
-        from app.services.scraper_service import scraper_service
-        from app.services.llm_service import llm_service
-        from app.services.webscraper.extractors.llm_extractor import LLMExtractor
+        from app.tier_1.data_extraction.scraper_service import scraper_service
+        from app.tier_1.llm.llm_service import llm_service
+        from app.tier_1.data_extraction.webscraper.extractors.llm_extractor import LLMExtractor
 
         logger.info(f"Smart template mapping from: {request.url}")
         logger.info(f"Template columns: {request.template_columns}")
@@ -1567,7 +1567,7 @@ async def list_all_templates(
         from sqlalchemy import text
 
         # Get built-in presets
-        from app.services.template_extraction_service import get_screener_in_template, get_drenting_template
+        from app.tier_1.data_extraction.template_extraction_service import get_screener_in_template, get_drenting_template
 
         builtin_presets = [
             {
@@ -1744,8 +1744,8 @@ async def save_extracted_data_to_db(
     """
     try:
         from app.models.database import Document, DocumentChunk
-        from app.services.embedding_service import embedding_service
-        from app.services.document_service import document_service
+        from app.tier_1.embeddings.embedding_service import embedding_service
+        from app.tier_1.document_processing.document_service import document_service
         from sqlalchemy import text
         from datetime import datetime
         import uuid as uuid_lib
@@ -1759,7 +1759,7 @@ async def save_extracted_data_to_db(
         await document_service.initialize()
 
         # Get current user for organizational context
-        from app.core.security import get_current_user_from_request
+        from app.tier_1.infrastructure.security import get_current_user_from_request
         current_user = await get_current_user_from_request(http_request, db)
         user_id = str(current_user.id) if current_user else None
         username = current_user.username if current_user else "anonymous"
@@ -1831,7 +1831,7 @@ async def save_extracted_data_to_db(
         safe_company_name = re.sub(r'[^\w\-]', '_', request.company_name)
 
         # Construct hierarchical MinIO path with company subfolder
-        from app.services.document_service import construct_minio_path
+        from app.tier_1.document_processing.document_service import construct_minio_path
         base_path = construct_minio_path(
             department=department,
             team=team,
@@ -1859,7 +1859,7 @@ async def save_extracted_data_to_db(
 
         # Upload JSON to MinIO
         logger.info(f"📦 Uploading extraction data to MinIO: {minio_path}")
-        from app.core.config import settings
+        from app.tier_1.infrastructure.config import settings
         document_service.minio_client.put_object(
             bucket_name=settings.MINIO_BUCKET_NAME,
             object_name=minio_path,
@@ -2123,8 +2123,8 @@ async def ultra_smart_extract(
     """
     try:
         import time
-        from app.services.tool_usage_tracker import tool_tracker, ToolCategory
-        from app.core.config import settings
+        from app.tier_1.platform_services.tool_usage_tracker import tool_tracker, ToolCategory
+        from app.tier_1.infrastructure.config import settings
 
         logger.info("="*80)
         logger.info("🚀 ULTRA-SMART EXTRACTION REQUEST")
@@ -2138,10 +2138,10 @@ async def ultra_smart_extract(
         start_time = time.time()
 
         # Import Ultra-Smart Extractor
-        from app.services.webscraper.extractors.ultra_smart_extractor import UltraSmartExtractor
-        from app.services.llm_service import llm_service
-        from app.services.scraper_service import scraper_service
-        from app.services.document_service import document_service
+        from app.tier_1.data_extraction.webscraper.extractors.ultra_smart_extractor import UltraSmartExtractor
+        from app.tier_1.llm.llm_service import llm_service
+        from app.tier_1.data_extraction.scraper_service import scraper_service
+        from app.tier_1.document_processing.document_service import document_service
 
         # Auto-select best available model if not specified
         # Only auto-select if BOTH are missing (use AND not OR)
@@ -2199,7 +2199,7 @@ async def ultra_smart_extract(
         # SCRAPING COMPLIANCE CHECK - Check configured policies
         # ============================================================
         if request.source_type == "url" and db:
-            from app.services.scraping_config_service import scraping_config_service
+            from app.tier_1.data_extraction.scraping_config_service import scraping_config_service
 
             compliance_check = await scraping_config_service.check_scraping_allowed(db, request.url)
 
@@ -2444,9 +2444,9 @@ async def ultra_smart_navigation_extract(
         logger.info("="*80)
 
         # Import Ultra-Smart Extractor and services
-        from app.services.webscraper.extractors.ultra_smart_extractor import UltraSmartExtractor
-        from app.services.llm_service import llm_service
-        from app.services.scraper_service import scraper_service
+        from app.tier_1.data_extraction.webscraper.extractors.ultra_smart_extractor import UltraSmartExtractor
+        from app.tier_1.llm.llm_service import llm_service
+        from app.tier_1.data_extraction.scraper_service import scraper_service
 
         # Initialize ultra-smart extractor
         ultra_extractor = UltraSmartExtractor(
@@ -2593,8 +2593,8 @@ async def generate_css_selectors(
         logger.info("="*80)
 
         # Import CSS Selector Generator
-        from app.services.webscraper.css_selector_generator import CSSSelectorGenerator
-        from app.services.llm_service import llm_service
+        from app.tier_1.data_extraction.webscraper.css_selector_generator import CSSSelectorGenerator
+        from app.tier_1.llm.llm_service import llm_service
 
         # Initialize generator
         selector_generator = CSSSelectorGenerator(llm_service=llm_service)

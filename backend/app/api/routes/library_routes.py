@@ -10,10 +10,10 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
 
-from app.core.database import get_db
+from app.tier_1.infrastructure.database import get_db
 from app.api.routes.auth import get_current_user
 from app.models.database import Document
-from app.services.document_service import document_service
+from app.tier_1.document_processing.document_service import document_service
 
 # Import models from correct modules
 try:

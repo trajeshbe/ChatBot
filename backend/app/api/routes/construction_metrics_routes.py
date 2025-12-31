@@ -20,9 +20,9 @@ from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.tier_1.infrastructure.database import get_db
 from app.agents.construction_metrics import ConstructionMetricsAgent
-from app.services.llm_service import LLMService
+from app.tier_1.llm.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ async def extract_construction_metrics(
             project_name = Path(zip_file.filename).stem
 
         # Initialize agent
-        from app.services.hybrid_extraction_service import HybridExtractionService
+        from app.tier_1.document_processing.hybrid_extraction_service import HybridExtractionService
 
         llm_service = LLMService()
         vision_service = HybridExtractionService()

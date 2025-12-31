@@ -9,8 +9,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
-from app.services.rbac_service import RBACService
+from app.tier_1.infrastructure.database import get_db
+from app.tier_1.platform_services.rbac_service import RBACService
 from app.schemas.rbac_schemas import (
     # Role schemas
     RoleCreate,

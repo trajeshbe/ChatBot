@@ -19,24 +19,24 @@ import uvicorn
 import uuid
 import time
 
-from app.core.config import settings
-from app.core.database import init_db, close_db, get_db
+from app.tier_1.infrastructure.config import settings
+from app.tier_1.infrastructure.database import init_db, close_db, get_db
 from app.api.graphql.schema import schema
-from app.services.embedding_service import embedding_service
+from app.tier_1.embeddings.embedding_service import embedding_service
 
 # Import consolidated RAG service with memory hierarchy
-from app.services.rag_service import rag_service
+from app.tier_1.rag.rag_service import rag_service
 logger_temp = logging.getLogger(__name__)
 logger_temp.info("✓ Using RAG Service with memory hierarchy")
 ENHANCED_RAG_AVAILABLE = True  # Always true now (consolidated)
 
 # Import consolidated LLM service with multi-model support
-from app.services.llm_service import llm_service
+from app.tier_1.llm.llm_service import llm_service
 logger_temp.info("✓ Using LLM Service with multi-model support and Claude integration")
 
-from app.services.document_service import document_service
-from app.services.scraper_service import scraper_service
-from app.services.audit_service import audit_service
+from app.tier_1.document_processing.document_service import document_service
+from app.tier_1.data_extraction.scraper_service import scraper_service
+from app.tier_1.platform_services.audit_service import audit_service
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Configure logging

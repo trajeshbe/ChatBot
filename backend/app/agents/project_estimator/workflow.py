@@ -26,8 +26,8 @@ from datetime import datetime
 from langgraph.graph import StateGraph, END
 from sqlalchemy.orm import Session
 
-from app.services.llm_service import LLMService
-from app.services.document_service import DocumentService
+from app.tier_1.llm.llm_service import LLMService
+from app.tier_1.document_processing.document_service import DocumentService
 
 logger = logging.getLogger(__name__)
 
@@ -573,7 +573,7 @@ Return ONLY a valid JSON object with these keys: project_goal, key_features (arr
         logger.info("Agent 1.1: Sample Complexity Analyzer (with EDA) - Analyzing uploaded samples")
 
         try:
-            from app.services.eda_analyzer import EDAAnalyzer
+            from app.tier_1.export.eda_analyzer import EDAAnalyzer
             import yaml
             from pathlib import Path
 
@@ -1735,8 +1735,8 @@ Return ONLY a valid JSON object:
 
         try:
             # Import generation services
-            from app.services.project_estimator.brd_generation_service import BRDGenerationService
-            from app.services.project_estimator.excel_generation_service import ExcelGenerationService
+            from app.tier_1.export.project_estimator.brd_generation_service import BRDGenerationService
+            from app.tier_1.export.project_estimator.excel_generation_service import ExcelGenerationService
 
             timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
 

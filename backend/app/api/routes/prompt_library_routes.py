@@ -10,7 +10,7 @@ from typing import List, Optional
 from uuid import UUID
 import logging
 
-from app.core.database import get_db
+from app.tier_1.infrastructure.database import get_db
 from app.models.prompt_library import PromptLibrary, PromptRating, OutputTemplate, PromptUsageLog
 from app.models.database_enhanced import User, Project
 from app.models.rbac import Department

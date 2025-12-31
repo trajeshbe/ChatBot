@@ -20,41 +20,41 @@ class TestServiceImports:
 
     def test_import_rag_service(self):
         """Test RAG service import"""
-        from app.services.rag_service import rag_service, RAGService
+        from app.tier_1.rag.rag_service import rag_service, RAGService
         assert rag_service is not None
         assert isinstance(rag_service, RAGService)
 
     def test_import_llm_service(self):
         """Test LLM service import"""
-        from app.services.llm_service import llm_service, LLMService
+        from app.tier_1.llm.llm_service import llm_service, LLMService
         assert llm_service is not None
         assert isinstance(llm_service, LLMService)
 
     def test_import_document_service(self):
         """Test document service import"""
-        from app.services.document_service import document_service, DocumentService
+        from app.tier_1.document_processing.document_service import document_service, DocumentService
         assert document_service is not None
         assert isinstance(document_service, DocumentService)
 
     def test_import_scraper_service(self):
         """Test scraper service import"""
-        from app.services.scraper_service import scraper_service, ScraperService
+        from app.tier_1.data_extraction.scraper_service import scraper_service, ScraperService
         assert scraper_service is not None
         assert isinstance(scraper_service, ScraperService)
 
     def test_no_enhanced_imports(self):
         """Verify enhanced service imports fail (they should no longer exist)"""
         with pytest.raises(ImportError):
-            from app.services.rag_service_enhanced import enhanced_rag_service
+            from app.tier_1.rag.rag_service_enhanced import enhanced_rag_service
 
         with pytest.raises(ImportError):
-            from app.services.llm_service_enhanced import llm_service
+            from app.tier_1.llm.llm_service_enhanced import llm_service
 
         with pytest.raises(ImportError):
-            from app.services.document_service_enhanced import enhanced_document_service
+            from app.tier_1.document_processing.document_service_enhanced import enhanced_document_service
 
         with pytest.raises(ImportError):
-            from app.services.scraper_service_enhanced import enhanced_scraper_service
+            from app.tier_1.data_extraction.scraper_service_enhanced import enhanced_scraper_service
 
 
 class TestRAGServiceConsolidation:
@@ -62,12 +62,12 @@ class TestRAGServiceConsolidation:
 
     def test_has_basic_query_method(self):
         """Test basic query method exists"""
-        from app.services.rag_service import rag_service
+        from app.tier_1.rag.rag_service import rag_service
         assert hasattr(rag_service, 'query')
 
     def test_has_enhanced_session_methods(self):
         """Test enhanced session management methods exist"""
-        from app.services.rag_service import rag_service
+        from app.tier_1.rag.rag_service import rag_service
         assert hasattr(rag_service, '_ensure_session_exists')
         assert hasattr(rag_service, '_save_conversation_message')
         assert hasattr(rag_service, '_get_conversation_context')
@@ -75,19 +75,19 @@ class TestRAGServiceConsolidation:
 
     def test_has_memory_hierarchy_methods(self):
         """Test memory hierarchy methods exist"""
-        from app.services.rag_service import rag_service
+        from app.tier_1.rag.rag_service import rag_service
         assert hasattr(rag_service, '_search_session_documents')
         assert hasattr(rag_service, '_combine_memory_results')
 
     def test_has_cache_methods(self):
         """Test caching methods exist"""
-        from app.services.rag_service import rag_service
+        from app.tier_1.rag.rag_service import rag_service
         assert hasattr(rag_service, '_check_semantic_cache')
         assert hasattr(rag_service, '_cache_result')
 
     def test_query_signature_accepts_project_id(self):
         """Test query method accepts project_id parameter"""
-        from app.services.rag_service import rag_service
+        from app.tier_1.rag.rag_service import rag_service
         import inspect
         sig = inspect.signature(rag_service.query)
         assert 'project_id' in sig.parameters
@@ -98,13 +98,13 @@ class TestLLMServiceConsolidation:
 
     def test_has_basic_generate_method(self):
         """Test basic generate method exists"""
-        from app.services.llm_service import llm_service
+        from app.tier_1.llm.llm_service import llm_service
         assert hasattr(llm_service, 'generate')
         assert hasattr(llm_service, 'generate_with_context')
 
     def test_has_all_provider_methods(self):
         """Test all LLM provider methods exist"""
-        from app.services.llm_service import llm_service
+        from app.tier_1.llm.llm_service import llm_service
         assert hasattr(llm_service, '_call_openai')
         assert hasattr(llm_service, '_call_ollama')
         assert hasattr(llm_service, '_call_vllm')
@@ -113,14 +113,14 @@ class TestLLMServiceConsolidation:
 
     def test_has_model_registry_methods(self):
         """Test model registry methods exist (enhanced feature)"""
-        from app.services.llm_service import llm_service
+        from app.tier_1.llm.llm_service import llm_service
         assert hasattr(llm_service, 'get_available_models')
         assert hasattr(llm_service, 'set_default_model')
         assert hasattr(llm_service, '_check_ollama_model_availability')
 
     def test_has_api_key_management(self):
         """Test API key management exists"""
-        from app.services.llm_service import llm_service
+        from app.tier_1.llm.llm_service import llm_service
         assert hasattr(llm_service, '_get_api_key_with_fallback')
 
 
@@ -129,14 +129,14 @@ class TestDocumentServiceConsolidation:
 
     def test_has_basic_methods(self):
         """Test basic document methods exist"""
-        from app.services.document_service import document_service
+        from app.tier_1.document_processing.document_service import document_service
         assert hasattr(document_service, 'upload_file')
         assert hasattr(document_service, 'process_document')
         assert hasattr(document_service, 'search_similar_chunks')
 
     def test_has_enhanced_methods(self):
         """Test enhanced methods exist"""
-        from app.services.document_service import document_service
+        from app.tier_1.document_processing.document_service import document_service
         assert hasattr(document_service, 'upload_file_with_project')  # Enhanced
         assert hasattr(document_service, 'get_file_download_url')     # Enhanced
         assert hasattr(document_service, 'delete_file')                # Enhanced
@@ -144,7 +144,7 @@ class TestDocumentServiceConsolidation:
 
     def test_has_search_methods(self):
         """Test search methods exist"""
-        from app.services.document_service import document_service
+        from app.tier_1.document_processing.document_service import document_service
         assert hasattr(document_service, '_execute_search')
         assert hasattr(document_service, '_keyword_only_search')
 
@@ -154,13 +154,13 @@ class TestScraperServiceConsolidation:
 
     def test_has_basic_scrape_methods(self):
         """Test basic scraping methods exist"""
-        from app.services.scraper_service import scraper_service
+        from app.tier_1.data_extraction.scraper_service import scraper_service
         assert hasattr(scraper_service, 'scrape_url')
         assert hasattr(scraper_service, 'scrape_multiple_urls')
 
     def test_has_enhanced_methods(self):
         """Test enhanced methods exist"""
-        from app.services.scraper_service import scraper_service
+        from app.tier_1.data_extraction.scraper_service import scraper_service
         assert hasattr(scraper_service, 'get_scraper_capabilities')  # Enhanced
         assert hasattr(scraper_service, '_create_default_config')    # Enhanced
         assert hasattr(scraper_service, '_apply_smart_filtering')    # Enhanced
@@ -171,7 +171,7 @@ class TestProjectFilteringIntegration:
 
     def test_rag_query_with_project_id(self):
         """Test RAG query accepts and uses project_id"""
-        from app.services.rag_service import rag_service
+        from app.tier_1.rag.rag_service import rag_service
         import inspect
 
         # Test that project_id parameter is accepted
@@ -181,7 +181,7 @@ class TestProjectFilteringIntegration:
 
     def test_session_creation_with_project_id(self):
         """Test session creation includes project_id"""
-        from app.services.rag_service import rag_service
+        from app.tier_1.rag.rag_service import rag_service
         import inspect
 
         # Test that _ensure_session_exists accepts project_id
@@ -191,7 +191,7 @@ class TestProjectFilteringIntegration:
 
     def test_document_search_with_project_filter(self):
         """Test document search can filter by project"""
-        from app.services.document_service import document_service
+        from app.tier_1.document_processing.document_service import document_service
         import inspect
 
         # Test that search_similar_chunks accepts project_id
@@ -205,26 +205,26 @@ class TestSingletonPatterns:
 
     def test_rag_service_singleton(self):
         """Test RAG service is singleton"""
-        from app.services.rag_service import rag_service
-        from app.services.rag_service import rag_service as rag_service2
+        from app.tier_1.rag.rag_service import rag_service
+        from app.tier_1.rag.rag_service import rag_service as rag_service2
         assert rag_service is rag_service2
 
     def test_llm_service_singleton(self):
         """Test LLM service is singleton"""
-        from app.services.llm_service import llm_service
-        from app.services.llm_service import llm_service as llm_service2
+        from app.tier_1.llm.llm_service import llm_service
+        from app.tier_1.llm.llm_service import llm_service as llm_service2
         assert llm_service is llm_service2
 
     def test_document_service_singleton(self):
         """Test document service is singleton"""
-        from app.services.document_service import document_service
-        from app.services.document_service import document_service as document_service2
+        from app.tier_1.document_processing.document_service import document_service
+        from app.tier_1.document_processing.document_service import document_service as document_service2
         assert document_service is document_service2
 
     def test_scraper_service_singleton(self):
         """Test scraper service is singleton"""
-        from app.services.scraper_service import scraper_service
-        from app.services.scraper_service import scraper_service as scraper_service2
+        from app.tier_1.data_extraction.scraper_service import scraper_service
+        from app.tier_1.data_extraction.scraper_service import scraper_service as scraper_service2
         assert scraper_service is scraper_service2
 
 
@@ -235,15 +235,15 @@ class TestBackwardCompatibility:
         """Test that old import patterns fail with ImportError"""
         # This is good - we want old code to fail fast with clear error
         with pytest.raises(ImportError):
-            from app.services.rag_service_enhanced import enhanced_rag_service
+            from app.tier_1.rag.rag_service_enhanced import enhanced_rag_service
 
     def test_main_imports_work(self):
         """Test that main.py imports work"""
         # These should work without try/except now
-        from app.services.rag_service import rag_service
-        from app.services.llm_service import llm_service
-        from app.services.document_service import document_service
-        from app.services.scraper_service import scraper_service
+        from app.tier_1.rag.rag_service import rag_service
+        from app.tier_1.llm.llm_service import llm_service
+        from app.tier_1.document_processing.document_service import document_service
+        from app.tier_1.data_extraction.scraper_service import scraper_service
 
         assert rag_service is not None
         assert llm_service is not None

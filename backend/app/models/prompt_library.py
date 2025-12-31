@@ -8,7 +8,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import uuid
 
-from app.core.database import Base
+from app.tier_1.infrastructure.database import Base
 
 
 class PromptLibrary(Base):

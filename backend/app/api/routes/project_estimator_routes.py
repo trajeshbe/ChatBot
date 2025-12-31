@@ -14,8 +14,8 @@ from datetime import datetime
 from fastapi import APIRouter, File, Form, UploadFile, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
-from app.services.llm_service import llm_service  # Use singleton
+from app.tier_1.infrastructure.database import get_db
+from app.tier_1.llm.llm_service import llm_service  # Use singleton
 from app.agents.project_estimator.workflow import ProjectEstimatorWorkflow
 
 logger = logging.getLogger(__name__)

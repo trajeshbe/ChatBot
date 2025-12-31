@@ -4,7 +4,7 @@ Tests for scraper strategy plugin architecture.
 
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
-from app.services.scraper_strategies import (
+from app.tier_1.data_extraction.scraper_strategies import (
     ScraperStrategy,
     ScraperConfig,
     ScraperStrategyFactory,

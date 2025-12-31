@@ -17,8 +17,8 @@ from typing import Optional
 import logging
 import uuid
 
-from app.core.database import get_db
-from app.services.multi_strategy_rag import multi_strategy_rag, AnswerStrategy
+from app.tier_1.infrastructure.database import get_db
+from app.tier_1.rag.multi_strategy_rag import multi_strategy_rag, AnswerStrategy
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)

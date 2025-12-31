@@ -12,16 +12,16 @@ from enum import Enum
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
+from app.tier_1.infrastructure.database import get_db
 from app.models.database import WebScrapeJob, Document
-from app.services.webscraper.core.scraper_engine import (
+from app.tier_1.data_extraction.webscraper.core.scraper_engine import (
     ScraperEngine,
     strict_scraper,
     balanced_scraper,
     aggressive_scraper
 )
-from app.services.webscraper.compliance import ComplianceLevel, AuthType
-from app.services.document_service import document_service
+from app.tier_1.data_extraction.webscraper.compliance import ComplianceLevel, AuthType
+from app.tier_1.document_processing.document_service import document_service
 
 logger = logging.getLogger(__name__)
 
@@ -286,7 +286,7 @@ async def scrape_url(
         # Prepare auth config if provided
         auth_config = None
         if request.auth_config:
-            from app.services.webscraper.compliance import auth_manager
+            from app.tier_1.data_extraction.webscraper.compliance import auth_manager
             auth_config = auth_manager.create_auth(
                 auth_type=request.auth_config.auth_type,
                 credentials=request.auth_config.credentials

@@ -4,8 +4,8 @@ Tests for enhanced scraper service.
 
 import pytest
 from unittest.mock import Mock, patch, AsyncMock, MagicMock
-from app.services.scraper_service import ScraperService
-from app.services.scraper_strategies import ScraperConfig, ScraperStrategy
+from app.tier_1.data_extraction.scraper_service import ScraperService
+from app.tier_1.data_extraction.scraper_strategies import ScraperConfig, ScraperStrategy
 
 
 @pytest.fixture
@@ -251,7 +251,7 @@ class TestScraperService:
 
     def test_format_document_content(self, scraper_service):
         """Test formatting scraped content as document"""
-        from app.services.scraper_strategies import ScrapedContent
+        from app.tier_1.data_extraction.scraper_strategies import ScrapedContent
 
         scraped = ScrapedContent(
             content="Main content here",

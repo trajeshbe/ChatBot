@@ -17,8 +17,8 @@ from app.agents.agent_state import EnhancedAgentState
 from app.agents.tool_registry import tool_registry
 from langchain.schema import HumanMessage
 from openai import AsyncOpenAI
-from app.core.config import settings
-from app.services.task_router import task_router
+from app.tier_1.infrastructure.config import settings
+from app.tier_1.agents.task_router import task_router
 from app.utils.resource_checker import resource_checker
 
 logger = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ class EnhancedRAGAgent(RAGAgent):
         # Priority 1: Try to get API key from database
         if db is not None:
             try:
-                from app.services.secrets_service import SecretsService
+                from app.tier_1.platform_services.secrets_service import SecretsService
                 secrets_service = SecretsService()
                 api_key = await secrets_service.get_api_key(db, provider="openai")
                 if api_key:
@@ -957,7 +957,7 @@ Respond by calling the appropriate tool function(s)."""
         Returns:
             Dictionary with selected tools and parameters
         """
-        from app.services.llm_service import llm_service
+        from app.tier_1.llm.llm_service import llm_service
 
         # Structured prompt for tool selection
         selection_prompt = f"""You are a tool selection assistant. Analyze the user's query and select the most appropriate tool(s).
@@ -1372,7 +1372,7 @@ IMPORTANT:
         model_id = state["user_preferences"].get("model_id")
 
         # Call enhanced RAG service to generate natural language answer using user's model
-        from app.services.rag_service import rag_service
+        from app.tier_1.rag.rag_service import rag_service
 
         # ✅ Initialize rag_response before try block so it's accessible in exception handler
         rag_response = {}
@@ -1586,7 +1586,7 @@ Extracted Data:
         Returns:
             Response with answer from LLM only (includes debug_context if Brain View enabled)
         """
-        from app.services.llm_service import llm_service
+        from app.tier_1.llm.llm_service import llm_service
         import time
 
         try:
@@ -1749,7 +1749,7 @@ Extracted Data:
         Returns:
             Response with answer from documents
         """
-        from app.services.rag_service import rag_service
+        from app.tier_1.rag.rag_service import rag_service
 
         try:
             tool_params = tool_params or {}
@@ -1849,7 +1849,7 @@ Extracted Data:
             elif agent_option == "claude_cli":
                 # Use Claude CLI agent (powerful, costly)
                 from app.agents.claude_cli_agent import create_claude_cli_agent
-                from app.core.config import settings
+                from app.tier_1.infrastructure.config import settings
 
                 # Get Anthropic API key
                 anthropic_api_key = user_preferences.get('anthropic_api_key')

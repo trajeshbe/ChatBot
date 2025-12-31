@@ -27,17 +27,17 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy import text
 
 from app.celery_app import celery_app
-from app.core.database import sync_engine
+from app.tier_1.infrastructure.database import sync_engine
 from app.models.finetuning_models import FineTuningJob, TrainingMetric, FineTuningDataset
 from app.models.database import User
 
 # Create sync session for Celery tasks (Celery tasks are synchronous)
 SessionLocal = sessionmaker(bind=sync_engine, autocommit=False, autoflush=False)
-from app.services.finetuning.finetuning_sandbox_manager import FineTuningSandboxManager
-from app.services.finetuning.gpu_pool_manager import GPUPoolManager
-from app.services.finetuning.trainer_factory import TrainerFactory
-from app.services.minio_path_builder import MinIOPathBuilder
-from app.core.config import settings
+from app.tier_1.finetuning.finetuning_sandbox_manager import FineTuningSandboxManager
+from app.tier_1.finetuning.gpu_pool_manager import GPUPoolManager
+from app.tier_1.finetuning.trainer_factory import TrainerFactory
+from app.tier_1.infrastructure.minio_path_builder import MinIOPathBuilder
+from app.tier_1.infrastructure.config import settings
 
 # Import Prometheus metrics from shared metrics module
 # This allows both the backend (/metrics endpoint) and celery worker to use the same metrics
@@ -345,9 +345,9 @@ def trigger_automatic_evaluation(
     """
     try:
         from app.models.finetuning_models import FineTunedModel, FineTuningDataset
-        from app.services.finetuning.model_evaluation_service import ModelEvaluationService
+        from app.tier_1.finetuning.model_evaluation_service import ModelEvaluationService
         from minio import Minio
-        from app.core.config import settings
+        from app.tier_1.infrastructure.config import settings
         import tempfile
         import uuid
 
@@ -1309,7 +1309,7 @@ def merge_lora_model_task(
         Saves merged model to /workspace/finetuning/{job_id}/output/merged_model
         OllamaDeploymentService checks this path FIRST (workspace-first optimization)
     """
-    from app.services.finetuning.model_merge_service import ModelMergeService
+    from app.tier_1.finetuning.model_merge_service import ModelMergeService
 
     logger.info(f"🔄 [CELERY] Starting merge task for model {model_id}")
     logger.info(f"   Task ID: {self.request.id}")

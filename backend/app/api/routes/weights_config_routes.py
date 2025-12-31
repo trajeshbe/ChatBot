@@ -16,7 +16,7 @@ from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
 import logging
 
-from app.services.weights_config_service import weights_config_service
+from app.tier_1.infrastructure.weights_config_service import weights_config_service
 
 logger = logging.getLogger(__name__)
 
