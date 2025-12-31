@@ -13,7 +13,7 @@ from app.tier_1.embeddings.embedding_service import embedding_service
 from app.tier_1.document_processing.content_analyzer import content_analyzer
 from app.tier_1.embeddings.intelligent_embedding_service import intelligent_embedding_service
 from app.tier_1.export.multi_analyzer_ensemble import multi_analyzer_ensemble
-from app.services.multi_channel_processor import multi_channel_processor
+from app.tier_1.nlp_processing.multi_channel_processor import multi_channel_processor
 import io
 import os
 import re

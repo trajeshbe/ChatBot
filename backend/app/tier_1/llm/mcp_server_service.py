@@ -376,7 +376,7 @@ class MCPServerService:
 
     async def execute_web_scraper(self, db: AsyncSession, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute web scraper"""
-        from app.services.scraper_service import scraper_service
+        from app.tier_1.data_extraction.scraper_service import scraper_service
 
         result = await scraper_service.scrape_url(
             url=params["url"],

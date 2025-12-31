@@ -15,11 +15,11 @@ import re  # 🆕 For URL detection
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text as sql_text, and_, func
 from app.tier_1.embeddings.embedding_service import embedding_service
-from app.services.intelligent_retrieval_service import intelligent_retrieval_service
+from app.tier_1.rag.intelligent_retrieval_service import intelligent_retrieval_service
 from app.tier_1.embeddings.intelligent_embedding_service import intelligent_embedding_service
 from app.tier_1.document_processing.document_service import document_service
 from app.tier_1.nlp_processing.query_classifier import query_classifier
-from app.services.quality_metrics import quality_metrics_service
+from app.tier_1.evaluation.quality_metrics import quality_metrics_service
 from app.services.security_guardrails import check_query_safety  # 🆕 Security filters
 from app.services.reranker_service import rerank_chunks  # 🆕 Cross-encoder reranker
 from app.services.query_reformulation_service import reformulate_query  # 🆕 Query reformulation
@@ -255,7 +255,7 @@ class RAGService:
                 logger.info(f"🌐 Triggering web scraper for URL(s): {detected_urls}")
 
                 # Import scraper service
-                from app.services.scraper_service import scraper_service
+                from app.tier_1.data_extraction.scraper_service import scraper_service
 
                 # Scrape each detected URL
                 scrape_results = []

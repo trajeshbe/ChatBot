@@ -14,7 +14,7 @@ import base64
 from typing import Dict, Any, Optional
 from pathlib import Path
 import httpx
-from app.services.gpu_resource_manager import get_gpu_manager
+from app.tier_1.infrastructure.gpu_resource_manager import get_gpu_manager
 
 logger = logging.getLogger(__name__)
 
