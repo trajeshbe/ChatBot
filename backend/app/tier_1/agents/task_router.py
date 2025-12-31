@@ -207,7 +207,7 @@ class TaskRouter:
             QueryComplexity enum
         """
         try:
-            from app.services.llm_service import llm_service
+            from app.tier_1.llm.llm_service import llm_service
 
             # Use lightweight local model for classification (fast, no cost)
             classification_prompt = f"""Classify the complexity of this user query into ONE of these categories:
@@ -311,7 +311,7 @@ Respond with ONLY ONE WORD: SIMPLE, MODERATE, COMPLEX, or ANALYTICAL"""
                 - reasoning: str - explanation
         """
         try:
-            from app.services.llm_service import llm_service
+            from app.tier_1.llm.llm_service import llm_service
 
             # Structured prompt for content analysis
             analysis_prompt = f"""Analyze this query and determine if it requires visual content analysis tools.

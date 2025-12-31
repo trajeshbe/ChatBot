@@ -261,7 +261,7 @@ class DynamicQueryClassifier:
         if self.settings.get('enable_llm_fallback', True):
             logger.info("No rule matched, falling back to LLM classification")
             # Import here to avoid circular dependency
-            from app.services.query_classifier import query_classifier as llm_classifier
+            from app.tier_1.nlp_processing.query_classifier import query_classifier as llm_classifier
             return await llm_classifier.classify(query)
 
         # Default fallback

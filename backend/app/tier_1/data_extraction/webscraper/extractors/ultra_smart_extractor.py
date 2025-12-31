@@ -167,7 +167,7 @@ class UltraSmartExtractor:
 
             if requires_navigation:
                 logger.info("🧭 Instructions require AI-powered navigation - using Navigation Agent")
-                from app.services.webscraper.agents import NavigationAgent
+                from app.tier_1.data_extraction.webscraper.agents import NavigationAgent
 
                 nav_agent = NavigationAgent(llm_service=self.llm_service)
 

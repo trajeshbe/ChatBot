@@ -352,7 +352,7 @@ class MCPServerService:
     # Tool execution handlers
     async def execute_document_rag(self, db: AsyncSession, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute document RAG query"""
-        from app.services.rag_service import rag_service
+        from app.tier_1.rag.rag_service import rag_service
 
         result = await rag_service.query_documents(
             db=db,

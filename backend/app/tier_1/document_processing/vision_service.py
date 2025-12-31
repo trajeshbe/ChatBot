@@ -193,7 +193,7 @@ class VisionService:
         Returns:
             Dict with text, model, method, success, and metadata
         """
-        from app.services.llm_service import get_llm_service
+        from app.tier_1.llm.llm_service import get_llm_service
 
         llm_service = get_llm_service()
 

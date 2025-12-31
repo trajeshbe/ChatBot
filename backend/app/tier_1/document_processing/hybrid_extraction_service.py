@@ -16,8 +16,8 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from enum import Enum
 
-from app.services.ocr_service import ocr_service
-from app.services.vision_service import VisionService
+from app.tier_1.document_processing.ocr_service import ocr_service
+from app.tier_1.document_processing.vision_service import VisionService
 
 logger = logging.getLogger(__name__)
 

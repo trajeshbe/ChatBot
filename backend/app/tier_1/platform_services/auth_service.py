@@ -8,7 +8,7 @@ from sqlalchemy import select
 import uuid
 
 from app.models.database import User
-from app.core.security import verify_password, get_password_hash, create_access_token
+from app.tier_1.infrastructure.security import verify_password, get_password_hash, create_access_token
 
 
 class AuthService:
@@ -92,7 +92,7 @@ class AuthService:
         Returns:
             User object if token valid, None otherwise
         """
-        from app.core.security import verify_token
+        from app.tier_1.infrastructure.security import verify_token
 
         user_id = verify_token(token)
         if not user_id:

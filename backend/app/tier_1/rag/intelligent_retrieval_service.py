@@ -21,8 +21,8 @@ from sqlalchemy import select, or_, and_
 import numpy as np
 
 from app.models.database import DocumentChunk
-from app.services.intelligent_embedding_service import intelligent_embedding_service
-from app.services.content_analyzer import SimilarityMetric
+from app.tier_1.embeddings.intelligent_embedding_service import intelligent_embedding_service
+from app.tier_1.document_processing.content_analyzer import SimilarityMetric
 
 logger = logging.getLogger(__name__)
 
@@ -228,7 +228,7 @@ class IntelligentRetrievalService:
         Returns classification dict with method="llm"
         """
         import json
-        from app.services.llm_service import llm_service
+        from app.tier_1.llm.llm_service import llm_service
 
         prompt = f"""Analyze this query and determine the best retrieval strategy for a document search system.
 

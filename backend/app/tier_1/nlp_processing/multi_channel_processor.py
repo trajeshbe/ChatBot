@@ -355,7 +355,7 @@ class MultiChannelProcessor:
 
     def _determine_channels(self, content_classification: Dict[str, Any]) -> List[str]:
         """Determine which channels to process based on content type"""
-        from app.services.multi_analyzer_ensemble import ContentType as ContentTypeEnum
+        from app.tier_1.export.multi_analyzer_ensemble import ContentType as ContentTypeEnum
 
         content_type = content_classification.get("content_type")
 
@@ -390,7 +390,7 @@ class MultiChannelProcessor:
         text_chunks: List[Dict[str, Any]]
     ):
         """Process text channel (generate text embeddings)"""
-        from app.services.embedding_service import embedding_service
+        from app.tier_1.embeddings.embedding_service import embedding_service
 
         logger.info(f"📝 Processing text channel for {len(chunks)} chunks...")
 
@@ -439,7 +439,7 @@ class MultiChannelProcessor:
 
         try:
             # Import services
-            from app.services.intelligent_embedding_service import intelligent_embedding_service
+            from app.tier_1.embeddings.intelligent_embedding_service import intelligent_embedding_service
             import fitz  # PyMuPDF
 
             # Initialize intelligent embedding service if needed
@@ -542,7 +542,7 @@ class MultiChannelProcessor:
         file_path: str
     ):
         """Process table channel (generate table embeddings with structural enhancement)"""
-        from app.services.intelligent_embedding_service import intelligent_embedding_service
+        from app.tier_1.embeddings.intelligent_embedding_service import intelligent_embedding_service
 
         logger.info(f"📊 Processing table channel for {len(chunks)} chunks...")
 

@@ -283,7 +283,7 @@ def main():
                 # Import evaluation service
                 import sys
                 sys.path.insert(0, '/app')  # Add backend to path
-                from app.services.finetuning.model_evaluation_service import ModelEvaluationService
+                from app.tier_1.finetuning.model_evaluation_service import ModelEvaluationService
 
                 eval_service = ModelEvaluationService()
 

@@ -150,7 +150,7 @@ class ScraperEngine:
         """
         try:
             # Import RAG pipeline LLM client with proper Ollama support
-            from app.rag_pipeline.llm import get_llm_client
+            from app.tier_1.rag.pipeline.llm import get_llm_client
 
             # Truncate content if too long (to fit in context window)
             max_content_length = 8000

@@ -7,12 +7,12 @@ from typing import List, Dict, Optional
 import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.config import settings
+from app.tier_1.infrastructure.config import settings
 from app.models.database import Document, DocumentChunk
-from app.services.embedding_service import embedding_service
-from app.services.content_analyzer import content_analyzer
-from app.services.intelligent_embedding_service import intelligent_embedding_service
-from app.services.multi_analyzer_ensemble import multi_analyzer_ensemble
+from app.tier_1.embeddings.embedding_service import embedding_service
+from app.tier_1.document_processing.content_analyzer import content_analyzer
+from app.tier_1.embeddings.intelligent_embedding_service import intelligent_embedding_service
+from app.tier_1.export.multi_analyzer_ensemble import multi_analyzer_ensemble
 from app.services.multi_channel_processor import multi_channel_processor
 import io
 import os
@@ -21,8 +21,8 @@ import time
 
 # Tool usage tracking
 try:
-    from app.services.tool_usage_tracker import tool_tracker, ToolCategory
-    from app.core.database import AsyncSessionLocal
+    from app.tier_1.platform_services.tool_usage_tracker import tool_tracker, ToolCategory
+    from app.tier_1.infrastructure.database import AsyncSessionLocal
     TOOL_TRACKING_ENABLED = True
 except ImportError:
     TOOL_TRACKING_ENABLED = False
@@ -66,7 +66,7 @@ def sanitize_path_component(component: str) -> str:
     if not component:
         return ""
 
-    from app.services.minio_path_builder import MinIOPathBuilder
+    from app.tier_1.infrastructure.minio_path_builder import MinIOPathBuilder
     return MinIOPathBuilder.sanitize(component)
 
 
@@ -462,7 +462,7 @@ class DocumentService:
                 logger.info(f"🔍 Running hybrid OCR+Vision extraction for {content_type_str} document...")
 
                 try:
-                    from app.services.hybrid_extraction_service import hybrid_extraction_service
+                    from app.tier_1.document_processing.hybrid_extraction_service import hybrid_extraction_service
 
                     # Run hybrid extraction (auto-selects strategy based on content type)
                     hybrid_result = await hybrid_extraction_service.extract_from_document(
@@ -1365,7 +1365,7 @@ class DocumentService:
             await self.initialize()
 
         try:
-            from app.services.minio_path_builder import MinIOPathBuilder
+            from app.tier_1.infrastructure.minio_path_builder import MinIOPathBuilder
             from app.models.database import Document
             import io
 

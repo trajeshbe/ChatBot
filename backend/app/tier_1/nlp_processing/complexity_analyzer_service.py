@@ -53,7 +53,7 @@ class ComplexityAnalyzerService:
         """Initialize LLM/vision services lazily (only when needed)."""
         if self.llm_service is None:
             try:
-                from app.services.llm_service import llm_service
+                from app.tier_1.llm.llm_service import llm_service
                 self.llm_service = llm_service
                 await self.llm_service.initialize()
                 self.logger.info("✅ LLM service initialized for complexity analysis")
@@ -63,7 +63,7 @@ class ComplexityAnalyzerService:
 
         if self.vision_service is None:
             try:
-                from app.services.vision_service import get_vision_service
+                from app.tier_1.document_processing.vision_service import get_vision_service
                 self.vision_service = await get_vision_service()
                 self.logger.info("✅ Vision service initialized for complexity analysis")
             except Exception as e:
@@ -72,7 +72,7 @@ class ComplexityAnalyzerService:
 
         if self.ocr_service is None:
             try:
-                from app.services.ocr_service import OCRService
+                from app.tier_1.document_processing.ocr_service import OCRService
                 self.ocr_service = OCRService()
                 self.logger.info("✅ OCR service initialized for complexity analysis")
             except Exception as e:

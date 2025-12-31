@@ -30,7 +30,7 @@ from typing import Dict, Any, Optional, List
 from datetime import timedelta
 import redis.asyncio as redis
 
-from app.core.config import settings
+from app.tier_1.infrastructure.config import settings
 from app.utils.text_compression import compress_text, count_tokens
 
 logger = logging.getLogger(__name__)

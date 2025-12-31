@@ -2,7 +2,7 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 from typing import List, Union
 import logging
-from app.core.config import settings
+from app.tier_1.infrastructure.config import settings
 import redis.asyncio as redis
 import hashlib
 import json
@@ -10,8 +10,8 @@ import time
 
 # Tool usage tracking
 try:
-    from app.services.tool_usage_tracker import tool_tracker, ToolCategory
-    from app.core.database import AsyncSessionLocal
+    from app.tier_1.platform_services.tool_usage_tracker import tool_tracker, ToolCategory
+    from app.tier_1.infrastructure.database import AsyncSessionLocal
     TOOL_TRACKING_ENABLED = True
 except ImportError:
     TOOL_TRACKING_ENABLED = False

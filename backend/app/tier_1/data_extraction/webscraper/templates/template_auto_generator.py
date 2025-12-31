@@ -9,7 +9,7 @@ for data extraction with intelligent mapping.
 from typing import List, Dict, Any, Optional
 import logging
 import json
-from app.services.webscraper.templates.template_models import (
+from app.tier_1.data_extraction.webscraper.templates.template_models import (
     ExtractionTemplate,
     FieldDefinition,
     SourceHint,

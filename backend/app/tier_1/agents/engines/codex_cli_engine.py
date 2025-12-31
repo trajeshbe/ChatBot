@@ -57,7 +57,7 @@ class CodexCLIEngine(AgentEngine):
             return None
 
         try:
-            from app.services.secrets_service import get_secrets_service
+            from app.tier_1.platform_services.secrets_service import get_secrets_service
 
             secrets_service = get_secrets_service()
             api_key = await secrets_service.get_api_key(

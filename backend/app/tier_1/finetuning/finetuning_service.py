@@ -28,7 +28,7 @@ from app.models.finetuning_models import (
     TrainingMetric,
     get_default_hyperparameters
 )
-from app.services.finetuning.dataset_preprocessor import DatasetPreprocessor
+from app.tier_1.finetuning.dataset_preprocessor import DatasetPreprocessor
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +120,7 @@ class FineTuningService:
         import tempfile
         from pathlib import Path
         from minio import Minio
-        from app.core.config import settings
+        from app.tier_1.infrastructure.config import settings
 
         stmt = select(FineTuningDataset).where(FineTuningDataset.id == dataset_id)
         result = await self.db.execute(stmt)

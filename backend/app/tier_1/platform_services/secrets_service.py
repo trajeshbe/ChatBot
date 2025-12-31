@@ -26,7 +26,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.models.database_enhanced import APICredential, APIKeyAccessLog
-from app.core.config import settings
+from app.tier_1.infrastructure.config import settings
 
 logger = logging.getLogger(__name__)
 

@@ -47,7 +47,7 @@ class EDAAnalyzer:
     async def _get_vision_service(self):
         """Lazy load vision service to avoid import issues."""
         if self.vision_service is None:
-            from app.services.vision_service import get_vision_service
+            from app.tier_1.document_processing.vision_service import get_vision_service
             self.vision_service = await get_vision_service()
         return self.vision_service
 

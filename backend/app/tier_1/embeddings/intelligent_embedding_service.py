@@ -23,13 +23,13 @@ import hashlib
 import json
 import time
 
-from app.core.config import settings
-from app.services.content_analyzer import content_analyzer, ContentType, SimilarityMetric
+from app.tier_1.infrastructure.config import settings
+from app.tier_1.document_processing.content_analyzer import content_analyzer, ContentType, SimilarityMetric
 
 # Tool usage tracking
 try:
-    from app.services.tool_usage_tracker import tool_tracker, ToolCategory
-    from app.core.database import AsyncSessionLocal
+    from app.tier_1.platform_services.tool_usage_tracker import tool_tracker, ToolCategory
+    from app.tier_1.infrastructure.database import AsyncSessionLocal
     TOOL_TRACKING_ENABLED = True
 except ImportError:
     TOOL_TRACKING_ENABLED = False

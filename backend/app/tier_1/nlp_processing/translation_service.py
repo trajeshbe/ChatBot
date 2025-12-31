@@ -17,7 +17,7 @@ from typing import Dict, Any, Optional, List
 import asyncio
 
 # LLM service imports
-from app.services.llm_service import LLMService
+from app.tier_1.llm.llm_service import LLMService
 
 # Transformers imports (Helsinki-NLP models)
 try:

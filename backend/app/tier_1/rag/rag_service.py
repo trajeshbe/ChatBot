@@ -14,16 +14,16 @@ import logging
 import re  # 🆕 For URL detection
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text as sql_text, and_, func
-from app.services.embedding_service import embedding_service
+from app.tier_1.embeddings.embedding_service import embedding_service
 from app.services.intelligent_retrieval_service import intelligent_retrieval_service
-from app.services.intelligent_embedding_service import intelligent_embedding_service
-from app.services.document_service import document_service
-from app.services.query_classifier import query_classifier
+from app.tier_1.embeddings.intelligent_embedding_service import intelligent_embedding_service
+from app.tier_1.document_processing.document_service import document_service
+from app.tier_1.nlp_processing.query_classifier import query_classifier
 from app.services.quality_metrics import quality_metrics_service
 from app.services.security_guardrails import check_query_safety  # 🆕 Security filters
 from app.services.reranker_service import rerank_chunks  # 🆕 Cross-encoder reranker
 from app.services.query_reformulation_service import reformulate_query  # 🆕 Query reformulation
-from app.core.config import settings
+from app.tier_1.infrastructure.config import settings
 import time
 import uuid
 
@@ -31,9 +31,9 @@ logger = logging.getLogger(__name__)
 
 # Import LLM service
 try:
-    from app.services.llm_service import llm_service
+    from app.tier_1.llm.llm_service import llm_service
 except ImportError:
-    from app.services.llm_service import llm_service
+    from app.tier_1.llm.llm_service import llm_service
 
 
 class RAGService:
@@ -1556,7 +1556,7 @@ class RAGService:
         """Check semantic cache for similar queries"""
         try:
             # Reuse from original RAG service
-            from app.services.rag_service import rag_service
+            from app.tier_1.rag.rag_service import rag_service
             return await rag_service._check_semantic_cache(query_text, db)
         except Exception as e:
             logger.warning(f"Error checking semantic cache: {e}")
@@ -1573,7 +1573,7 @@ class RAGService:
         """Cache query result"""
         try:
             # Reuse from original RAG service
-            from app.services.rag_service import rag_service
+            from app.tier_1.rag.rag_service import rag_service
             await rag_service._cache_result(query_text, query_embedding, result, db)
         except Exception as e:
             logger.warning(f"Error caching result: {e}")

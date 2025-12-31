@@ -13,14 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import urlparse
 
 from app.models.database import Document, WebScrapeJob
-from app.services.document_service import document_service
-from app.services.scraper_strategies import (
+from app.tier_1.document_processing.document_service import document_service
+from app.tier_1.data_extraction.scraper_strategies import (
     ScraperStrategy,
     ScraperConfig,
     ScraperStrategyFactory,
     ScrapedContent
 )
-from app.core.config import settings
+from app.tier_1.infrastructure.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +107,7 @@ class ScraperService:
         # ============================================================
         compliance_check = None
         if db:
-            from app.services.scraping_config_service import scraping_config_service
+            from app.tier_1.data_extraction.scraping_config_service import scraping_config_service
 
             compliance_check = await scraping_config_service.check_scraping_allowed(db, url)
 
@@ -199,7 +199,7 @@ class ScraperService:
             content_bytes = self._format_document_content(scraped_content).encode('utf-8')
 
             # Construct hierarchical MinIO path
-            from app.services.document_service import construct_minio_path
+            from app.tier_1.document_processing.document_service import construct_minio_path
             import re
 
             # Get project name from project_id
@@ -267,7 +267,7 @@ class ScraperService:
             # LOG SUCCESSFUL SCRAPING ATTEMPT
             # ============================================================
             if db:
-                from app.services.scraping_config_service import scraping_config_service
+                from app.tier_1.data_extraction.scraping_config_service import scraping_config_service
                 await scraping_config_service.log_scraping_attempt(
                     db=db,
                     url=url,
@@ -309,7 +309,7 @@ class ScraperService:
             # LOG FAILED SCRAPING ATTEMPT
             # ============================================================
             if db:
-                from app.services.scraping_config_service import scraping_config_service
+                from app.tier_1.data_extraction.scraping_config_service import scraping_config_service
                 await scraping_config_service.log_scraping_attempt(
                     db=db,
                     url=url,
@@ -409,7 +409,7 @@ class ScraperService:
             Filtered content
         """
         try:
-            from app.services.llm_service import llm_service
+            from app.tier_1.llm.llm_service import llm_service
 
             # Create a filtering prompt
             system_prompt = """You are a content extraction assistant.

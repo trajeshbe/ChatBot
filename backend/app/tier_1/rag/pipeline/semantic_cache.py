@@ -93,7 +93,7 @@ class SemanticCache:
             return
 
         try:
-            from app.core.config import settings as app_settings
+            from app.tier_1.infrastructure.config import settings as app_settings
             self.redis_client = await redis.from_url(
                 app_settings.REDIS_URL,
                 encoding="utf-8",

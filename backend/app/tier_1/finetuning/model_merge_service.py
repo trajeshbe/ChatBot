@@ -24,7 +24,7 @@ from sqlalchemy import update
 from app.models.finetuning_models import FineTunedModel
 from minio import Minio
 from minio.error import S3Error
-from app.core.config import settings
+from app.tier_1.infrastructure.config import settings
 
 logger = logging.getLogger(__name__)
 

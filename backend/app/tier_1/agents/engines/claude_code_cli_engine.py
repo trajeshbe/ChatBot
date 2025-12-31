@@ -54,7 +54,7 @@ class ClaudeCodeCLIEngine(AgentEngine):
             return None
 
         try:
-            from app.services.secrets_service import get_secrets_service
+            from app.tier_1.platform_services.secrets_service import get_secrets_service
 
             secrets_service = get_secrets_service()
             api_key = await secrets_service.get_api_key(
@@ -401,7 +401,7 @@ class ClaudeCodeCLIEngine(AgentEngine):
         Returns:
             Dict with success status and session info
         """
-        from app.services.terminal_session_manager import create_terminal_session
+        from app.tier_1.agents.terminal_session_manager import create_terminal_session
 
         self.logger.info(f"🖥️ [Claude Code] Starting interactive session for task: {task_id}")
 

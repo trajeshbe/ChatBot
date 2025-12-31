@@ -70,7 +70,7 @@ class OllamaReranker:
     async def initialize(self):
         """Initialize HTTP client"""
         if self.client is None:
-            from app.core.config import settings as app_settings
+            from app.tier_1.infrastructure.config import settings as app_settings
             self.client = httpx.AsyncClient(
                 base_url=app_settings.OLLAMA_ENDPOINT,
                 timeout=30.0

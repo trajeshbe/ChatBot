@@ -10,7 +10,7 @@ A robust RAG (Retrieval-Augmented Generation) pipeline with:
 - Comprehensive observability
 
 Usage:
-    from app.rag_pipeline import rag_answer
+    from app.tier_1.rag.pipeline import rag_answer
 
     answer, citations, state = await rag_answer(
         user_query="What is the project about?",

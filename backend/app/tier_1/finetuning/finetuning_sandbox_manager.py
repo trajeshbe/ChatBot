@@ -28,9 +28,9 @@ import traceback
 from minio import Minio
 from minio.error import S3Error
 
-from app.services.agent_sandbox_manager import AgentSandboxManager
-from app.services.finetuning.training_log_streamer import TrainingLogStreamer
-from app.core.config import settings
+from app.tier_1.agents.agent_sandbox_manager import AgentSandboxManager
+from app.tier_1.finetuning.training_log_streamer import TrainingLogStreamer
+from app.tier_1.infrastructure.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +100,7 @@ class FineTuningSandboxManager(AgentSandboxManager):
         """
         try:
             from sqlalchemy import create_engine, text
-            from app.core.config import settings
+            from app.tier_1.infrastructure.config import settings
 
             # Create synchronous engine (already in psycopg2 format)
             database_url = settings.SYNC_SQLALCHEMY_DATABASE_URI
@@ -280,7 +280,7 @@ class FineTuningSandboxManager(AgentSandboxManager):
             logger.info(f"🔄 Preprocessing dataset: {dataset_file_path}")
 
             # Import here to avoid circular dependencies
-            from app.services.finetuning.dataset_preprocessor import DatasetPreprocessor
+            from app.tier_1.finetuning.dataset_preprocessor import DatasetPreprocessor
             import json
             import pandas as pd
 
@@ -559,7 +559,7 @@ class FineTuningSandboxManager(AgentSandboxManager):
         Returns:
             Training result with metrics and paths
         """
-        from app.services.finetuning.gpu_pool_manager import gpu_pool_manager
+        from app.tier_1.finetuning.gpu_pool_manager import gpu_pool_manager
 
         logger.info(f"🚀 Starting training job {job_id} (requires {memory_required_gb}GB GPU VRAM)")
 
@@ -850,7 +850,7 @@ class FineTuningSandboxManager(AgentSandboxManager):
                 """Update job progress in database in real-time"""
                 try:
                     from app.models.finetuning_models import FineTuningJob
-                    from app.core.database import get_async_session_maker
+                    from app.tier_1.infrastructure.database import get_async_session_maker
                     from sqlalchemy import update
 
                     SessionLocal = get_async_session_maker()

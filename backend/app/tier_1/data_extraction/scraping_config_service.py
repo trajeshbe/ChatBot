@@ -232,7 +232,7 @@ class ScrapingConfigService:
         Returns detailed compliance information
         """
         try:
-            from app.core.config import settings
+            from app.tier_1.infrastructure.config import settings
 
             # Extract domain from URL
             parsed_url = urlparse(url)

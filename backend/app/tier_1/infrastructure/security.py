@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 import bcrypt
-from app.core.config import settings
+from app.tier_1.infrastructure.config import settings
 import uuid
 
 # JWT settings

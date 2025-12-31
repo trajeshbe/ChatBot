@@ -25,7 +25,7 @@ from datetime import datetime
 import httpx
 from pydantic import BaseModel, Field
 
-from app.core.config import Settings
+from app.tier_1.infrastructure.config import Settings
 
 logger = logging.getLogger(__name__)
 

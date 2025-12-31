@@ -248,8 +248,8 @@ def compute_reward(
     # Method 2: Use multi-reward framework (NEW)
     if use_multi_reward:
         try:
-            from app.services.finetuning.rewards import create_default_calculator
-            from app.services.finetuning.rewards.utils import extract_reasoning_steps
+            from app.tier_1.finetuning.rewards import create_default_calculator
+            from app.tier_1.finetuning.rewards.utils import extract_reasoning_steps
 
             # Create reward calculator
             calculator = create_default_calculator()
@@ -358,7 +358,7 @@ def parse_reasoning_dataset(dataset, reasoning_format: str = "auto") -> list:
     Returns:
         List of formatted examples with reasoning metadata
     """
-    from app.services.finetuning.rewards.utils import (
+    from app.tier_1.finetuning.rewards.utils import (
         parse_cot_response,
         extract_reasoning_steps
     )
@@ -499,8 +499,8 @@ def main():
 
         # Initialize metrics emitter
         try:
-            from app.services.finetuning.rewards.metrics_emitter import RewardMetricsEmitter
-            from app.services.finetuning.rewards import create_default_calculator
+            from app.tier_1.finetuning.rewards.metrics_emitter import RewardMetricsEmitter
+            from app.tier_1.finetuning.rewards import create_default_calculator
 
             job_id = config.get("job_id", f"grpo_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
             job_name = config.get("job_name", "GRPO Training")
@@ -663,7 +663,7 @@ def main():
                 # Import evaluation service
                 import sys
                 sys.path.insert(0, '/app')  # Add backend to path
-                from app.services.finetuning.model_evaluation_service import ModelEvaluationService
+                from app.tier_1.finetuning.model_evaluation_service import ModelEvaluationService
 
                 eval_service = ModelEvaluationService()
 

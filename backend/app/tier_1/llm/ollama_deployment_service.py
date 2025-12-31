@@ -365,7 +365,7 @@ class OllamaDeploymentService:
         """
         try:
             from minio import Minio
-            from app.core.config import settings
+            from app.tier_1.infrastructure.config import settings
             import tempfile
             import asyncio
 

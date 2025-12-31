@@ -29,7 +29,7 @@ class LLMExtractor:
         Initialize LLM extractor
 
         Args:
-            llm_service: LLM service instance (from app.services.llm_service)
+            llm_service: LLM service instance (from app.tier_1.llm.llm_service)
         """
         self.logger = logger
         self.llm_service = llm_service

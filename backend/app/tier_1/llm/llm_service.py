@@ -18,12 +18,12 @@ from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
 from typing import Dict, List, Optional, Any
 import logging
-from app.core.config import settings
-from app.core.database import get_db
+from app.tier_1.infrastructure.config import settings
+from app.tier_1.infrastructure.database import get_db
 from app.models.model_registry import get_model_registry, ModelInfo, ModelProvider
 from app.utils.gpu_detector import get_gpu_detector
 from app.utils.resource_checker import resource_checker
-from app.services.secrets_service import get_secrets_service
+from app.tier_1.platform_services.secrets_service import get_secrets_service
 from tenacity import retry, stop_after_attempt, wait_exponential
 import time
 

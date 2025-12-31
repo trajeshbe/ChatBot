@@ -590,7 +590,7 @@ class MultiAnalyzerEnsemble:
         """
         import json
         from pathlib import Path
-        from app.services.llm_service import get_llm_service
+        from app.tier_1.llm.llm_service import get_llm_service
 
         try:
             # Extract filename from file path

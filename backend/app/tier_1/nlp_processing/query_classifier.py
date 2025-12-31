@@ -17,7 +17,7 @@ from typing import Dict, List, TYPE_CHECKING
 import logging
 
 if TYPE_CHECKING:
-    from app.services.llm_service import LLMService
+    from app.tier_1.llm.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ REQUIRED LOGIC:
     def llm_service(self) -> 'LLMService':
         """Lazy load LLM service to avoid circular imports"""
         if self._llm_service is None:
-            from app.services.llm_service import llm_service
+            from app.tier_1.llm.llm_service import llm_service
             self._llm_service = llm_service
         return self._llm_service
 

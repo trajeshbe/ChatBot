@@ -52,7 +52,7 @@ class AgentOrchestrationService:
             "scrape website and extract product info" → "website_product_scraper"
         """
         import re
-        from app.services.llm_service import LLMService
+        from app.tier_1.llm.llm_service import LLMService
 
         prompt = f"""Generate a short, descriptive name (3-5 words, snake_case) for this task:
 
@@ -74,7 +74,7 @@ Task name:"""
 
         try:
             # Use lightweight model for quick response
-            from app.core.config import settings
+            from app.tier_1.infrastructure.config import settings
             import httpx
 
             # Try Ollama first (free, fast)
@@ -150,7 +150,7 @@ Task name:"""
         logger.info(f"📝 Generated task name: '{task_name}' for task {task_id}")
 
         # 🆕 Build MinIO base path - use current user's organizational structure
-        from app.services.minio_path_builder import MinIOPathBuilder
+        from app.tier_1.infrastructure.minio_path_builder import MinIOPathBuilder
         from app.models.database import Document
         from uuid import UUID
 
@@ -328,7 +328,7 @@ Task name:"""
             task_id: Task identifier
         """
         # Create new database session for async task
-        from app.core.database import AsyncSessionLocal
+        from app.tier_1.infrastructure.database import AsyncSessionLocal
         async with AsyncSessionLocal() as db:
             try:
                 # Get task from database
@@ -721,7 +721,7 @@ Task name:"""
         import mimetypes
         from pathlib import Path
         from minio import Minio
-        from app.core.config import settings
+        from app.tier_1.infrastructure.config import settings
 
         if not task.artifacts:
             logger.info(f"No artifacts to upload for task {task.task_id}")
@@ -799,7 +799,7 @@ Task name:"""
             session_id: Session ID to sync documents for
         """
         from minio import Minio
-        from app.core.config import settings
+        from app.tier_1.infrastructure.config import settings
         from app.models.database_enhanced import ChatSession, SessionDocument
         from app.models.database import Document
         from pathlib import Path
@@ -878,7 +878,7 @@ Task name:"""
             document_ids: List of document IDs (UUIDs as strings) to sync
         """
         from minio import Minio
-        from app.core.config import settings
+        from app.tier_1.infrastructure.config import settings
         from app.models.database import Document
         from pathlib import Path
         from uuid import UUID
@@ -1095,8 +1095,8 @@ Task name:"""
             task_id: Task identifier
             engine: Engine name (codex-cli or claude-code-cli)
         """
-        from app.core.database import AsyncSessionLocal
-        from app.services.engines import CodexCLIEngine, ClaudeCodeCLIEngine, EngineType
+        from app.tier_1.infrastructure.database import AsyncSessionLocal
+        from app.tier_1.agents.engines import CodexCLIEngine, ClaudeCodeCLIEngine, EngineType
         from pathlib import Path
 
         async with AsyncSessionLocal() as db:
@@ -1262,7 +1262,7 @@ Task name:"""
             logger.info(f"ℹ️ No running process found for task {task_id} (may not have started yet)")
 
         # ✨ NEW: Close terminal session gracefully (triggers artifact scanning)
-        from app.services.terminal_session_manager import close_terminal_session
+        from app.tier_1.agents.terminal_session_manager import close_terminal_session
         try:
             logger.info(f"🔌 Closing terminal session for cancelled task: {task_id}")
             await close_terminal_session(task_id, scan_artifacts=True)

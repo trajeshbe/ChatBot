@@ -303,7 +303,7 @@ class EvaluationService:
         - Helpfulness: Is the answer helpful to the user?
         """
         try:
-            from app.services.llm_service import llm_service
+            from app.tier_1.llm.llm_service import llm_service
 
             contexts_text = "\n\n".join([
                 f"Context {i+1}: {chunk.get('content', '')[:500]}"
@@ -462,7 +462,7 @@ Respond ONLY with a JSON object in this exact format:
                     'note': 'Ground truth required'
                 }
 
-            from app.services.embedding_service import embedding_service
+            from app.tier_1.embeddings.embedding_service import embedding_service
             import numpy as np
 
             # Get embeddings
@@ -660,7 +660,7 @@ Respond ONLY with a JSON object in this exact format:
     ) -> Dict[str, Any]:
         """Detect hallucinations (claims not supported by context)"""
         try:
-            from app.services.llm_service import llm_service
+            from app.tier_1.llm.llm_service import llm_service
 
             contexts_text = "\n\n".join([
                 chunk.get('content', '')[:500]
@@ -722,7 +722,7 @@ Is every claim in the answer supported by the contexts? Respond with JSON:
     ) -> Dict[str, Any]:
         """Evaluate how relevant the answer is to the query"""
         try:
-            from app.services.embedding_service import embedding_service
+            from app.tier_1.embeddings.embedding_service import embedding_service
             import numpy as np
 
             # Get embeddings
@@ -760,7 +760,7 @@ Is every claim in the answer supported by the contexts? Respond with JSON:
     ) -> Dict[str, Any]:
         """Evaluate precision of retrieved contexts"""
         try:
-            from app.services.embedding_service import embedding_service
+            from app.tier_1.embeddings.embedding_service import embedding_service
             import numpy as np
 
             if not context_chunks:
@@ -851,7 +851,7 @@ Is every claim in the answer supported by the contexts? Respond with JSON:
     ) -> Dict[str, Any]:
         """Evaluate faithfulness (groundedness) of response to contexts"""
         try:
-            from app.services.embedding_service import embedding_service
+            from app.tier_1.embeddings.embedding_service import embedding_service
             import numpy as np
 
             if not context_chunks:

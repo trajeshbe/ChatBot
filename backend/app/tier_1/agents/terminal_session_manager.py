@@ -392,7 +392,7 @@ async def _scan_and_upload_artifacts(task_id: str):
         logger.info(f"✅ Found {len(artifacts)} artifact(s): {artifacts[:5]}...")  # Show first 5
 
         # Update task in database with artifacts list
-        from app.core.database import AsyncSessionLocal
+        from app.tier_1.infrastructure.database import AsyncSessionLocal
         async with AsyncSessionLocal() as db:
             result_query = await db.execute(
                 select(AgentTask).filter(AgentTask.task_id == task_id)
@@ -413,7 +413,7 @@ async def _scan_and_upload_artifacts(task_id: str):
             # The minio_base_path is already set with the correct org structure:
             # e.g., "Technology/Backend-Development/Construction-Intelligence/admin/agent-tasks/task_name/task_id/"
             if task.minio_base_path:
-                from app.services.agent_service import AgentOrchestrationService
+                from app.tier_1.agents.agent_service import AgentOrchestrationService
                 agent_service = AgentOrchestrationService(db)
                 await agent_service._upload_artifacts_to_minio(task)
                 logger.info(f"🎉 Artifacts uploaded to MinIO: {task.minio_base_path}artifacts/")

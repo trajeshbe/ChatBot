@@ -275,8 +275,8 @@ class ExtractionWorkflowNodes:
                 )
 
                 # Import LLM services
-                from app.services.llm_service import llm_service
-                from app.services.webscraper.extractors.llm_extractor import LLMExtractor
+                from app.tier_1.llm.llm_service import llm_service
+                from app.tier_1.data_extraction.webscraper.extractors.llm_extractor import LLMExtractor
 
                 # Initialize LLM service
                 await llm_service.initialize()

@@ -37,7 +37,7 @@ class LLMClient:
 
         try:
             # Initialize OpenAI
-            from app.core.config import settings as app_settings
+            from app.tier_1.infrastructure.config import settings as app_settings
             if app_settings.OPENAI_API_KEY:
                 self.openai_client = AsyncOpenAI(api_key=app_settings.OPENAI_API_KEY)
                 logger.info("OpenAI client initialized")

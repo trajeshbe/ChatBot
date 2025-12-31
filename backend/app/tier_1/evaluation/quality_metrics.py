@@ -14,7 +14,7 @@ These metrics help monitor and validate RAG system performance.
 import re
 from typing import Dict, List, Optional
 import logging
-from app.services.embedding_service import embedding_service
+from app.tier_1.embeddings.embedding_service import embedding_service
 import numpy as np
 
 logger = logging.getLogger(__name__)

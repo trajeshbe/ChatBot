@@ -28,7 +28,7 @@ from app.models.finetuning_models import (
     FineTunedModel,
     FineTuningJob
 )
-from app.core.config import settings
+from app.tier_1.infrastructure.config import settings
 
 logger = logging.getLogger(__name__)
 
