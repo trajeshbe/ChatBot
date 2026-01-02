@@ -122,6 +122,13 @@ class ModuleCreate(ModuleBase):
 
     display_order: int = Field(0, ge=0, description="Order in navigation")
     is_active: bool = Field(True, description="Whether module is active")
+    module_type: Optional[str] = Field(None, description="Module type: tier2 or tier3")
+    tier: Optional[int] = Field(None, ge=1, le=3, description="Tier level (1, 2, or 3)")
+    category: Optional[str] = Field(None, max_length=100, description="Module category")
+    tier_2_dependencies: Optional[List[str]] = Field(None, description="List of tier 2 module codes this depends on")
+    is_enabled: bool = Field(True, description="Global enable/disable flag")
+    is_beta: bool = Field(False, description="Beta feature flag")
+    requires_special_permission: bool = Field(False, description="Requires special admin approval")
 
 
 class ModuleUpdate(RBACBaseSchema):
@@ -133,6 +140,13 @@ class ModuleUpdate(RBACBaseSchema):
     route: Optional[str] = Field(None, max_length=100)
     display_order: Optional[int] = Field(None, ge=0)
     is_active: Optional[bool] = None
+    module_type: Optional[str] = None
+    tier: Optional[int] = Field(None, ge=1, le=3)
+    category: Optional[str] = Field(None, max_length=100)
+    tier_2_dependencies: Optional[List[str]] = None
+    is_enabled: Optional[bool] = None
+    is_beta: Optional[bool] = None
+    requires_special_permission: Optional[bool] = None
 
 
 class ModuleResponse(ModuleBase):
@@ -143,6 +157,44 @@ class ModuleResponse(ModuleBase):
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
+    module_type: Optional[str] = None
+    tier: Optional[int] = None
+    category: Optional[str] = None
+    tier_2_dependencies: Optional[List[str]] = None
+    is_enabled: bool = True
+    is_beta: bool = False
+    requires_special_permission: bool = False
+    created_by: Optional[UUID] = None
+    updated_by: Optional[UUID] = None
+
+
+class ModuleManagementUpdate(RBACBaseSchema):
+    """Schema for admin module management updates (enable/disable, RBAC)."""
+
+    is_enabled: Optional[bool] = Field(None, description="Enable or disable module globally")
+    is_active: Optional[bool] = Field(None, description="Activate or deactivate module")
+    requires_special_permission: Optional[bool] = Field(None, description="Require special permission")
+    is_beta: Optional[bool] = Field(None, description="Mark as beta feature")
+
+
+class UserModuleAccessResponse(RBACBaseSchema):
+    """Response showing which modules a user can access."""
+
+    user_id: UUID
+    username: str
+    accessible_modules: List[ModuleResponse] = Field(default_factory=list)
+    inaccessible_modules: List[ModuleResponse] = Field(default_factory=list)
+
+
+class ModuleAccessUpdateRequest(RBACBaseSchema):
+    """Request to update user access to modules via role permissions."""
+
+    user_id: UUID
+    module_id: UUID
+    can_read: bool = False
+    can_write: bool = False
+    can_delete: bool = False
+    can_share: bool = False
 
 
 # ============================================================================

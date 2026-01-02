@@ -33,6 +33,7 @@ interface UseStreamingChatReturn {
   error: string | null;
   sources: any[];  // 🆕 RAG sources
   modelUsed: string | null;  // 🆕 Model that was used
+  metadata: any | null;  // 🆕 Evaluation metrics, performance data, brain view
   startStreaming: (query: string, config?: StreamingConfig) => void;
   stopStreaming: () => void;
   resetStream: () => void;
@@ -44,6 +45,7 @@ export const useStreamingChat = (apiUrl: string = 'http://localhost:8000'): UseS
   const [error, setError] = useState<string | null>(null);
   const [sources, setSources] = useState<any[]>([]);  // 🆕 RAG sources
   const [modelUsed, setModelUsed] = useState<string | null>(null);  // 🆕 Model used
+  const [metadata, setMetadata] = useState<any | null>(null);  // 🆕 Evaluation metrics, performance, brain view
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -77,6 +79,7 @@ export const useStreamingChat = (apiUrl: string = 'http://localhost:8000'): UseS
     setError(null);
     setSources([]);  // 🆕 Clear sources
     setModelUsed(null);  // 🆕 Clear model
+    setMetadata(null);  // 🆕 Clear metadata
   }, [stopStreaming]);
 
   /**
@@ -91,6 +94,7 @@ export const useStreamingChat = (apiUrl: string = 'http://localhost:8000'): UseS
     setError(null);
     setSources([]);  // 🆕 Clear previous sources
     setModelUsed(null);  // 🆕 Clear previous model
+    setMetadata(null);  // 🆕 Clear previous metadata
     setIsStreaming(true);
 
     // Build query parameters (🆕 now includes unified_config and all RAG params)
@@ -156,6 +160,19 @@ export const useStreamingChat = (apiUrl: string = 'http://localhost:8000'): UseS
         }
       } catch (err) {
         console.error('Error parsing sources event:', err);
+      }
+    });
+
+    // 🆕 Handle metadata event (evaluation metrics, performance data, brain view)
+    eventSource.addEventListener('metadata', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === 'metadata') {
+          console.log('📊 Received metadata:', data);
+          setMetadata(data);
+        }
+      } catch (err) {
+        console.error('Error parsing metadata event:', err);
       }
     });
 
@@ -238,6 +255,7 @@ export const useStreamingChat = (apiUrl: string = 'http://localhost:8000'): UseS
     error,
     sources,  // 🆕 RAG sources
     modelUsed,  // 🆕 Model used
+    metadata,  // 🆕 Evaluation metrics, performance data, brain view
     startStreaming,
     stopStreaming,
     resetStream

@@ -29,6 +29,9 @@ from app.schemas.rbac_schemas import (
     ModuleUpdate,
     ModuleResponse,
     ModuleListResponse,
+    ModuleManagementUpdate,
+    UserModuleAccessResponse,
+    ModuleAccessUpdateRequest,
     # Permission schemas
     RolePermissionCreate,
     RolePermissionUpdate,
@@ -399,6 +402,150 @@ async def get_module(
     if not module:
         raise HTTPException(status_code=404, detail=f"Module {module_id} not found")
     return ModuleResponse.model_validate(module)
+
+
+@router.put(
+    "/modules/{module_id}",
+    response_model=ModuleResponse,
+    summary="Update module (admin)",
+)
+async def update_module(
+    module_id: UUID,
+    module_update: ModuleUpdate,
+    rbac: RBACService = Depends(get_rbac_service),
+):
+    """
+    Update module attributes including enable/disable, tier, category.
+
+    Admin-only endpoint for managing module configuration.
+    """
+    try:
+        update_data = module_update.model_dump(exclude_unset=True)
+        updated_module = await rbac.update_module(module_id, **update_data)
+
+        if not updated_module:
+            raise HTTPException(status_code=404, detail=f"Module {module_id} not found")
+
+        return ModuleResponse.model_validate(updated_module)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating module: {str(e)}")
+
+
+@router.patch(
+    "/modules/{module_id}/management",
+    response_model=ModuleResponse,
+    summary="Update module management settings (admin)",
+)
+async def update_module_management(
+    module_id: UUID,
+    management_update: ModuleManagementUpdate,
+    rbac: RBACService = Depends(get_rbac_service),
+):
+    """
+    Update module management settings (enable/disable, beta, special permission).
+
+    Simplified endpoint for quick enable/disable operations.
+    """
+    try:
+        update_data = management_update.model_dump(exclude_unset=True)
+        updated_module = await rbac.update_module(module_id, **update_data)
+
+        if not updated_module:
+            raise HTTPException(status_code=404, detail=f"Module {module_id} not found")
+
+        return ModuleResponse.model_validate(updated_module)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating module management: {str(e)}")
+
+
+@router.get(
+    "/modules/tier/{tier}",
+    response_model=ModuleListResponse,
+    summary="Get modules by tier",
+)
+async def get_modules_by_tier(
+    tier: int,
+    enabled_only: bool = Query(True, description="Only return enabled modules"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    rbac: RBACService = Depends(get_rbac_service),
+):
+    """Get all modules for a specific tier (1, 2, or 3)."""
+    try:
+        modules = await rbac.get_modules_by_tier(tier, enabled_only=enabled_only)
+
+        # Pagination
+        total = len(modules)
+        start = (page - 1) * page_size
+        end = start + page_size
+        items = modules[start:end]
+
+        return ModuleListResponse(
+            items=[ModuleResponse.model_validate(m) for m in items],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting modules by tier: {str(e)}")
+
+
+@router.get(
+    "/modules/category/{category}",
+    response_model=ModuleListResponse,
+    summary="Get modules by category",
+)
+async def get_modules_by_category(
+    category: str,
+    enabled_only: bool = Query(True, description="Only return enabled modules"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    rbac: RBACService = Depends(get_rbac_service),
+):
+    """Get all modules in a specific category (e.g., 'Education', 'Finance')."""
+    try:
+        modules = await rbac.get_modules_by_category(category, enabled_only=enabled_only)
+
+        # Pagination
+        total = len(modules)
+        start = (page - 1) * page_size
+        end = start + page_size
+        items = modules[start:end]
+
+        return ModuleListResponse(
+            items=[ModuleResponse.model_validate(m) for m in items],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting modules by category: {str(e)}")
+
+
+@router.get(
+    "/users/{user_id}/accessible-modules",
+    response_model=List[ModuleResponse],
+    summary="Get user's accessible modules",
+)
+async def get_user_accessible_modules(
+    user_id: UUID,
+    tier: Optional[int] = Query(None, description="Filter by tier"),
+    rbac: RBACService = Depends(get_rbac_service),
+):
+    """
+    Get all modules that a user can access based on their RBAC permissions.
+
+    Returns only enabled modules that the user has read permission for.
+    """
+    try:
+        modules = await rbac.get_user_accessible_modules(user_id, tier=tier)
+        return [ModuleResponse.model_validate(m) for m in modules]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting user accessible modules: {str(e)}")
 
 
 # ============================================================================

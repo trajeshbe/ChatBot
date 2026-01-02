@@ -1,0 +1,169 @@
+REQUEST FOR PROPOSAL (RFP)
+RFP Number: RFP-2024-CM-00128
+Issue Date: January 20, 2024
+Closing Date: February 20, 2024, 14:00 GMT
+
+ISSUING ORGANIZATION
+Name: Thames Valley Construction Authority
+Department: Procurement & Supply Chain
+Contact: procurement@tvca.gov.uk
+Address: Building 5, Thames Business Park, Reading, RG2 0TD, United Kingdom
+
+PROJECT OVERVIEW
+Project Name: Riverside Residential Development - Phase 2
+Project Location: Reading, Berkshire, UK
+Contract Duration: 18 months
+Estimated Contract Value: £4.5 million - £5.2 million
+
+SCOPE OF WORK
+Supply and delivery of construction materials for 150-unit residential development:
+
+1. STRUCTURAL MATERIALS
+   - Concrete: 2,500 m³ ready-mix concrete (C30/37 grade)
+   - Steel reinforcement bars: 450 tonnes (various diameters 12mm-32mm)
+   - Structural steel sections: 180 tonnes (I-beams, H-columns)
+   - Precast concrete elements: 850 units (lintels, stairs, panels)
+
+2. MASONRY & BRICKWORK
+   - Facing bricks: 850,000 units (red multi stock, frost-resistant)
+   - Engineering bricks: 120,000 units (Class B)
+   - Blocks: 180,000 units (100mm, 140mm lightweight aggregate)
+   - Mortar: 450 tonnes (various mixes)
+
+3. ROOFING MATERIALS
+   - Roof tiles: 45,000 units (interlocking concrete tiles, slate grey)
+   - Roof underlay: 8,500 m²
+   - Guttering & downpipes: Complete system for 150 units (uPVC, anthracite grey)
+   - Roof insulation: 9,500 m² (300mm mineral wool, U-value 0.16)
+
+4. TIMBER & JOINERY
+   - Structural timber: 185 m³ (treated softwood, C24 grade)
+   - Floor joists: 2,850 linear meters (various sizes)
+   - Roof trusses: 150 sets (pre-fabricated to specification)
+   - Window frames: 600 units (uPVC, white, double-glazed, A-rated)
+   - Door sets: 450 units (internal) + 150 units (external, composite)
+
+5. INSULATION & DAMP PROOFING
+   - Wall insulation: 12,000 m² (cavity wall insulation batts)
+   - Floor insulation: 8,500 m² (100mm rigid PIR boards)
+   - Damp-proof membrane: 9,000 m² (1200 gauge)
+   - Damp-proof course: 2,500 linear meters
+
+TECHNICAL REQUIREMENTS
+- All materials must comply with UK Building Regulations 2010 (as amended)
+- CE marking required for regulated products
+- UKCA marking accepted where applicable
+- Materials must meet minimum environmental standards (BRE Green Guide A or B rating)
+- Chain of custody certification required for timber products (FSC or PEFC)
+- Fire performance: Materials for residential use must achieve minimum Class 1 surface spread
+
+DELIVERY REQUIREMENTS
+- Delivery Schedule: Phased deliveries over 18 months as per construction program
+- Delivery Location: Site compound, Riverside Development, Reading RG2 5XX
+- Access: HGV access available via dedicated site entrance
+- Storage: Limited on-site storage; JIT delivery preferred
+- Packaging: Returnable packaging systems preferred; waste minimization required
+
+QUALITY & CERTIFICATION
+- ISO 9001:2015 Quality Management certification (mandatory)
+- ISO 14001:2015 Environmental Management (preferred)
+- ISO 45001:2018 Occupational Health & Safety (preferred)
+- Product test certificates and compliance documentation required
+- Material traceability system required
+
+SUSTAINABILITY REQUIREMENTS
+- Minimum 25% recycled content where feasible
+- EPD (Environmental Product Declaration) preferred
+- Local sourcing preferred (within 250km radius)
+- Carbon footprint calculation required for major materials
+- Waste management plan required
+- Circular economy approach encouraged
+
+PRICING REQUIREMENTS
+Suppliers must provide:
+- Unit prices for each material category
+- Volume discounts if applicable
+- Delivery costs (separate line item)
+- Price validity period (minimum 90 days)
+- Payment terms (specify early payment discounts if available)
+- Price variation clauses (if any)
+
+EVALUATION CRITERIA
+Proposals will be evaluated on the following weighted criteria:
+1. Price (40%)
+   - Competitive pricing
+   - Total cost of ownership
+   - Payment terms
+
+2. Technical Capability (30%)
+   - Product quality and specifications
+   - Compliance with standards
+   - Technical support
+
+3. Delivery & Logistics (15%)
+   - Delivery reliability track record
+   - Flexibility in scheduling
+   - Stock availability
+
+4. Sustainability (10%)
+   - Environmental credentials
+   - Carbon footprint
+   - Circular economy initiatives
+
+5. Experience & References (5%)
+   - Previous similar projects
+   - Client references
+   - Financial stability
+
+SUBMISSION REQUIREMENTS
+Suppliers must submit:
+1. Company profile and registration documents
+2. Financial statements (last 2 years)
+3. Insurance certificates (Public Liability £10M, Professional Indemnity £5M)
+4. Health & Safety policy and accident statistics
+5. Environmental policy and certifications
+6. Quality management system documentation
+7. Detailed technical specifications for all materials
+8. Pricing schedule (using provided template)
+9. Delivery schedule and logistics plan
+10. References from 3 similar projects (last 3 years)
+11. Samples of key materials (bricks, tiles, timber)
+
+CONTRACTUAL TERMS
+- Contract Type: Fixed price with limited variation clauses
+- Payment Terms: Net 30 days from invoice date
+- Retention: 5% until practical completion
+- Warranty: Minimum 12 months from delivery
+- Liquidated Damages: £5,000 per day for late delivery (capped at 10% contract value)
+- Insurance: Comprehensive coverage required
+
+TIMELINE
+- RFP Issue Date: January 20, 2024
+- Clarification Questions Deadline: February 5, 2024
+- Clarification Responses Published: February 8, 2024
+- Proposal Submission Deadline: February 20, 2024, 14:00 GMT
+- Supplier Presentations: February 26-28, 2024
+- Award Decision: March 8, 2024
+- Contract Signature: March 15, 2024
+- Mobilization Period: March 15 - April 1, 2024
+- First Delivery: April 8, 2024
+
+CONTACT INFORMATION
+Primary Contact: Sarah Mitchell, Senior Procurement Officer
+Email: s.mitchell@tvca.gov.uk
+Phone: +44 118 960 5000
+Secondary Contact: James Roberts, Project Manager
+Email: j.roberts@tvca.gov.uk
+
+SUBMISSION METHOD
+Electronic submission only via procurement portal: https://procurement.tvca.gov.uk
+Maximum file size: 50MB per document
+Accepted formats: PDF, Microsoft Office formats
+Late submissions will not be accepted
+
+NOTES
+- This RFP does not constitute an offer or commitment to purchase
+- TVCA reserves the right to cancel or modify this RFP at any time
+- All costs incurred in preparing proposals are at the supplier's expense
+- Confidential and commercially sensitive information will be protected
+- TVCA is committed to fair and transparent procurement practices

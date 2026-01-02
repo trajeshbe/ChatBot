@@ -1,0 +1,59 @@
+[
+  {
+    "learner_id": "BC2024001",
+    "name": "Ahmed Hassan",
+    "age": 28,
+    "nationality": "Egyptian",
+    "current_location": "Cairo, Egypt",
+    "english_level": "B1 Intermediate",
+    "ielts_score": null,
+    "learning_goals": ["Academic preparation", "Study abroad"],
+    "preferred_study_mode": "Online",
+    "budget_range": "£500-£1000",
+    "target_start_date": "2024-03-01",
+    "interests": ["Engineering", "Technology", "Academic English"],
+    "previous_courses": [],
+    "availability": {
+      "days": ["Monday", "Wednesday", "Friday"],
+      "time_preference": "Evening (18:00-21:00 GMT)"
+    }
+  },
+  {
+    "learner_id": "BC2024002",
+    "name": "Maria Rodriguez",
+    "age": 35,
+    "nationality": "Spanish",
+    "current_location": "Madrid, Spain",
+    "english_level": "C1 Advanced",
+    "ielts_score": 7.5,
+    "learning_goals": ["Business English", "Professional development"],
+    "preferred_study_mode": "Hybrid",
+    "budget_range": "£1000-£2000",
+    "target_start_date": "2024-02-15",
+    "interests": ["Business", "Marketing", "Communication"],
+    "previous_courses": ["IELTS Preparation", "General English B2"],
+    "availability": {
+      "days": ["Tuesday", "Thursday", "Saturday"],
+      "time_preference": "Morning (09:00-12:00 GMT)"
+    }
+  },
+  {
+    "learner_id": "BC2024003",
+    "name": "Li Wei",
+    "age": 22,
+    "nationality": "Chinese",
+    "current_location": "Beijing, China",
+    "english_level": "A2 Elementary",
+    "ielts_score": null,
+    "learning_goals": ["General English improvement", "Travel"],
+    "preferred_study_mode": "Online",
+    "budget_range": "£300-£600",
+    "target_start_date": "2024-04-01",
+    "interests": ["Travel", "Culture", "Conversation"],
+    "previous_courses": ["Beginner English A1"],
+    "availability": {
+      "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+      "time_preference": "Evening (19:00-21:00 GMT)"
+    }
+  }
+]

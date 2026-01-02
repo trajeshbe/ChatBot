@@ -332,11 +332,106 @@ class RBACService:
         """Get module by code"""
         return get_module_by_code(self.db, code)
 
-    async def get_all_modules(self, active_only: bool = True) -> List[Module]:
+    async def get_all_modules(self, active_only: bool = True, enabled_only: bool = False) -> List[Module]:
         """Get all modules"""
         stmt = select(Module)
         if active_only:
             stmt = stmt.where(Module.is_active == True)
+        if enabled_only:
+            stmt = stmt.where(Module.is_enabled == True)
+        stmt = stmt.order_by(Module.display_order)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def update_module(self, module_id: uuid.UUID, updated_by: uuid.UUID = None, **kwargs) -> Optional[Module]:
+        """Update module attributes including enable/disable, tier, category"""
+        stmt = select(Module).where(Module.id == module_id)
+        result = await self.db.execute(stmt)
+        module = result.scalar_one_or_none()
+
+        if not module:
+            return None
+
+        # Track if update includes important fields
+        if updated_by:
+            kwargs['updated_by'] = updated_by
+
+        for key, value in kwargs.items():
+            if hasattr(module, key):
+                setattr(module, key, value)
+
+        await self.db.commit()
+        await self.db.refresh(module)
+        return module
+
+    async def get_modules_by_tier(self, tier: int, enabled_only: bool = True) -> List[Module]:
+        """Get all modules for a specific tier"""
+        stmt = select(Module).where(Module.tier == tier)
+        if enabled_only:
+            stmt = stmt.where(Module.is_enabled == True)
+        stmt = stmt.order_by(Module.category, Module.display_order)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_modules_by_category(self, category: str, enabled_only: bool = True) -> List[Module]:
+        """Get all modules in a category"""
+        stmt = select(Module).where(Module.category == category)
+        if enabled_only:
+            stmt = stmt.where(Module.is_enabled == True)
+        stmt = stmt.order_by(Module.display_order)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_user_accessible_modules(self, user_id: uuid.UUID, tier: Optional[int] = None) -> List[Module]:
+        """Get modules that a user can access (has read permission), optionally filtered by tier"""
+        from app.models.database_enhanced import User as UserModel, UserRole as UserRoleEnum
+
+        # Admin bypass
+        stmt_user = select(UserModel).where(UserModel.id == user_id)
+        result_user = await self.db.execute(stmt_user)
+        user = result_user.scalar_one_or_none()
+
+        if user and user.role == UserRoleEnum.ADMIN:
+            # Admins can access all enabled modules
+            stmt = select(Module).where(Module.is_enabled == True)
+            if tier:
+                stmt = stmt.where(Module.tier == tier)
+            stmt = stmt.order_by(Module.display_order)
+            result = await self.db.execute(stmt)
+            return list(result.scalars().all())
+
+        # Get user's role IDs
+        stmt_roles = select(UserRole).where(UserRole.user_id == user_id, UserRole.is_active == True)
+        result_roles = await self.db.execute(stmt_roles)
+        user_roles = result_roles.scalars().all()
+
+        if not user_roles:
+            return []
+
+        role_ids = [ur.role_id for ur in user_roles]
+
+        # Get permissions for those roles
+        stmt_perms = select(RoleModulePermission).where(
+            RoleModulePermission.role_id.in_(role_ids),
+            RoleModulePermission.can_read == True
+        )
+        result_perms = await self.db.execute(stmt_perms)
+        permissions = result_perms.scalars().all()
+
+        # Get unique module IDs
+        module_ids = {perm.module_id for perm in permissions}
+
+        if not module_ids:
+            return []
+
+        # Get modules
+        stmt = select(Module).where(
+            Module.id.in_(module_ids),
+            Module.is_enabled == True,
+            Module.is_active == True
+        )
+        if tier:
+            stmt = stmt.where(Module.tier == tier)
         stmt = stmt.order_by(Module.display_order)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())

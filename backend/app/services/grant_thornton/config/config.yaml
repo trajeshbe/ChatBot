@@ -1,0 +1,35 @@
+calculation_formula_path: backend/app/services/grant_thornton/artifacts/calculation_formula.xlsx
+datapoints_excel_path: backend/app/services/grant_thornton/artifacts/datapoints_prompt.xlsx
+embed_model_name: BAAI/bge-large-en-v1.5
+header_tags:
+  '#': '#'
+  '##': '##'
+  '###': '###'
+initial_context_queries:
+- Standalone Statement of Profit and Loss
+- standalone Balance sheet
+- standalone Cash flow statement
+llm_model_name: gpt-4o-mini
+mapping_fields:
+  capital_work-in-progress: capital_wip
+  work-in-progress: wip
+persist_directory: vector_store
+ratio_formula_path: backend/app/services/grant_thornton/artifacts/final_calculation_formula.xlsx
+rerank_top_n: 2
+reranker_model_name: BAAI/bge-reranker-large
+retrieval_top_k: 20
+retry_count: 2
+sub_calculation_list:
+- average_total_equity
+- tangible_net_worth
+- cash_profit
+- dso
+- dio
+- dpo
+- average_receivables
+- average_payables
+- average_inventory
+- debt_service
+- total_bank_borrowings
+- cash_conversion_cycle
+use_gpu: true

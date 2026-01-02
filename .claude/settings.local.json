@@ -42,7 +42,8 @@
       "Bash(chmod:*)",
       "Bash(mv:*)",
       "Bash(git mv:*)",
-      "Bash(rmdir:*)"
+      "Bash(rmdir:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

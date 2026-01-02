@@ -11,6 +11,7 @@ import { ScrapingConfigManager } from '../components/ScrapingConfigManager'
 import RoleManager from '../components/admin/RoleManager'
 import PermissionMatrix from '../components/admin/PermissionMatrix'
 import UserRoleAssignment from '../components/admin/UserRoleAssignment'
+import ModuleManagement from '../components/admin/ModuleManagement'
 import FineTuningManager from '../components/finetuning/FineTuningManager'
 import FineTuningGovernanceUI from '../components/finetuning/FineTuningGovernanceUI'
 
@@ -147,7 +148,7 @@ export default function AdminPage() {
   const router = useRouter()
   const { user, token, isAuthenticated, isLoading } = useAuth()
   const [activeTab, setActiveTab] = useState<'users' | 'sessions' | 'audit' | 'metrics' | 'database' | 'apikeys' | 'ollama' | 'mcptools' | 'scraping' | 'rbac' | 'finetuning'>('users')
-  const [rbacSubTab, setRbacSubTab] = useState<'roles' | 'permissions' | 'users'>('roles')
+  const [rbacSubTab, setRbacSubTab] = useState<'roles' | 'permissions' | 'users' | 'modules'>('roles')
   const [users, setUsers] = useState<User[]>([])
   const [sessions, setSessions] = useState<Session[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
@@ -1400,6 +1401,19 @@ export default function AdminPage() {
                           <span>User Roles</span>
                         </div>
                       </button>
+                      <button
+                        onClick={() => setRbacSubTab('modules')}
+                        className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+                          rbacSubTab === 'modules'
+                            ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                            : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <Settings className="w-4 h-4" />
+                          <span>Module Management</span>
+                        </div>
+                      </button>
                     </div>
                   </div>
 
@@ -1407,6 +1421,7 @@ export default function AdminPage() {
                   {rbacSubTab === 'roles' && <RoleManager />}
                   {rbacSubTab === 'permissions' && <PermissionMatrix />}
                   {rbacSubTab === 'users' && <UserRoleAssignment />}
+                  {rbacSubTab === 'modules' && <ModuleManagement />}
                 </div>
               )}
 

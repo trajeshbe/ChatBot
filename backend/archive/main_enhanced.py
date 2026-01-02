@@ -154,6 +154,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠ Fine-Tuning routes not available: {type(e).__name__}: {e}")
 
+# Add Admin Module Management router
+try:
+    from app.api.routes.admin_module_routes import router as admin_module_router
+    app.include_router(admin_module_router)
+    logger.info("✓ Admin Module Management API routes loaded")
+except Exception as e:
+    logger.warning(f"⚠ Admin Module Management routes not available: {type(e).__name__}: {e}")
+
 
 # === REST API Endpoints ===
 

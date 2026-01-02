@@ -130,6 +130,7 @@ class Team(Base):
 class Module(Base):
     """Application modules/features"""
     __tablename__ = "modules"
+    __table_args__ = {'extend_existing': True}
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column('module_name', String(255), nullable=False)  # Maps to module_name in DB
@@ -142,6 +143,17 @@ class Module(Base):
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
     meta_info = Column('meta_info', Text, nullable=True)  # JSONB column in DB
+
+    # New fields from module management migration
+    module_type = Column(String(20), nullable=True)  # 'tier2' or 'tier3'
+    tier = Column(Integer, nullable=True)  # 2 or 3
+    category = Column(String(100), nullable=True)  # e.g., 'Education', 'Finance'
+    tier_2_dependencies = Column('tier_2_dependencies', Text, nullable=True)  # Array of module_key values in DB
+    is_enabled = Column(Boolean, default=True)  # Global enable/disable
+    is_beta = Column(Boolean, default=False)
+    requires_special_permission = Column(Boolean, default=False)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Relationships
     permissions = relationship("RoleModulePermission", back_populates="module", cascade="all, delete-orphan")

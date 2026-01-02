@@ -342,6 +342,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
     error: streamingError,
     sources: streamingSources,  // 🔧 FIX: Capture sources from streaming
     modelUsed: streamingModel,  // 🔧 FIX: Capture model from streaming
+    metadata: streamingMetadata,  // 🆕 Capture metadata (evaluation, performance, brain view)
     startStreaming,
     stopStreaming,
     resetStream
@@ -901,18 +902,45 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
   // 🆕 Finalize streaming message when complete
   useEffect(() => {
     if (!isStreaming && streamingContent && !streamingError) {
+      // 🐛 Debug logging for metadata
+      console.log('🔍 Finalizing streaming message with metadata:', {
+        has_metadata: !!streamingMetadata,
+        has_debug_context: !!streamingMetadata?.debug_context,
+        has_quality_metrics: !!streamingMetadata?.quality_metrics,
+        has_tools_used: !!streamingMetadata?.tools_used,
+        metadata: streamingMetadata
+      });
+
       // Mark the last message as complete
       setMessages(prev => {
         const lastMessage = prev[prev.length - 1]
         if (lastMessage?.isStreaming) {
+          const finalizedMessage = {
+            ...lastMessage,
+            isStreaming: false,
+            model: streamingModel || selectedModel || undefined,  // 🔧 FIX: Use streaming model
+            sources: streamingSources,  // 🔧 FIX: Ensure sources are in final message
+            // 🆕 Add metadata from streaming (evaluation metrics, performance, brain view)
+            ...(streamingMetadata?.latency_ms && { latency_ms: streamingMetadata.latency_ms }),
+            ...(streamingMetadata?.tokens_used && { tokens_used: streamingMetadata.tokens_used }),
+            ...(streamingMetadata?.num_sources !== undefined && { num_sources: streamingMetadata.num_sources }),
+            ...(streamingMetadata?.cached !== undefined && { cached: streamingMetadata.cached }),
+            ...(streamingMetadata?.model_name && { model_name: streamingMetadata.model_name }),
+            ...(streamingMetadata?.quality_metrics && { quality_metrics: streamingMetadata.quality_metrics }),
+            ...(streamingMetadata?.tools_used && { tools_used: streamingMetadata.tools_used }),
+            ...(streamingMetadata?.debug_context && { debug_context: streamingMetadata.debug_context }),
+            ...(streamingMetadata?.rag_settings && { rag_settings: streamingMetadata.rag_settings })
+          };
+
+          console.log('✅ Finalized message:', {
+            has_debug_context: !!finalizedMessage.debug_context,
+            has_quality_metrics: !!finalizedMessage.quality_metrics,
+            has_tools_used: !!finalizedMessage.tools_used
+          });
+
           return [
             ...prev.slice(0, -1),
-            {
-              ...lastMessage,
-              isStreaming: false,
-              model: streamingModel || selectedModel || undefined,  // 🔧 FIX: Use streaming model
-              sources: streamingSources  // 🔧 FIX: Ensure sources are in final message
-            }
+            finalizedMessage
           ]
         }
         return prev
@@ -922,7 +950,7 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       resetStream()
       setIsLoading(false)
     }
-  }, [isStreaming, streamingContent, streamingError, streamingSources, streamingModel, selectedModel, resetStream])  // 🔧 FIX: Add streaming dependencies
+  }, [isStreaming, streamingContent, streamingError, streamingSources, streamingModel, streamingMetadata, selectedModel, resetStream])  // 🔧 FIX: Add streamingMetadata dependency
 
   // 🆕 Handle streaming errors
   useEffect(() => {

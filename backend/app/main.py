@@ -798,6 +798,29 @@ async def stream_chat_response(
                 if i % 5 == 0:  # Every 5 chars
                     await asyncio.sleep(0.01)
 
+            # 🆕 Send metadata event with evaluation metrics, performance data, and brain view
+            metadata = {
+                "type": "metadata",
+                "latency_ms": agent_result.get("latency_ms"),
+                "tokens_used": agent_result.get("tokens_used"),
+                "num_sources": len(sources),
+                "cached": agent_result.get("cached", False),
+                "model": model_used,
+                "model_name": agent_result.get("model_name"),
+                "quality_metrics": agent_result.get("quality_metrics"),
+                "tools_used": agent_result.get("tools_used"),
+                "debug_context": agent_result.get("debug_context"),
+                "rag_settings": agent_result.get("rag_settings")
+            }
+
+            # Filter out None values
+            metadata = {k: v for k, v in metadata.items() if v is not None}
+
+            yield {
+                "event": "metadata",
+                "data": json.dumps(metadata)
+            }
+
             # Send completion event with metadata
             yield {
                 "event": "done",
@@ -1585,6 +1608,24 @@ except ImportError as e:
 except Exception as e:
     logger.warning(f"Could not register Construction Metrics router: {e}")
 
+# Grant Thornton Financial Analysis API
+try:
+    from app.api.routes import grant_thornton_routes
+    app.include_router(grant_thornton_routes.router)
+
+    # British Council Course Recommendation POC
+    from app.api.routes import british_council_routes
+    app.include_router(british_council_routes.router)
+
+    # CRU Mining Intelligence POC
+    from app.api.routes import cru_routes
+    app.include_router(cru_routes.router)
+    logger.info("✓ Grant Thornton Financial Analysis API router registered (50+ datapoints, ratios, Excel export)")
+except ImportError as e:
+    logger.warning(f"Grant Thornton API not available: {e}")
+except Exception as e:
+    logger.warning(f"Could not register Grant Thornton router: {e}")
+
 # Fine-Tuning API
 try:
     from app.api.routes import finetuning_routes
@@ -1683,6 +1724,867 @@ try:
     logger.info("✓ Tool Discovery API router registered (list, search, and manage tools)")
 except Exception as e:
     logger.warning(f"Could not register Tool Discovery router: {e}")
+
+# === TIER 2: Domain Vertical Modules ===
+# Pluggable modules that extend tier_1 core platform for specific use cases
+
+# Document Intelligence Module (18-field extraction from planning documents)
+try:
+    from app.tier_2 import registry
+    from app.tier_2.document_intelligence.routes import router as docu_extract_router
+
+    # Register module
+    registry.register(
+        module_id="docu-extract",
+        name="Document Intelligence Extraction",
+        description="Extract 18 structured fields from planning documents and architectural drawings",
+        version="1.0.0",
+        tier=2,
+        category="document_intelligence",
+        dependencies=["llm_service", "vision_service", "document_service", "hybrid_extraction_service", "ocr_service"],
+        routes_prefix="/api/v1/modules/docu-extract"
+    )
+
+    # Enable and register router
+    registry.enable("docu-extract")
+    app.include_router(docu_extract_router)
+
+    logger.info("✓ Tier 2 Module: Document Intelligence Extraction loaded")
+    logger.info(f"  → Modules registered: {len(registry.list_modules())}, Enabled: {len(registry.get_enabled_modules())}")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Document Intelligence module not available: {type(e).__name__}: {e}")
+
+# Relation Extractor Module (Extract structured entity relationships)
+try:
+    from app.tier_2 import registry
+    from app.tier_2.document_intelligence.relation_extractor_routes import router as relation_extractor_router
+
+    # Register module
+    registry.register(
+        module_id="relation-extractor",
+        name="Relation Extractor",
+        description="Extract structured relationships between entities in documents",
+        version="1.0.0",
+        tier=2,
+        category="document_intelligence",
+        dependencies=["llm_service", "vision_service", "document_service", "hybrid_extraction_service", "ocr_service"],
+        routes_prefix="/api/v1/modules/relation-extractor"
+    )
+
+    # Enable and register router
+    registry.enable("relation-extractor")
+    app.include_router(relation_extractor_router)
+
+    logger.info("✓ Tier 2 Module: Relation Extractor loaded")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Relation Extractor module not available: {type(e).__name__}: {e}")
+
+# Generic RAG Module (Configurable RAG with collection management)
+try:
+    from app.tier_2 import registry
+    from app.tier_2.document_intelligence.generic_rag_routes import router as generic_rag_router
+
+    # Register module
+    registry.register(
+        module_id="generic-rag",
+        name="Generic RAG",
+        description="Configurable RAG with collection management for any document set",
+        version="1.0.0",
+        tier=2,
+        category="document_intelligence",
+        dependencies=["rag_service", "llm_service", "embedding_service", "reranker_service"],
+        routes_prefix="/api/v1/modules/generic-rag"
+    )
+
+    # Enable and register router
+    registry.enable("generic-rag")
+    app.include_router(generic_rag_router)
+
+    logger.info("✓ Tier 2 Module: Generic RAG loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Generic RAG module not available: {type(e).__name__}: {e}")
+
+
+# ============================================================================
+# TIER 2 MODULES: CONSTRUCTION
+# ============================================================================
+
+# Planning Classifier Module (Classify planning documents by type and purpose)
+try:
+    from app.tier_2 import registry
+    from app.tier_2.construction.planning_classifier_routes import router as planning_classifier_router
+
+    registry.register(
+        module_id="planning-classifier",
+        name="Planning Classifier",
+        description="Classify planning documents by type and purpose",
+        version="1.0.0",
+        tier=2,
+        category="construction",
+        dependencies=["llm_service", "vision_service", "document_service", "ocr_service"],
+        routes_prefix="/api/v1/modules/planning-classifier"
+    )
+    registry.enable("planning-classifier")
+    app.include_router(planning_classifier_router)
+
+    logger.info("✓ Tier 2 Module: Planning Classifier loaded")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Planning Classifier module not available: {type(e).__name__}: {e}")
+
+
+# Mine Scope Analyzer Module (Analyze mining scope documents)
+try:
+    from app.tier_2 import registry
+    from app.tier_2.construction.mine_scope_routes import router as mine_scope_router
+
+    registry.register(
+        module_id="mine-scope",
+        name="Mine Scope Analyzer",
+        description="Analyze mining scope documents for requirements extraction and risk analysis",
+        version="1.0.0",
+        tier=2,
+        category="construction",
+        dependencies=["llm_service", "vision_service", "document_service"],
+        routes_prefix="/api/v1/modules/mine-scope"
+    )
+    registry.enable("mine-scope")
+    app.include_router(mine_scope_router)
+
+    logger.info("✓ Tier 2 Module: Mine Scope Analyzer loaded")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Mine Scope module not available: {type(e).__name__}: {e}")
+
+
+# Estimator One AU Module (Australian construction cost estimation)
+try:
+    from app.tier_2 import registry
+    from app.tier_2.construction.estimator_au_routes import router as estimator_au_router
+
+    registry.register(
+        module_id="estimator-one-au",
+        name="Estimator One AU",
+        description="Australian construction cost estimation with state-based pricing",
+        version="1.0.0",
+        tier=2,
+        category="construction",
+        dependencies=["llm_service", "document_service"],
+        routes_prefix="/api/v1/modules/estimator-one-au"
+    )
+    registry.enable("estimator-one-au")
+    app.include_router(estimator_au_router)
+
+    logger.info("✓ Tier 2 Module: Estimator One AU loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Estimator One AU module not available: {type(e).__name__}: {e}")
+
+
+# === TIER 2 PROCUREMENT MODULES ===
+
+# Matcher Module (PO-to-invoice matching)
+try:
+    from app.tier_2 import registry
+    from app.tier_2.procurement.matcher_routes import router as matcher_router
+
+    registry.register(
+        module_id="matcher",
+        name="PO-Invoice Matcher",
+        description="Match purchase orders to invoices with variance analysis",
+        version="1.0.0",
+        tier=2,
+        category="procurement",
+        dependencies=["llm_service", "document_service"],
+        routes_prefix="/api/v1/modules/matcher"
+    )
+    registry.enable("matcher")
+    app.include_router(matcher_router)
+
+    logger.info("✓ Tier 2 Module: Matcher loaded")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Matcher module not available: {type(e).__name__}: {e}")
+
+
+# Vendor Recommendation Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.procurement.vendor_recommendation_routes import router as vendor_recommendation_router
+
+    registry.register(
+        module_id="vendor-recommendation",
+        name="Vendor Recommendation",
+        description="Recommend vendors based on criteria and historical performance",
+        version="1.0.0",
+        tier=2,
+        category="procurement",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/vendor-recommendation"
+    )
+    registry.enable("vendor-recommendation")
+    app.include_router(vendor_recommendation_router)
+
+    logger.info("✓ Tier 2 Module: Vendor Recommendation loaded")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Vendor Recommendation module not available: {type(e).__name__}: {e}")
+
+
+# Tender Intelligence Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.procurement.tender_intelligence_routes import router as tender_intelligence_router
+
+    registry.register(
+        module_id="tender-intelligence",
+        name="Tender Intelligence",
+        description="Analyze tender/RFP documents for bid intelligence",
+        version="1.0.0",
+        tier=2,
+        category="procurement",
+        dependencies=["llm_service", "document_service"],
+        routes_prefix="/api/v1/modules/tender-intelligence"
+    )
+    registry.enable("tender-intelligence")
+    app.include_router(tender_intelligence_router)
+
+    logger.info("✓ Tier 2 Module: Tender Intelligence loaded")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Tender Intelligence module not available: {type(e).__name__}: {e}")
+
+
+# Spend Smart Module (Spending pattern analysis)
+try:
+    from app.tier_2 import registry
+    from app.tier_2.procurement.spend_smart_routes import router as spend_smart_router
+
+    registry.register(
+        module_id="spend-smart",
+        name="Spend Smart",
+        description="Analyze spending patterns and identify cost savings",
+        version="1.0.0",
+        tier=2,
+        category="procurement",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/spend-smart"
+    )
+    registry.enable("spend-smart")
+    app.include_router(spend_smart_router)
+
+    logger.info("✓ Tier 2 Module: Spend Smart loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Spend Smart module not available: {type(e).__name__}: {e}")
+
+
+# === TIER 2 HR & TALENT MODULES ===
+
+# Talent Search Module (AI-powered talent search and matching)
+try:
+    from app.tier_2 import registry
+    from app.tier_2.hr_talent.talent_search_routes import router as talent_search_router
+
+    registry.register(
+        module_id="talent-search",
+        name="Talent Search",
+        description="AI-powered talent search and candidate-to-job matching",
+        version="1.0.0",
+        tier=2,
+        category="hr_talent",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/talent-search"
+    )
+    registry.enable("talent-search")
+    app.include_router(talent_search_router)
+
+    logger.info("✓ Tier 2 Module: Talent Search loaded")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Talent Search module not available: {type(e).__name__}: {e}")
+
+
+# Taxonomy Skillmatch Module (Skill taxonomy and matching)
+try:
+    from app.tier_2 import registry
+    from app.tier_2.hr_talent.taxonomy_skillmatch_routes import router as taxonomy_skillmatch_router
+
+    registry.register(
+        module_id="taxonomy-skillmatch",
+        name="Taxonomy Skillmatch",
+        description="Skill taxonomy mapping and matching",
+        version="1.0.0",
+        tier=2,
+        category="hr_talent",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/taxonomy-skillmatch"
+    )
+    registry.enable("taxonomy-skillmatch")
+    app.include_router(taxonomy_skillmatch_router)
+
+    logger.info("✓ Tier 2 Module: Taxonomy Skillmatch loaded")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Taxonomy Skillmatch module not available: {type(e).__name__}: {e}")
+
+
+# Talent Pulse Module (Employee sentiment and engagement analysis)
+try:
+    from app.tier_2 import registry
+    from app.tier_2.hr_talent.talent_pulse_routes import router as talent_pulse_router
+
+    registry.register(
+        module_id="talent-pulse",
+        name="Talent Pulse",
+        description="Employee sentiment and engagement analysis",
+        version="1.0.0",
+        tier=2,
+        category="hr_talent",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/talent-pulse"
+    )
+    registry.enable("talent-pulse")
+    app.include_router(talent_pulse_router)
+
+    logger.info("✓ Tier 2 Module: Talent Pulse loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Talent Pulse module not available: {type(e).__name__}: {e}")
+
+
+# === TIER 2 AGRICULTURE MODULES ===
+
+# Agri Taxonomy Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.agriculture.agri_taxonomy_routes import router as agri_taxonomy_router
+
+    registry.register(
+        module_id="agri-taxonomy",
+        name="Agricultural Taxonomy",
+        description="Agricultural crop classification and taxonomy",
+        version="1.0.0",
+        tier=2,
+        category="agriculture",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/agri-taxonomy"
+    )
+    registry.enable("agri-taxonomy")
+    app.include_router(agri_taxonomy_router)
+
+    logger.info("✓ Tier 2 Module: Agri Taxonomy loaded")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Agri Taxonomy module not available: {type(e).__name__}: {e}")
+
+
+# Agronomy Decision Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.agriculture.agronomy_decision_routes import router as agronomy_decision_router
+
+    registry.register(
+        module_id="agronomy-decision",
+        name="Agronomy Decision Support",
+        description="AI-powered agronomy decision support and farm management recommendations",
+        version="1.0.0",
+        tier=2,
+        category="agriculture",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/agronomy-decision"
+    )
+    registry.enable("agronomy-decision")
+    app.include_router(agronomy_decision_router)
+
+    logger.info("✓ Tier 2 Module: Agronomy Decision loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Agronomy Decision module not available: {type(e).__name__}: {e}")
+
+
+# === TIER 2 MARKETING MODULES ===
+
+# Sentiment Social Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.marketing.sentiment_social_routes import router as sentiment_social_router
+
+    registry.register(
+        module_id="sentiment-social",
+        name="Social Media Sentiment Analysis",
+        description="AI-powered social media sentiment analysis and brand monitoring",
+        version="1.0.0",
+        tier=2,
+        category="marketing",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/sentiment-social"
+    )
+    registry.enable("sentiment-social")
+    app.include_router(sentiment_social_router)
+
+    logger.info("✓ Tier 2 Module: Sentiment Social loaded")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Sentiment Social module not available: {type(e).__name__}: {e}")
+
+
+# Campaign Optimizer Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.marketing.campaign_optimizer_routes import router as campaign_optimizer_router
+
+    registry.register(
+        module_id="campaign-optimizer",
+        name="Campaign Optimization Engine",
+        description="AI-powered marketing campaign optimization and ROI maximization",
+        version="1.0.0",
+        tier=2,
+        category="marketing",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/campaign-optimizer"
+    )
+    registry.enable("campaign-optimizer")
+    app.include_router(campaign_optimizer_router)
+
+    logger.info("✓ Tier 2 Module: Campaign Optimizer loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Campaign Optimizer module not available: {type(e).__name__}: {e}")
+
+
+# === TIER 2 ECOMMERCE MODULES ===
+
+# Product Recommendation Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.ecommerce.product_recommendation_routes import router as product_recommendation_router
+
+    registry.register(
+        module_id="product-recommendation",
+        name="Product Recommendation Engine",
+        description="AI-powered product recommendation engine with personalization",
+        version="1.0.0",
+        tier=2,
+        category="ecommerce",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/product-recommendation"
+    )
+    registry.enable("product-recommendation")
+    app.include_router(product_recommendation_router)
+    logger.info("✓ Tier 2 Module: Product Recommendation loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Product Recommendation module not available: {type(e).__name__}: {e}")
+
+
+# === TIER 2 MARITIME MODULES ===
+
+# Maritime Logistics Optimizer Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.maritime.maritime_logistics_routes import router as maritime_logistics_router
+
+    registry.register(
+        module_id="maritime-logistics",
+        name="Maritime Logistics Optimizer",
+        description="AI-powered maritime logistics optimization with route planning, port scheduling, and cargo management",
+        version="1.0.0",
+        tier=2,
+        category="maritime",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/maritime-logistics"
+    )
+    registry.enable("maritime-logistics")
+    app.include_router(maritime_logistics_router)
+    logger.info("✓ Tier 2 Module: Maritime Logistics loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Maritime Logistics module not available: {type(e).__name__}: {e}")
+
+
+# === TIER 2 ANALYTICS MODULES ===
+
+# Predictive Analytics Engine Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.analytics.predictive_analytics_routes import router as predictive_analytics_router
+
+    registry.register(
+        module_id="predictive-analytics",
+        name="Predictive Analytics Engine",
+        description="AI-powered predictive analytics for business forecasting and trend analysis",
+        version="1.0.0",
+        tier=2,
+        category="analytics",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/predictive-analytics"
+    )
+    registry.enable("predictive-analytics")
+    app.include_router(predictive_analytics_router)
+    logger.info("✓ Tier 2 Module: Predictive Analytics loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Predictive Analytics module not available: {type(e).__name__}: {e}")
+
+
+# Customer Churn Predictor Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.analytics.customer_churn_routes import router as customer_churn_router
+
+    registry.register(
+        module_id="customer-churn",
+        name="Customer Churn Predictor",
+        description="AI-powered customer churn prediction and retention strategy recommendations",
+        version="1.0.0",
+        tier=2,
+        category="analytics",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/customer-churn"
+    )
+    registry.enable("customer-churn")
+    app.include_router(customer_churn_router)
+    logger.info("✓ Tier 2 Module: Customer Churn loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Customer Churn module not available: {type(e).__name__}: {e}")
+
+# Sales Performance Analytics Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.analytics.sales_performance_routes import router as sales_performance_router
+
+    registry.register(
+        module_id="sales-performance",
+        name="Sales Performance Analytics",
+        description="AI-powered sales rep scoring, opportunity prediction, and pipeline health analysis",
+        version="1.0.0",
+        tier=2,
+        category="analytics",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/sales-performance"
+    )
+    registry.enable("sales-performance")
+    app.include_router(sales_performance_router)
+    logger.info("✓ Tier 2 Module: Sales Performance loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Sales Performance module not available: {type(e).__name__}: {e}")
+
+# Financial Anomaly Detector Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.analytics.financial_anomaly_routes import router as financial_anomaly_router
+
+    registry.register(
+        module_id="financial-anomaly",
+        name="Financial Anomaly Detector",
+        description="AI-powered transaction anomaly detection, fraud scoring, and pattern recognition",
+        version="1.0.0",
+        tier=2,
+        category="analytics",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/financial-anomaly"
+    )
+    registry.enable("financial-anomaly")
+    app.include_router(financial_anomaly_router)
+    logger.info("✓ Tier 2 Module: Financial Anomaly loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Financial Anomaly module not available: {type(e).__name__}: {e}")
+
+# ==============================================
+# TIER 2: INDUSTRY VERTICALS (Modules 24-28)
+# ==============================================
+
+# Healthcare Diagnostics AI Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.industry_verticals.healthcare_diagnostics_routes import router as healthcare_diagnostics_router
+
+    registry.register(
+        module_id="healthcare-diagnostics",
+        name="Healthcare Diagnostics AI",
+        description="AI-powered medical diagnostics with symptom analysis, differential diagnosis, and treatment recommendations",
+        version="1.0.0",
+        tier=2,
+        category="industry_verticals",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/healthcare-diagnostics"
+    )
+    registry.enable("healthcare-diagnostics")
+    app.include_router(healthcare_diagnostics_router)
+    logger.info("✓ Tier 2 Module: Healthcare Diagnostics loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Healthcare Diagnostics module not available: {type(e).__name__}: {e}")
+
+# Legal Document Analyzer Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.industry_verticals.legal_document_routes import router as legal_document_router
+
+    registry.register(
+        module_id="legal-document",
+        name="Legal Document Analyzer",
+        description="AI-powered legal document analysis with clause extraction, risk assessment, and compliance checking",
+        version="1.0.0",
+        tier=2,
+        category="industry_verticals",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/legal-document"
+    )
+    registry.enable("legal-document")
+    app.include_router(legal_document_router)
+    logger.info("✓ Tier 2 Module: Legal Document Analyzer loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Legal Document module not available: {type(e).__name__}: {e}")
+
+# Real Estate Valuation AI Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.industry_verticals.real_estate_routes import router as real_estate_router
+
+    registry.register(
+        module_id="real-estate-valuation",
+        name="Real Estate Valuation AI",
+        description="AI-powered property valuation with comparable analysis and market trend insights",
+        version="1.0.0",
+        tier=2,
+        category="industry_verticals",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/real-estate"
+    )
+    registry.enable("real-estate-valuation")
+    app.include_router(real_estate_router)
+    logger.info("✓ Tier 2 Module: Real Estate Valuation loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Real Estate module not available: {type(e).__name__}: {e}")
+
+# Insurance Risk Assessor Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.industry_verticals.insurance_risk_routes import router as insurance_risk_router
+
+    registry.register(
+        module_id="insurance-risk",
+        name="Insurance Risk Assessor",
+        description="AI-powered insurance risk assessment with premium calculation and risk factor analysis",
+        version="1.0.0",
+        tier=2,
+        category="industry_verticals",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/insurance-risk"
+    )
+    registry.enable("insurance-risk")
+    app.include_router(insurance_risk_router)
+    logger.info("✓ Tier 2 Module: Insurance Risk Assessor loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Insurance Risk module not available: {type(e).__name__}: {e}")
+
+# Educational Content Recommender Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.industry_verticals.educational_content_routes import router as educational_content_router
+
+    registry.register(
+        module_id="educational-content",
+        name="Educational Content Recommender",
+        description="AI-powered educational content recommendations with learning path generation and skill-level matching",
+        version="1.0.0",
+        tier=2,
+        category="industry_verticals",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/educational-content"
+    )
+    registry.enable("educational-content")
+    app.include_router(educational_content_router)
+    logger.info("✓ Tier 2 Module: Educational Content Recommender loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Educational Content module not available: {type(e).__name__}: {e}")
+
+# ==============================================
+# TIER 2: ADVANCED CAPABILITIES (Modules 29-30)
+# ==============================================
+
+# Multilingual Content Translator Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.advanced_capabilities.multilingual_translator_routes import router as multilingual_translator_router
+
+    registry.register(
+        module_id="multilingual-translator",
+        name="Multilingual Content Translator",
+        description="AI-powered multi-language translation with quality assessment and glossary management (10+ languages)",
+        version="1.0.0",
+        tier=2,
+        category="advanced_capabilities",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/multilingual-translator"
+    )
+    registry.enable("multilingual-translator")
+    app.include_router(multilingual_translator_router)
+    logger.info("✓ Tier 2 Module: Multilingual Translator loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Multilingual Translator module not available: {type(e).__name__}: {e}")
+
+# Code Analysis & Review AI Module
+try:
+    from app.tier_2 import registry
+    from app.tier_2.advanced_capabilities.code_analysis_routes import router as code_analysis_router
+
+    registry.register(
+        module_id="code-analysis",
+        name="Code Analysis & Review AI",
+        description="AI-powered code analysis with security scanning, performance optimization, and quality metrics (8+ languages)",
+        version="1.0.0",
+        tier=2,
+        category="advanced_capabilities",
+        dependencies=["llm_service"],
+        routes_prefix="/api/v1/modules/code-analysis"
+    )
+    registry.enable("code-analysis")
+    app.include_router(code_analysis_router)
+    logger.info("✓ Tier 2 Module: Code Analysis & Review loaded")
+    logger.info(f"  → Total Tier 2 modules: {len(registry.get_enabled_modules())} enabled")
+    logger.info("🎉 ALL 30 TIER 2 MODULES LOADED SUCCESSFULLY!")
+except Exception as e:
+    logger.warning(f"⚠ Tier 2 Code Analysis module not available: {type(e).__name__}: {e}")
+
+# ================================================
+# TIER 3: CUSTOMER SOLUTIONS (Customer-Specific POCs)
+# ================================================
+
+# British Council POC
+try:
+    from app.tier_3 import tier3_registry
+    from app.tier_3.customer_solutions.british_council_routes import router as british_council_router
+
+    tier3_registry.register(
+        module_id="british-council",
+        name="British Council POC",
+        description="Educational content delivery and assessment platform",
+        customer="British Council",
+        tier_2_dependencies=["educational-content", "generic-rag", "multilingual-translator"]
+    )
+    tier3_registry.enable("british-council")
+    app.include_router(british_council_router)
+    logger.info("✓ Tier 3 Customer POC: British Council loaded")
+except Exception as e:
+    logger.warning(f"⚠ Tier 3 British Council POC not available: {type(e).__name__}: {e}")
+
+# CRU POC
+try:
+    from app.tier_3 import tier3_registry
+    from app.tier_3.customer_solutions.cru_routes import router as cru_router
+
+    tier3_registry.register(
+        module_id="cru",
+        name="CRU POC",
+        description="Construction resource utilization and project monitoring",
+        customer="CRU",
+        tier_2_dependencies=["construction-monitor", "estimator-one-au", "mine-scope"]
+    )
+    tier3_registry.enable("cru")
+    app.include_router(cru_router)
+    logger.info("✓ Tier 3 Customer POC: CRU loaded")
+except Exception as e:
+    logger.warning(f"⚠ Tier 3 CRU POC not available: {type(e).__name__}: {e}")
+
+# Grant Thornton POC
+try:
+    from app.tier_3 import tier3_registry
+    from app.tier_3.customer_solutions.grant_thornton_routes import router as grant_thornton_router
+
+    tier3_registry.register(
+        module_id="grant-thornton",
+        name="Grant Thornton POC",
+        description="Financial audit and compliance automation",
+        customer="Grant Thornton",
+        tier_2_dependencies=["financial-anomaly", "legal-document", "document-intelligence"]
+    )
+    tier3_registry.enable("grant-thornton")
+    app.include_router(grant_thornton_router)
+    logger.info("✓ Tier 3 Customer POC: Grant Thornton loaded")
+except Exception as e:
+    logger.warning(f"⚠ Tier 3 Grant Thornton POC not available: {type(e).__name__}: {e}")
+
+# GT Motive POC
+try:
+    from app.tier_3 import tier3_registry
+    from app.tier_3.customer_solutions.gt_motive_routes import router as gt_motive_router
+
+    tier3_registry.register(
+        module_id="gt-motive",
+        name="GT Motive POC",
+        description="Automotive damage assessment and claims processing",
+        customer="GT Motive",
+        tier_2_dependencies=["insurance-risk", "document-intelligence", "predictive-analytics"]
+    )
+    tier3_registry.enable("gt-motive")
+    app.include_router(gt_motive_router)
+    logger.info("✓ Tier 3 Customer POC: GT Motive loaded")
+except Exception as e:
+    logger.warning(f"⚠ Tier 3 GT Motive POC not available: {type(e).__name__}: {e}")
+
+# Solera POC
+try:
+    from app.tier_3 import tier3_registry
+    from app.tier_3.customer_solutions.solera_routes import router as solera_router
+
+    tier3_registry.register(
+        module_id="solera",
+        name="Solera POC",
+        description="Insurance claims workflow automation",
+        customer="Solera",
+        tier_2_dependencies=["insurance-risk", "document-intelligence", "financial-anomaly"]
+    )
+    tier3_registry.enable("solera")
+    app.include_router(solera_router)
+    logger.info("✓ Tier 3 Customer POC: Solera loaded")
+except Exception as e:
+    logger.warning(f"⚠ Tier 3 Solera POC not available: {type(e).__name__}: {e}")
+
+# Construction Monitor POC
+try:
+    from app.tier_3 import tier3_registry
+    from app.tier_3.customer_solutions.construction_monitor_routes import router as construction_monitor_router
+
+    tier3_registry.register(
+        module_id="construction-monitor",
+        name="Construction Monitor POC",
+        description="Real-time project monitoring and reporting",
+        customer="Construction Monitor",
+        tier_2_dependencies=["estimator-one-au", "mine-scope", "document-intelligence"]
+    )
+    tier3_registry.enable("construction-monitor")
+    app.include_router(construction_monitor_router)
+    logger.info("✓ Tier 3 Customer POC: Construction Monitor loaded")
+    logger.info(f"🎉 ALL 6 TIER 3 CUSTOMER POCs LOADED! Total enabled: {len(tier3_registry.get_enabled_modules())}")
+except Exception as e:
+    logger.warning(f"⚠ Tier 3 Construction Monitor POC not available: {type(e).__name__}: {e}")
+
 
 # Scraping Configuration & Compliance API (Admin-level scraping policy management)
 try:

@@ -22,7 +22,17 @@ import {
   ChevronDown,
   BookOpen,
   Bot,
-  Building2
+  Building2,
+  ShoppingCart,
+  Users,
+  Sprout,
+  Mail,
+  ShoppingBag,
+  Ship,
+  PieChart,
+  Target,
+  Layers,
+  CheckCircle2
 } from 'lucide-react'
 import { ThemeToggle } from '@/theme/ThemeToggle'
 import axios from 'axios'
@@ -38,9 +48,11 @@ interface Project {
   updated_at: string
 }
 
+type TabType = 'dashboard' | 'chat' | 'upload' | 'scrape' | 'history' | 'evaluation' | 'estimator' | 'tools' | 'weights' | 'library' | 'projects' | 'files' | 'explainable' | 'agent' | 'construction' | 'document-extract'
+
 interface Props {
-  activeTab: 'dashboard' | 'chat' | 'upload' | 'scrape' | 'history' | 'evaluation' | 'estimator' | 'tools' | 'weights' | 'library' | 'projects' | 'files' | 'explainable' | 'agent' | 'construction'
-  setActiveTab: (tab: 'dashboard' | 'chat' | 'upload' | 'scrape' | 'history' | 'evaluation' | 'estimator' | 'tools' | 'weights' | 'library' | 'projects' | 'files' | 'explainable' | 'agent' | 'construction') => void
+  activeTab: TabType
+  setActiveTab: (tab: TabType) => void
   currentUser?: string
   onNewChat?: () => void
   onProjectClick?: (projectId: string) => void
@@ -54,7 +66,9 @@ export default function SidebarModern({ activeTab, setActiveTab, currentUser, on
   const [loadingProjects, setLoadingProjects] = useState(false)
   const [recentChats, setRecentChats] = useState<ChatSessionType[]>([])
   const [loadingChats, setLoadingChats] = useState(false)
-  const [metricsExpanded, setMetricsExpanded] = useState(false)  // 🆕 Track metrics submenu state
+  const [metricsExpanded, setMetricsExpanded] = useState(false)  // Track metrics submenu state
+  const [verticalsExpanded, setVerticalsExpanded] = useState(false)  // Track domain verticals submenu
+  const [customersExpanded, setCustomersExpanded] = useState(false)  // Track customer solutions submenu
 
   // 🆕 Consolidated Metrics & Evaluation submenu items (defined early for useEffect)
   const metricsSubItems = [
@@ -156,14 +170,145 @@ export default function SidebarModern({ activeTab, setActiveTab, currentUser, on
     // 'Projects' removed - use Projects section in sidebar instead
   ]
 
-  // Secondary navigation - Tools & Features
+  // Platform Tools (Tier 1)
   const secondaryNavItems = [
     { id: 'upload' as const, icon: Upload, label: 'Upload Files' },
     { id: 'scrape' as const, icon: Globe, label: 'Web Scraping' },
     { id: 'estimator' as const, icon: Calculator, label: 'Project Estimator' },
-    { id: 'construction' as const, icon: Building2, label: 'Construction Metrics' },
     { id: 'library' as const, icon: BookOpen, label: 'Prompt Library' },
     { id: 'agent' as const, icon: Bot, label: 'Agent Tasks' },
+  ]
+
+  // Domain Verticals (Tier 2) - Industry-specific modules
+  const domainVerticals = [
+    {
+      id: 'document-intelligence',
+      icon: FileText,
+      label: 'Document Intelligence',
+      badge: '3/3',
+      modules: [
+        { id: 'document-extract' as const, label: '18-Field Extraction', status: 'live' },
+        { id: 'relation-extractor' as const, label: 'Relation Extractor', status: 'live' },
+        { id: 'generic-rag' as const, label: 'Generic RAG', status: 'live' }
+      ]
+    },
+    {
+      id: 'construction',
+      icon: Building2,
+      label: 'Construction',
+      badge: '4/4',
+      modules: [
+        { id: 'construction' as const, label: 'Building Metrics', status: 'live' },
+        { id: 'planning-classifier' as const, label: 'Planning Classifier', status: 'live' },
+        { id: 'mine-scope' as const, label: 'Mine Scope Analysis', status: 'live' },
+        { id: 'estimator-au' as const, label: 'AU Cost Estimator', status: 'live' }
+      ]
+    },
+    {
+      id: 'procurement',
+      icon: ShoppingCart,
+      label: 'Procurement',
+      badge: '4/4',
+      modules: [
+        { id: 'matcher' as const, label: 'PO-Invoice Matcher', status: 'live' },
+        { id: 'vendor-recommendation' as const, label: 'Vendor Recommendation', status: 'live' },
+        { id: 'tender-intelligence' as const, label: 'Tender Intelligence', status: 'live' },
+        { id: 'spend-smart' as const, label: 'Spend Analytics', status: 'live' }
+      ]
+    },
+    {
+      id: 'hr-talent',
+      icon: Users,
+      label: 'HR & Talent',
+      badge: '3/3',
+      modules: [
+        { id: 'talent-search' as const, label: 'Talent Search', status: 'live' },
+        { id: 'taxonomy-skillmatch' as const, label: 'Skill Taxonomy', status: 'live' },
+        { id: 'talent-pulse' as const, label: 'Employee Engagement', status: 'live' }
+      ]
+    },
+    {
+      id: 'agriculture',
+      icon: Sprout,
+      label: 'Agriculture',
+      badge: '2/2',
+      modules: [
+        { id: 'agri-taxonomy' as const, label: 'Crop Taxonomy', status: 'live' },
+        { id: 'agronomy-decision' as const, label: 'Agronomy Decisions', status: 'live' }
+      ]
+    },
+    {
+      id: 'marketing',
+      icon: Mail,
+      label: 'Marketing',
+      badge: '2/2',
+      modules: [
+        { id: 'sentiment-social' as const, label: 'Social Sentiment', status: 'live' },
+        { id: 'campaign-optimizer' as const, label: 'Campaign Optimizer', status: 'live' }
+      ]
+    },
+    {
+      id: 'ecommerce',
+      icon: ShoppingBag,
+      label: 'E-commerce',
+      badge: '1/1',
+      modules: [
+        { id: 'product-recommendation' as const, label: 'Product Recommendations', status: 'live' }
+      ]
+    },
+    {
+      id: 'maritime',
+      icon: Ship,
+      label: 'Maritime',
+      badge: '1/1',
+      modules: [
+        { id: 'maritime-logistics' as const, label: 'Logistics Optimizer', status: 'live' }
+      ]
+    },
+    {
+      id: 'analytics',
+      icon: PieChart,
+      label: 'Analytics',
+      badge: '4/4',
+      modules: [
+        { id: 'predictive-analytics' as const, label: 'Predictive Analytics', status: 'live' },
+        { id: 'customer-churn' as const, label: 'Churn Predictor', status: 'live' },
+        { id: 'sales-performance' as const, label: 'Sales Performance', status: 'live' },
+        { id: 'financial-anomaly' as const, label: 'Financial Anomaly', status: 'live' }
+      ]
+    },
+    {
+      id: 'industry-verticals',
+      icon: Building2,
+      label: 'Industry Verticals',
+      badge: '5/5',
+      modules: [
+        { id: 'healthcare-diagnostics' as const, label: 'Healthcare Diagnostics', status: 'live' },
+        { id: 'legal-document' as const, label: 'Legal Document Analyzer', status: 'live' },
+        { id: 'real-estate-valuation' as const, label: 'Real Estate Valuation', status: 'live' },
+        { id: 'insurance-risk' as const, label: 'Insurance Risk Assessor', status: 'live' },
+        { id: 'educational-content' as const, label: 'Educational Content', status: 'live' }
+      ]
+    },
+    {
+      id: 'advanced-capabilities',
+      icon: Sparkles,
+      label: 'Advanced Capabilities',
+      badge: '2/2',
+      modules: [
+        { id: 'multilingual-translator' as const, label: 'Multilingual Translator', status: 'live' },
+        { id: 'code-analysis' as const, label: 'Code Analysis & Review', status: 'live' }
+      ]
+    }
+  ]
+
+  // Customer Solutions (Tier 3) - Customer-specific POCs
+  const customerSolutions = [
+    { id: 'british-council', label: 'British Council POC', status: 'live' },
+    { id: 'cru', label: 'CRU POC', status: 'live' },
+    { id: 'gt-motive', label: 'GT Motive POC', status: 'live' },
+    { id: 'solera', label: 'Solera POC', status: 'live' },
+    { id: 'construction-monitor', label: 'Construction Monitor POC', status: 'live' }
   ]
 
   return (
@@ -328,6 +473,156 @@ export default function SidebarModern({ activeTab, setActiveTab, currentUser, on
             >
               <TrendingUp className="w-4 h-4 flex-shrink-0" />
             </button>
+          )}
+
+          {/* 🆕 Domain Verticals (Tier 2) Section */}
+          {!isCollapsed && (
+            <div className="mt-4">
+              <button
+                onClick={() => setVerticalsExpanded(!verticalsExpanded)}
+                className={`
+                  w-full px-3 py-2 flex items-center justify-between gap-3 rounded-lg
+                  transition-all duration-150
+                  ${['document-extract', 'construction'].includes(activeTab)
+                    ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                  }
+                `}
+              >
+                <div className="flex items-center gap-3">
+                  <Layers className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-sm font-medium">Domain Verticals</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded font-semibold">TIER 2</span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 transition-transform duration-200 ${verticalsExpanded ? 'rotate-180' : ''}`}
+                  />
+                </div>
+              </button>
+
+              {/* Domain Verticals Submenu */}
+              {verticalsExpanded && (
+                <div className="mt-0.5 ml-3 pl-3 border-l border-slate-200 dark:border-slate-700 space-y-0.5">
+                  {domainVerticals.map((vertical) => {
+                    const Icon = vertical.icon
+                    const hasModules = vertical.modules && vertical.modules.length > 0
+                    const isVerticalActive = vertical.modules?.some((m: any) => m.id === activeTab)
+
+                    return (
+                      <div key={vertical.id}>
+                        {hasModules ? (
+                          <>
+                            <div className={`px-2 py-1.5 flex items-center justify-between text-xs font-medium text-slate-600 dark:text-slate-400 ${isVerticalActive ? 'text-emerald-700 dark:text-emerald-300' : ''}`}>
+                              <div className="flex items-center gap-2">
+                                <Icon className="w-3.5 h-3.5" />
+                                <span>{vertical.label}</span>
+                              </div>
+                              <span className="text-[9px] px-1 py-0.5 bg-slate-100 dark:bg-slate-800 rounded">{vertical.badge}</span>
+                            </div>
+                            <div className="ml-5 space-y-0.5">
+                              {vertical.modules.map((module: any) => {
+                                const isActive = activeTab === module.id
+                                const isLive = module.status === 'live'
+
+                                return (
+                                  <button
+                                    key={module.id}
+                                    onClick={() => isLive && setActiveTab(module.id)}
+                                    disabled={!isLive}
+                                    className={`
+                                      w-full px-2 py-1 flex items-center justify-between gap-2 rounded-lg
+                                      transition-all duration-150 text-xs
+                                      ${isActive
+                                        ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 font-medium'
+                                        : isLive
+                                          ? 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                          : 'text-slate-400 dark:text-slate-600 cursor-not-allowed'
+                                      }
+                                    `}
+                                  >
+                                    <span>{module.label}</span>
+                                    {isLive ? (
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                    ) : (
+                                      <span className="text-[8px] px-1 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-500 rounded">SOON</span>
+                                    )}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </>
+                        ) : (
+                          <div className={`px-2 py-1.5 flex items-center justify-between text-xs font-medium text-slate-400 dark:text-slate-600`}>
+                            <div className="flex items-center gap-2">
+                              <Icon className="w-3.5 h-3.5" />
+                              <span>{vertical.label}</span>
+                            </div>
+                            <span className="text-[9px] px-1 py-0.5 bg-slate-100 dark:bg-slate-800 rounded">{vertical.badge}</span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 🆕 Customer Solutions (Tier 3) Section */}
+          {!isCollapsed && (
+            <div className="mt-2">
+              <button
+                onClick={() => setCustomersExpanded(!customersExpanded)}
+                className="w-full px-3 py-2 flex items-center justify-between gap-3 rounded-lg transition-all duration-150 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+              >
+                <div className="flex items-center gap-3">
+                  <Target className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-sm font-medium">Customer Solutions</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded font-semibold">TIER 3</span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 transition-transform duration-200 ${customersExpanded ? 'rotate-180' : ''}`}
+                  />
+                </div>
+              </button>
+
+              {/* Customer Solutions Submenu */}
+              {customersExpanded && (
+                <div className="mt-0.5 ml-3 pl-3 border-l border-slate-200 dark:border-slate-700 space-y-0.5">
+                  {customerSolutions.map((customer: any) => {
+                    const isActive = activeTab === customer.id
+                    const isLive = customer.status === 'live'
+
+                    return (
+                      <button
+                        key={customer.id}
+                        onClick={() => isLive && setActiveTab(customer.id)}
+                        disabled={!isLive}
+                        className={`
+                          w-full px-2 py-1 flex items-center justify-between gap-2 rounded-lg
+                          transition-all duration-150 text-xs
+                          ${isActive
+                            ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 font-medium'
+                            : isLive
+                              ? 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                              : 'text-slate-400 dark:text-slate-600 cursor-not-allowed'
+                          }
+                        `}
+                      >
+                        <span>{customer.label}</span>
+                        {isLive ? (
+                          <CheckCircle2 className="w-3 h-3 text-purple-600" />
+                        ) : (
+                          <span className="text-[8px] px-1 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-500 rounded">SOON</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           )}
         </div>
 

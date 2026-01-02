@@ -17,13 +17,17 @@ import Library from '@/components/Library'
 import PromptLibraryManager from '@/components/PromptLibraryManager'
 import AgentTaskMonitor from '@/components/AgentTaskMonitor'
 import ConstructionExtraction from '@/components/ConstructionExtraction'
+import DocumentExtractionPanel from '@/components/DocumentExtractionPanel'
+import GrantThorntonExtraction from '@/components/GrantThorntonExtraction'
+import ModuleInterface from '@/components/ModuleInterface'
 import { useAuth } from '@/contexts/AuthContext'
 import type { RAGConfig } from '@/components/RAGSettings'
+import { getModuleConfig, isModuleId } from '@/config/modules'
 
 export default function Home() {
   const router = useRouter()
   const { user, isAuthenticated, isLoading } = useAuth()
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'chat' | 'upload' | 'scrape' | 'history' | 'evaluation' | 'estimator' | 'tools' | 'weights' | 'library' | 'projects' | 'files' | 'explainable' | 'agent' | 'construction'>('chat')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'chat' | 'upload' | 'scrape' | 'history' | 'evaluation' | 'estimator' | 'tools' | 'weights' | 'library' | 'projects' | 'files' | 'explainable' | 'agent' | 'construction' | 'document-extract' | 'grant-thornton'>('chat')
   const [sessionId, setSessionId] = useState<string>('')
   const [currentUser, setCurrentUser] = useState<string>('Anonymous')
   const [ragConfig, setRagConfig] = useState<RAGConfig | null>(null)
@@ -202,6 +206,18 @@ export default function Home() {
             </div>
           )}
 
+          {activeTab === 'document-extract' && (
+            <div className="flex-1 overflow-y-auto">
+              <DocumentExtractionPanel />
+            </div>
+          )}
+
+          {activeTab === 'grant-thornton' && (
+            <div className="flex-1 overflow-y-auto">
+              <GrantThorntonExtraction />
+            </div>
+          )}
+
           {activeTab === 'scrape' && (
             <div className="flex-1 flex flex-col overflow-y-auto p-6 bg-slate-50 dark:bg-slate-900">
               <UnifiedWebScraper />
@@ -307,6 +323,23 @@ export default function Home() {
               </div>
             </div>
           )}
+
+          {/* Tier 2 & Tier 3 Module Interface - Dynamic rendering for all modules */}
+          {isModuleId(activeTab) && (() => {
+            const moduleConfig = getModuleConfig(activeTab)
+            if (!moduleConfig) return null
+
+            return (
+              <div className="flex-1 overflow-hidden">
+                <ModuleInterface
+                  moduleId={moduleConfig.id}
+                  moduleName={moduleConfig.name}
+                  moduleType={moduleConfig.type}
+                  sessionId={sessionId}
+                />
+              </div>
+            )
+          })()}
         </div>
       </main>
     </>
