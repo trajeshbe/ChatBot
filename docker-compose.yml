@@ -565,3 +565,4 @@ volumes:
   claude_session:  # Claude CLI OAuth session persistence
   finetuning_workspaces:  # Training workspaces (datasets, checkpoints, logs)
   huggingface_cache:  # HuggingFace models cache (avoid re-downloading)
+  elasticsearch_data:  # Elasticsearch index data for CRU POC keyword search

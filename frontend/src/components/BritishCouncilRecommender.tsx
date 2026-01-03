@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
+import { Settings } from 'lucide-react'
+import POCConfigManager from './POCConfigManager'
 
 interface UserProfile {
   skills: string[]
@@ -35,6 +37,7 @@ export default function BritishCouncilRecommender() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [recommendations, setRecommendations] = useState<CourseRecommendation[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [showConfig, setShowConfig] = useState(false)
 
   const handleAnalyzeProfile = async () => {
     if (!userInput.trim()) {
@@ -109,14 +112,33 @@ export default function BritishCouncilRecommender() {
     <div className="h-full overflow-y-auto bg-gradient-to-br from-slate-50 to-slate-100 p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">
-            🎓 British Council Course Recommender
-          </h1>
-          <p className="text-slate-600">
-            AI-powered course recommendations based on your profile and goals
-          </p>
+        <div className="mb-8 flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800 mb-2">
+              🎓 British Council Course Recommender
+            </h1>
+            <p className="text-slate-600">
+              AI-powered course recommendations based on your profile and goals
+            </p>
+          </div>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Configure
+          </button>
         </div>
+
+        {/* Configuration Panel */}
+        {showConfig && (
+          <div className="mb-6">
+            <POCConfigManager
+              moduleName="british_council"
+              onClose={() => setShowConfig(false)}
+            />
+          </div>
+        )}
 
         {/* Input Section */}
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6">

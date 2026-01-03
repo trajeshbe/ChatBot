@@ -1,0 +1,96 @@
+{
+  "document_type": "mining_market_report",
+  "report_metadata": {
+    "report_id": "CRU-CU-2024-Q1",
+    "commodity": "Copper",
+    "period": "Q1 2024",
+    "publication_date": "2024-01-15",
+    "author": "Dr. Michael Patterson"
+  },
+  "price_data": {
+    "current_price": {
+      "value": 8450,
+      "unit": "USD per tonne",
+      "benchmark": "LME 3-month"
+    },
+    "price_change_qoq": "+3.05%",
+    "price_change_yoy": "+12.5%",
+    "forecast_2024": {
+      "Q2": {"min": 8300, "max": 8700},
+      "Q3": {"min": 8500, "max": 9100},
+      "Q4": {"min": 8700, "max": 9300},
+      "full_year_avg": 8625
+    }
+  },
+  "production_data": [
+    {
+      "country": "Chile",
+      "total_production": 1420000,
+      "unit": "tonnes",
+      "change_yoy": "+2.3%",
+      "major_operations": [
+        {"name": "Codelco", "production": 365000},
+        {"name": "Escondida (BHP)", "production": 280000},
+        {"name": "Collahuasi", "production": 145000}
+      ]
+    },
+    {
+      "country": "Peru",
+      "total_production": 580000,
+      "unit": "tonnes",
+      "change_yoy": "+5.1%",
+      "major_operations": [
+        {"name": "Las Bambas", "production": 95000},
+        {"name": "Antamina", "production": 88000},
+        {"name": "Cerro Verde", "production": 120000}
+      ]
+    },
+    {
+      "country": "Democratic Republic of Congo",
+      "total_production": 425000,
+      "unit": "tonnes",
+      "change_yoy": "+8.5%",
+      "major_operations": [
+        {"name": "Kamoa-Kakula", "production": 95000, "status": "new production"},
+        {"name": "Tenke Fungurume", "production": 68000}
+      ]
+    }
+  ],
+  "demand_data": {
+    "total_global_demand": 24500000,
+    "unit": "tonnes",
+    "regional_breakdown": [
+      {"region": "China", "demand": 13200000, "share": "54%"},
+      {"region": "Europe", "demand": 3800000},
+      {"region": "North America", "demand": 2100000}
+    ],
+    "growth_drivers": [
+      {"sector": "Electric Vehicle production", "growth": "+18% YoY"},
+      {"sector": "Renewable energy infrastructure", "growth": "+14% YoY"},
+      {"sector": "Grid modernization projects", "growth": "+9% YoY"}
+    ]
+  },
+  "inventory_data": {
+    "lme_stocks": {"value": 185500, "unit": "tonnes", "change": "down 12% from Dec 2023"},
+    "shfe_stocks": {"value": 245000, "unit": "tonnes", "change": "down 8% from Dec 2023"},
+    "comex_stocks": {"value": 28500, "unit": "tonnes", "change": "down 15% from Dec 2023"},
+    "days_of_consumption": 6.2
+  },
+  "cost_analysis": {
+    "average_c1_cost": 4650,
+    "unit": "USD per tonne",
+    "margin_at_current_price": 3800,
+    "margin_percentage": "45%",
+    "cost_quartiles": {
+      "bottom": {"min": 2800, "max": 3500},
+      "second": {"min": 3500, "max": 4800},
+      "third": {"min": 4800, "max": 6200},
+      "top": {"min": 6200, "max": 7500}
+    }
+  },
+  "market_outlook": {
+    "recommendation": "CONSTRUCTIVE",
+    "price_target_2024": 8800,
+    "investment_thesis": "Tight supply fundamentals, strong demand from energy transition"
+  }
+}

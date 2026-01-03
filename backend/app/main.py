@@ -1609,22 +1609,23 @@ except Exception as e:
     logger.warning(f"Could not register Construction Metrics router: {e}")
 
 # Grant Thornton Financial Analysis API
-try:
-    from app.api.routes import grant_thornton_routes
-    app.include_router(grant_thornton_routes.router)
-
-    # British Council Course Recommendation POC
-    from app.api.routes import british_council_routes
-    app.include_router(british_council_routes.router)
-
-    # CRU Mining Intelligence POC
-    from app.api.routes import cru_routes
-    app.include_router(cru_routes.router)
-    logger.info("✓ Grant Thornton Financial Analysis API router registered (50+ datapoints, ratios, Excel export)")
-except ImportError as e:
-    logger.warning(f"Grant Thornton API not available: {e}")
-except Exception as e:
-    logger.warning(f"Could not register Grant Thornton router: {e}")
+# NOTE: Disabled old routes - now using tier3 customer_solutions instead (lines 2516+)
+# try:
+#     from app.api.routes import grant_thornton_routes
+#     app.include_router(grant_thornton_routes.router)
+#
+#     # British Council Course Recommendation POC
+#     from app.api.routes import british_council_routes
+#     app.include_router(british_council_routes.router)
+#
+#     # CRU Mining Intelligence POC
+#     from app.api.routes import cru_routes
+#     app.include_router(cru_routes.router)
+#     logger.info("✓ Grant Thornton Financial Analysis API router registered (50+ datapoints, ratios, Excel export)")
+# except ImportError as e:
+#     logger.warning(f"Grant Thornton API not available: {e}")
+# except Exception as e:
+#     logger.warning(f"Could not register Grant Thornton router: {e}")
 
 # Fine-Tuning API
 try:
@@ -2667,6 +2668,14 @@ try:
     logger.info("✓ Agent Task Management API router registered (LLM-driven autonomous agent)")
 except Exception as e:
     logger.warning(f"Could not register Agent router: {e}")
+
+# Module Configuration API (Dynamic POC Config)
+try:
+    from app.api.routes import module_config_routes
+    app.include_router(module_config_routes.router)
+    logger.info("✓ Module Configuration API router registered (Dynamic config for Tier 2/3 modules)")
+except Exception as e:
+    logger.warning(f"Could not register Module Configuration router: {e}")
 
 
 # === Admin API Endpoints ===

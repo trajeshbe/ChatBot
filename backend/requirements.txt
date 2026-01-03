@@ -315,3 +315,9 @@ torch>=2.2.2                    # PyTorch - model operations (compatible with do
 ptyprocess==0.7.0               # Pseudo-terminal process management - enables interactive terminal sessions
 # Note: Python's built-in `pty` module is used for basic PTY operations,
 # but ptyprocess provides better cross-platform support and process management
+
+# ----------------------------------------------------------------------------
+# ELASTICSEARCH INTEGRATION (Required for CRU POC)
+# Used by: app/tier_1/rag/elasticsearch_service.py, app/tier_3/customer_solutions/cru_service.py
+# ----------------------------------------------------------------------------
+elasticsearch>=8.11.0           # Elasticsearch client - BM25 keyword search for CRU mining intelligence POC

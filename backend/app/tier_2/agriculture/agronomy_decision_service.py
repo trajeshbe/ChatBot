@@ -41,39 +41,109 @@ class AgronomyDecisionService:
         # Tier 1 service dependencies
         self.llm_service = LLMService(db, settings)
 
-        # Knowledge base for decision rules (simplified for demo)
-        self.decision_rules = self._load_decision_rules()
+        # Import DocumentService for extracting decision rules
+        from app.tier_1.document_processing.document_service import DocumentService
+        self.document_service = DocumentService(db, settings)
+
+        # Knowledge base loaded from agricultural research documents
+        self.decision_rules: Dict[str, Dict[str, Any]] = {}
 
         logger.info("✓ AgronomyDecisionService initialized with tier_1 services")
 
-    def _load_decision_rules(self) -> Dict[str, Dict[str, Any]]:
-        """Load basic decision rules (hardcoded for demo, would be from DB in production)"""
+    async def _load_decision_rules_from_documents(self, session_id: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+        """Load decision rules from uploaded agricultural research documents"""
+        try:
+            documents = await self.document_service.list_documents(session_id=session_id)
+
+            if not documents:
+                logger.warning("No documents found for decision rules - using fallback rules")
+                return self._get_fallback_rules()
+
+            all_rules = []
+
+            for doc in documents[:10]:
+                try:
+                    chunks = await self.document_service.get_chunks_for_document(doc.id)
+                    document_text = " ".join([chunk.get('content', '') for chunk in chunks[:5]])
+
+                    rules = await self._extract_rules_from_text(document_text)
+                    all_rules.extend(rules)
+                except Exception as e:
+                    logger.warning(f"Failed to extract rules from document {doc.id}: {e}")
+                    continue
+
+            # Build rules database
+            rules_db = {}
+            for rule in all_rules:
+                decision_type = rule.get("decision_type", "").lower()
+                if decision_type and decision_type not in rules_db:
+                    rules_db[decision_type] = rule.get("thresholds", {})
+
+            logger.info(f"✓ Loaded decision rules for {len(rules_db)} decision types from documents")
+            return rules_db if rules_db else self._get_fallback_rules()
+
+        except Exception as e:
+            logger.error(f"Failed to load decision rules from documents: {e}")
+            return self._get_fallback_rules()
+
+    async def _extract_rules_from_text(self, text: str) -> List[Dict[str, Any]]:
+        """Extract decision rules using LLM"""
+        prompt = f"""Extract agronomy decision rules and thresholds from this agricultural research document:
+
+{text[:3000]}
+
+Return JSON array:
+[
+  {{
+    "decision_type": "irrigation/fertilization/planting/harvesting/pest_control",
+    "thresholds": {{
+      "soil_moisture_threshold": 30.0,
+      "critical_threshold": 20.0,
+      "optimal_range": [40.0, 60.0]
+    }}
+  }}
+]
+
+Extract as many decision rules as possible. Return ONLY valid JSON array."""
+
+        try:
+            response = await self.llm_service.generate_response(
+                prompt=prompt,
+                model="gpt-4o-mini",
+                temperature=0.0,
+                max_tokens=1000
+            )
+
+            rules = json.loads(response.strip())
+            return rules if isinstance(rules, list) else []
+
+        except Exception as e:
+            logger.warning(f"Rules extraction failed: {e}")
+            return []
+
+    def _get_fallback_rules(self) -> Dict[str, Dict[str, Any]]:
+        """Fallback rules when no documents available"""
         return {
             "irrigation": {
-                "soil_moisture_threshold": 30.0,  # %
+                "soil_moisture_threshold": 30.0,
                 "critical_threshold": 20.0,
                 "optimal_range": (40.0, 60.0)
             },
             "fertilization": {
-                "nitrogen_low": 20.0,  # ppm
+                "nitrogen_low": 20.0,
                 "phosphorus_low": 15.0,
                 "potassium_low": 100.0,
                 "optimal_ph_range": (6.0, 7.5)
-            },
-            "planting": {
-                "min_soil_temp_celsius": 10.0,
-                "optimal_soil_temp": 18.0,
-                "frost_risk_delay_days": 14
-            },
-            "harvesting": {
-                "rain_delay_threshold_mm": 10.0,
-                "wind_speed_limit_kmh": 40.0
             }
         }
 
     async def make_decisions(self, request: AgronomyDecisionRequest) -> AgronomyDecisionResponse:
         """Analyze context and provide agronomy recommendations"""
         logger.info(f"🌾 Making {len(request.decision_types)} agronomy decisions")
+
+        # Load decision rules from documents if not already loaded
+        if not self.decision_rules:
+            self.decision_rules = await self._load_decision_rules_from_documents(session_id=request.session_id)
 
         analyses: List[DecisionAnalysis] = []
 

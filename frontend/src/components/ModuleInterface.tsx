@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Send, Loader2, Info, CheckCircle2, XCircle, FileText, Sparkles } from 'lucide-react';
+import { Send, Loader2, Info, CheckCircle2, XCircle, FileText, Sparkles, Settings } from 'lucide-react';
 import axios from 'axios';
+import POCConfigManager from './POCConfigManager';
 
 interface ModuleInterfaceProps {
   moduleId: string;
@@ -34,12 +35,12 @@ const ModuleInterface: React.FC<ModuleInterfaceProps> = ({
   sessionId
 }) => {
   const [query, setQuery] = useState('');
-  const [context, setContext] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [response, setResponse] = useState<ModuleResponse | null>(null);
   const [status, setStatus] = useState<ModuleStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showConfig, setShowConfig] = useState(false);
 
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
@@ -83,8 +84,7 @@ const ModuleInterface: React.FC<ModuleInterfaceProps> = ({
       const endpoint = `${getEndpointPrefix()}/process`;
       const payload = {
         session_id: sessionId,
-        query: query.trim(),
-        context: context.trim() ? JSON.parse(context) : {}
+        query: query.trim()
       };
 
       const res = await axios.post(endpoint, payload);
@@ -111,7 +111,14 @@ const ModuleInterface: React.FC<ModuleInterfaceProps> = ({
               {moduleType === 'tier3' ? 'Customer Solution POC' : 'Domain Vertical Module'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowConfig(!showConfig)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+            >
+              <Settings className="w-4 h-4" />
+              Configure Module
+            </button>
             {loadingStatus ? (
               <span className="text-sm text-gray-500 flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -177,43 +184,36 @@ const ModuleInterface: React.FC<ModuleInterfaceProps> = ({
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-6">
+        {/* Configuration Panel */}
+        {showConfig && (
+          <div className="mb-6">
+            <POCConfigManager
+              moduleName={moduleId}
+              onClose={() => setShowConfig(false)}
+            />
+          </div>
+        )}
+
         {/* Input Form */}
         <form onSubmit={handleSubmit} className="mb-6">
           <div className="space-y-4">
             {/* Query Input */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Query / Request
+                Your Request
               </label>
               <textarea
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Enter your query or request for this module..."
+                placeholder="Enter your request for this module..."
                 className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-white resize-none"
                 rows={4}
                 disabled={loading}
               />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Configuration is managed via the "Configure Module" button above
+              </p>
             </div>
-
-            {/* Optional Context Input */}
-            <details className="group">
-              <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">
-                Advanced: Add Context (JSON)
-              </summary>
-              <div className="mt-2">
-                <textarea
-                  value={context}
-                  onChange={(e) => setContext(e.target.value)}
-                  placeholder='{"key": "value", "department": "Engineering"}'
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-white font-mono text-sm resize-none"
-                  rows={3}
-                  disabled={loading}
-                />
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Optional JSON context object for the request
-                </p>
-              </div>
-            </details>
 
             {/* Submit Button */}
             <button

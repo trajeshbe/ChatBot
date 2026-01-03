@@ -306,6 +306,7 @@ export default function SidebarModern({ activeTab, setActiveTab, currentUser, on
   const customerSolutions = [
     { id: 'british-council', label: 'British Council POC', status: 'live' },
     { id: 'cru', label: 'CRU POC', status: 'live' },
+    { id: 'grant-thornton', label: 'Grant Thornton POC', status: 'live' },
     { id: 'gt-motive', label: 'GT Motive POC', status: 'live' },
     { id: 'solera', label: 'Solera POC', status: 'live' },
     { id: 'construction-monitor', label: 'Construction Monitor POC', status: 'live' }

@@ -1,0 +1,59 @@
+{
+  "module_name": "british_council",
+  "display_name": "British Council Course Recommendations",
+  "description": "Personalized course recommendations based on learner profiles",
+  "module_type": "tier3_customer_solution",
+  "category": "education",
+  "config": {
+    "llm": {
+      "profile_analyzer": {
+        "model": "gpt-4o-mini",
+        "temperature": 0.0,
+        "max_tokens": 500
+      },
+      "course_recommender": {
+        "model": "gpt-4o-mini",
+        "temperature": 0.2,
+        "max_tokens": 800
+      }
+    },
+    "prompts": {
+      "system": {
+        "profile_extraction": "Extract a structured user profile from this text.\n\nFocus on:\n- Education level and background\n- Preferred learning format (online/offline/hybrid)\n- Time availability (full-time/part-time/flexible)\n- Subject interests and skills\n- Learning goals and objectives\n\nProvide the output as a JSON structure.",
+        "course_recommendation": "Based on the user profile provided, recommend suitable courses that match their:\n- Education level\n- Learning format preference\n- Available time commitment\n- Subject interests\n- Skill development goals\n\nRank recommendations by relevance and explain why each course is a good fit."
+      },
+      "user": {
+        "profile_query_template": "User background: {background}\n\nEducation: {education}\nPreferences: {preferences}\n\nFind matching courses from the catalog.",
+        "course_search_template": "Search for courses matching: {search_query}"
+      }
+    },
+    "scoring": {
+      "weights": {
+        "semantic": 0.6,
+        "profile": 0.4
+      },
+      "factors": {
+        "education_match": 0.3,
+        "format_match": 0.2,
+        "availability_match": 0.2,
+        "skill_intersection": 0.3
+      }
+    },
+    "thresholds": {
+      "match_threshold": 0.8,
+      "high_match": 0.9,
+      "min_profile_completeness": 0.7
+    },
+    "retrieval": {
+      "initial_top_k": 10,
+      "rerank_top_k": 5,
+      "final_recommendations": 5
+    },
+    "features": {
+      "enable_reranking": true,
+      "enable_profile_extraction": true,
+      "enable_caching": true,
+      "enable_personalization": true
+    }
+  }
+}

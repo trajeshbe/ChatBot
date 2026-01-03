@@ -17,15 +17,26 @@ class HealthcareDiagnosticsService:
     def __init__(self, db: Session, settings: Settings):
         self.db = db
         self.settings = settings
-        self.llm_service = LLMService()
+        self.llm_service = LLMService(db, settings)
+
+        # Import DocumentService for extracting patient data
+        from app.tier_1.document_processing.document_service import DocumentService
+        self.document_service = DocumentService(db, settings)
 
     async def analyze_symptoms(self, request: AnalyzeSymptomsRequest) -> AnalyzeSymptomsResponse:
         """Analyze patient symptoms with AI-powered diagnostics"""
         try:
             logger.info(f"Analyzing symptoms for patient {request.patient.patient_id}")
 
+            # Extract patient data from uploaded medical records if document_id provided
+            patient_data = request.patient
+            if request.document_id:
+                extracted_patient = await self._extract_patient_data(request.document_id)
+                if extracted_patient:
+                    patient_data = extracted_patient
+
             # Generate diagnostic hypotheses
-            diagnoses = self._generate_diagnoses(request.patient, request.category)
+            diagnoses = await self._generate_diagnoses_llm(patient_data, request.category)
 
             # Generate treatment recommendations
             treatments = []
@@ -52,7 +63,112 @@ class HealthcareDiagnosticsService:
             logger.error(f"Error analyzing symptoms: {e}", exc_info=True)
             raise
 
-    def _generate_diagnoses(
+    async def _extract_patient_data(self, document_id: str) -> Optional[PatientData]:
+        """Extract patient data from uploaded medical record"""
+        try:
+            chunks = await self.document_service.get_chunks_for_document(document_id)
+            medical_record = " ".join([chunk.get('content', '') for chunk in chunks[:5]])
+
+            prompt = f"""Extract patient information from this medical record:
+
+{medical_record[:3000]}
+
+Return JSON:
+{{
+  "patient_id": "id",
+  "age": 45,
+  "gender": "male/female/other",
+  "symptoms": ["symptom1", "symptom2"],
+  "medical_history": ["condition1"],
+  "current_medications": ["medication1"],
+  "allergies": ["allergy1"],
+  "vital_signs": {{"blood_pressure": "120/80"}}
+}}
+
+Return ONLY valid JSON."""
+
+            response = await self.llm_service.generate_response(
+                prompt=prompt,
+                model="gpt-4o-mini",
+                temperature=0.0,
+                max_tokens=500
+            )
+
+            data = json.loads(response.strip())
+
+            return PatientData(
+                patient_id=data.get("patient_id", document_id),
+                age=data.get("age"),
+                gender=data.get("gender", "unknown"),
+                symptoms=data.get("symptoms", []),
+                medical_history=data.get("medical_history", []),
+                current_medications=data.get("current_medications", []),
+                allergies=data.get("allergies", []),
+                vital_signs=data.get("vital_signs", {})
+            )
+
+        except Exception as e:
+            logger.warning(f"Patient data extraction failed: {e}")
+            return None
+
+    async def _generate_diagnoses_llm(
+        self, patient: PatientData, category: DiagnosticCategory
+    ) -> List[DiagnosticHypothesis]:
+        """Generate diagnostic hypotheses using LLM-based analysis"""
+        symptoms_str = ", ".join(patient.symptoms)
+        medical_history_str = ", ".join(patient.medical_history) if patient.medical_history else "None"
+
+        prompt = f"""As a medical expert, analyze this patient case and provide differential diagnoses:
+
+Patient: Age {patient.age}, Gender: {patient.gender}
+Symptoms: {symptoms_str}
+Medical History: {medical_history_str}
+Category: {category.value}
+
+Return JSON array:
+[
+  {{
+    "condition": "Condition Name",
+    "probability": 70.0,
+    "severity": "low/moderate/high/critical",
+    "confidence": "low/moderate/high/very_high",
+    "supporting_evidence": ["evidence1", "evidence2"],
+    "differential_diagnosis": ["alternative1", "alternative2"],
+    "recommended_tests": ["test1", "test2"]
+  }}
+]
+
+Provide top 5 diagnoses. Return ONLY valid JSON array."""
+
+        try:
+            response = await self.llm_service.generate_response(
+                prompt=prompt,
+                model="gpt-4o-mini",
+                temperature=0.2,
+                max_tokens=1000
+            )
+
+            diagnoses_data = json.loads(response.strip())
+
+            diagnoses = []
+            for diag in diagnoses_data:
+                diagnoses.append(DiagnosticHypothesis(
+                    condition=diag.get("condition", ""),
+                    probability=float(diag.get("probability", 50)),
+                    severity=SeverityLevel(diag.get("severity", "moderate")),
+                    confidence=ConfidenceLevel(diag.get("confidence", "moderate")),
+                    supporting_evidence=diag.get("supporting_evidence", []),
+                    differential_diagnosis=diag.get("differential_diagnosis", []),
+                    recommended_tests=diag.get("recommended_tests", [])
+                ))
+
+            return diagnoses[:5]
+
+        except Exception as e:
+            logger.warning(f"LLM diagnosis generation failed: {e}, using rule-based fallback")
+            return self._generate_diagnoses_fallback(patient, category)
+
+    def _generate_diagnoses_fallback(
         self, patient: PatientData, category: DiagnosticCategory
     ) -> List[DiagnosticHypothesis]:
         """Generate diagnostic hypotheses based on symptoms"""

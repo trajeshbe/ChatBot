@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.tier_1.infrastructure.config import Settings
 from app.tier_1.llm.llm_service import LLMService
+from app.tier_1.document_processing.document_service import DocumentService
 
 from .spend_smart_schemas import (
     SpendAnalysisRequest,
@@ -35,7 +36,8 @@ class SpendSmartService:
         self.db = db
         self.settings = settings
         self.llm_service = LLMService(db, settings)
-        logger.info("✓ SpendSmartService initialized")
+        self.document_service = DocumentService(db)
+        logger.info("✓ SpendSmartService initialized with tier_1 services")
 
     async def analyze_spending(self, request: SpendAnalysisRequest) -> SpendAnalysisResponse:
         """Analyze spending patterns."""
@@ -45,29 +47,29 @@ class SpendSmartService:
         logger.info(f"💰 Analyzing spending for {request.time_period_months} months")
 
         try:
-            # Mock spending data (in production, query from database)
-            mock_data = self._generate_mock_spending_data(request)
+            # Extract real spending data from uploaded documents
+            spending_data = await self._extract_spending_from_documents(request)
 
             # Analyze patterns
-            patterns = self._analyze_patterns(mock_data)
+            patterns = self._analyze_patterns(spending_data)
 
             # Detect anomalies
             anomalies = []
             if request.detect_anomalies:
-                anomalies = self._detect_anomalies(mock_data)
+                anomalies = self._detect_anomalies(spending_data)
 
             # Identify savings opportunities
             savings_opportunities = []
             if request.identify_savings:
-                savings_opportunities = await self._identify_savings(mock_data, patterns)
+                savings_opportunities = await self._identify_savings(spending_data, patterns)
 
             # Calculate totals
-            total_spend = sum(mock_data["spend_by_category"].values())
+            total_spend = sum(spending_data["spend_by_category"].values())
             avg_monthly = total_spend / request.time_period_months
             total_savings = sum(s.potential_savings for s in savings_opportunities)
 
             # Generate insights using LLM
-            insights, recommendations = await self._generate_insights(mock_data, patterns, anomalies, savings_opportunities)
+            insights, recommendations = await self._generate_insights(spending_data, patterns, anomalies, savings_opportunities)
 
             # Store analysis
             await self._store_analysis(request, total_spend, total_savings)
@@ -79,7 +81,7 @@ class SpendSmartService:
                 time_period_months=request.time_period_months,
                 total_spend=total_spend,
                 avg_monthly_spend=avg_monthly,
-                spend_by_category=mock_data["spend_by_category"],
+                spend_by_category=spending_data["spend_by_category"],
                 spending_patterns=patterns,
                 savings_opportunities=savings_opportunities,
                 anomalies=anomalies,
@@ -88,30 +90,125 @@ class SpendSmartService:
                 key_insights=insights,
                 recommendations=recommendations,
                 processing_time_seconds=processing_time,
-                tier_1_services_used=["LLMService"]
+                tier_1_services_used=["LLMService", "DocumentService"]
             )
 
         except Exception as e:
             logger.error(f"❌ Spend analysis failed: {str(e)}", exc_info=True)
             raise
 
-    def _generate_mock_spending_data(self, request: SpendAnalysisRequest) -> Dict[str, Any]:
-        """Generate mock spending data."""
-        return {
-            "spend_by_category": {
-                "it": 250000.0,
-                "office_supplies": 50000.0,
-                "facilities": 150000.0,
-                "professional_services": 200000.0,
-                "marketing": 100000.0,
-                "travel": 75000.0
-            },
-            "vendor_spend": {
-                "TechSupply Corp": 150000.0,
-                "Office Depot": 50000.0,
-                "Facilities Co": 150000.0
+    async def _extract_spending_from_documents(self, request: SpendAnalysisRequest) -> Dict[str, Any]:
+        """Extract real spending data from uploaded financial documents."""
+        try:
+            # Step 1: Get documents for this session (invoices, expense reports, POs)
+            documents = await self.document_service.list_documents(
+                session_id=request.session_id,
+                limit=100  # More documents for comprehensive spending analysis
+            )
+
+            if not documents:
+                logger.warning(f"No documents found for session {request.session_id}. Upload invoices, expense reports, or purchase orders.")
+                # Return empty structure instead of mock data
+                return {
+                    "spend_by_category": {},
+                    "vendor_spend": {}
+                }
+
+            # Step 2: Extract spending data from documents
+            spend_by_category = {}
+            vendor_spend = {}
+
+            for doc in documents[:20]:  # Analyze up to 20 documents
+                chunks = await self.document_service.get_chunks_for_document(doc.id)
+
+                if not chunks:
+                    continue
+
+                # Combine chunks for context
+                document_text = " ".join([chunk.get('content', '') for chunk in chunks[:10]])
+
+                if len(document_text) < 100:
+                    continue
+
+                # Extract spending data using LLM
+                spending_from_doc = await self._extract_spending_from_text(
+                    document_text,
+                    request.time_period_months
+                )
+
+                # Aggregate spending by category
+                for category, amount in spending_from_doc.get("spend_by_category", {}).items():
+                    spend_by_category[category] = spend_by_category.get(category, 0) + amount
+
+                # Aggregate spending by vendor
+                for vendor, amount in spending_from_doc.get("vendor_spend", {}).items():
+                    vendor_spend[vendor] = vendor_spend.get(vendor, 0) + amount
+
+            logger.info(f"Extracted spending data from {len(documents)} documents: {len(spend_by_category)} categories, {len(vendor_spend)} vendors")
+
+            return {
+                "spend_by_category": spend_by_category,
+                "vendor_spend": vendor_spend
             }
-        }
+
+        except Exception as e:
+            logger.error(f"Failed to extract spending from documents: {str(e)}", exc_info=True)
+            return {
+                "spend_by_category": {},
+                "vendor_spend": {}
+            }
+
+    async def _extract_spending_from_text(
+        self,
+        text: str,
+        time_period_months: int
+    ) -> Dict[str, Any]:
+        """Extract spending information from document text using LLM."""
+        prompt = f"""Extract spending/expense information from the following financial document (invoice, expense report, purchase order).
+
+Text:
+{text[:3000]}
+
+Time Period: {time_period_months} months
+
+Extract:
+1. Spending by category (it, office_supplies, facilities, professional_services, marketing, travel, other)
+2. Vendor/supplier names and amounts
+
+Return a JSON object:
+{{
+  "spend_by_category": {{
+    "it": 25000.0,
+    "office_supplies": 5000.0
+  }},
+  "vendor_spend": {{
+    "Vendor Name": 30000.0
+  }}
+}}
+
+If no spending data found, return empty objects.
+Return ONLY the JSON, no explanation."""
+
+        try:
+            response = await self.llm_service.generate_response(
+                prompt=prompt,
+                model="gpt-4o-mini",
+                temperature=0.1,
+                max_tokens=1000
+            )
+
+            import json
+            spending = json.loads(response.strip())
+
+            logger.info(f"Extracted spending: {len(spending.get('spend_by_category', {}))} categories, {len(spending.get('vendor_spend', {}))} vendors")
+            return spending
+
+        except Exception as e:
+            logger.warning(f"Failed to extract spending from text: {str(e)}")
+            return {
+                "spend_by_category": {},
+                "vendor_spend": {}
+            }
 
     def _analyze_patterns(self, data: Dict[str, Any]) -> List[SpendingPattern]:
         """Analyze spending patterns."""

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.tier_1.infrastructure.config import Settings
 from app.tier_1.llm.llm_service import LLMService
+from app.tier_1.document_processing.document_service import DocumentService
 
 from .vendor_recommendation_schemas import (
     VendorRecommendationRequest,
@@ -29,24 +30,6 @@ from .vendor_recommendation_schemas import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-# Mock vendor database (in production, this would come from a real database)
-MOCK_VENDORS = {
-    VendorCategory.IT_HARDWARE: [
-        {"vendor_id": "v1", "vendor_name": "TechSupply Corp", "avg_cost_per_unit": 100, "quality_rating": 4.5, "delivery_days": 3, "certifications": ["ISO9001"]},
-        {"vendor_id": "v2", "vendor_name": "Hardware Plus", "avg_cost_per_unit": 95, "quality_rating": 4.2, "delivery_days": 5, "certifications": ["ISO9001", "ISO14001"]},
-        {"vendor_id": "v3", "vendor_name": "Global IT Solutions", "avg_cost_per_unit": 110, "quality_rating": 4.8, "delivery_days": 2, "certifications": ["ISO9001", "SOC2"]},
-    ],
-    VendorCategory.IT_SERVICES: [
-        {"vendor_id": "v4", "vendor_name": "CloudExperts Inc", "avg_cost_per_unit": 150, "quality_rating": 4.7, "delivery_days": 7, "certifications": ["SOC2", "ISO27001"]},
-        {"vendor_id": "v5", "vendor_name": "DevOps Masters", "avg_cost_per_unit": 140, "quality_rating": 4.4, "delivery_days": 10, "certifications": ["ISO27001"]},
-    ],
-    VendorCategory.PROFESSIONAL_SERVICES: [
-        {"vendor_id": "v6", "vendor_name": "ConsultPro LLC", "avg_cost_per_unit": 200, "quality_rating": 4.6, "delivery_days": 14, "certifications": ["CPA"]},
-        {"vendor_id": "v7", "vendor_name": "Advisory Group", "avg_cost_per_unit": 180, "quality_rating": 4.3, "delivery_days": 10, "certifications": []},
-    ]
-}
 
 
 class VendorRecommendationService:
@@ -70,6 +53,7 @@ class VendorRecommendationService:
 
         # Tier 1 service dependencies
         self.llm_service = LLMService(db, settings)
+        self.document_service = DocumentService(db)
 
         logger.info("✓ VendorRecommendationService initialized with tier_1 services")
 
@@ -142,35 +126,137 @@ class VendorRecommendationService:
             logger.error(f"❌ Recommendation generation failed: {str(e)}", exc_info=True)
             raise
 
-    def _get_candidate_vendors(
+    async def _get_candidate_vendors(
         self,
         request: VendorRecommendationRequest
     ) -> List[Dict[str, Any]]:
-        """Get candidate vendors for the category."""
-        # In production, query from database
-        # For now, use mock data
-        vendors = MOCK_VENDORS.get(request.category, [])
+        """Get candidate vendors from uploaded documents using LLM extraction."""
+        try:
+            # Step 1: Get documents for this session (vendor catalogs, RFPs, etc.)
+            documents = await self.document_service.list_documents(
+                session_id=request.session_id,
+                limit=50
+            )
 
-        # Filter by exclusions
-        if request.exclude_vendor_ids:
-            vendors = [v for v in vendors if v["vendor_id"] not in request.exclude_vendor_ids]
+            if not documents:
+                logger.warning(f"No documents found for session {request.session_id}. Upload vendor catalogs or RFP documents.")
+                return []
 
-        # Filter by certifications
-        if request.required_certifications:
-            vendors = [
-                v for v in vendors
-                if all(cert in v.get("certifications", []) for cert in request.required_certifications)
-            ]
+            # Step 2: Extract vendor data from document chunks using LLM
+            all_vendors = []
 
-        # Filter by budget
-        if request.budget_range_max:
-            vendors = [v for v in vendors if v.get("avg_cost_per_unit", 0) <= request.budget_range_max]
+            for doc in documents[:10]:  # Limit to 10 most recent documents
+                chunks = await self.document_service.get_chunks_for_document(doc.id)
 
-        # Filter by delivery time
-        if request.required_delivery_days:
-            vendors = [v for v in vendors if v.get("delivery_days", 999) <= request.required_delivery_days]
+                if not chunks:
+                    continue
 
-        return vendors
+                # Combine first 5 chunks for context
+                document_text = " ".join([chunk.get('content', '') for chunk in chunks[:5]])
+
+                if len(document_text) < 100:
+                    continue
+
+                # Extract vendors using LLM
+                vendors_from_doc = await self._extract_vendors_from_text(
+                    document_text,
+                    request.category
+                )
+
+                all_vendors.extend(vendors_from_doc)
+
+            # Step 3: Deduplicate vendors by name
+            unique_vendors = {}
+            for vendor in all_vendors:
+                vendor_name = vendor.get("vendor_name", "").strip()
+                if vendor_name and vendor_name not in unique_vendors:
+                    unique_vendors[vendor_name] = vendor
+
+            vendors = list(unique_vendors.values())
+
+            logger.info(f"Extracted {len(vendors)} unique vendors from {len(documents)} documents")
+
+            # Step 4: Apply filters
+            # Filter by exclusions
+            if request.exclude_vendor_ids:
+                vendors = [v for v in vendors if v["vendor_id"] not in request.exclude_vendor_ids]
+
+            # Filter by certifications
+            if request.required_certifications:
+                vendors = [
+                    v for v in vendors
+                    if all(cert in v.get("certifications", []) for cert in request.required_certifications)
+                ]
+
+            # Filter by budget
+            if request.budget_range_max:
+                vendors = [v for v in vendors if v.get("avg_cost_per_unit", 0) <= request.budget_range_max]
+
+            # Filter by delivery time
+            if request.required_delivery_days:
+                vendors = [v for v in vendors if v.get("delivery_days", 999) <= request.required_delivery_days]
+
+            return vendors
+
+        except Exception as e:
+            logger.error(f"Failed to extract vendors from documents: {str(e)}", exc_info=True)
+            return []
+
+    async def _extract_vendors_from_text(
+        self,
+        text: str,
+        category: VendorCategory
+    ) -> List[Dict[str, Any]]:
+        """Extract vendor information from document text using LLM."""
+        prompt = f"""Extract vendor information from the following text. Focus on vendors in the {category.value} category.
+
+Text:
+{text[:3000]}
+
+Extract vendors with the following information:
+- vendor_name: Company name
+- avg_cost_per_unit: Average price per unit (numeric)
+- quality_rating: Quality rating out of 5.0
+- delivery_days: Estimated delivery time in days
+- certifications: List of certifications (ISO9001, ISO14001, SOC2, etc.)
+
+Return a JSON array:
+[
+  {{
+    "vendor_id": "generated_id",
+    "vendor_name": "Company Name",
+    "avg_cost_per_unit": 100.0,
+    "quality_rating": 4.5,
+    "delivery_days": 5,
+    "certifications": ["ISO9001"]
+  }}
+]
+
+If no vendors found, return empty array [].
+Return ONLY the JSON array, no explanation."""
+
+        try:
+            response = await self.llm_service.generate_response(
+                prompt=prompt,
+                model="gpt-4o-mini",
+                temperature=0.1,
+                max_tokens=1500
+            )
+
+            import json
+            vendors = json.loads(response.strip())
+
+            # Generate vendor IDs if missing
+            for vendor in vendors:
+                if "vendor_id" not in vendor or not vendor["vendor_id"]:
+                    vendor["vendor_id"] = str(uuid.uuid4())[:8]
+
+            logger.info(f"Extracted {len(vendors)} vendors from document text")
+            return vendors
+
+        except Exception as e:
+            logger.warning(f"Failed to extract vendors from text: {str(e)}")
+            return []
 
     def _calculate_vendor_score(
         self,

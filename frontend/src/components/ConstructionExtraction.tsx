@@ -1,3 +1,5 @@
+import { Settings } from 'lucide-react'
+import POCConfigManager from './POCConfigManager'
 import { useState, useRef } from 'react'
 import { Upload, Loader2, CheckCircle, XCircle, FileArchive, Building2 } from 'lucide-react'
 import axios from 'axios'
@@ -29,6 +31,7 @@ interface ExtractionResult {
 
 export default function ConstructionExtraction() {
   const [isExtracting, setIsExtracting] = useState(false)
+  const [showConfig, setShowConfig] = useState(false)
   const [result, setResult] = useState<ExtractionResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -93,16 +96,37 @@ export default function ConstructionExtraction() {
       <div className="flex-1 flex flex-col items-center justify-center p-8">
         <div className="w-full max-w-4xl">
           {/* Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
-              <Building2 className="w-8 h-8 text-blue-600" />
+          <div className="mb-8">
+            <div className="flex items-start justify-between mb-4">
+              <div className="text-center flex-1">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
+                  <Building2 className="w-8 h-8 text-blue-600" />
+                </div>
+                <h1 className="text-3xl font-bold text-slate-900 mb-2">
+                  Construction Metrics Extraction
+                </h1>
+                <p className="text-slate-600">
+                  Upload a ZIP file containing construction documents to automatically extract building metrics
+                </p>
+              </div>
+              <button
+                onClick={() => setShowConfig(!showConfig)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                <Settings className="w-4 h-4" />
+                Configure
+              </button>
             </div>
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">
-              Construction Metrics Extraction
-            </h1>
-            <p className="text-slate-600">
-              Upload a ZIP file containing construction documents to automatically extract building metrics
-            </p>
+
+            {/* Configuration Panel */}
+            {showConfig && (
+              <div className="mb-6">
+                <POCConfigManager
+                  moduleName="construction_monitor"
+                  onClose={() => setShowConfig(false)}
+                />
+              </div>
+            )}
           </div>
 
           {/* Upload Button */}

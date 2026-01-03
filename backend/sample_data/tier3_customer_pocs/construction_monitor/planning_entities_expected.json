@@ -1,0 +1,50 @@
+{
+  "document_id": "planning_app_2024_0245",
+  "expected_entities": {
+    "ORGANIZATION": [
+      {"text": "Barrat Homes Ltd", "start": 150, "end": 166, "label": "ORGANIZATION"},
+      {"text": "Westminster City Council", "start": 88, "end": 112, "label": "ORGANIZATION"},
+      {"text": "Smith Planning Consultants", "start": 225, "end": 251, "label": "ORGANIZATION"}
+    ],
+    "LOCATION": [
+      {"text": "London", "start": 180, "end": 186, "label": "LOCATION"},
+      {"text": "Plot 45-48, Riverside Development, Thames Embankment, London", "start": 290, "end": 351, "label": "LOCATION"}
+    ],
+    "DATE": [
+      {"text": "15 January 2024", "start": 60, "end": 75, "label": "DATE"},
+      {"text": "15 Jan 2024 - 15 Feb 2024", "start": 780, "end": 805, "label": "DATE"},
+      {"text": "1 March 2024", "start": 835, "end": 847, "label": "DATE"},
+      {"text": "15 March 2024", "start": 875, "end": 888, "label": "DATE"}
+    ],
+    "PERSON": [
+      {"text": "Sarah Johnson", "start": 1100, "end": 1113, "label": "PERSON"}
+    ],
+    "QUANTITY": [
+      {"text": "150 residential units", "start": 385, "end": 406, "label": "QUANTITY"},
+      {"text": "80 x 2-bedroom apartments", "start": 420, "end": 445, "label": "QUANTITY"},
+      {"text": "50 x 3-bedroom apartments", "start": 448, "end": 473, "label": "QUANTITY"},
+      {"text": "20 x 4-bedroom penthouses", "start": 476, "end": 501, "label": "QUANTITY"},
+      {"text": "2.5 hectares", "start": 550, "end": 562, "label": "QUANTITY"},
+      {"text": "12 storeys", "start": 580, "end": 590, "label": "QUANTITY"},
+      {"text": "45 meters", "start": 596, "end": 605, "label": "QUANTITY"},
+      {"text": "120 underground spaces", "start": 625, "end": 647, "label": "QUANTITY"}
+    ]
+  },
+  "expected_relationships": [
+    {
+      "head": "Barrat Homes Ltd",
+      "relation": "APPLICANT_FOR",
+      "tail": "2024/0245/FUL"
+    },
+    {
+      "head": "Sarah Johnson",
+      "relation": "PLANNING_OFFICER_FOR",
+      "tail": "2024/0245/FUL"
+    },
+    {
+      "head": "Plot 45-48, Riverside Development",
+      "relation": "LOCATION_OF",
+      "tail": "150 residential units"
+    }
+  ]
+}

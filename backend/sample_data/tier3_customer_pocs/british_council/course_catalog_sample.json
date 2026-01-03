@@ -1,0 +1,62 @@
+[
+  {
+    "course_id": "IELTS_PREP_2024",
+    "course_name": "IELTS Preparation Course",
+    "level_required": "B1-C1",
+    "duration_weeks": 8,
+    "hours_per_week": 10,
+    "mode": "Online",
+    "price_gbp": 850,
+    "start_dates": ["2024-02-15", "2024-03-15", "2024-04-15"],
+    "max_students": 15,
+    "focus_areas": ["Academic writing", "Speaking skills", "Test strategy"],
+    "target_score": "6.5-8.0",
+    "instructor_qualification": "IELTS certified trainer",
+    "includes": ["Mock tests", "Personalized feedback", "Study materials"]
+  },
+  {
+    "course_id": "BUS_ENG_ADV_2024",
+    "course_name": "Business English Advanced",
+    "level_required": "C1",
+    "duration_weeks": 12,
+    "hours_per_week": 6,
+    "mode": "Hybrid",
+    "price_gbp": 1450,
+    "start_dates": ["2024-02-20", "2024-05-01"],
+    "max_students": 12,
+    "focus_areas": ["Business communication", "Presentations", "Negotiation"],
+    "target_score": null,
+    "instructor_qualification": "Business English specialist",
+    "includes": ["Case studies", "Role-play sessions", "Networking events"]
+  },
+  {
+    "course_id": "GEN_ENG_INT_2024",
+    "course_name": "General English Intermediate",
+    "level_required": "A2-B1",
+    "duration_weeks": 10,
+    "hours_per_week": 8,
+    "mode": "Online",
+    "price_gbp": 650,
+    "start_dates": ["2024-03-01", "2024-04-01", "2024-05-01"],
+    "max_students": 20,
+    "focus_areas": ["Grammar", "Vocabulary", "Conversation"],
+    "target_score": null,
+    "instructor_qualification": "CELTA certified",
+    "includes": ["Interactive lessons", "Group discussions", "Progress tests"]
+  },
+  {
+    "course_id": "ACAD_ENG_PREP_2024",
+    "course_name": "Academic English Preparation",
+    "level_required": "B1-B2",
+    "duration_weeks": 12,
+    "hours_per_week": 10,
+    "mode": "Online",
+    "price_gbp": 950,
+    "start_dates": ["2024-02-15", "2024-04-01"],
+    "max_students": 15,
+    "focus_areas": ["Essay writing", "Research skills", "Academic vocabulary"],
+    "target_score": null,
+    "instructor_qualification": "Academic English specialist",
+    "includes": ["Writing workshops", "Library resources", "University preparation"]
+  }
+]

@@ -1,0 +1,151 @@
+CRU MINING INTELLIGENCE REPORT
+Copper Market Analysis Q1 2024
+
+EXECUTIVE SUMMARY
+Report ID: CRU-CU-2024-Q1
+Publication Date: January 15, 2024
+Author: Dr. Michael Patterson, Senior Analyst
+Region: Global Market Overview
+
+MARKET FUNDAMENTALS
+
+Copper Spot Price (LME 3-month)
+Current: $8,450 per tonne
+Previous Quarter: $8,200 per tonne
+Change: +3.05% QoQ
+Year-on-Year: +12.5%
+
+SUPPLY ANALYSIS
+
+Major Producers Performance (Q1 2024):
+1. Chile - 1.42 million tonnes (+2.3% YoY)
+   - Codelco: 365,000 tonnes
+   - Escondida (BHP): 280,000 tonnes
+   - Collahuasi: 145,000 tonnes
+
+2. Peru - 580,000 tonnes (+5.1% YoY)
+   - Las Bambas: 95,000 tonnes
+   - Antamina: 88,000 tonnes
+   - Cerro Verde: 120,000 tonnes
+
+3. China - 490,000 tonnes (+1.8% YoY)
+   - Jiangxi Copper: 185,000 tonnes
+   - Tongling Nonferrous: 145,000 tonnes
+
+4. Democratic Republic of Congo - 425,000 tonnes (+8.5% YoY)
+   - Kamoa-Kakula: 95,000 tonnes (new production)
+   - Tenke Fungurume: 68,000 tonnes
+
+Total Global Production: 5.85 million tonnes
+Forecast 2024: 24.5 million tonnes
+
+DEMAND OUTLOOK
+
+Regional Consumption (annualized):
+- China: 13.2 million tonnes (54% of global demand)
+- Europe: 3.8 million tonnes
+- North America: 2.1 million tonnes
+- Rest of World: 5.4 million tonnes
+
+Growth Drivers:
+- Electric Vehicle production (+18% YoY)
+- Renewable energy infrastructure (+14% YoY)
+- Construction sector (+3.5% YoY China, +2.1% Global)
+- Grid modernization projects (+9% YoY)
+
+MINE DEVELOPMENT PROJECTS
+
+Expansion Projects:
+1. Kamoa-Kakula Phase 3 (DRC)
+   - Capacity: +290,000 tpa
+   - Completion: Q3 2024
+   - Investment: $1.8 billion
+
+2. Quebrada Blanca Phase 2 (Chile)
+   - Capacity: +240,000 tpa
+   - Status: Ramping up
+   - Operator: Teck Resources
+
+3. Oyu Tolgoi Underground (Mongolia)
+   - Target capacity: 500,000 tpa
+   - Status: Production ramp-up continues
+   - Operator: Rio Tinto
+
+New Greenfield Projects:
+- Cobre Panama (suspended - regulatory issues)
+- Resolution Copper (USA) - permitting delays
+- Timok Upper Zone (Serbia) - construction phase
+
+PRICE FORECAST
+
+2024 Price Forecast Range:
+Q2 2024: $8,300 - $8,700 per tonne
+Q3 2024: $8,500 - $9,100 per tonne
+Q4 2024: $8,700 - $9,300 per tonne
+Full Year Average: $8,625 per tonne
+
+Upside Risks:
+- Stronger-than-expected Chinese demand recovery
+- Supply disruptions in South America (labor, weather)
+- Accelerated EV adoption globally
+- Infrastructure stimulus packages
+
+Downside Risks:
+- Global economic slowdown
+- Reduced Chinese property sector activity
+- Higher-than-expected scrap availability
+- New mine ramp-ups faster than anticipated
+
+INVENTORY LEVELS
+
+LME Copper Stocks: 185,500 tonnes (down 12% from Dec 2023)
+SHFE Stocks: 245,000 tonnes (down 8% from Dec 2023)
+COMEX Stocks: 28,500 tonnes (down 15% from Dec 2023)
+
+Days of Consumption: 6.2 days (historically tight)
+
+TECHNICAL COST ANALYSIS
+
+C1 Cash Cost Quartiles (2024):
+- Bottom Quartile: $2,800 - $3,500/t
+- Second Quartile: $3,500 - $4,800/t
+- Third Quartile: $4,800 - $6,200/t
+- Top Quartile: $6,200 - $7,500/t
+
+Average Industry C1 Cost: $4,650/t
+Margin at current price: $3,800/t (45% margin)
+
+KEY MARKET INDICATORS
+
+Copper Treatment Charges (TC/RC):
+Current TC: $68/t (down from $88/t in Q4 2023)
+Current RC: 6.8 c/lb (down from 8.8 c/lb in Q4 2023)
+Trend: Declining (indicating tight concentrate supply)
+
+Refined Copper Premium (Shanghai):
+Current: $95/t over LME
+Previous Quarter: $72/t
+Trend: Rising (strong Chinese demand)
+
+SUSTAINABILITY & ESG TRENDS
+
+Carbon Intensity Initiatives:
+- 15 major producers committed to net-zero by 2050
+- Average carbon intensity: 3.2 tCO2e per tonne copper
+- Target reduction: 30% by 2030
+
+Water Management:
+- Desalination projects in Chile (8 operations)
+- Water recycling rates: 75-85% in major operations
+
+ANALYST RECOMMENDATION
+
+Market Outlook: CONSTRUCTIVE
+Price Target (2024): $8,800/t
+Investment Thesis: Tight supply fundamentals, strong demand from energy transition
+
+Contact:
+Dr. Michael Patterson
+Senior Copper Market Analyst
+m.patterson@crugroup.com
++44 20 7903 2000

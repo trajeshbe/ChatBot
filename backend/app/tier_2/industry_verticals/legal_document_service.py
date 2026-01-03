@@ -17,16 +17,25 @@ class LegalDocumentService:
     def __init__(self, db: Session, settings: Settings):
         self.db = db
         self.settings = settings
-        self.llm_service = LLMService()
+        self.llm_service = LLMService(db, settings)
+
+        # Import DocumentService for extracting legal documents
+        from app.tier_1.document_processing.document_service import DocumentService
+        self.document_service = DocumentService(db, settings)
 
     async def analyze_document(self, request: AnalyzeDocumentRequest) -> AnalyzeDocumentResponse:
         """Analyze legal document with AI"""
         try:
             logger.info(f"Analyzing legal document {request.document_id}")
 
+            # Extract document text if document_id provided
+            document_text = request.document_text
+            if request.document_id and not document_text:
+                document_text = await self._extract_document_text(request.document_id)
+
             clauses = []
             if request.include_clause_extraction:
-                clauses = self._extract_clauses(request.document_text, request.document_type)
+                clauses = await self._extract_clauses_llm(document_text, request.document_type)
 
             risk = None
             if request.include_risk_assessment:
@@ -48,7 +57,66 @@ class LegalDocumentService:
             logger.error(f"Error analyzing document: {e}", exc_info=True)
             raise
 
-    def _extract_clauses(self, text: str, doc_type: DocumentType) -> List[ExtractedClause]:
+    async def _extract_document_text(self, document_id: str) -> str:
+        """Extract text from uploaded legal document"""
+        try:
+            chunks = await self.document_service.get_chunks_for_document(document_id)
+            text = " ".join([chunk.get('content', '') for chunk in chunks])
+            logger.info(f"Extracted {len(text)} characters from document {document_id}")
+            return text
+        except Exception as e:
+            logger.error(f"Failed to extract document text: {e}")
+            return ""
+
+    async def _extract_clauses_llm(self, text: str, doc_type: DocumentType) -> List[ExtractedClause]:
+        """Extract legal clauses using LLM-based analysis"""
+        if not text:
+            return []
+
+        prompt = f"""Extract key legal clauses from this {doc_type.value} document:
+
+{text[:5000]}
+
+Return JSON array:
+[
+  {{
+    "clause_type": "termination/liability/confidentiality/payment/indemnification/jurisdiction/dispute_resolution/intellectual_property/warranty/limitation_of_liability",
+    "clause_text": "Full text of the clause",
+    "risk_level": "low/moderate/high/critical",
+    "concerns": ["concern1", "concern2"],
+    "recommendations": ["recommendation1", "recommendation2"]
+  }}
+]
+
+Extract all important clauses. Return ONLY valid JSON array."""
+
+        try:
+            response = await self.llm_service.generate_response(
+                prompt=prompt,
+                model="gpt-4o-mini",
+                temperature=0.1,
+                max_tokens=2000
+            )
+
+            clauses_data = json.loads(response.strip())
+
+            clauses = []
+            for clause in clauses_data:
+                clauses.append(ExtractedClause(
+                    clause_type=ClauseType(clause.get("clause_type", "confidentiality")),
+                    clause_text=clause.get("clause_text", ""),
+                    risk_level=RiskLevel(clause.get("risk_level", "moderate")),
+                    concerns=clause.get("concerns", []),
+                    recommendations=clause.get("recommendations", [])
+                ))
+
+            return clauses[:10]
+
+        except Exception as e:
+            logger.warning(f"LLM clause extraction failed: {e}, using keyword fallback")
+            return self._extract_clauses_fallback(text, doc_type)
+
+    def _extract_clauses_fallback(self, text: str, doc_type: DocumentType) -> List[ExtractedClause]:
         """Extract key clauses from document"""
         clauses = []
         text_lower = text.lower()

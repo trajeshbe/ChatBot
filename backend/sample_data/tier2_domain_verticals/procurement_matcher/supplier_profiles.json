@@ -1,0 +1,255 @@
+[
+  {
+    "supplier_id": "SUP-UK-001",
+    "company_name": "BuildMaster Materials Ltd",
+    "location": "Birmingham, UK",
+    "distance_from_site_km": 145,
+    "established_year": 1998,
+    "annual_revenue_gbp": 45000000,
+    "employee_count": 250,
+    "certifications": ["ISO 9001:2015", "ISO 14001:2015", "ISO 45001:2018", "BES 6001"],
+    "specializations": ["Concrete supply", "Steel reinforcement", "Aggregates", "Masonry materials"],
+    "product_categories": {
+      "concrete": {
+        "capability": "Full range ready-mix",
+        "capacity_m3_per_week": 2500,
+        "quality_grades": ["C20/25", "C25/30", "C30/37", "C35/45"],
+        "delivery_radius_km": 50,
+        "batching_plants": 4
+      },
+      "steel_reinforcement": {
+        "capability": "Cut and bend service",
+        "capacity_tonnes_per_week": 120,
+        "bar_sizes_mm": [8, 10, 12, 16, 20, 25, 32, 40],
+        "stock_holding_tonnes": 850
+      },
+      "bricks": {
+        "capability": "Distribution",
+        "stock_varieties": 45,
+        "delivery_lead_time_days": 5
+      }
+    },
+    "sustainability": {
+      "recycled_content_percentage": 30,
+      "carbon_reduction_target": "Net zero by 2040",
+      "local_sourcing_percentage": 65,
+      "waste_diversion_rate": 92
+    },
+    "references": [
+      {
+        "project": "Manchester Arena Residential Complex",
+        "value_gbp": 3800000,
+        "year": 2023,
+        "client": "Northern Development Corp"
+      },
+      {
+        "project": "Bristol Riverside Apartments",
+        "value_gbp": 2950000,
+        "year": 2022,
+        "client": "Wessex Housing Association"
+      }
+    ],
+    "delivery_performance": {
+      "on_time_delivery_percentage": 94,
+      "average_lead_time_days": 7,
+      "minimum_order_value_gbp": 5000
+    },
+    "pricing_tier": "Mid-range competitive",
+    "payment_terms": "Net 30 days, 2% discount for payment within 10 days",
+    "insurance": {
+      "public_liability_gbp": 10000000,
+      "professional_indemnity_gbp": 5000000,
+      "employers_liability_gbp": 10000000
+    }
+  },
+  {
+    "supplier_id": "SUP-UK-002",
+    "company_name": "EcoStruct Materials PLC",
+    "location": "Reading, UK",
+    "distance_from_site_km": 8,
+    "established_year": 2010,
+    "annual_revenue_gbp": 28000000,
+    "employee_count": 120,
+    "certifications": ["ISO 9001:2015", "ISO 14001:2015", "FSC", "PEFC", "Passivhaus"],
+    "specializations": ["Sustainable timber", "Insulation materials", "Green building materials", "Passive house components"],
+    "product_categories": {
+      "timber": {
+        "capability": "Engineered timber specialist",
+        "capacity_m3_per_week": 450,
+        "certifications": ["FSC 100%", "PEFC"],
+        "products": ["CLT panels", "Glulam beams", "Structural timber", "Roof trusses"],
+        "processing_facility": "On-site CNC manufacturing"
+      },
+      "insulation": {
+        "capability": "Premium eco-insulation",
+        "materials": ["Mineral wool", "Wood fiber", "Sheep wool", "Recycled PET"],
+        "thermal_performance": "U-values from 0.13",
+        "stock_holding_m2": 12000
+      },
+      "windows_doors": {
+        "capability": "High-performance joinery",
+        "materials": ["Triple-glazed timber", "uPVC A++", "Composite"],
+        "manufacturing_capacity_units_per_week": 85,
+        "customization": "Bespoke sizing available"
+      }
+    },
+    "sustainability": {
+      "recycled_content_percentage": 45,
+      "carbon_reduction_target": "Carbon negative by 2030",
+      "local_sourcing_percentage": 80,
+      "waste_diversion_rate": 98,
+      "renewable_energy_usage": 85,
+      "epd_available": true
+    },
+    "references": [
+      {
+        "project": "Oxford Passive House Development",
+        "value_gbp": 1850000,
+        "year": 2023,
+        "client": "Oxford City Council",
+        "certification": "Passivhaus Premium"
+      },
+      {
+        "project": "Henley-on-Thames Eco Village",
+        "value_gbp": 2250000,
+        "year": 2022,
+        "client": "Thames Valley Housing Trust"
+      }
+    ],
+    "delivery_performance": {
+      "on_time_delivery_percentage": 96,
+      "average_lead_time_days": 10,
+      "minimum_order_value_gbp": 2000
+    },
+    "pricing_tier": "Premium eco-focused",
+    "payment_terms": "Net 30 days, 3% discount for payment within 7 days",
+    "insurance": {
+      "public_liability_gbp": 10000000,
+      "professional_indemnity_gbp": 5000000,
+      "product_liability_gbp": 5000000
+    }
+  },
+  {
+    "supplier_id": "SUP-UK-003",
+    "company_name": "Thames Roofing Supplies",
+    "location": "Slough, UK",
+    "distance_from_site_km": 22,
+    "established_year": 1985,
+    "annual_revenue_gbp": 18500000,
+    "employee_count": 95,
+    "certifications": ["ISO 9001:2015", "NFRC Member", "CompetentRoofer Approved"],
+    "specializations": ["Roofing materials", "Rainwater systems", "Roofline products", "Flat roofing"],
+    "product_categories": {
+      "roof_tiles": {
+        "capability": "Comprehensive tile range",
+        "materials": ["Concrete", "Clay", "Slate", "Composite"],
+        "manufacturers": ["Redland", "Marley", "Forticrete", "Sandtoft"],
+        "stock_holding_units": 125000,
+        "colors_available": 28
+      },
+      "rainwater_systems": {
+        "capability": "Complete drainage solutions",
+        "materials": ["uPVC", "Cast iron", "Aluminium", "Copper"],
+        "systems": ["Gutters", "Downpipes", "Hoppers", "Accessories"],
+        "colors": ["Black", "White", "Grey", "Brown"]
+      },
+      "underlays_membranes": {
+        "capability": "Breathable and non-breathable",
+        "stock_m2": 35000,
+        "fire_ratings": ["Class 0", "Class 1"],
+        "warranty_years": 25
+      }
+    },
+    "sustainability": {
+      "recycled_content_percentage": 15,
+      "carbon_reduction_target": "50% reduction by 2035",
+      "local_sourcing_percentage": 40,
+      "waste_diversion_rate": 85,
+      "takeback_scheme": "Packaging and pallets"
+    },
+    "references": [
+      {
+        "project": "Windsor Heights Apartments",
+        "value_gbp": 485000,
+        "year": 2023,
+        "client": "Royal Borough of Windsor & Maidenhead"
+      },
+      {
+        "project": "Maidenhead Town Center Regeneration",
+        "value_gbp": 625000,
+        "year": 2023,
+        "client": "Berkshire Construction Partners"
+      }
+    ],
+    "delivery_performance": {
+      "on_time_delivery_percentage": 91,
+      "average_lead_time_days": 5,
+      "minimum_order_value_gbp": 500,
+      "same_day_delivery": "Available for stock items within 20km"
+    },
+    "pricing_tier": "Competitive trade pricing",
+    "payment_terms": "Net 30 days, monthly account facility available",
+    "insurance": {
+      "public_liability_gbp": 10000000,
+      "product_liability_gbp": 10000000
+    }
+  },
+  {
+    "supplier_id": "SUP-UK-004",
+    "company_name": "MegaBuild Wholesale",
+    "location": "London, UK",
+    "distance_from_site_km": 65,
+    "established_year": 2005,
+    "annual_revenue_gbp": 125000000,
+    "employee_count": 650,
+    "certifications": ["ISO 9001:2015", "ISO 14001:2015", "Builders Merchants Federation Member"],
+    "specializations": ["Full builders merchant", "Bulk materials", "Plant hire", "Trade counter"],
+    "product_categories": {
+      "comprehensive_range": {
+        "categories": ["Timber", "Bricks", "Blocks", "Cement", "Plaster", "Insulation", "Roofing", "Drainage", "Landscaping"],
+        "sku_count": 15000,
+        "trade_branches": 12,
+        "distribution_centers": 3
+      },
+      "bulk_materials": {
+        "aggregates": "Sand, gravel, crushed stone",
+        "cement": "All major brands and types",
+        "delivery_fleet": "35 vehicles including Hiabs and artics"
+      }
+    },
+    "sustainability": {
+      "recycled_content_percentage": 22,
+      "carbon_reduction_target": "Net zero by 2045",
+      "local_sourcing_percentage": 55,
+      "waste_diversion_rate": 88,
+      "environmental_initiatives": ["Electric delivery vehicles pilot", "Solar panels on warehouses"]
+    },
+    "references": [
+      {
+        "project": "Wembley Stadium District Housing",
+        "value_gbp": 8500000,
+        "year": 2023,
+        "client": "Quintain Living"
+      },
+      {
+        "project": "Croydon Town Center Redevelopment",
+        "value_gbp": 6200000,
+        "year": 2022,
+        "client": "Unibail-Rodamco-Westfield"
+      }
+    ],
+    "delivery_performance": {
+      "on_time_delivery_percentage": 89,
+      "average_lead_time_days": 3,
+      "minimum_order_value_gbp": 250,
+      "emergency_delivery": "Available 24/7 for premium"
+    },
+    "pricing_tier": "Volume discount specialist",
+    "payment_terms": "Net 60 days for approved accounts, credit facilities up to £500k",
+    "insurance": {
+      "public_liability_gbp": 25000000,
+      "professional_indemnity_gbp": 10000000,
+      "goods_in_transit_gbp": 1000000
+    }
+  }
+]

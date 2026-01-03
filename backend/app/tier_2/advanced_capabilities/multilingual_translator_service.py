@@ -12,7 +12,11 @@ class MultilingualTranslatorService:
     def __init__(self, db: Session, settings: Settings):
         self.db = db
         self.settings = settings
-        self.llm_service = LLMService()
+        self.llm_service = LLMService(db, settings)
+
+        # Import DocumentService for extracting content from documents
+        from app.tier_1.document_processing.document_service import DocumentService
+        self.document_service = DocumentService(db, settings)
 
     async def translate_content(self, request: TranslateRequest) -> TranslateResponse:
         """Translate content into multiple target languages with quality assessment"""
@@ -20,9 +24,14 @@ class MultilingualTranslatorService:
             start_time = time.time()
             translations = []
 
+            # Extract content from document if document_id provided
+            content_to_translate = request.content
+            if request.document_id:
+                content_to_translate = await self._extract_document_content(request.document_id)
+
             for target_lang in request.target_languages:
                 translation_result = await self._translate_to_language(
-                    content=request.content,
+                    content=content_to_translate,
                     source_lang=request.source_language,
                     target_lang=target_lang,
                     content_type=request.content_type
@@ -31,9 +40,11 @@ class MultilingualTranslatorService:
 
             processing_time = (time.time() - start_time) * 1000
 
+            total_chars = len(content_to_translate)
+
             # Generate AI insights about translation quality
             prompt = f"""Analyze translation from {request.source_language.value} to {len(request.target_languages)} languages.
-Content type: {request.content_type.value}. Length: {len(request.content)} chars.
+Content type: {request.content_type.value}. Length: {total_chars} chars.
 Provide 2 sentences on translation challenges and recommendations."""
 
             insights = await self.llm_service.generate_response(
@@ -47,7 +58,7 @@ Provide 2 sentences on translation challenges and recommendations."""
                 content_id=request.content_id,
                 source_language=request.source_language,
                 translations=translations,
-                total_characters=len(request.content),
+                total_characters=total_chars,
                 processing_time_ms=round(processing_time, 2),
                 ai_insights=insights.strip()
             )
@@ -55,6 +66,17 @@ Provide 2 sentences on translation challenges and recommendations."""
         except Exception as e:
             logger.error(f"Translation error: {e}", exc_info=True)
             raise
+
+    async def _extract_document_content(self, document_id: str) -> str:
+        """Extract text content from uploaded document"""
+        try:
+            chunks = await self.document_service.get_chunks_for_document(document_id)
+            content = " ".join([chunk.get('content', '') for chunk in chunks])
+            logger.info(f"Extracted {len(content)} characters from document {document_id}")
+            return content
+        except Exception as e:
+            logger.error(f"Failed to extract document content: {e}")
+            return ""
 
     async def _translate_to_language(
         self,

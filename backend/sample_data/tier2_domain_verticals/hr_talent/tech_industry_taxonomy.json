@@ -1,0 +1,312 @@
+{
+  "taxonomy_version": "2.0",
+  "last_updated": "2024-01-15",
+  "industries": [
+    {
+      "industry": "Information Technology",
+      "domains": [
+        {
+          "domain": "Software Development",
+          "groups": [
+            {
+              "group": "Web Development",
+              "occupations": [
+                {
+                  "occupation": "Front-End Developer",
+                  "skills": [
+                    "React", "Vue.js", "Angular", "JavaScript", "TypeScript",
+                    "HTML5", "CSS3", "Responsive Design", "Web Accessibility",
+                    "Redux", "Webpack", "NPM", "Git"
+                  ]
+                },
+                {
+                  "occupation": "Back-End Developer",
+                  "skills": [
+                    "Node.js", "Python", "Java", "Go", "REST API",
+                    "GraphQL", "Microservices", "Database Design", "SQL",
+                    "NoSQL", "Authentication", "API Security"
+                  ]
+                },
+                {
+                  "occupation": "Full-Stack Developer",
+                  "skills": [
+                    "React", "Node.js", "Python", "TypeScript", "MongoDB",
+                    "PostgreSQL", "REST API", "GraphQL", "Docker", "Kubernetes",
+                    "CI/CD", "Agile", "Git", "AWS", "Azure"
+                  ]
+                }
+              ]
+            },
+            {
+              "group": "Mobile Development",
+              "occupations": [
+                {
+                  "occupation": "iOS Developer",
+                  "skills": [
+                    "Swift", "Objective-C", "Xcode", "UIKit", "SwiftUI",
+                    "Core Data", "iOS SDK", "App Store", "TestFlight",
+                    "Push Notifications", "In-App Purchases"
+                  ]
+                },
+                {
+                  "occupation": "Android Developer",
+                  "skills": [
+                    "Kotlin", "Java", "Android Studio", "Jetpack Compose",
+                    "Android SDK", "Material Design", "Play Store",
+                    "Firebase", "Retrofit", "Room Database"
+                  ]
+                },
+                {
+                  "occupation": "React Native Developer",
+                  "skills": [
+                    "React Native", "JavaScript", "TypeScript", "Expo",
+                    "Redux", "Native Modules", "iOS", "Android",
+                    "Cross-platform Development"
+                  ]
+                }
+              ]
+            },
+            {
+              "group": "DevOps & Infrastructure",
+              "occupations": [
+                {
+                  "occupation": "DevOps Engineer",
+                  "skills": [
+                    "Docker", "Kubernetes", "Jenkins", "GitLab CI", "Terraform",
+                    "Ansible", "AWS", "Azure", "Linux", "Bash",
+                    "Monitoring", "Prometheus", "Grafana"
+                  ]
+                },
+                {
+                  "occupation": "Cloud Solutions Architect",
+                  "skills": [
+                    "AWS", "Azure", "GCP", "Cloud Architecture", "Microservices",
+                    "Serverless", "Lambda", "API Gateway", "CloudFormation",
+                    "Infrastructure as Code", "Security Best Practices"
+                  ]
+                },
+                {
+                  "occupation": "Site Reliability Engineer",
+                  "skills": [
+                    "Kubernetes", "Docker", "Monitoring", "Incident Response",
+                    "Performance Optimization", "Automation", "Python",
+                    "Go", "Distributed Systems", "High Availability"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "Data & Analytics",
+          "groups": [
+            {
+              "group": "Data Science",
+              "occupations": [
+                {
+                  "occupation": "Data Scientist",
+                  "skills": [
+                    "Python", "R", "Machine Learning", "Statistics",
+                    "Pandas", "NumPy", "Scikit-learn", "TensorFlow",
+                    "PyTorch", "SQL", "Data Visualization", "A/B Testing"
+                  ]
+                },
+                {
+                  "occupation": "Machine Learning Engineer",
+                  "skills": [
+                    "Python", "TensorFlow", "PyTorch", "Scikit-learn",
+                    "Deep Learning", "NLP", "Computer Vision", "MLOps",
+                    "Model Deployment", "Feature Engineering"
+                  ]
+                },
+                {
+                  "occupation": "AI Research Scientist",
+                  "skills": [
+                    "Machine Learning", "Deep Learning", "Research",
+                    "Python", "TensorFlow", "PyTorch", "NLP",
+                    "Computer Vision", "Reinforcement Learning", "Publications"
+                  ]
+                }
+              ]
+            },
+            {
+              "group": "Data Engineering",
+              "occupations": [
+                {
+                  "occupation": "Data Engineer",
+                  "skills": [
+                    "Python", "SQL", "Spark", "Hadoop", "Airflow",
+                    "ETL", "Data Pipelines", "AWS", "Redshift",
+                    "BigQuery", "Kafka", "Data Modeling"
+                  ]
+                },
+                {
+                  "occupation": "Big Data Engineer",
+                  "skills": [
+                    "Hadoop", "Spark", "Kafka", "HBase", "Hive",
+                    "Scala", "Python", "Distributed Systems",
+                    "Data Processing", "Stream Processing"
+                  ]
+                }
+              ]
+            },
+            {
+              "group": "Business Intelligence",
+              "occupations": [
+                {
+                  "occupation": "BI Developer",
+                  "skills": [
+                    "SQL", "Tableau", "Power BI", "Data Warehousing",
+                    "ETL", "Data Modeling", "DAX", "Data Visualization",
+                    "Business Analytics", "Reporting"
+                  ]
+                },
+                {
+                  "occupation": "Data Analyst",
+                  "skills": [
+                    "SQL", "Excel", "Tableau", "Power BI", "Python",
+                    "Statistics", "Data Visualization", "A/B Testing",
+                    "Google Analytics", "Business Intelligence"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "Cybersecurity",
+          "groups": [
+            {
+              "group": "Security Engineering",
+              "occupations": [
+                {
+                  "occupation": "Security Engineer",
+                  "skills": [
+                    "Network Security", "Penetration Testing", "SIEM",
+                    "Firewall", "IDS/IPS", "Vulnerability Assessment",
+                    "Security Auditing", "Encryption", "PKI"
+                  ]
+                },
+                {
+                  "occupation": "Application Security Engineer",
+                  "skills": [
+                    "OWASP Top 10", "Secure Coding", "Code Review",
+                    "Penetration Testing", "SAST", "DAST",
+                    "Threat Modeling", "Security Testing"
+                  ]
+                },
+                {
+                  "occupation": "Cloud Security Engineer",
+                  "skills": [
+                    "AWS Security", "Azure Security", "IAM",
+                    "Cloud Security Architecture", "Compliance",
+                    "Security Automation", "Container Security"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "Product Management",
+          "groups": [
+            {
+              "group": "Product Leadership",
+              "occupations": [
+                {
+                  "occupation": "Product Manager",
+                  "skills": [
+                    "Product Strategy", "Roadmapping", "User Research",
+                    "Agile", "Data Analysis", "Stakeholder Management",
+                    "A/B Testing", "Product Analytics", "PRD Writing"
+                  ]
+                },
+                {
+                  "occupation": "Technical Product Manager",
+                  "skills": [
+                    "Product Management", "Technical Architecture",
+                    "API Design", "SQL", "Data Analysis",
+                    "Software Development Lifecycle", "Agile"
+                  ]
+                },
+                {
+                  "occupation": "Senior Product Manager",
+                  "skills": [
+                    "Product Strategy", "Product Vision", "Leadership",
+                    "Cross-functional Collaboration", "Metrics",
+                    "Business Strategy", "Market Analysis"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "domain": "Design",
+          "groups": [
+            {
+              "group": "UX/UI Design",
+              "occupations": [
+                {
+                  "occupation": "UX Designer",
+                  "skills": [
+                    "User Research", "Wireframing", "Prototyping",
+                    "Usability Testing", "Information Architecture",
+                    "User Flows", "Personas", "Figma", "Sketch"
+                  ]
+                },
+                {
+                  "occupation": "UI Designer",
+                  "skills": [
+                    "Visual Design", "Typography", "Color Theory",
+                    "Design Systems", "Figma", "Adobe XD",
+                    "Responsive Design", "Interaction Design"
+                  ]
+                },
+                {
+                  "occupation": "Product Designer",
+                  "skills": [
+                    "UX Design", "UI Design", "Prototyping",
+                    "User Research", "Design Thinking",
+                    "Figma", "Product Strategy", "Cross-functional Collaboration"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "industry": "Finance & Banking",
+      "domains": [
+        {
+          "domain": "Financial Technology",
+          "groups": [
+            {
+              "group": "Quantitative Analysis",
+              "occupations": [
+                {
+                  "occupation": "Quantitative Developer",
+                  "skills": [
+                    "C++", "Python", "Financial Mathematics",
+                    "Derivatives Pricing", "Risk Management",
+                    "Monte Carlo Simulation", "Black-Scholes Model"
+                  ]
+                },
+                {
+                  "occupation": "Quantitative Analyst",
+                  "skills": [
+                    "Statistics", "Financial Modeling", "Python",
+                    "R", "Time Series Analysis", "Portfolio Optimization",
+                    "Risk Analytics", "MATLAB"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

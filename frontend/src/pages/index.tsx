@@ -20,6 +20,8 @@ import ConstructionExtraction from '@/components/ConstructionExtraction'
 import DocumentExtractionPanel from '@/components/DocumentExtractionPanel'
 import GrantThorntonExtraction from '@/components/GrantThorntonExtraction'
 import ModuleInterface from '@/components/ModuleInterface'
+import EnhancedModulePanel from '@/components/EnhancedModulePanel'
+import ModuleRouter from '@/components/ModuleRouter'
 import { useAuth } from '@/contexts/AuthContext'
 import type { RAGConfig } from '@/components/RAGSettings'
 import { getModuleConfig, isModuleId } from '@/config/modules'
@@ -324,17 +326,19 @@ export default function Home() {
             </div>
           )}
 
-          {/* Tier 2 & Tier 3 Module Interface - Dynamic rendering for all modules */}
+          {/* Tier 2 & Tier 3 Module Interface - Dynamic rendering with specialized components */}
           {isModuleId(activeTab) && (() => {
             const moduleConfig = getModuleConfig(activeTab)
             if (!moduleConfig) return null
 
             return (
               <div className="flex-1 overflow-hidden">
-                <ModuleInterface
+                <ModuleRouter
                   moduleId={moduleConfig.id}
                   moduleName={moduleConfig.name}
                   moduleType={moduleConfig.type}
+                  moduleCategory={moduleConfig.category}
+                  moduleDescription={moduleConfig.description}
                   sessionId={sessionId}
                 />
               </div>

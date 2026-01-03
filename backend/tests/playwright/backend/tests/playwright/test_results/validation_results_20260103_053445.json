@@ -1,0 +1,12 @@
+    "Tier 3 Customer Solutions": {
+      "status": "PASSED",
+      "test_file": "test_tier3_customer_solutions.py"
+    },
+    "All Tier 2 Verticals": {
+      "status": "PASSED",
+      "test_file": "test_tier2_all_verticals.py"
+    },
+    "Document Intelligence": {
+      "status": "PASSED",
+      "test_file": "test_tier2_document_intelligence.py"
+    },

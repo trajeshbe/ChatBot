@@ -1,0 +1,243 @@
+REQUEST FOR PROPOSAL (RFP)
+ENTERPRISE CLOUD MIGRATION AND INFRASTRUCTURE SERVICES
+
+Project Name: Global Cloud Migration Initiative
+RFP Number: RFP-2024-IT-0015
+Issue Date: January 15, 2024
+Response Deadline: February 28, 2024
+Organization: Fortune 500 Financial Services Company
+
+EXECUTIVE SUMMARY
+
+We are seeking qualified vendors to support our comprehensive cloud migration initiative, transitioning our on-premises data centers and legacy applications to a hybrid cloud architecture over an 18-month period.
+
+PROJECT OVERVIEW
+
+Scope: Migration of 450+ applications and 2,800+ servers to AWS and Azure cloud platforms
+Timeline: 18 months (April 2024 - September 2025)
+Budget Range: $25M - $35M
+Contract Type: Fixed-price milestones with performance incentives
+
+TECHNICAL REQUIREMENTS
+
+1. CLOUD INFRASTRUCTURE EXPERTISE
+
+Required Capabilities:
+- AWS Advanced Consulting Partner or Azure Gold Partner status
+- Proven experience migrating enterprise workloads (500+ servers)
+- Multi-cloud architecture and design expertise
+- Infrastructure-as-Code (Terraform, CloudFormation, ARM templates)
+- Cloud cost optimization and FinOps practices
+- Security and compliance in highly regulated environments (SOC 2, PCI-DSS, GDPR)
+
+Primary Technologies:
+- Amazon Web Services (AWS): EC2, S3, RDS, Lambda, EKS, CloudFront
+- Microsoft Azure: Virtual Machines, Blob Storage, SQL Database, AKS, CDN
+- Kubernetes and container orchestration
+- CI/CD pipelines (Jenkins, GitLab CI, GitHub Actions)
+- Monitoring and observability (Datadog, New Relic, Prometheus/Grafana)
+
+2. APPLICATION MIGRATION SERVICES
+
+Application Portfolio:
+- Legacy monolithic applications (Java, .NET, mainframe)
+- Modern microservices architectures
+- Databases: Oracle, SQL Server, PostgreSQL, MySQL, MongoDB
+- Middleware: WebSphere, WebLogic, Tomcat
+- Enterprise applications: SAP, Salesforce, custom-built platforms
+
+Migration Approaches:
+- Rehost (lift-and-shift): ~40% of applications
+- Replatform: ~35% of applications
+- Refactor/Re-architect: ~20% of applications
+- Retire: ~5% of applications
+
+Required Services:
+- Application assessment and migration planning
+- Code modernization and refactoring
+- Database migration (including data validation)
+- Integration with existing systems
+- Performance testing and optimization
+- Post-migration support (6 months minimum)
+
+3. DATA MIGRATION AND MANAGEMENT
+
+Data Requirements:
+- Total data volume: 850 TB
+- Database migrations: 180+ database instances
+- File storage migration: 400 TB of unstructured data
+- Real-time data replication for critical systems
+- Zero data loss requirement for financial transactions
+- Maximum downtime: 4 hours for Tier-1 applications
+
+Data Security:
+- Encryption in transit and at rest
+- Data classification and DLP policies
+- Compliance with financial regulations (SOX, GLBA)
+- Data residency requirements (US and EU regions)
+
+4. SECURITY AND COMPLIANCE
+
+Mandatory Requirements:
+- ISO 27001 certification
+- SOC 2 Type II attestation
+- Experience with financial services regulations
+- Cloud Security Alliance (CSA) STAR certification preferred
+
+Security Services:
+- Cloud security architecture and design
+- Identity and Access Management (IAM) implementation
+- Network security (VPC, firewalls, WAF)
+- Security monitoring and SIEM integration
+- Vulnerability assessments and penetration testing
+- Incident response planning
+
+5. NETWORKING AND CONNECTIVITY
+
+Network Requirements:
+- Hybrid cloud connectivity (Direct Connect, ExpressRoute)
+- SD-WAN implementation
+- Load balancing and traffic management
+- DNS and CDN configuration
+- VPN for remote access
+- Network performance monitoring
+
+Bandwidth Requirements:
+- 10 Gbps dedicated connections to primary data centers
+- 1 Gbps connections to regional offices (25 locations)
+- Global content delivery network (CDN)
+
+6. DISASTER RECOVERY AND BUSINESS CONTINUITY
+
+DR Requirements:
+- Multi-region disaster recovery architecture
+- RPO (Recovery Point Objective): 15 minutes for critical systems
+- RTO (Recovery Time Objective): 1 hour for critical systems
+- Automated failover and recovery
+- Regular DR testing (quarterly)
+- Backup and restore capabilities
+
+7. DEVOPS AND AUTOMATION
+
+DevOps Capabilities:
+- CI/CD pipeline development and optimization
+- Infrastructure-as-Code implementation
+- Configuration management (Ansible, Puppet, Chef)
+- Automated testing frameworks
+- Container orchestration (Kubernetes, ECS, AKS)
+- GitOps practices
+
+8. MANAGED SERVICES (POST-MIGRATION)
+
+Ongoing Support Requirements:
+- 24/7/365 support with SLA guarantees
+- Cloud infrastructure management
+- Performance monitoring and optimization
+- Cost optimization and reporting
+- Patch management and updates
+- Capacity planning
+- Security operations
+
+Service Level Agreements:
+- System Availability: 99.95% for Tier-1 applications
+- Incident Response: Critical issues - 15 minutes, High - 1 hour
+- Problem Resolution: Critical - 4 hours, High - 24 hours
+
+VENDOR QUALIFICATIONS
+
+Mandatory Qualifications:
+1. Minimum 8 years of cloud migration experience
+2. Completed at least 10 enterprise migrations (500+ servers each)
+3. Certified professionals: minimum 20 AWS/Azure certified architects and engineers
+4. Financial services industry experience required
+5. Annual revenue: minimum $100M (demonstrates stability)
+6. Global delivery capability (North America, Europe preferred)
+
+Preferred Qualifications:
+- AWS Premier Consulting Partner or Azure Expert MSP
+- Mainframe modernization experience
+- SAP on cloud experience
+- DevSecOps expertise
+- FinOps certification
+
+Team Requirements:
+- Dedicated Cloud Architect (AWS/Azure certified)
+- Migration Lead with 10+ years experience
+- Security Specialist (CISSP or equivalent)
+- Database Migration Specialist
+- DevOps Engineer (Kubernetes certified)
+- Project Manager (PMP certified)
+- Minimum team size: 15 FTEs for duration of project
+
+PROPOSAL REQUIREMENTS
+
+Vendors must provide:
+
+1. Company Overview
+- Corporate profile and history
+- Financial statements (last 2 years)
+- Organizational chart
+- Office locations and global delivery centers
+
+2. Technical Capabilities
+- Cloud certifications (company and individual)
+- Technology partnerships
+- Case studies (minimum 5 similar engagements)
+- Reference clients (minimum 3, financial services preferred)
+
+3. Proposed Solution
+- Migration methodology and approach
+- Detailed project plan with milestones
+- Risk mitigation strategies
+- Quality assurance processes
+- Knowledge transfer plan
+
+4. Team Composition
+- Proposed team structure
+- Key personnel resumes with certifications
+- Staff augmentation capabilities
+- Escalation procedures
+
+5. Commercial Proposal
+- Detailed cost breakdown by phase
+- Pricing model (fixed-price, T&M components)
+- Assumptions and exclusions
+- Payment terms
+- Change management process
+
+6. References and Case Studies
+- Minimum 5 references from similar projects
+- Contact information for reference checks
+- Detailed case studies demonstrating capabilities
+
+EVALUATION CRITERIA
+
+Proposals will be evaluated based on:
+- Technical capabilities and approach (40%)
+- Team qualifications and experience (25%)
+- Cost and value proposition (20%)
+- References and case studies (10%)
+- Innovation and strategic fit (5%)
+
+TIMELINE
+
+- RFP Issue Date: January 15, 2024
+- Pre-proposal Conference: January 25, 2024 (optional)
+- Question Submission Deadline: February 5, 2024
+- Response to Questions: February 12, 2024
+- Proposal Submission Deadline: February 28, 2024
+- Shortlist Notification: March 8, 2024
+- Vendor Presentations: March 18-22, 2024
+- Final Selection: March 29, 2024
+- Contract Negotiation: April 1-15, 2024
+- Project Kickoff: April 22, 2024
+
+CONTACT INFORMATION
+
+Primary Contact: Jane Smith, Director of IT Procurement
+Email: jane.smith@financialcorp.com
+Phone: (555) 123-4567
+
+Questions: Submit via email by February 5, 2024
+
+Proposal Submission: Electronic submission via procurement portal

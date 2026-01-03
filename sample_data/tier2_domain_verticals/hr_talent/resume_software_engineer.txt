@@ -1,0 +1,75 @@
+SARAH CHEN
+Senior Full-Stack Software Engineer
+Seattle, WA | sarah.chen@email.com | (206) 555-0123 | linkedin.com/in/sarahchen
+
+PROFESSIONAL SUMMARY
+Accomplished Full-Stack Software Engineer with 7+ years of experience building scalable web applications and microservices architectures. Expert in React, Node.js, Python, and cloud technologies (AWS, Azure). Proven track record of leading development teams and delivering high-impact products for Fortune 500 companies. Strong advocate for clean code, test-driven development, and agile methodologies.
+
+TECHNICAL SKILLS
+Programming Languages: JavaScript/TypeScript, Python, Java, Go, SQL
+Frontend: React, Next.js, Vue.js, Redux, HTML5, CSS3, Tailwind CSS, Material-UI
+Backend: Node.js, Express, FastAPI, Django, Spring Boot, GraphQL, REST APIs
+Databases: PostgreSQL, MongoDB, Redis, MySQL, Elasticsearch
+Cloud & DevOps: AWS (EC2, S3, Lambda, RDS), Azure, Docker, Kubernetes, Terraform, Jenkins, GitHub Actions
+Testing: Jest, Pytest, Selenium, Cypress, Unit Testing, Integration Testing
+Tools: Git, JIRA, Confluence, Figma, VS Code, IntelliJ
+
+PROFESSIONAL EXPERIENCE
+
+MICROSOFT CORPORATION, Seattle, WA
+Senior Software Engineer, Azure DevOps Team                                    Jan 2021 - Present
+• Lead development of CI/CD pipeline features used by 100,000+ enterprise customers
+• Architected microservices-based solution using Node.js and Kubernetes, improving deployment speed by 40%
+• Implemented real-time collaboration features using WebSockets and Redis pub/sub
+• Mentored team of 5 junior engineers, conducting code reviews and technical design sessions
+• Reduced API response time by 60% through database optimization and caching strategies
+• Championed adoption of TypeScript across team, improving code quality and developer productivity
+
+Technologies: React, TypeScript, Node.js, Kubernetes, Azure, PostgreSQL, Redis
+
+AMAZON WEB SERVICES, Seattle, WA
+Software Development Engineer II, EC2 Console Team                              Mar 2019 - Dec 2020
+• Developed customer-facing features for AWS EC2 management console serving millions of users
+• Built reusable React component library used across 15+ AWS console applications
+• Implemented automated testing suite with 85% code coverage using Jest and Cypress
+• Collaborated with UX designers to create intuitive interfaces for complex cloud infrastructure
+• Optimized frontend bundle size by 50% using code splitting and lazy loading
+• Participated in on-call rotation, resolving critical production issues
+
+Technologies: React, Redux, Node.js, AWS Lambda, DynamoDB, CloudFormation
+
+ZILLOW GROUP, Seattle, WA
+Software Engineer, Search Platform                                              Jun 2017 - Feb 2019
+• Developed search and recommendation features for Zillow's real estate platform
+• Built RESTful APIs using Python Flask serving 50M+ monthly requests
+• Implemented Elasticsearch-based search with advanced filtering and geospatial queries
+• Designed and deployed machine learning models for property valuation
+• Created data pipelines using Apache Airflow for ETL processes
+• Improved search relevancy by 25% through A/B testing and algorithmic improvements
+
+Technologies: Python, Flask, React, Elasticsearch, PostgreSQL, Docker, Apache Airflow
+
+EDUCATION
+
+Master of Science in Computer Science                                          2015 - 2017
+University of Washington, Seattle, WA
+GPA: 3.8/4.0 | Focus: Distributed Systems and Machine Learning
+
+Bachelor of Science in Computer Engineering                                     2011 - 2015
+UC Berkeley, Berkeley, CA
+GPA: 3.7/4.0 | Dean's List (6 semesters)
+
+CERTIFICATIONS
+• AWS Certified Solutions Architect - Professional
+• Certified Kubernetes Application Developer (CKAD)
+• Microsoft Certified: Azure Developer Associate
+
+PROJECTS & ACHIEVEMENTS
+• Open Source Contributor: Active contributor to React, Node.js, and FastAPI communities (500+ GitHub stars)
+• Tech Speaker: Presented at React Conf 2022 on "Building Scalable Real-Time Applications"
+• Patent: Co-inventor on US Patent #10,123,456 for "System and Method for Distributed Cache Invalidation"
+• Hackathon Winner: 1st place at Microsoft Internal Hackathon 2022 for AI-powered code review tool
+
+PUBLICATIONS
+• "Optimizing Microservices Communication Patterns" - IEEE Software Engineering Conference 2021
+• "Real-Time Data Synchronization in Distributed Systems" - ACM Cloud Computing Journal 2020

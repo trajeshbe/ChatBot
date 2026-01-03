@@ -1,0 +1,63 @@
+{
+  "module_name": "talent_search",
+  "display_name": "Talent Search & Matching",
+  "description": "AI-powered talent search and job matching with semantic analysis",
+  "module_type": "tier2_domain_vertical",
+  "category": "hr_talent",
+  "config": {
+    "llm": {
+      "default": {
+        "model": "gpt-4o-mini",
+        "temperature": 0.2,
+        "max_tokens": 1000,
+        "top_p": 1.0,
+        "frequency_penalty": 0.0,
+        "presence_penalty": 0.0
+      },
+      "resume_analyzer": {
+        "model": "gpt-4o-mini",
+        "temperature": 0.1,
+        "max_tokens": 800
+      }
+    },
+    "prompts": {
+      "system": {
+        "main": "You are an AI assistant specialized in talent search and job matching. Analyze resumes and job descriptions to find the best candidates based on skills, experience, and cultural fit.",
+        "resume_analysis": "Extract key information from the following resume focusing on skills, experience, education, and achievements.",
+        "job_matching": "Match candidates to job requirements based on skill alignment, experience relevance, and cultural fit indicators."
+      },
+      "user": {
+        "query_template": "Find candidates for: {job_description}\n\nRequirements:\n{requirements}",
+        "resume_template": "Analyze this resume:\n\n{resume_text}"
+      }
+    },
+    "thresholds": {
+      "min_confidence": 0.7,
+      "high_match": 0.9,
+      "skill_match_threshold": 0.8
+    },
+    "scoring": {
+      "weights": {
+        "skills_match": 0.6,
+        "experience_match": 0.4
+      },
+      "factors": {
+        "technical_skills": 0.4,
+        "soft_skills": 0.2,
+        "years_experience": 0.25,
+        "education": 0.15
+      }
+    },
+    "retrieval": {
+      "top_k": 10,
+      "rerank_top_k": 5,
+      "min_score": 0.6
+    },
+    "features": {
+      "enable_caching": true,
+      "enable_semantic_search": true,
+      "enable_skill_extraction": true,
+      "enable_debug_logging": false
+    }
+  }
+}

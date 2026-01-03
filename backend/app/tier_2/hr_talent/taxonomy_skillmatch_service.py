@@ -38,62 +38,101 @@ class TaxonomySkillmatchService:
         # Tier 1 service dependencies
         self.llm_service = LLMService(db, settings)
 
-        # Load skill taxonomy (simplified for demo)
-        self.taxonomy = self._load_taxonomy()
+        # Import DocumentService for extracting skills from documents
+        from app.tier_1.document_processing.document_service import DocumentService
+        self.document_service = DocumentService(db, settings)
+
+        # Taxonomy loaded dynamically from documents
+        self.taxonomy: Dict[str, TaxonomyNode] = {}
 
         logger.info("✓ TaxonomySkillmatchService initialized with tier_1 services")
 
-    def _load_taxonomy(self) -> Dict[str, TaxonomyNode]:
-        """Load skill taxonomy (hardcoded for demo, would be from DB in production)"""
-        taxonomy = {
-            "python": TaxonomyNode(
-                skill_name="Python",
-                category=SkillCategory.TECHNICAL,
-                synonyms=["python programming", "python3"],
-                related_skills=["FastAPI", "Django", "Flask", "Data Science"],
-                child_skills=["Django", "FastAPI", "Flask", "NumPy", "Pandas"]
-            ),
-            "javascript": TaxonomyNode(
-                skill_name="JavaScript",
-                category=SkillCategory.TECHNICAL,
-                synonyms=["js", "ecmascript"],
-                related_skills=["TypeScript", "React", "Node.js"],
-                child_skills=["React", "Vue", "Angular", "Node.js"]
-            ),
-            "leadership": TaxonomyNode(
-                skill_name="Leadership",
-                category=SkillCategory.LEADERSHIP,
-                synonyms=["team leadership", "people management"],
-                related_skills=["Communication", "Decision Making", "Strategic Thinking"],
-                child_skills=["Team Management", "Mentoring", "Stakeholder Management"]
-            ),
-            "communication": TaxonomyNode(
-                skill_name="Communication",
-                category=SkillCategory.SOFT_SKILLS,
-                synonyms=["interpersonal skills", "verbal communication"],
-                related_skills=["Presentation", "Negotiation", "Writing"],
-                child_skills=["Written Communication", "Verbal Communication", "Presentation Skills"]
-            ),
-            "sql": TaxonomyNode(
-                skill_name="SQL",
-                category=SkillCategory.TECHNICAL,
-                synonyms=["structured query language", "database querying"],
-                related_skills=["PostgreSQL", "MySQL", "Database Design"],
-                child_skills=["PostgreSQL", "MySQL", "SQLite", "MSSQL"]
-            ),
-            "agile": TaxonomyNode(
-                skill_name="Agile",
-                category=SkillCategory.METHODOLOGIES,
-                synonyms=["agile methodology", "scrum"],
-                related_skills=["Scrum", "Kanban", "Project Management"],
-                child_skills=["Scrum", "Kanban", "SAFe"]
+    async def _load_taxonomy_from_documents(self, session_id: Optional[str] = None) -> Dict[str, TaxonomyNode]:
+        """Load skill taxonomy from uploaded job descriptions and competency frameworks"""
+        try:
+            documents = await self.document_service.list_documents(session_id=session_id)
+
+            if not documents:
+                logger.warning("No documents found for taxonomy extraction - returning empty taxonomy")
+                return {}
+
+            all_skills = []
+
+            # Extract skills from first 10 documents
+            for doc in documents[:10]:
+                try:
+                    chunks = await self.document_service.get_chunks_for_document(doc.id)
+                    document_text = " ".join([chunk.get('content', '') for chunk in chunks[:5]])
+
+                    skills = await self._extract_skills_from_text(document_text)
+                    all_skills.extend(skills)
+                except Exception as e:
+                    logger.warning(f"Failed to extract skills from document {doc.id}: {e}")
+                    continue
+
+            # Build taxonomy from extracted skills
+            taxonomy = {}
+            for skill in all_skills:
+                normalized = self._normalize_skill_name(skill.get("skill_name", ""))
+                if normalized and normalized not in taxonomy:
+                    taxonomy[normalized] = TaxonomyNode(
+                        skill_name=skill.get("skill_name", ""),
+                        category=SkillCategory(skill.get("category", "technical")),
+                        synonyms=skill.get("synonyms", []),
+                        related_skills=skill.get("related_skills", []),
+                        child_skills=skill.get("child_skills", [])
+                    )
+
+            logger.info(f"✓ Loaded {len(taxonomy)} skills from documents")
+            return taxonomy
+
+        except Exception as e:
+            logger.error(f"Failed to load taxonomy from documents: {e}")
+            return {}
+
+    async def _extract_skills_from_text(self, text: str) -> List[Dict[str, Any]]:
+        """Extract structured skill data using LLM"""
+        prompt = f"""Extract all skills mentioned in this job description or competency framework:
+
+{text[:3000]}
+
+Extract technical skills, soft skills, leadership skills, domain knowledge, and methodologies.
+
+Return JSON array:
+[
+  {{
+    "skill_name": "Python",
+    "category": "technical/soft_skills/leadership/domain_knowledge/methodologies",
+    "synonyms": ["python programming", "python3"],
+    "related_skills": ["Django", "FastAPI", "Flask"],
+    "child_skills": ["Django", "FastAPI", "NumPy"]
+  }}
+]
+
+Extract 20+ skills. Return ONLY valid JSON array."""
+
+        try:
+            response = await self.llm_service.generate_response(
+                prompt=prompt,
+                model="gpt-4o-mini",
+                temperature=0.1,
+                max_tokens=1500
             )
-        }
-        return taxonomy
+
+            skills = json.loads(response.strip())
+            return skills if isinstance(skills, list) else []
+
+        except Exception as e:
+            logger.warning(f"Skill extraction failed: {e}")
+            return []
 
     async def map_skills_to_taxonomy(self, request: SkillTaxonomyRequest) -> SkillTaxonomyResponse:
         """Map skills to standard taxonomy"""
         logger.info(f"📚 Mapping {len(request.skills)} skills to taxonomy")
+
+        # Load taxonomy from documents if not already loaded
+        if not self.taxonomy:
+            self.taxonomy = await self._load_taxonomy_from_documents(session_id=request.session_id)
 
         mappings: List[SkillMapping] = []
         unmapped: List[str] = []

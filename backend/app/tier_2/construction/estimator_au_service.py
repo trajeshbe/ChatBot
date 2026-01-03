@@ -32,34 +32,7 @@ from .estimator_au_schemas import (
 logger = logging.getLogger(__name__)
 
 
-# Australian construction cost rates (2024 average - AUD/m²)
-COST_RATES_PER_SQM_AUD = {
-    AustralianState.NSW: {
-        "residential_house": {"basic": 1800, "standard": 2500, "high": 3500, "premium": 5000},
-        "commercial_office": {"basic": 2200, "standard": 3000, "high": 4200, "premium": 6000},
-        "industrial": {"basic": 1200, "standard": 1600, "high": 2200, "premium": 3000}
-    },
-    AustralianState.VIC: {
-        "residential_house": {"basic": 1750, "standard": 2450, "high": 3400, "premium": 4800},
-        "commercial_office": {"basic": 2150, "standard": 2950, "high": 4100, "premium": 5800},
-        "industrial": {"basic": 1150, "standard": 1550, "high": 2150, "premium": 2900}
-    },
-    AustralianState.QLD: {
-        "residential_house": {"basic": 1700, "standard": 2350, "high": 3250, "premium": 4600},
-        "commercial_office": {"basic": 2050, "standard": 2800, "high": 3900, "premium": 5500},
-        "industrial": {"basic": 1100, "standard": 1450, "high": 2000, "premium": 2750}
-    },
-    AustralianState.WA: {
-        "residential_house": {"basic": 1850, "standard": 2550, "high": 3550, "premium": 5100},
-        "commercial_office": {"basic": 2250, "standard": 3050, "high": 4250, "premium": 6100},
-        "industrial": {"basic": 1250, "standard": 1650, "high": 2250, "premium": 3050}
-    },
-    AustralianState.SA: {
-        "residential_house": {"basic": 1650, "standard": 2300, "high": 3200, "premium": 4500},
-        "commercial_office": {"basic": 2000, "standard": 2750, "high": 3850, "premium": 5400},
-        "industrial": {"basic": 1050, "standard": 1400, "high": 1950, "premium": 2700}
-    }
-}
+# Cost rates will be loaded from uploaded documents (cost databases, project data)
 
 
 class EstimatorAUService:
@@ -85,6 +58,9 @@ class EstimatorAUService:
         self.llm_service = LLMService(db, settings)
         self.document_service = DocumentService(db, settings)
 
+        # Cost rates loaded from documents
+        self.cost_rates_cache: Dict[str, Any] = {}
+
         logger.info("✓ EstimatorAUService initialized with tier_1 services")
 
     async def generate_estimate(
@@ -104,7 +80,11 @@ class EstimatorAUService:
                 # Merge extracted details with request
                 request = self._merge_details(request, extracted_details)
 
-            # Step 2: Get base cost rate
+            # Step 2: Load cost rates from documents if not cached
+            if not self.cost_rates_cache:
+                self.cost_rates_cache = await self._extract_cost_rates_from_documents(session_id=request.session_id)
+
+            # Get base cost rate
             base_rate_per_sqm = self._get_base_cost_rate(
                 request.state,
                 request.project_type,
@@ -244,6 +224,90 @@ Return ONLY JSON."""
 
         return request
 
+    async def _extract_cost_rates_from_documents(self, session_id: Optional[str] = None) -> Dict[str, Any]:
+        """Extract cost rates from uploaded cost databases"""
+        try:
+            documents = await self.document_service.list_documents(session_id=session_id)
+
+            if not documents:
+                logger.warning("No documents found for cost extraction - using fallback rates")
+                return self._get_fallback_rates()
+
+            all_rates = []
+
+            for doc in documents[:10]:
+                try:
+                    chunks = await self.document_service.get_chunks_for_document(doc.id)
+                    document_text = " ".join([chunk.get('content', '') for chunk in chunks[:5]])
+
+                    rates = await self._extract_rates_from_text(document_text)
+                    all_rates.extend(rates)
+                except Exception as e:
+                    logger.warning(f"Failed to extract rates from document {doc.id}: {e}")
+                    continue
+
+            # Build rate database from extracted rates
+            rate_db = {}
+            for rate in all_rates:
+                state = rate.get("state", "nsw").upper()
+                if state not in rate_db:
+                    rate_db[state] = {}
+
+                project_type = rate.get("project_type", "residential_house")
+                if project_type not in rate_db[state]:
+                    rate_db[state][project_type] = {}
+
+                quality = rate.get("quality_level", "standard")
+                rate_db[state][project_type][quality] = float(rate.get("rate_per_sqm", 2500))
+
+            logger.info(f"✓ Loaded cost rates for {len(rate_db)} states from documents")
+            return rate_db if rate_db else self._get_fallback_rates()
+
+        except Exception as e:
+            logger.error(f"Failed to load cost rates from documents: {e}")
+            return self._get_fallback_rates()
+
+    async def _extract_rates_from_text(self, text: str) -> List[Dict[str, Any]]:
+        """Extract cost rates using LLM"""
+        prompt = f"""Extract Australian construction cost rates from this document:
+
+{text[:3000]}
+
+Return JSON array:
+[
+  {{
+    "state": "NSW/VIC/QLD/WA/SA",
+    "project_type": "residential_house/commercial_office/industrial",
+    "quality_level": "basic/standard/high/premium",
+    "rate_per_sqm": 2500
+  }}
+]
+
+Return ONLY valid JSON array."""
+
+        try:
+            response = await self.llm_service.generate_response(
+                prompt=prompt,
+                model="gpt-4o-mini",
+                temperature=0.0,
+                max_tokens=1000
+            )
+
+            rates = json.loads(response.strip())
+            return rates if isinstance(rates, list) else []
+
+        except Exception as e:
+            logger.warning(f"Rate extraction failed: {e}")
+            return []
+
+    def _get_fallback_rates(self) -> Dict[str, Any]:
+        """Fallback rates when no documents available"""
+        return {
+            "NSW": {
+                "residential_house": {"basic": 1800, "standard": 2500, "high": 3500, "premium": 5000}
+            }
+        }
+
     def _get_base_cost_rate(
         self,
         state: AustralianState,
@@ -259,12 +323,8 @@ Return ONLY JSON."""
             elif "industrial" in project_type.value:
                 project_category = "industrial"
 
-        state_rates = COST_RATES_PER_SQM_AUD.get(
-            state,
-            COST_RATES_PER_SQM_AUD[AustralianState.NSW]  # Default to NSW
-        )
-
-        return state_rates.get(project_category, {}).get(quality_level, 2500)
+        state_key = state.value.upper()
+        return self.cost_rates_cache.get(state_key, {}).get(project_category, {}).get(quality_level, 2500)
 
     def _calculate_breakdown(
         self,

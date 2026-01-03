@@ -35,6 +35,11 @@ class TalentSearchService:
         self.settings = settings
         # Tier 1 service dependencies
         self.llm_service = LLMService(db, settings)
+
+        # Import DocumentService for extracting candidate profiles
+        from app.tier_1.document_processing.document_service import DocumentService
+        self.document_service = DocumentService(db, settings)
+
         logger.info("✓ TalentSearchService initialized with tier_1 services")
 
     async def search_talent(self, request: TalentSearchRequest) -> TalentSearchResponse:
@@ -51,8 +56,8 @@ class TalentSearchService:
         """
         logger.info(f"🔍 Talent search for job: {request.job_requirement.job_title}")
 
-        # Get candidate pool (use provided or fetch from database)
-        candidates = request.candidate_pool if request.candidate_pool else self._get_candidate_pool()
+        # Get candidate pool (use provided or fetch from documents)
+        candidates = request.candidate_pool if request.candidate_pool else await self._get_candidate_pool(session_id=request.session_id)
 
         logger.info(f"Evaluating {len(candidates)} candidates")
 
@@ -447,8 +452,84 @@ Return ONLY the recommendation text."""
             else:
                 return "Not recommended - significant gaps in requirements."
 
-    def _get_candidate_pool(self) -> List[CandidateProfile]:
-        """Get candidate pool from database (mock for now)"""
-        # In production, query from candidates table
-        # For now, return empty list (candidates must be provided in request)
-        return []
+    async def _get_candidate_pool(self, session_id: Optional[str] = None) -> List[CandidateProfile]:
+        """Get candidate pool from uploaded resumes and CVs"""
+        try:
+            documents = await self.document_service.list_documents(session_id=session_id)
+
+            if not documents:
+                logger.warning("No documents found for candidate extraction - returning empty pool")
+                return []
+
+            candidates = []
+
+            # Extract candidate profiles from first 20 documents
+            for doc in documents[:20]:
+                try:
+                    chunks = await self.document_service.get_chunks_for_document(doc.id)
+                    resume_text = " ".join([chunk.get('content', '') for chunk in chunks])
+
+                    profile = await self._extract_candidate_profile(resume_text, doc.filename)
+                    if profile:
+                        candidates.append(profile)
+                except Exception as e:
+                    logger.warning(f"Failed to extract candidate from document {doc.id}: {e}")
+                    continue
+
+            logger.info(f"✓ Extracted {len(candidates)} candidates from documents")
+            return candidates
+
+        except Exception as e:
+            logger.error(f"Failed to load candidate pool: {e}")
+            return []
+
+    async def _extract_candidate_profile(self, resume_text: str, filename: str) -> Optional[CandidateProfile]:
+        """Extract candidate profile from resume using LLM"""
+        prompt = f"""Extract candidate information from this resume:
+
+{resume_text[:3000]}
+
+Return JSON:
+{{
+  "candidate_id": "unique_id",
+  "name": "Full Name",
+  "email": "email@example.com",
+  "location": "City, State",
+  "years_of_experience": 5.0,
+  "experience_level": "entry_level/mid_level/senior/lead/principal/executive",
+  "expected_salary": 100000.0,
+  "skills": [{{"name": "Python", "proficiency_level": "expert", "years_experience": 3.0}}],
+  "education": [{{"degree": "Bachelor of Science", "field": "Computer Science", "institution": "University", "required": false}}],
+  "resume_text": "summary"
+}}
+
+Return ONLY valid JSON."""
+
+        try:
+            response = await self.llm_service.generate_response(
+                prompt=prompt,
+                model="gpt-4o-mini",
+                temperature=0.0,
+                max_tokens=1000
+            )
+
+            data = json.loads(response.strip())
+
+            # Convert to CandidateProfile
+            return CandidateProfile(
+                candidate_id=data.get("candidate_id", filename),
+                name=data.get("name"),
+                email=data.get("email"),
+                phone=data.get("phone"),
+                location=data.get("location", ""),
+                years_of_experience=float(data.get("years_of_experience", 0)),
+                experience_level=ExperienceLevel(data.get("experience_level", "mid_level")),
+                expected_salary=data.get("expected_salary"),
+                skills=[Skill(**s) for s in data.get("skills", [])],
+                education=[],  # Simplified for now
+                resume_text=resume_text[:1000]
+            )
+
+        except Exception as e:
+            logger.warning(f"Candidate extraction failed: {e}")
+            return None

@@ -1,0 +1,229 @@
+CONSTRUCTION PROJECT DOCUMENTATION
+RIVERSIDE MIXED-USE DEVELOPMENT - DATA EXTRACTION DOCUMENT
+Project ID: RMD-2024-001
+Document Type: Project Summary with Structured Data Tables
+Date: January 15, 2024
+
+=============================================================================
+PROJECT OVERVIEW
+=============================================================================
+
+Project Name: Riverside Towers Mixed-Use Development
+Developer: Urban Living Communities LLC
+General Contractor: BuildRight Construction Inc.
+Architect: Pacific Design Associates
+Location: 1250 Waterfront Boulevard, Seattle, WA 98101
+Project Value: $185,000,000
+Start Date: April 1, 2024
+Estimated Completion: September 30, 2026
+Duration: 30 months
+
+=============================================================================
+TABLE 1: PROJECT FINANCIAL SUMMARY
+=============================================================================
+
+| Cost Category              | Amount ($)    | Percentage | Status      |
+|----------------------------|---------------|------------|-------------|
+| Site Acquisition           | 28,500,000    | 15.4%      | Completed   |
+| Site Preparation           | 8,200,000     | 4.4%       | In Progress |
+| Foundation & Structure     | 52,000,000    | 28.1%      | Pending     |
+| Architectural Finishes     | 38,500,000    | 20.8%      | Pending     |
+| MEP Systems                | 32,000,000    | 17.3%      | Pending     |
+| Landscaping & Public Realm | 6,800,000     | 3.7%       | Pending     |
+| Professional Fees          | 12,000,000    | 6.5%       | In Progress |
+| Contingency                | 7,000,000     | 3.8%       | Reserved    |
+| TOTAL PROJECT COST         | 185,000,000   | 100.0%     | Active      |
+
+=============================================================================
+TABLE 2: BUILDING SPECIFICATIONS
+=============================================================================
+
+| Parameter                  | Tower A (North) | Tower B (South) | Podium Base |
+|----------------------------|-----------------|-----------------|-------------|
+| Number of Storeys          | 28              | 32              | 5           |
+| Height (feet)              | 295             | 340             | 65          |
+| Gross Floor Area (sq.ft)   | 220,000         | 265,000         | 60,000      |
+| Residential Units          | 185             | 240             | N/A         |
+| Commercial Space (sq.ft)   | 0               | 0               | 45,000      |
+| Amenity Space (sq.ft)      | 6,500           | 8,500           | 15,000      |
+| Parking Levels             | N/A             | N/A             | 3 (Below)   |
+| Parking Stalls             | N/A             | N/A             | 365         |
+| Construction Type          | Type I-A        | Type I-A        | Type I-A    |
+| Structural System          | Concrete Core   | Concrete Core   | Concrete    |
+| Foundation Type            | Mat Foundation  | Mat Foundation  | Mat         |
+
+=============================================================================
+TABLE 3: RESIDENTIAL UNIT MIX
+=============================================================================
+
+| Unit Type        | Tower A | Tower B | Total | Avg. Size (sq.ft) | Price Range ($)        |
+|------------------|---------|---------|-------|-------------------|------------------------|
+| Studio           | 35      | 40      | 75    | 520               | 285,000 - 350,000      |
+| One Bedroom      | 80      | 100     | 180   | 680               | 420,000 - 550,000      |
+| Two Bedroom      | 58      | 77      | 135   | 980               | 680,000 - 890,000      |
+| Three Bedroom    | 12      | 23      | 35    | 1,350             | 1,200,000 - 1,650,000  |
+| TOTAL UNITS      | 185     | 240     | 425   | 785 (avg)         | 630,000 (avg)          |
+| Affordable Units | 37      | 48      | 85    | 720 (avg)         | 180,000 - 240,000      |
+
+=============================================================================
+TABLE 4: PROJECT SCHEDULE MILESTONES
+=============================================================================
+
+| Milestone                        | Start Date  | End Date    | Duration  | Status      |
+|----------------------------------|-------------|-------------|-----------|-------------|
+| Site Mobilization                | Apr 1, 2024 | Apr 30, 2024| 30 days   | Upcoming    |
+| Demolition & Site Clearing       | May 1, 2024 | Jun 15, 2024| 45 days   | Upcoming    |
+| Excavation                       | Jun 16, 2024| Aug 30, 2024| 75 days   | Upcoming    |
+| Foundation Construction          | Sep 1, 2024 | Dec 31, 2024| 120 days  | Upcoming    |
+| Tower A Structure (Floors 1-28)  | Jan 1, 2025 | Oct 31, 2025| 305 days  | Upcoming    |
+| Tower B Structure (Floors 1-32)  | Jan 1, 2025 | Nov 30, 2025| 335 days  | Upcoming    |
+| MEP Rough-In (Tower A)           | May 1, 2025 | Jan 31, 2026| 275 days  | Upcoming    |
+| MEP Rough-In (Tower B)           | May 1, 2025 | Feb 28, 2026| 305 days  | Upcoming    |
+| Interior Finishes (Tower A)      | Aug 1, 2025 | Apr 30, 2026| 275 days  | Upcoming    |
+| Interior Finishes (Tower B)      | Sep 1, 2025 | May 31, 2026| 275 days  | Upcoming    |
+| Exterior Cladding & Glazing      | Mar 1, 2025 | Jun 30, 2026| 485 days  | Upcoming    |
+| Landscaping & Public Realm       | Apr 1, 2026 | Aug 31, 2026| 150 days  | Upcoming    |
+| Commissioning & Testing          | Jun 1, 2026 | Sep 15, 2026| 105 days  | Upcoming    |
+| Final Inspections & Certification| Sep 1, 2026 | Sep 30, 2026| 30 days   | Upcoming    |
+| Occupancy (Tower A)              | Oct 1, 2026 | Oct 15, 2026| 15 days   | Upcoming    |
+| Occupancy (Tower B)              | Oct 15, 2026| Oct 31, 2026| 16 days   | Upcoming    |
+
+=============================================================================
+TABLE 5: CONTRACTOR & SUBCONTRACTOR ROSTER
+=============================================================================
+
+| Trade/Discipline          | Company Name                  | Contract Value ($) | Contact Person       |
+|---------------------------|-------------------------------|-------------------|----------------------|
+| General Contractor        | BuildRight Construction Inc.  | 165,000,000       | John Smith, PM       |
+| Structural Engineering    | Structural Design Partners    | 4,200,000         | Sarah Lee, PE        |
+| MEP Engineering           | Integrated Systems Engineers  | 3,800,000         | Michael Chen, PE     |
+| Excavation & Earthwork    | Pacific Excavators LLC        | 6,500,000         | Robert Martinez      |
+| Concrete & Formwork       | ConcreteWorks Pro             | 42,000,000        | David Johnson        |
+| Structural Steel          | SteelFrame Industries         | 18,500,000        | Jennifer Wu          |
+| Curtain Wall & Glazing    | GlassTech Facades Inc.        | 22,000,000        | Emily Rodriguez      |
+| Mechanical HVAC           | Climate Control Systems       | 14,500,000        | James Patterson      |
+| Electrical                | PowerGrid Electrical          | 12,800,000        | Maria Garcia         |
+| Plumbing & Fire Protection| AquaSafe Plumbing Inc.        | 9,200,000         | Thomas Anderson      |
+| Elevator & Escalators     | Vertical Transport Solutions  | 5,800,000         | Susan Taylor         |
+| Interior Finishes         | FinishPro Contractors         | 16,500,000        | Robert Kim           |
+| Landscaping               | GreenScape Landscape Design   | 4,200,000         | Linda Thompson       |
+
+=============================================================================
+TABLE 6: MATERIAL QUANTITIES
+=============================================================================
+
+| Material                  | Quantity      | Unit        | Unit Cost ($) | Total Cost ($)  |
+|---------------------------|---------------|-------------|---------------|-----------------|
+| Concrete (Ready-Mix)      | 28,500        | Cubic Yards | 185           | 5,272,500       |
+| Reinforcing Steel (Rebar) | 4,200         | Tons        | 1,850         | 7,770,000       |
+| Structural Steel          | 2,800         | Tons        | 4,200         | 11,760,000      |
+| Curtain Wall Glazing      | 185,000       | Square Feet | 120           | 22,200,000      |
+| Drywall                   | 820,000       | Square Feet | 3.50          | 2,870,000       |
+| Floor Tile                | 145,000       | Square Feet | 12.80         | 1,856,000       |
+| Carpeting                 | 220,000       | Square Feet | 8.50          | 1,870,000       |
+| Paint                     | 65,000        | Gallons     | 45            | 2,925,000       |
+| HVAC Equipment            | 850           | Units       | 12,500        | 10,625,000      |
+| Elevators                 | 12            | Units       | 485,000       | 5,820,000       |
+| Plumbing Fixtures         | 1,850         | Units       | 2,200         | 4,070,000       |
+| Electrical Panels         | 120           | Units       | 8,500         | 1,020,000       |
+
+=============================================================================
+TABLE 7: LABOR ALLOCATION
+=============================================================================
+
+| Trade                     | Peak Workers | Average Workers | Total Hours  | Labor Cost ($)  |
+|---------------------------|--------------|-----------------|--------------|-----------------|
+| General Labor             | 85           | 45              | 135,000      | 6,075,000       |
+| Carpenters                | 120          | 75              | 225,000      | 13,500,000      |
+| Ironworkers               | 95           | 60              | 180,000      | 12,600,000      |
+| Concrete Workers          | 110          | 70              | 210,000      | 11,550,000      |
+| Electricians              | 85           | 55              | 165,000      | 13,200,000      |
+| Plumbers                  | 70           | 45              | 135,000      | 10,800,000      |
+| HVAC Technicians          | 65           | 40              | 120,000      | 9,600,000       |
+| Glaziers                  | 45           | 30              | 90,000       | 6,300,000       |
+| Drywall Installers        | 80           | 50              | 150,000      | 7,500,000       |
+| Painters                  | 60           | 35              | 105,000      | 4,725,000       |
+| Tile Setters              | 40           | 25              | 75,000       | 4,125,000       |
+| TOTAL                     | 855          | 530             | 1,590,000    | 99,975,000      |
+
+=============================================================================
+TABLE 8: SUSTAINABILITY & ENVIRONMENTAL METRICS
+=============================================================================
+
+| Metric                           | Target Value | Current Status | Achievement % |
+|----------------------------------|--------------|----------------|---------------|
+| LEED Certification               | Gold         | In Progress    | 78%           |
+| Energy Use Intensity (EUI)       | 28 kBtu/sf   | Designed 26    | 107%          |
+| Water Use Reduction              | 35%          | Designed 38%   | 109%          |
+| Renewable Energy (Solar PV)      | 150 kW       | Spec'd 150 kW  | 100%          |
+| Green Roof Coverage              | 15,000 sf    | Designed 15,000| 100%          |
+| Recycled Content in Materials    | 25%          | Current 28%    | 112%          |
+| Construction Waste Diverted      | 75%          | Current 82%    | 109%          |
+| Indoor Air Quality (CO2 ppm)     | < 800        | Designed 750   | 106%          |
+| Daylighting (% Floor Area)       | 60%          | Designed 68%   | 113%          |
+| Electric Vehicle Charging Stalls | 80           | Planned 85     | 106%          |
+
+=============================================================================
+TABLE 9: RISK REGISTER & MITIGATION
+=============================================================================
+
+| Risk ID | Risk Description              | Probability | Impact  | Mitigation Strategy                    | Status    |
+|---------|-------------------------------|-------------|---------|----------------------------------------|-----------|
+| R-001   | Weather Delays                | High        | Medium  | Weather contingency in schedule        | Active    |
+| R-002   | Labor Shortage                | Medium      | High    | Pre-book skilled trades, apprenticeship| Active    |
+| R-003   | Material Price Escalation     | High        | High    | Fixed-price contracts, bulk purchasing | Mitigated |
+| R-004   | Supply Chain Disruption       | Medium      | High    | Multiple suppliers, early procurement  | Active    |
+| R-005   | Design Changes                | Low         | Medium  | Early design freeze, change order proc | Controlled|
+| R-006   | Soil Contamination            | Low         | High    | Phase II ESA completed, remediation   | Mitigated |
+| R-007   | Regulatory/Permit Delays      | Low         | Medium  | Early engagement with city planning    | Mitigated |
+| R-008   | Structural Engineering Issues | Low         | High    | Peer review, third-party QA            | Controlled|
+| R-009   | Subcontractor Default         | Low         | High    | Bonding requirements, financial checks | Controlled|
+| R-010   | Adjacent Property Damage      | Medium      | High    | Monitoring, insurance, pre-surveys     | Active    |
+
+=============================================================================
+TABLE 10: QUALITY CONTROL CHECKPOINTS
+=============================================================================
+
+| Checkpoint ID | Description                        | Frequency   | Responsible Party       | Pass Criteria      |
+|---------------|------------------------------------|-------------|-------------------------|--------------------|
+| QC-001        | Soil Compaction Testing            | Daily       | Geotechnical Engineer   | 95% Proctor Density|
+| QC-002        | Concrete Strength Testing          | Per Pour    | Materials Testing Lab   | 4,000 psi @ 28 days|
+| QC-003        | Rebar Inspection                   | Pre-Pour    | Structural Engineer     | Per Drawings       |
+| QC-004        | Welding Inspection (Structural)    | Each Weld   | CWI Certified Inspector | AWS D1.1 Standards |
+| QC-005        | Curtain Wall Mock-Up Testing       | One-Time    | Facade Consultant       | Water/Air Tight    |
+| QC-006        | MEP Rough-In Inspection            | Per Floor   | MEP Engineer            | Code Compliance    |
+| QC-007        | Fire Stopping Inspection           | Per Floor   | Fire Protection Eng     | UL Listed Systems  |
+| QC-008        | Elevator Load Testing              | Pre-Occupancy| Elevator Inspector      | 125% Rated Load    |
+| QC-009        | Building Envelope Air Barrier Test | Final       | Commissioning Agent     | < 0.25 cfm/sf      |
+| QC-010        | Final Punch List Inspection        | Pre-Occupancy| General Contractor      | Zero Deficiencies  |
+
+=============================================================================
+EXTRACTED DATA SUMMARY
+=============================================================================
+
+This document contains 10 structured data tables with the following information:
+
+1. Financial Summary: 8 cost categories, total budget $185M
+2. Building Specifications: 3 structures (2 towers + podium), 12 parameters each
+3. Residential Unit Mix: 4 unit types, 425 total units, pricing data
+4. Schedule Milestones: 16 major milestones, 30-month timeline
+5. Contractor Roster: 13 contractors/subcontractors, contact information
+6. Material Quantities: 12 major material types, quantities and costs
+7. Labor Allocation: 11 trades, 855 peak workers, 1.59M hours
+8. Sustainability Metrics: 10 LEED-related targets and achievements
+9. Risk Register: 10 identified risks with mitigation strategies
+10. Quality Control: 10 inspection checkpoints with pass criteria
+
+Total Data Points Extracted: 187
+Tables with Financial Data: 6 (Tables 1, 5, 6, 7, and summary data)
+Tables with Schedule Data: 1 (Table 4 - 16 milestones)
+Tables with Resource Data: 2 (Tables 5, 7 - contractors and labor)
+Tables with Performance Metrics: 2 (Tables 8, 10 - sustainability, QC)
+
+Document Classification: Construction Project Documentation
+Extraction Confidence: High (structured table format)
+Recommended Use Case: Document Intelligence - 18-field extraction, financial analysis, schedule tracking
+
+=============================================================================
+END OF DOCUMENT
+=============================================================================

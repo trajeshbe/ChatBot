@@ -37,73 +37,94 @@ class AgriTaxonomyService:
         # Tier 1 service dependencies
         self.llm_service = LLMService(db, settings)
 
-        # Load basic crop taxonomy (hardcoded for demo, would be from DB in production)
-        self.taxonomy = self._load_basic_taxonomy()
+        # Import DocumentService for extracting crop data
+        from app.tier_1.document_processing.document_service import DocumentService
+        self.document_service = DocumentService(db, settings)
+
+        # Taxonomy loaded dynamically from agricultural knowledge base documents
+        self.taxonomy: Dict[str, Dict[str, Any]] = {}
 
         logger.info("✓ AgriTaxonomyService initialized with tier_1 services")
 
-    def _load_basic_taxonomy(self) -> Dict[str, Dict[str, Any]]:
-        """Load basic crop taxonomy database"""
-        return {
-            "rice": {
-                "common_name": "Rice",
-                "scientific_name": "Oryza sativa",
-                "category": CropCategory.CEREALS,
-                "family": "Poaceae",
-                "climate_zones": [ClimateZone.TROPICAL, ClimateZone.SUBTROPICAL],
-                "soil_types": [SoilType.CLAY, SoilType.LOAMY],
-                "growth_duration_days": 120
-            },
-            "wheat": {
-                "common_name": "Wheat",
-                "scientific_name": "Triticum aestivum",
-                "category": CropCategory.CEREALS,
-                "family": "Poaceae",
-                "climate_zones": [ClimateZone.TEMPERATE, ClimateZone.CONTINENTAL],
-                "soil_types": [SoilType.LOAMY, SoilType.CLAY],
-                "growth_duration_days": 150
-            },
-            "corn": {
-                "common_name": "Corn (Maize)",
-                "scientific_name": "Zea mays",
-                "category": CropCategory.CEREALS,
-                "family": "Poaceae",
-                "climate_zones": [ClimateZone.TEMPERATE, ClimateZone.TROPICAL],
-                "soil_types": [SoilType.LOAMY, SoilType.SANDY],
-                "growth_duration_days": 90
-            },
-            "tomato": {
-                "common_name": "Tomato",
-                "scientific_name": "Solanum lycopersicum",
-                "category": CropCategory.VEGETABLES,
-                "family": "Solanaceae",
-                "climate_zones": [ClimateZone.TEMPERATE, ClimateZone.SUBTROPICAL],
-                "soil_types": [SoilType.LOAMY, SoilType.SANDY],
-                "growth_duration_days": 75
-            },
-            "soybean": {
-                "common_name": "Soybean",
-                "scientific_name": "Glycine max",
-                "category": CropCategory.LEGUMES,
-                "family": "Fabaceae",
-                "climate_zones": [ClimateZone.TEMPERATE, ClimateZone.SUBTROPICAL],
-                "soil_types": [SoilType.LOAMY, SoilType.CLAY],
-                "growth_duration_days": 100
-            },
-            "cotton": {
-                "common_name": "Cotton",
-                "scientific_name": "Gossypium hirsutum",
-                "category": CropCategory.FIBER_CROPS,
-                "family": "Malvaceae",
-                "climate_zones": [ClimateZone.TROPICAL, ClimateZone.SUBTROPICAL],
-                "soil_types": [SoilType.LOAMY, SoilType.CLAY],
-                "growth_duration_days": 180
-            }
-        }
+    async def _load_taxonomy_from_documents(self, session_id: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+        """Load crop taxonomy from uploaded agricultural knowledge base documents"""
+        try:
+            documents = await self.document_service.list_documents(session_id=session_id)
+
+            if not documents:
+                logger.warning("No documents found for crop taxonomy extraction - returning empty taxonomy")
+                return {}
+
+            all_crops = []
+
+            for doc in documents[:10]:
+                try:
+                    chunks = await self.document_service.get_chunks_for_document(doc.id)
+                    document_text = " ".join([chunk.get('content', '') for chunk in chunks[:5]])
+
+                    crops = await self._extract_crops_from_text(document_text)
+                    all_crops.extend(crops)
+                except Exception as e:
+                    logger.warning(f"Failed to extract crops from document {doc.id}: {e}")
+                    continue
+
+            # Build taxonomy database
+            taxonomy = {}
+            for crop in all_crops:
+                crop_key = crop.get("common_name", "").lower().strip()
+                if crop_key and crop_key not in taxonomy:
+                    taxonomy[crop_key] = crop
+
+            logger.info(f"✓ Loaded taxonomy for {len(taxonomy)} crops from documents")
+            return taxonomy
+
+        except Exception as e:
+            logger.error(f"Failed to load taxonomy from documents: {e}")
+            return {}
+
+    async def _extract_crops_from_text(self, text: str) -> List[Dict[str, Any]]:
+        """Extract crop taxonomy data using LLM"""
+        prompt = f"""Extract all crop information from this agricultural document:
+
+{text[:3000]}
+
+Return JSON array:
+[
+  {{
+    "common_name": "Rice",
+    "scientific_name": "Oryza sativa",
+    "category": "cereals/legumes/vegetables/fruits/oilseeds/fiber_crops/forage_crops/tuber_crops/spices/medicinal_plants",
+    "family": "Poaceae",
+    "climate_zones": ["tropical", "subtropical"],
+    "soil_types": ["clay", "loamy"],
+    "growth_duration_days": 120
+  }}
+]
+
+Extract 10+ crops. Return ONLY valid JSON array."""
+
+        try:
+            response = await self.llm_service.generate_response(
+                prompt=prompt,
+                model="gpt-4o-mini",
+                temperature=0.0,
+                max_tokens=1500
+            )
+
+            crops = json.loads(response.strip())
+            return crops if isinstance(crops, list) else []
+
+        except Exception as e:
+            logger.warning(f"Crop extraction failed: {e}")
+            return []
 
     async def classify_crops(self, request: TaxonomyClassificationRequest) -> TaxonomyClassificationResponse:
         """Classify crops and build taxonomy"""
         logger.info(f"🌾 Classifying {len(request.crop_names)} crops")
+
+        # Load taxonomy from documents if not already loaded
+        if not self.taxonomy:
+            self.taxonomy = await self._load_taxonomy_from_documents(session_id=request.session_id)
 
         classifications: List[CropTaxonomy] = []
         unclassified: List[str] = []

@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-01-03T05:34:45+00:00",
+  "frontend_url": "http://localhost:3001",
+  "backend_url": "http://localhost:8000",
+  "test_results": {
+  }
+}

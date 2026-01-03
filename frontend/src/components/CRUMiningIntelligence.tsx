@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
+import { Settings } from 'lucide-react'
+import POCConfigManager from './POCConfigManager'
 
 interface Source {
   document_id: string
@@ -36,6 +38,7 @@ export default function CRUMiningIntelligence() {
   const [comparisonResults, setComparisonResults] = useState<PipelineResult[]>([])
   const [showComparison, setShowComparison] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showConfig, setShowConfig] = useState(false)
 
   // Sample queries
   const sampleQueries = [
@@ -134,13 +137,36 @@ export default function CRUMiningIntelligence() {
     <div className="h-full overflow-y-auto bg-gradient-to-br from-slate-50 to-slate-100 p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">
-            ⛏️ CRU Mining Intelligence
-          </h1>
-          <p className="text-slate-600">
-            Multi-pipeline RAG for mining document analysis
-          </p>
+        <div className="mb-8 flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800 mb-2">
+              ⛏️ CRU Mining Intelligence
+            </h1>
+            <p className="text-slate-600">
+              Multi-pipeline RAG for mining document analysis
+            </p>
+          </div>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Configure
+          </button>
+        </div>
+
+        {/* Configuration Panel */}
+        {showConfig && (
+          <div className="mb-6">
+            <POCConfigManager
+              moduleName="cru_mining"
+              onClose={() => setShowConfig(false)}
+            />
+          </div>
+        )}
+
+        {/* Pipeline badges */}
+        <div className="mb-6">
           <div className="flex gap-2 mt-2">
             <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-medium">
               pgvector (Semantic)

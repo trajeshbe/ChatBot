@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
-import { Upload, Loader2, CheckCircle, XCircle, FileText, DollarSign, TrendingUp, Download } from 'lucide-react'
+import { Upload, Loader2, CheckCircle, XCircle, FileText, DollarSign, TrendingUp, Download, Settings } from 'lucide-react'
 import axios from 'axios'
+import POCConfigManager from './POCConfigManager'
 
 interface ExtractedDatapoint {
   field_name: string
@@ -68,6 +69,7 @@ export default function GrantThorntonExtraction() {
   const [companyName, setCompanyName] = useState<string>('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [activeTab, setActiveTab] = useState<'datapoints' | 'calculations' | 'ratios'>('datapoints')
+  const [showConfig, setShowConfig] = useState(false)
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -192,16 +194,37 @@ export default function GrantThorntonExtraction() {
       <div className="flex-1 overflow-y-auto p-8">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
-              <DollarSign className="w-8 h-8 text-blue-600" />
+          <div className="mb-8">
+            <div className="flex items-start justify-between mb-4">
+              <div className="text-center flex-1">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
+                  <DollarSign className="w-8 h-8 text-blue-600" />
+                </div>
+                <h1 className="text-3xl font-bold text-slate-900 mb-2">
+                  Grant Thornton Financial Analysis
+                </h1>
+                <p className="text-slate-600">
+                  Upload an annual report PDF to automatically extract 50+ financial datapoints, calculate ratios, and generate Excel reports
+                </p>
+              </div>
+              <button
+                onClick={() => setShowConfig(!showConfig)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                <Settings className="w-4 h-4" />
+                Configure
+              </button>
             </div>
-            <h1 className="text-3xl font-bold text-slate-900 mb-2">
-              Grant Thornton Financial Analysis
-            </h1>
-            <p className="text-slate-600">
-              Upload an annual report PDF to automatically extract 50+ financial datapoints, calculate ratios, and generate Excel reports
-            </p>
+
+            {/* Configuration Panel */}
+            {showConfig && (
+              <div className="mb-6">
+                <POCConfigManager
+                  moduleName="grant_thornton"
+                  onClose={() => setShowConfig(false)}
+                />
+              </div>
+            )}
           </div>
 
           {/* Company Name Input */}
