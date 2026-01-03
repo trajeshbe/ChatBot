@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { AlertOctagon, Upload, Shield, TrendingDown, DollarSign } from 'lucide-react'
+import { AlertOctagon, Upload, Shield, TrendingDown, DollarSign , Settings} from 'lucide-react'
+import POCConfigManager from '../../POCConfigManager'
 
 interface AnomalyDetectionResponse {
   anomalies_detected: number
@@ -30,6 +31,7 @@ const SEVERITY_COLORS = {
 
 export default function FinancialAnomalyPanel() {
   const [file, setFile] = useState<File | null>(null)
+  const [showConfig, setShowConfig] = useState(false)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<AnomalyDetectionResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -70,7 +72,9 @@ export default function FinancialAnomalyPanel() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
+      <div className="flex items-start justify-between mb-6">
+          <div className="flex-1">
+<div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
           <AlertOctagon className="w-8 h-8 text-purple-600" />
           Financial Anomaly Detection
@@ -79,6 +83,25 @@ export default function FinancialAnomalyPanel() {
           Detect fraudulent transactions and suspicious financial patterns
         </p>
       </div>
+          </div>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Configure
+          </button>
+        </div>
+
+        {/* Configuration Panel */}
+        {showConfig && (
+          <div className="mb-6">
+            <POCConfigManager
+              moduleName="financial_anomaly"
+              onClose={() => setShowConfig(false)}
+            />
+          </div>
+        )}
 
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">Upload Transaction Data</h2>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { FileText, Upload, Network, CheckCircle, AlertCircle } from 'lucide-react'
+import { FileText, Upload, Network, CheckCircle, AlertCircle , Settings} from 'lucide-react'
+import POCConfigManager from '../../POCConfigManager'
 
 interface Entity {
   text: string
@@ -30,6 +31,7 @@ interface RelationExtractionResponse {
 
 export default function RelationExtractorPanel() {
   const [file, setFile] = useState<File | null>(null)
+  const [showConfig, setShowConfig] = useState(false)
   const [documentId, setDocumentId] = useState<string>('')
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -105,7 +107,9 @@ export default function RelationExtractorPanel() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
+      <div className="flex items-start justify-between mb-6">
+          <div className="flex-1">
+<div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
           <Network className="w-8 h-8 text-purple-600" />
           Relation Extractor - Entity Relationships
@@ -114,6 +118,25 @@ export default function RelationExtractorPanel() {
           Extract entities and their relationships from documents using LLM-powered analysis
         </p>
       </div>
+          </div>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Configure
+          </button>
+        </div>
+
+        {/* Configuration Panel */}
+        {showConfig && (
+          <div className="mb-6">
+            <POCConfigManager
+              moduleName="relation_extractor"
+              onClose={() => setShowConfig(false)}
+            />
+          </div>
+        )}
 
       {/* Upload Section */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">

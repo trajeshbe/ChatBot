@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { UserX, Upload, AlertTriangle, TrendingUp, Users, Calendar } from 'lucide-react'
+import { UserX, Upload, AlertTriangle, TrendingUp, Users, Calendar , Settings} from 'lucide-react'
+import POCConfigManager from '../../POCConfigManager'
 
 interface ChurnData {
   customer_id: string
@@ -40,6 +41,7 @@ const RISK_COLORS = {
 
 export default function CustomerChurnPanel() {
   const [file, setFile] = useState<File | null>(null)
+  const [showConfig, setShowConfig] = useState(false)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<ChurnAnalysisResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -81,7 +83,9 @@ export default function CustomerChurnPanel() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
+      <div className="flex items-start justify-between mb-6">
+          <div className="flex-1">
+<div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
           <UserX className="w-8 h-8 text-red-600" />
           Customer Churn Prediction
@@ -90,6 +94,25 @@ export default function CustomerChurnPanel() {
           Predict customer churn probability and identify retention strategies
         </p>
       </div>
+          </div>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Configure
+          </button>
+        </div>
+
+        {/* Configuration Panel */}
+        {showConfig && (
+          <div className="mb-6">
+            <POCConfigManager
+              moduleName="customer_churn"
+              onClose={() => setShowConfig(false)}
+            />
+          </div>
+        )}
 
       {/* Upload Section */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">

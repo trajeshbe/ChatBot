@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { Building2, TrendingUp, AlertCircle, Award, Clock, DollarSign, Star } from 'lucide-react'
+import { Building2, TrendingUp, AlertCircle, Award, Clock, DollarSign, Star , Settings} from 'lucide-react'
+import POCConfigManager from '../../POCConfigManager'
 
 // Types matching backend schemas
 type VendorCategory =
@@ -110,6 +111,7 @@ const CRITERIA_OPTIONS: { value: EvaluationCriteria; label: string }[] = [
 
 export default function VendorRecommendationPanel() {
   const [category, setCategory] = useState<VendorCategory>('it_hardware')
+  const [showConfig, setShowConfig] = useState(false)
   const [requirement, setRequirement] = useState<string>('')
   const [budgetMax, setBudgetMax] = useState<number>(200)
   const [deliveryDays, setDeliveryDays] = useState<number>(14)
@@ -186,7 +188,9 @@ export default function VendorRecommendationPanel() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
+      <div className="flex items-start justify-between mb-6">
+          <div className="flex-1">
+<div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
           <Building2 className="w-8 h-8 text-blue-600" />
           Vendor Recommendation
@@ -195,6 +199,25 @@ export default function VendorRecommendationPanel() {
           Get AI-powered vendor recommendations based on your procurement requirements and weighted criteria
         </p>
       </div>
+          </div>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Configure
+          </button>
+        </div>
+
+        {/* Configuration Panel */}
+        {showConfig && (
+          <div className="mb-6">
+            <POCConfigManager
+              moduleName="vendor_recommendation"
+              onClose={() => setShowConfig(false)}
+            />
+          </div>
+        )}
 
       {/* Configuration Section */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6 space-y-6">

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { Scale, Upload, AlertTriangle } from 'lucide-react'
+import { Scale, Upload, AlertTriangle , Settings} from 'lucide-react'
+import POCConfigManager from '../../POCConfigManager'
 
 interface LegalDocumentPanelResponse {
   results: any
@@ -10,6 +11,7 @@ interface LegalDocumentPanelResponse {
 
 export default function LegalDocumentPanel() {
   const [file, setFile] = useState<File | null>(null)
+  const [showConfig, setShowConfig] = useState(false)
   const [textInput, setTextInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<LegalDocumentPanelResponse | null>(null)
@@ -57,13 +59,34 @@ export default function LegalDocumentPanel() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
+      <div className="flex items-start justify-between mb-6">
+          <div className="flex-1">
+<div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
           <Scale className="w-8 h-8 text-purple-600" />
           Legal Document Analysis
         </h1>
         <p className="text-gray-600 mt-2">Analyze and extract insights from legal documents</p>
       </div>
+          </div>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Configure
+          </button>
+        </div>
+
+        {/* Configuration Panel */}
+        {showConfig && (
+          <div className="mb-6">
+            <POCConfigManager
+              moduleName="legal_document"
+              onClose={() => setShowConfig(false)}
+            />
+          </div>
+        )}
 
       {/* Input Section */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">

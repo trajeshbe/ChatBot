@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { Sprout, Plus, X, CheckCircle, AlertCircle, Leaf, Thermometer, Droplets } from 'lucide-react'
+import { Sprout, Plus, X, CheckCircle, AlertCircle, Leaf, Thermometer, Droplets , Settings} from 'lucide-react'
+import POCConfigManager from '../../POCConfigManager'
 
 // Types matching backend schemas
 type CropCategory =
@@ -79,6 +80,7 @@ const CATEGORY_COLORS: Record<CropCategory, string> = {
 
 export default function AgriTaxonomyPanel() {
   const [cropNames, setCropNames] = useState<string[]>([''])
+  const [showConfig, setShowConfig] = useState(false)
   const [includeRequirements, setIncludeRequirements] = useState(true)
   const [includeSeasonal, setIncludeSeasonal] = useState(true)
   const [useLLM, setUseLLM] = useState(true)
@@ -141,7 +143,9 @@ export default function AgriTaxonomyPanel() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
+      <div className="flex items-start justify-between mb-6">
+          <div className="flex-1">
+<div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
           <Sprout className="w-8 h-8 text-green-600" />
           Agricultural Taxonomy Classifier
@@ -150,6 +154,25 @@ export default function AgriTaxonomyPanel() {
           Classify crops with scientific names, growing requirements, and seasonal information
         </p>
       </div>
+          </div>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Configure
+          </button>
+        </div>
+
+        {/* Configuration Panel */}
+        {showConfig && (
+          <div className="mb-6">
+            <POCConfigManager
+              moduleName="agri_taxonomy"
+              onClose={() => setShowConfig(false)}
+            />
+          </div>
+        )}
 
       {/* Input Section */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6 space-y-6">

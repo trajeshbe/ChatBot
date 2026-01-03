@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import axios from 'axios'
-import { FileText, Upload, Loader2, CheckCircle, XCircle, Layers, Info } from 'lucide-react'
+import { FileText, Upload, Loader2, CheckCircle, XCircle, Layers, Info , Settings} from 'lucide-react'
+import POCConfigManager from '../../POCConfigManager'
 
 // Types matching backend schemas
 type PlanningDocumentType =
@@ -112,6 +113,7 @@ const PURPOSE_COLORS: Record<string, string> = {
 
 export default function PlanningClassifierPanel() {
   const [isUploading, setIsUploading] = useState(false)
+  const [showConfig, setShowConfig] = useState(false)
   const [isClassifying, setIsClassifying] = useState(false)
   const [uploadedDocument, setUploadedDocument] = useState<UploadedDocument | null>(null)
   const [useVision, setUseVision] = useState(true)
@@ -195,7 +197,9 @@ export default function PlanningClassifierPanel() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
+      <div className="flex items-start justify-between mb-6">
+          <div className="flex-1">
+<div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
           <Layers className="w-8 h-8 text-blue-600" />
           Planning Document Classifier
@@ -204,6 +208,25 @@ export default function PlanningClassifierPanel() {
           Classify construction planning documents by type and purpose using AI vision and text analysis
         </p>
       </div>
+          </div>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Configure
+          </button>
+        </div>
+
+        {/* Configuration Panel */}
+        {showConfig && (
+          <div className="mb-6">
+            <POCConfigManager
+              moduleName="planning_classifier"
+              onClose={() => setShowConfig(false)}
+            />
+          </div>
+        )}
 
       {/* Upload Section */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">

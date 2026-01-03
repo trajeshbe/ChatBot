@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { Activity, Plus, X, TrendingUp, AlertTriangle, CheckCircle, Users } from 'lucide-react'
+import { Activity, Plus, X, TrendingUp, AlertTriangle, CheckCircle, Users , Settings} from 'lucide-react'
+import POCConfigManager from '../../POCConfigManager'
 
 // Types matching backend schemas
 type EngagementLevel = 'very_low' | 'low' | 'moderate' | 'high' | 'very_high'
@@ -83,6 +84,7 @@ export default function TalentPulsePanel() {
   const [feedbackItems, setFeedbackItems] = useState<EmployeeFeedback[]>([
     { employee_id: '', feedback_text: '', department: '' }
   ])
+  const [showConfig, setShowConfig] = useState(false)
   const [analyzeSentiment, setAnalyzeSentiment] = useState(true)
   const [calculateEngagement, setCalculateEngagement] = useState(true)
   const [assessRisk, setAssessRisk] = useState(true)
@@ -148,7 +150,9 @@ export default function TalentPulsePanel() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
+      <div className="flex items-start justify-between mb-6">
+          <div className="flex-1">
+<div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
           <Activity className="w-8 h-8 text-purple-600" />
           Talent Pulse - Employee Engagement Analytics
@@ -157,6 +161,25 @@ export default function TalentPulsePanel() {
           Analyze employee sentiment, engagement, and attrition risk from feedback data
         </p>
       </div>
+          </div>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Configure
+          </button>
+        </div>
+
+        {/* Configuration Panel */}
+        {showConfig && (
+          <div className="mb-6">
+            <POCConfigManager
+              moduleName="talent_pulse"
+              onClose={() => setShowConfig(false)}
+            />
+          </div>
+        )}
 
       {/* Feedback Input Section */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6 space-y-6">

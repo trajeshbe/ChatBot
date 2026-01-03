@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import axios from 'axios'
-import { FileText, Upload, Loader2, CheckCircle, XCircle, AlertTriangle, TrendingUp, Calendar, DollarSign } from 'lucide-react'
+import { FileText, Upload, Loader2, CheckCircle, XCircle, AlertTriangle, TrendingUp, Calendar, DollarSign , Settings} from 'lucide-react'
+import POCConfigManager from '../../POCConfigManager'
 
 // Types matching backend schemas
 type TenderType = 'open_tender' | 'rfp' | 'rfq' | 'rfei' | 'eoi' | 'sealed_bid' | 'two_stage' | 'framework_agreement'
@@ -82,6 +83,7 @@ const BID_RECOMMENDATION_COLORS: Record<BidRecommendation, { bg: string; text: s
 
 export default function TenderIntelligencePanel() {
   const [isUploading, setIsUploading] = useState(false)
+  const [showConfig, setShowConfig] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [uploadedDocument, setUploadedDocument] = useState<UploadedDocument | null>(null)
   const [analyzeRequirements, setAnalyzeRequirements] = useState(true)
@@ -159,7 +161,9 @@ export default function TenderIntelligencePanel() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
+      <div className="flex items-start justify-between mb-6">
+          <div className="flex-1">
+<div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
           <FileText className="w-8 h-8 text-indigo-600" />
           Tender Intelligence Analyzer
@@ -168,6 +172,25 @@ export default function TenderIntelligencePanel() {
           Analyze tender/RFP documents with AI-powered requirement extraction and bid recommendations
         </p>
       </div>
+          </div>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Configure
+          </button>
+        </div>
+
+        {/* Configuration Panel */}
+        {showConfig && (
+          <div className="mb-6">
+            <POCConfigManager
+              moduleName="tender_intelligence"
+              onClose={() => setShowConfig(false)}
+            />
+          </div>
+        )}
 
       {/* Upload Section */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">

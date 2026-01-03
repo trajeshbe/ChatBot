@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { FileText, Upload, CheckCircle, XCircle, AlertTriangle, TrendingUp, Calculator } from 'lucide-react'
+import { FileText, Upload, CheckCircle, XCircle, AlertTriangle, TrendingUp, Calculator , Settings} from 'lucide-react'
+import POCConfigManager from '../../POCConfigManager'
 
 interface POMatchRequest {
   po_document_id?: string
@@ -50,6 +51,7 @@ interface POMatchResponse {
 
 export default function ProcurementMatcherPanel() {
   const [poFile, setPoFile] = useState<File | null>(null)
+  const [showConfig, setShowConfig] = useState(false)
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
   const [poDocId, setPoDocId] = useState<string>('')
   const [invoiceDocId, setInvoiceDocId] = useState<string>('')
@@ -166,7 +168,9 @@ export default function ProcurementMatcherPanel() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
+      <div className="flex items-start justify-between mb-6">
+          <div className="flex-1">
+<div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
           <Calculator className="w-8 h-8 text-blue-600" />
           Procurement Matcher - PO/Invoice Reconciliation
@@ -175,6 +179,25 @@ export default function ProcurementMatcherPanel() {
           Automated PO-to-Invoice matching with variance analysis using LLM extraction
         </p>
       </div>
+          </div>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Configure
+          </button>
+        </div>
+
+        {/* Configuration Panel */}
+        {showConfig && (
+          <div className="mb-6">
+            <POCConfigManager
+              moduleName="procurement_matcher"
+              onClose={() => setShowConfig(false)}
+            />
+          </div>
+        )}
 
       {/* Upload Section */}
       <div className="grid md:grid-cols-2 gap-6 mb-6">

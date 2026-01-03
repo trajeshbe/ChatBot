@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { Building, Upload, AlertTriangle } from 'lucide-react'
+import { Building, Upload, AlertTriangle , Settings} from 'lucide-react'
+import POCConfigManager from '../../POCConfigManager'
 
 interface BuildingMetricsPanelResponse {
   results: any
@@ -10,6 +11,7 @@ interface BuildingMetricsPanelResponse {
 
 export default function BuildingMetricsPanel() {
   const [file, setFile] = useState<File | null>(null)
+  const [showConfig, setShowConfig] = useState(false)
   const [textInput, setTextInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<BuildingMetricsPanelResponse | null>(null)
@@ -57,13 +59,34 @@ export default function BuildingMetricsPanel() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-6">
+      <div className="flex items-start justify-between mb-6">
+          <div className="flex-1">
+<div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
           <Building className="w-8 h-8 text-orange-600" />
           Building Metrics
         </h1>
         <p className="text-gray-600 mt-2">Construction project metrics extraction and analysis</p>
       </div>
+          </div>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Configure
+          </button>
+        </div>
+
+        {/* Configuration Panel */}
+        {showConfig && (
+          <div className="mb-6">
+            <POCConfigManager
+              moduleName="building_metrics"
+              onClose={() => setShowConfig(false)}
+            />
+          </div>
+        )}
 
       {/* Input Section */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">

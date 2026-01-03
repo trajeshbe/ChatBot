@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { TrendingUp, Upload, BarChart3, LineChart } from 'lucide-react'
+import { TrendingUp, Upload, BarChart3, LineChart , Settings} from 'lucide-react'
+import POCConfigManager from '../../POCConfigManager'
 
 interface PredictionResult {
   metric: string
@@ -24,6 +25,7 @@ interface PredictiveAnalyticsResponse {
 
 export default function PredictiveAnalyticsPanel() {
   const [file, setFile] = useState<File | null>(null)
+  const [showConfig, setShowConfig] = useState(false)
   const [metric, setMetric] = useState('revenue')
   const [forecastPeriod, setForecastPeriod] = useState('30')
   const [loading, setLoading] = useState(false)
@@ -68,7 +70,9 @@ export default function PredictiveAnalyticsPanel() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
+      <div className="flex items-start justify-between mb-6">
+          <div className="flex-1">
+<div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
           <TrendingUp className="w-8 h-8 text-blue-600" />
           Predictive Analytics & Forecasting
@@ -77,6 +81,25 @@ export default function PredictiveAnalyticsPanel() {
           Predict future trends and metrics using machine learning
         </p>
       </div>
+          </div>
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Configure
+          </button>
+        </div>
+
+        {/* Configuration Panel */}
+        {showConfig && (
+          <div className="mb-6">
+            <POCConfigManager
+              moduleName="predictive_analytics"
+              onClose={() => setShowConfig(false)}
+            />
+          </div>
+        )}
 
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <h2 className="text-xl font-semibold mb-4">Upload Historical Data</h2>
