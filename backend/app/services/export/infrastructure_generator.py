@@ -259,6 +259,62 @@ class InfrastructureGenerator:
 
         logger.info(f"   ✅ Generated: openapi.json")
 
+        # 10. Generate Backend Dockerfile
+        backend_dockerfile = self._generate_backend_dockerfile(module_name)
+        backend_docker_path = infra_dir.parent / "backend" / "Dockerfile"
+        backend_docker_path.parent.mkdir(parents=True, exist_ok=True)
+        backend_docker_path.write_text(backend_dockerfile)
+        files_generated.append(str(backend_docker_path))
+
+        logger.info(f"   ✅ Generated: backend/Dockerfile")
+
+        # 11. Generate Frontend Dockerfile
+        frontend_dockerfile = self._generate_frontend_dockerfile(module_name)
+        frontend_docker_path = infra_dir.parent / "frontend" / "Dockerfile"
+        frontend_docker_path.parent.mkdir(parents=True, exist_ok=True)
+        frontend_docker_path.write_text(frontend_dockerfile)
+        files_generated.append(str(frontend_docker_path))
+
+        logger.info(f"   ✅ Generated: frontend/Dockerfile")
+
+        # 12. Generate startup and utility scripts
+        logger.info(f"📜 Generating startup and utility scripts...")
+
+        scripts_dir = infra_dir / "scripts"
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+
+        # Database init script
+        db_init_script = self._generate_database_init_script(module_name)
+        db_init_path = scripts_dir / "init-database.sh"
+        db_init_path.write_text(db_init_script)
+        db_init_path.chmod(0o755)
+        files_generated.append(str(db_init_path))
+        logger.info(f"   ✅ Generated: scripts/init-database.sh")
+
+        # Wait for services script
+        wait_script = self._generate_wait_for_services_script()
+        wait_path = scripts_dir / "wait-for-services.sh"
+        wait_path.write_text(wait_script)
+        wait_path.chmod(0o755)
+        files_generated.append(str(wait_path))
+        logger.info(f"   ✅ Generated: scripts/wait-for-services.sh")
+
+        # Health check script
+        health_script = self._generate_health_check_script(module_name)
+        health_path = scripts_dir / "health-check.sh"
+        health_path.write_text(health_script)
+        health_path.chmod(0o755)
+        files_generated.append(str(health_path))
+        logger.info(f"   ✅ Generated: scripts/health-check.sh")
+
+        # MinIO init script
+        minio_script = self._generate_init_minio_script(module_name)
+        minio_path = scripts_dir / "init-minio.sh"
+        minio_path.write_text(minio_script)
+        minio_path.chmod(0o755)
+        files_generated.append(str(minio_path))
+        logger.info(f"   ✅ Generated: scripts/init-minio.sh")
+
         logger.info(f"✅ Docker Compose infrastructure generated: {len(files_generated)} files")
 
         return GeneratedInfrastructure(
@@ -323,8 +379,11 @@ version: '3.8'
 services:
   # Backend API
   backend:
-    image: genai-backend:latest
-    container_name: genai-backend
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    image: {module_name}-backend:latest
+    container_name: {module_name}-backend
     ports:
       - "${{BACKEND_PORT:-8000}}:8000"
     environment:
@@ -446,8 +505,11 @@ services:
 
   # Frontend (Next.js)
   frontend:
-    image: genai-frontend:latest
-    container_name: genai-frontend
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+    image: {module_name}-frontend:latest
+    container_name: {module_name}-frontend
     ports:
       - "${{FRONTEND_PORT:-3001}}:3001"
     environment:
@@ -477,57 +539,206 @@ volumes:
         return compose
 
     def _generate_env_file(self, config: Dict[str, Any]) -> str:
-        """Generate .env.example file."""
+        """Generate .env.example file with module-specific configuration."""
 
-        env_content = f"""# Generated Environment Configuration
-# Copy this file to .env and fill in your values
+        module_name = config.get("module_name", "module")
+        module_display = module_name.replace('_', ' ').title()
+
+        env_content = f"""# ============================================================================
+# {module_display} - Standalone Deployment Configuration
+# ============================================================================
+# This file contains all environment variables needed for deployment.
+#
+# SETUP INSTRUCTIONS:
+# 1. Copy this file to .env:
+#    cp .env.example .env
+#
+# 2. Fill in all REQUIRED fields marked with [REQUIRED]
+#
+# 3. Optionally customize other settings
+#
 # Generated: {datetime.utcnow().isoformat()}
+# ============================================================================
 
 # ============================================================================
-# Database Configuration
+# MODULE INFORMATION
 # ============================================================================
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=changeme_secure_password
-POSTGRES_DB=genai
+MODULE_NAME={module_name}
+MODULE_VERSION=1.0.0
+DEPLOYMENT_ENV=production
+
+# ============================================================================
+# DATABASE CONFIGURATION
+# ============================================================================
+# PostgreSQL database settings
+# NOTE: Database will be created automatically on first startup
+
+POSTGRES_HOST=postgres
 POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=changeme_secure_password_min_16_chars  # [REQUIRED] Change this!
+POSTGRES_DB={module_name.replace('-', '_')}
+
+# Database connection URL (auto-generated, don't modify)
+DATABASE_URL=postgresql://${{POSTGRES_USER}}:${{POSTGRES_PASSWORD}}@${{POSTGRES_HOST}}:${{POSTGRES_PORT}}/${{POSTGRES_DB}}
 
 # ============================================================================
-# Redis Configuration
+# REDIS CONFIGURATION
 # ============================================================================
+# Redis for caching and session management
+
+REDIS_HOST=redis
 REDIS_PORT=6379
+REDIS_DB=0
+REDIS_URL=redis://${{REDIS_HOST}}:${{REDIS_PORT}}/${{REDIS_DB}}
 
 # ============================================================================
-# MinIO Configuration
+# OBJECT STORAGE (MinIO)
 # ============================================================================
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=changeme_secure_key
-MINIO_BUCKET_NAME=genai-documents
+# S3-compatible object storage for documents and files
+
+MINIO_HOST=minio
 MINIO_PORT=9000
 MINIO_CONSOLE_PORT=9001
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=changeme_minio_password_min_8_chars  # [REQUIRED] Change this!
+
+# MinIO buckets (created automatically)
+MINIO_BUCKET_DOCUMENTS=documents
+MINIO_BUCKET_UPLOADS=uploads
+MINIO_BUCKET_EXPORTS=exports
+
+# MinIO endpoint URL (auto-generated)
+MINIO_ENDPOINT=http://${{MINIO_HOST}}:${{MINIO_PORT}}
 
 # ============================================================================
-# LLM API Keys
+# AI/LLM API KEYS
 # ============================================================================
-OPENAI_API_KEY=sk-proj-your-openai-api-key-here
-ANTHROPIC_API_KEY=sk-ant-your-anthropic-api-key-here
+# At least ONE LLM API key is required for the module to function
+
+# OpenAI (GPT models)
+OPENAI_API_KEY=sk-proj-your-openai-api-key-here  # [REQUIRED if using OpenAI]
+OPENAI_MODEL=gpt-4-turbo-preview
+
+# Anthropic Claude
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-api-key-here  # [REQUIRED if using Claude]
+ANTHROPIC_MODEL=claude-3-sonnet-20240229
+
+# Model Selection (use 'openai' or 'anthropic')
+DEFAULT_LLM_PROVIDER=openai
 
 # ============================================================================
-# Application Security
+# EMBEDDING MODEL CONFIGURATION
 # ============================================================================
-JWT_SECRET=changeme_jwt_secret_min_32_chars
-SECRET_KEY=changeme_secret_key_min_32_chars
+# For vector search and similarity matching
+
+EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+EMBEDDING_DIMENSION=384
 
 # ============================================================================
-# Application Configuration
+# APPLICATION SECURITY
 # ============================================================================
+# Security keys for JWT tokens and encryption
+# IMPORTANT: Use strong, unique values in production!
+
+JWT_SECRET=changeme_jwt_secret_MUST_BE_AT_LEAST_32_CHARACTERS_LONG  # [REQUIRED]
+SECRET_KEY=changeme_app_secret_MUST_BE_AT_LEAST_32_CHARACTERS_LONG  # [REQUIRED]
+
+# Session configuration
+SESSION_TIMEOUT_MINUTES=60
+
+# ============================================================================
+# APPLICATION PORTS
+# ============================================================================
+# External ports for accessing services
+
 BACKEND_PORT=8000
 FRONTEND_PORT=3001
-LOG_LEVEL=INFO
+
+# Internal service ports (don't change unless you know what you're doing)
+BACKEND_INTERNAL_PORT=8000
+FRONTEND_INTERNAL_PORT=3001
 
 # ============================================================================
-# Monitoring (if enabled)
+# LOGGING & DEBUGGING
 # ============================================================================
+# Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+LOG_LEVEL=INFO
+DEBUG=false
+
+# Enable detailed SQL logging (useful for debugging)
+SQL_ECHO=false
+
+# ============================================================================
+# PERFORMANCE TUNING
+# ============================================================================
+# Adjust based on your hardware and load
+
+# Backend workers (recommended: 2-4 per CPU core)
+BACKEND_WORKERS=4
+
+# Database connection pool
+DB_POOL_SIZE=20
+DB_MAX_OVERFLOW=10
+
+# Redis connection pool
+REDIS_POOL_SIZE=10
+
+# ============================================================================
+# MODULE-SPECIFIC CONFIGURATION
+# ============================================================================
+# Settings specific to {module_display}
+
+# API rate limiting
+RATE_LIMIT_PER_MINUTE=60
+
+# File upload limits
+MAX_UPLOAD_SIZE_MB=50
+ALLOWED_FILE_TYPES=pdf,txt,docx,xlsx
+
+# Processing settings
+MAX_CONCURRENT_JOBS=5
+JOB_TIMEOUT_SECONDS=300
+
+# ============================================================================
+# CORS CONFIGURATION
+# ============================================================================
+# Cross-Origin Resource Sharing settings
+
+# Allowed origins (comma-separated, * for all)
+CORS_ORIGINS=http://localhost:3001,http://localhost:8000
+
+# ============================================================================
+# MONITORING (Optional)
+# ============================================================================
+# Enable if using Grafana/Prometheus monitoring
+
+ENABLE_MONITORING=false
 GRAFANA_ADMIN_PASSWORD=changeme_grafana_password
+
+# Metrics endpoint (for Prometheus scraping)
+METRICS_ENABLED=true
+METRICS_PATH=/metrics
+
+# ============================================================================
+# BACKUP & MAINTENANCE (Optional)
+# ============================================================================
+# Automated backup settings
+
+ENABLE_AUTO_BACKUP=false
+BACKUP_SCHEDULE_CRON=0 2 * * *  # Daily at 2 AM
+BACKUP_RETENTION_DAYS=7
+
+# ============================================================================
+# NOTES
+# ============================================================================
+# - All [REQUIRED] fields must be filled before deployment
+# - Use strong passwords (min 16 characters, mix of letters/numbers/symbols)
+# - Never commit the .env file to version control
+# - Keep this file secure and backed up
+# - See README.md for detailed configuration guide
+# ============================================================================
 """
         return env_content
 
@@ -566,21 +777,47 @@ if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/
     exit 1
 fi
 
-# Pull images
-echo "📥 Pulling Docker images..."
-docker-compose pull
+# Build Docker images
+echo "🔨 Building Docker images (this may take 5-10 minutes on first run)..."
+docker-compose build --no-cache
+
+# Pull external images (PostgreSQL, Redis, MinIO)
+echo "📥 Pulling external images..."
+docker-compose pull postgres redis minio
 
 # Start services
 echo "🔧 Starting services..."
 docker-compose up -d
 
-# Wait for services to be healthy
-echo "⏳ Waiting for services to be healthy..."
-sleep 10
+# Wait for services to be ready using utility script
+if [ -f ../scripts/wait-for-services.sh ]; then
+    echo "⏳ Waiting for services to be ready..."
+    docker-compose exec -T backend bash /app/scripts/wait-for-services.sh || true
+else
+    echo "⏳ Waiting for services (10 seconds)..."
+    sleep 10
+fi
 
-# Check health
-echo "🏥 Checking service health..."
-docker-compose ps
+# Initialize MinIO buckets
+if [ -f ../scripts/init-minio.sh ]; then
+    echo "🪣 Initializing MinIO buckets..."
+    docker-compose exec -T backend bash ../scripts/init-minio.sh || echo "⚠️  MinIO init skipped (may need manual setup)"
+fi
+
+# Initialize database
+if [ -f ../scripts/init-database.sh ]; then
+    echo "🗄️  Initializing database schema..."
+    docker-compose exec -T backend bash ../scripts/init-database.sh || echo "⚠️  Database init skipped (may need manual setup)"
+fi
+
+# Run health checks
+if [ -f ../scripts/health-check.sh ]; then
+    echo "🏥 Running health checks..."
+    bash ../scripts/health-check.sh
+else
+    echo "🏥 Checking service health..."
+    docker-compose ps
+fi
 
 # Run database migrations
 echo "🗄️  Running database migrations..."
@@ -1882,6 +2119,355 @@ Licensed under the terms provided with this package.
 **Generated by Export Wizard v1.0.0**
 """
         return readme
+
+    def _generate_backend_dockerfile(self, module_name: str) -> str:
+        """
+        Generate production-ready Backend Dockerfile.
+
+        Multi-stage build for smaller image size.
+        Includes all dependencies needed for module.
+
+        Args:
+            module_name: Module name for labeling
+
+        Returns:
+            Dockerfile content as string
+        """
+        return f'''# Multi-stage build for {module_name} backend
+FROM python:3.11-slim as builder
+
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y \\
+    gcc g++ make \\
+    libpq-dev \\
+    tesseract-ocr \\
+    poppler-utils \\
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy requirements and install Python packages
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \\
+    pip install --no-cache-dir -r requirements.txt
+
+# ============================================================================
+# Final stage - Runtime
+# ============================================================================
+FROM python:3.11-slim
+
+# Install runtime dependencies only (smaller image)
+RUN apt-get update && apt-get install -y \\
+    libpq5 \\
+    tesseract-ocr \\
+    poppler-utils \\
+    curl \\
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Create app user (security best practice)
+RUN useradd -m -u 1000 appuser && \\
+    mkdir -p /app /app/logs /app/data && \\
+    chown -R appuser:appuser /app
+
+USER appuser
+WORKDIR /app
+
+# Copy application code
+COPY --chown=appuser:appuser ./app /app/app
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \\
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Start application with Uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+'''
+
+    def _generate_frontend_dockerfile(self, module_name: str) -> str:
+        """
+        Generate production-ready Frontend Dockerfile.
+
+        Multi-stage build with standalone Next.js output.
+
+        Args:
+            module_name: Module name for labeling
+
+        Returns:
+            Dockerfile content as string
+        """
+        return f'''# Multi-stage build for {module_name} frontend
+FROM node:18-alpine AS deps
+
+WORKDIR /app
+
+# Install dependencies based on package-lock.json
+COPY package.json package-lock.json* ./
+RUN npm ci --only=production
+
+# ============================================================================
+# Build stage
+# ============================================================================
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Install all dependencies (including dev)
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Build Next.js app (standalone output)
+ENV NEXT_TELEMETRY_DISABLED 1
+RUN npm run build
+
+# ============================================================================
+# Production stage
+# ============================================================================
+FROM node:18-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV production
+ENV NEXT_TELEMETRY_DISABLED 1
+
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \\
+    adduser --system --uid 1001 nextjs
+
+# Copy necessary files from builder
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+# Change ownership
+RUN chown -R nextjs:nodejs /app
+
+USER nextjs
+
+EXPOSE 3001
+
+ENV PORT 3001
+ENV HOSTNAME "0.0.0.0"
+
+CMD ["node", "server.js"]
+'''
+
+    def _generate_database_init_script(self, module_name: str) -> str:
+        """Generate database initialization script with schema creation."""
+
+        return f'''#!/bin/bash
+# Database Initialization Script for {module_name}
+# Generated by Export Wizard
+
+set -e
+
+echo "🗄️  Initializing database schema for {module_name}..."
+
+# Wait for PostgreSQL to be ready
+until PGPASSWORD=$POSTGRES_PASSWORD psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c '\\q' 2>/dev/null; do
+  echo "⏳ Waiting for PostgreSQL to be ready..."
+  sleep 2
+done
+
+echo "✅ PostgreSQL is ready"
+
+# Enable pgvector extension
+echo "📦 Enabling pgvector extension..."
+PGPASSWORD=$POSTGRES_PASSWORD psql -h "$POSTGRES_HOST" -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<-EOSQL
+    CREATE EXTENSION IF NOT EXISTS vector;
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+EOSQL
+
+echo "✅ Extensions enabled"
+
+# Run Alembic migrations
+echo "🔄 Running database migrations..."
+cd /app
+alembic upgrade head
+
+echo "✅ Database initialization complete"
+'''
+
+    def _generate_wait_for_services_script(self) -> str:
+        """Generate script to wait for all services to be ready."""
+
+        return '''#!/bin/bash
+# Wait for Services Script
+# Ensures all dependent services are ready before starting application
+
+set -e
+
+echo "⏳ Waiting for dependent services to be ready..."
+
+# Function to wait for a service
+wait_for_service() {
+    local host=$1
+    local port=$2
+    local service_name=$3
+    local max_attempts=60
+    local attempt=1
+
+    echo "Checking $service_name at $host:$port..."
+
+    while ! nc -z "$host" "$port" 2>/dev/null; do
+        if [ $attempt -eq $max_attempts ]; then
+            echo "❌ $service_name failed to start after $max_attempts attempts"
+            exit 1
+        fi
+        echo "⏳ Waiting for $service_name... (attempt $attempt/$max_attempts)"
+        sleep 2
+        ((attempt++))
+    done
+
+    echo "✅ $service_name is ready"
+}
+
+# Wait for PostgreSQL
+wait_for_service "${POSTGRES_HOST:-postgres}" "${POSTGRES_PORT:-5432}" "PostgreSQL"
+
+# Wait for Redis
+wait_for_service "${REDIS_HOST:-redis}" "${REDIS_PORT:-6379}" "Redis"
+
+# Wait for MinIO
+wait_for_service "${MINIO_HOST:-minio}" "${MINIO_PORT:-9000}" "MinIO"
+
+# Additional wait for PostgreSQL to fully initialize
+echo "⏳ Waiting 5 seconds for PostgreSQL full initialization..."
+sleep 5
+
+echo "✅ All services are ready!"
+'''
+
+    def _generate_health_check_script(self, module_name: str) -> str:
+        """Generate deployment health check and validation script."""
+
+        return f'''#!/bin/bash
+# Deployment Health Check Script for {module_name}
+# Validates that all services are running correctly
+
+set -e
+
+BACKEND_URL="${{BACKEND_URL:-http://localhost:8000}}"
+FRONTEND_URL="${{FRONTEND_URL:-http://localhost:3001}}"
+
+echo "🏥 Running health checks for {module_name}..."
+echo ""
+
+# Function to check HTTP endpoint
+check_endpoint() {{
+    local url=$1
+    local service_name=$2
+    local max_attempts=30
+    local attempt=1
+
+    while [ $attempt -le $max_attempts ]; do
+        if curl -sf "$url" > /dev/null 2>&1; then
+            echo "✅ $service_name is healthy: $url"
+            return 0
+        fi
+
+        if [ $attempt -eq $max_attempts ]; then
+            echo "❌ $service_name health check failed: $url"
+            return 1
+        fi
+
+        echo "⏳ Waiting for $service_name... (attempt $attempt/$max_attempts)"
+        sleep 2
+        ((attempt++))
+    done
+}}
+
+# Check Backend
+echo "Checking Backend..."
+check_endpoint "$BACKEND_URL/health" "Backend API"
+
+# Check Frontend
+echo "Checking Frontend..."
+check_endpoint "$FRONTEND_URL" "Frontend UI"
+
+# Check MinIO
+echo "Checking MinIO..."
+check_endpoint "http://localhost:9000/minio/health/live" "MinIO"
+
+# Check PostgreSQL connection
+echo "Checking PostgreSQL..."
+if docker-compose exec -T postgres pg_isready -U postgres > /dev/null 2>&1; then
+    echo "✅ PostgreSQL is healthy"
+else
+    echo "❌ PostgreSQL health check failed"
+    exit 1
+fi
+
+# Check Redis connection
+echo "Checking Redis..."
+if docker-compose exec -T redis redis-cli ping > /dev/null 2>&1; then
+    echo "✅ Redis is healthy"
+else
+    echo "❌ Redis health check failed"
+    exit 1
+fi
+
+echo ""
+echo "🎉 All health checks passed!"
+echo ""
+echo "Access URLs:"
+echo "  Backend API:  $BACKEND_URL"
+echo "  API Docs:     $BACKEND_URL/docs"
+echo "  Frontend UI:  $FRONTEND_URL"
+echo "  MinIO Console: http://localhost:9001"
+echo ""
+'''
+
+    def _generate_init_minio_script(self, module_name: str) -> str:
+        """Generate MinIO bucket initialization script."""
+
+        return f'''#!/bin/bash
+# MinIO Bucket Initialization Script for {module_name}
+# Creates required S3 buckets
+
+set -e
+
+echo "🪣 Initializing MinIO buckets for {module_name}..."
+
+# Wait for MinIO to be ready
+until curl -sf http://minio:9000/minio/health/live > /dev/null 2>&1; do
+  echo "⏳ Waiting for MinIO to be ready..."
+  sleep 2
+done
+
+echo "✅ MinIO is ready"
+
+# Configure mc (MinIO client)
+mc alias set local http://minio:9000 ${{MINIO_ROOT_USER:-minioadmin}} ${{MINIO_ROOT_PASSWORD:-minioadmin}}
+
+# Create buckets
+BUCKETS=("documents" "exports" "uploads" "temp")
+
+for bucket in "${{BUCKETS[@]}}"; do
+    if mc ls local/$bucket > /dev/null 2>&1; then
+        echo "✅ Bucket '$bucket' already exists"
+    else
+        mc mb local/$bucket
+        echo "✅ Created bucket: $bucket"
+    fi
+done
+
+# Set public policy for exports bucket (optional)
+mc anonymous set download local/exports
+
+echo "✅ MinIO bucket initialization complete"
+'''
 
     # Placeholder methods for other deployment types
     async def _generate_docker_compose_ha(self, *args, **kwargs):
