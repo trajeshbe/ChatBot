@@ -2,7 +2,7 @@
 
 import logging
 import json
-from typing import List, Dict
+from typing import List, Dict, Optional, Any
 from sqlalchemy.orm import Session
 
 from app.tier_1.infrastructure.config import Settings
@@ -15,10 +15,13 @@ logger = logging.getLogger(__name__)
 class CustomerChurnService:
     """Service for customer churn prediction"""
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
-        self.llm_service = LLMService(db, settings)
+        self.config = config or {}
+        self.llm_service = LLMService()
+        if config:
+            logger.info(f"✓ Using module config with model: {config.get('llm', {}).get('default', {}).get('model', 'default')}")
 
     async def predict_churn(self, request: PredictChurnRequest) -> PredictChurnResponse:
         """Predict customer churn with AI analysis"""
@@ -212,8 +215,13 @@ Segments: {segment_summary}
 
 Provide 2-3 sentences of expert insights about churn patterns and retention priorities."""
 
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.3)
+
             response = await self.llm_service.generate_response(
-                prompt=prompt, model="gpt-4o-mini", temperature=0.3
+                prompt=prompt, model=model, temperature=temperature
             )
             return response.strip()
 

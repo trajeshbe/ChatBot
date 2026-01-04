@@ -9,7 +9,7 @@ Spending pattern analysis using tier_1 services.
 import uuid
 import logging
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Any
 from sqlalchemy.orm import Session
 
 from app.tier_1.infrastructure.config import Settings
@@ -32,12 +32,15 @@ logger = logging.getLogger(__name__)
 class SpendSmartService:
     """Spending pattern analysis service."""
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
-        self.llm_service = LLMService(db, settings)
+        self.config = config or {}
+        self.llm_service = LLMService()
         self.document_service = DocumentService(db)
         logger.info("✓ SpendSmartService initialized with tier_1 services")
+        if config:
+            logger.info(f"✓ Using module config with model: {config.get(\'llm\', {}).get(\'default\', {}).get(\'model\', \'default\')}")
 
     async def analyze_spending(self, request: SpendAnalysisRequest) -> SpendAnalysisResponse:
         """Analyze spending patterns."""
@@ -190,11 +193,17 @@ If no spending data found, return empty objects.
 Return ONLY the JSON, no explanation."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.1)
+            max_tokens = llm_config.get('max_tokens', 1000)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.1,
-                max_tokens=1000
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             import json

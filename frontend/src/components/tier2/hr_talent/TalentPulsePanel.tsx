@@ -2,6 +2,7 @@ import { useState } from 'react'
 import axios from 'axios'
 import { Activity, Plus, X, TrendingUp, AlertTriangle, CheckCircle, Users , Settings} from 'lucide-react'
 import POCConfigManager from '../../POCConfigManager'
+import FileUpload from '../../FileUpload'
 
 // Types matching backend schemas
 type EngagementLevel = 'very_low' | 'low' | 'moderate' | 'high' | 'very_high'
@@ -180,6 +181,24 @@ export default function TalentPulsePanel() {
             />
           </div>
         )}
+
+      {/* Document Upload Section */}
+      <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <h3 className="text-lg font-semibold text-slate-800 mb-2">
+          📋 Upload Feedback Data
+        </h3>
+        <p className="text-sm text-slate-600 mb-4">
+          Upload employee surveys, performance reviews, or feedback reports for sentiment analysis.
+        </p>
+        <FileUpload
+          hideProjectSelector={true}
+          compact={true}
+          metadata={{
+            company: 'hr_talent',
+            usecase: 'talent_pulse'
+          }}
+        />
+      </div>
 
       {/* Feedback Input Section */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6 space-y-6">

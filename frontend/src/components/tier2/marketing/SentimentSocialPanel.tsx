@@ -2,6 +2,7 @@ import { useState } from 'react'
 import axios from 'axios'
 import { MessageCircle, Upload, AlertTriangle , Settings} from 'lucide-react'
 import POCConfigManager from '../../POCConfigManager'
+import FileUpload from '../../FileUpload'
 
 interface SentimentSocialPanelResponse {
   results: any
@@ -10,23 +11,15 @@ interface SentimentSocialPanelResponse {
 }
 
 export default function SentimentSocialPanel() {
-  const [file, setFile] = useState<File | null>(null)
   const [showConfig, setShowConfig] = useState(false)
   const [textInput, setTextInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<SentimentSocialPanelResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0])
-      setError(null)
-    }
-  }
-
   const handleSubmit = async () => {
-    if (!file && !textInput.trim()) {
-      setError('Please upload a file or enter text')
+    if (!textInput.trim()) {
+      setError('Please enter a sentiment analysis query')
       return
     }
 
@@ -35,18 +28,10 @@ export default function SentimentSocialPanel() {
     setResult(null)
 
     try {
-      const formData = new FormData()
-      if (file) {
-        formData.append('file', file)
-      }
-      if (textInput.trim()) {
-        formData.append('text', textInput)
-      }
-
       const response = await axios.post<SentimentSocialPanelResponse>(
         'http://localhost:8000/api/v1/modules/sentiment-social/analyze',
-        formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
+        { text: textInput },
+        { headers: { 'Content-Type': 'application/json' } }
       )
       setResult(response.data)
     } catch (err: any) {
@@ -88,52 +73,37 @@ export default function SentimentSocialPanel() {
           </div>
         )}
 
-      {/* Input Section */}
+      {/* File Upload Section */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4">Upload Data or Enter Text</h2>
+        <h2 className="text-xl font-semibold mb-4">📋 Upload Social Media Data</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Upload social media posts, comments, reviews, or sentiment analysis data.
+        </p>
+        <FileUpload
+          hideProjectSelector={true}
+          compact={true}
+          metadata={{
+            company: 'marketing',
+            usecase: 'sentiment_social'
+          }}
+        />
+      </div>
 
-        {/* File Upload */}
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-indigo-400 transition-colors mb-4">
-          <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <label className="cursor-pointer">
-            <span className="text-indigo-600 hover:text-indigo-700 font-medium">
-              Click to upload
-            </span>
-            <span className="text-gray-600"> or drag and drop</span>
-            <input
-              type="file"
-              accept=".csv,.pdf,.txt"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-          </label>
-          <p className="text-sm text-gray-500 mt-2">PDF, CSV, or TXT files</p>
-        </div>
+      {/* Query Section */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-xl font-semibold mb-4">💬 Or Enter Query</h2>
 
-        {file && (
-          <p className="mt-3 text-sm text-gray-700 mb-4">
-            Selected: <span className="font-medium">{file.name}</span>
-          </p>
-        )}
+        <textarea
+          value={textInput}
+          onChange={(e) => setTextInput(e.target.value)}
+          placeholder="Enter your sentiment analysis query..."
+          rows={4}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 mb-4"
+        />
 
-        {/* Text Input */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Or enter text directly
-          </label>
-          <textarea
-            value={textInput}
-            onChange={(e) => setTextInput(e.target.value)}
-            placeholder="Enter your data or query here..."
-            rows={4}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-          />
-        </div>
-
-        {/* Submit Button */}
         <button
           onClick={handleSubmit}
-          disabled={loading || (!file && !textInput.trim())}
+          disabled={loading || !textInput.trim()}
           className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
         >
           {loading ? (

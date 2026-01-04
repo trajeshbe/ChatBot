@@ -29,13 +29,16 @@ logger = logging.getLogger(__name__)
 class CampaignOptimizerService:
     """Service for marketing campaign optimization"""
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
+        self.config = config or {}
         # Tier 1 service dependencies
-        self.llm_service = LLMService(db, settings)
+        self.llm_service = LLMService()
 
         logger.info("✓ CampaignOptimizerService initialized with tier_1 services")
+        if config:
+            logger.info(f"✓ Using module config with model: {config.get('llm', {}).get('default', {}).get('model', 'default')}")
 
     async def optimize_campaigns(self, request: CampaignOptimizationRequest) -> CampaignOptimizationResponse:
         """Analyze campaigns and provide optimization recommendations"""
@@ -339,11 +342,17 @@ Return JSON: {{"insights": ["insight 1", "insight 2", ...]}}
 Return ONLY valid JSON."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.3)
+            max_tokens = llm_config.get('max_tokens', 200)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.3,
-                max_tokens=200
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             result = json.loads(response.strip())

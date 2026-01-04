@@ -139,6 +139,8 @@ export default function PlanningClassifierPanel() {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('session_id', sessionId)
+    formData.append('company', 'construction')
+    formData.append('usecase', 'planning_classifier')
 
     try {
       const response = await axios.post('http://localhost:8000/api/v1/upload', formData, {

@@ -1,11 +1,12 @@
 """Customer Churn Predictor - API Routes"""
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .customer_churn_service import CustomerChurnService
 from .customer_churn_schemas import *
 
@@ -16,12 +17,17 @@ router = APIRouter(prefix="/api/v1/modules/customer-churn", tags=["Customer Chur
 @router.post("/predict", response_model=PredictChurnResponse)
 async def predict_churn(
     request: PredictChurnRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
     """Predict customer churn with AI-powered analysis"""
     try:
-        service = CustomerChurnService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "customer_churn")
+        logger.info(f"✓ Loaded config for customer_churn")
+
+        # Initialize service with config
+        service = CustomerChurnService(db, settings, config=module_config)
         return await service.predict_churn(request)
     except Exception as e:
         logger.error(f"Error in predict_churn: {e}", exc_info=True)

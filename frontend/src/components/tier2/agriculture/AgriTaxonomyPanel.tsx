@@ -2,6 +2,7 @@ import { useState } from 'react'
 import axios from 'axios'
 import { Sprout, Plus, X, CheckCircle, AlertCircle, Leaf, Thermometer, Droplets , Settings} from 'lucide-react'
 import POCConfigManager from '../../POCConfigManager'
+import FileUpload from '../../FileUpload'
 
 // Types matching backend schemas
 type CropCategory =
@@ -174,9 +175,25 @@ export default function AgriTaxonomyPanel() {
           </div>
         )}
 
-      {/* Input Section */}
+      {/* File Upload Section */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-xl font-semibold mb-4">📋 Upload Crop Data</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Upload agricultural documents, crop lists, or farming reports for taxonomy classification.
+        </p>
+        <FileUpload
+          hideProjectSelector={true}
+          compact={true}
+          metadata={{
+            company: 'agriculture',
+            usecase: 'agri_taxonomy'
+          }}
+        />
+      </div>
+
+      {/* Manual Input Section */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6 space-y-6">
-        <h2 className="text-xl font-semibold">Crop Names</h2>
+        <h2 className="text-xl font-semibold">💬 Or Enter Crop Names Manually</h2>
 
         {/* Crop Name Inputs */}
         <div className="space-y-3">

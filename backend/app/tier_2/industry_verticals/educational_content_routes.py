@@ -1,9 +1,10 @@
 """Educational Content Recommender - API Routes"""
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .educational_content_service import EducationalContentService
 from .educational_content_schemas import *
 

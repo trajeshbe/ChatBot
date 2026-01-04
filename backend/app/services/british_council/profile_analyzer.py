@@ -56,14 +56,16 @@ class ProfileAnalyzerService:
         )
     """
 
-    def __init__(self, llm_service=None):
+    def __init__(self, llm_service=None, config: Optional[dict] = None):
         """
         Initialize profile analyzer.
 
         Args:
             llm_service: Optional LLM service (uses singleton if not provided)
+            config: Optional module configuration (prompts, LLM settings)
         """
         self.llm = llm_service or get_llm_service()
+        self.config = config or {}
         logger.info("🎓 ProfileAnalyzerService initialized")
 
     async def analyze_profile(
@@ -153,13 +155,33 @@ class ProfileAnalyzerService:
         """
         Build prompt for profile extraction.
 
+        Uses prompt from module config if available, otherwise uses default.
+
         Args:
             user_input: Raw user input text
 
         Returns:
             Formatted prompt for LLM
         """
-        prompt = f"""You are a profile analyzer for the British Council course recommendation system.
+        # Try to get prompt from config
+        prompts_config = self.config.get("prompts", {})
+        system_prompts = prompts_config.get("system", {})
+
+        # Use configured prompt or fallback to default
+        base_prompt = system_prompts.get("profile_extraction", None)
+
+        if base_prompt:
+            # Use configured prompt (should include placeholder for user_input)
+            prompt = f"""{base_prompt}
+
+User Input:
+"{user_input}"
+
+Return ONLY valid JSON matching the schema above."""
+            logger.info("📝 Using profile extraction prompt from module config")
+        else:
+            # Fallback to default prompt
+            prompt = f"""You are a profile analyzer for the British Council course recommendation system.
 
 Extract a structured profile from this user input:
 
@@ -233,17 +255,15 @@ JSON:"""
         return True
 
 
-# Singleton instance
-_profile_analyzer = None
-
-def get_profile_analyzer() -> ProfileAnalyzerService:
+# Factory function (not singleton to allow config injection)
+def get_profile_analyzer(config: Optional[dict] = None) -> ProfileAnalyzerService:
     """
-    Get singleton ProfileAnalyzerService instance.
+    Get ProfileAnalyzerService instance.
+
+    Args:
+        config: Optional module configuration (prompts, LLM settings)
 
     Returns:
         ProfileAnalyzerService instance
     """
-    global _profile_analyzer
-    if _profile_analyzer is None:
-        _profile_analyzer = ProfileAnalyzerService()
-    return _profile_analyzer
+    return ProfileAnalyzerService(config=config)

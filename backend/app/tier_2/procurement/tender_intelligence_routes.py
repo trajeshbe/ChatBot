@@ -7,11 +7,12 @@ REST endpoints for tender/RFP analysis and bid intelligence.
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .tender_intelligence_service import TenderIntelligenceService
 from .tender_intelligence_schemas import (
     TenderAnalysisRequest,
@@ -32,7 +33,7 @@ router = APIRouter(
 @router.post("/analyze", response_model=TenderAnalysisResponse)
 async def analyze_tender(
     request: TenderAnalysisRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -63,7 +64,12 @@ async def analyze_tender(
     try:
         logger.info(f"📋 Tender analysis request for {request.document_id}")
 
-        service = TenderIntelligenceService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "tender_intelligence")
+        logger.info(f"✓ Loaded config for tender_intelligence")
+
+        # Initialize service with config
+        service = TenderIntelligenceService(db, settings, config=module_config)
         result = await service.analyze_tender(request)
 
         logger.info(f"✓ Analysis complete: {result.bid_recommendation.value}")

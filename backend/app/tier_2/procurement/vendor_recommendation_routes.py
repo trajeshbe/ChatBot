@@ -7,11 +7,12 @@ REST endpoints for vendor recommendation and evaluation.
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .vendor_recommendation_service import VendorRecommendationService
 from .vendor_recommendation_schemas import (
     VendorRecommendationRequest,
@@ -34,7 +35,7 @@ router = APIRouter(
 @router.post("/recommend", response_model=VendorRecommendationResponse)
 async def recommend_vendors(
     request: VendorRecommendationRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -90,7 +91,12 @@ async def recommend_vendors(
     try:
         logger.info(f"🏢 Vendor recommendation request for {request.category.value}")
 
-        service = VendorRecommendationService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "vendor_recommendation")
+        logger.info(f"✓ Loaded config for vendor_recommendation")
+
+        # Initialize service with config
+        service = VendorRecommendationService(db, settings, config=module_config)
         result = await service.recommend_vendors(request)
 
         logger.info(f"✓ Generated {len(result.recommendations)} recommendations")
@@ -113,7 +119,7 @@ async def recommend_vendors(
 @router.post("/compare", response_model=VendorComparisonResponse)
 async def compare_vendors(
     request: VendorComparisonRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Compare specific vendors side-by-side.
@@ -171,7 +177,7 @@ async def compare_vendors(
 @router.post("/search")
 async def search_vendors(
     request: SearchVendorsRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Search vendors by criteria.
@@ -237,7 +243,7 @@ async def search_vendors(
 @router.post("/export")
 async def export_recommendations(
     request: ExportRecommendationsRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Export vendor recommendations in various formats.
@@ -311,7 +317,7 @@ async def export_recommendations(
 async def get_recommendation_stats(
     session_id: str = None,
     project_id: str = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Get vendor recommendation statistics.

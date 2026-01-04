@@ -7,11 +7,12 @@ REST endpoints for configurable RAG with collection management.
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .generic_rag_service import GenericRAGService
 from .generic_rag_schemas import (
     RAGQueryRequest,
@@ -37,7 +38,7 @@ router = APIRouter(
 @router.post("/query", response_model=RAGQueryResponse)
 async def query_rag(
     request: RAGQueryRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -87,7 +88,12 @@ async def query_rag(
     try:
         logger.info(f"🔍 Generic RAG query: {request.query[:100]}...")
 
-        service = GenericRAGService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "generic_rag")
+        logger.info(f"✓ Loaded config for generic_rag")
+
+        # Initialize service with config
+        service = GenericRAGService(db, settings, config=module_config)
         result = await service.query(request)
 
         logger.info(f"✓ Query complete: {result.num_sources_used} sources, confidence {result.confidence_score:.0%}")
@@ -110,7 +116,7 @@ async def query_rag(
 @router.post("/collections", response_model=SavedCollection)
 async def create_collection(
     request: CreateCollectionRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -151,7 +157,12 @@ async def create_collection(
     try:
         logger.info(f"📁 Creating collection: {request.collection_name}")
 
-        service = GenericRAGService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "generic_rag")
+        logger.info(f"✓ Loaded config for generic_rag")
+
+        # Initialize service with config
+        service = GenericRAGService(db, settings, config=module_config)
         collection = await service.create_collection(request)
 
         logger.info(f"✓ Collection created: {collection.collection_id}")
@@ -172,7 +183,7 @@ async def list_collections(
     include_public: bool = True,
     limit: int = 50,
     offset: int = 0,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -203,7 +214,12 @@ async def list_collections(
             offset=offset
         )
 
-        service = GenericRAGService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "generic_rag")
+        logger.info(f"✓ Loaded config for generic_rag")
+
+        # Initialize service with config
+        service = GenericRAGService(db, settings, config=module_config)
         result = await service.list_collections(request)
 
         logger.info(f"✓ Listed {result.returned_count}/{result.total_count} collections")
@@ -221,7 +237,7 @@ async def list_collections(
 async def update_collection(
     collection_id: str,
     request: UpdateCollectionRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -308,7 +324,7 @@ async def update_collection(
 @router.delete("/collections/{collection_id}")
 async def delete_collection(
     collection_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Delete a RAG collection.

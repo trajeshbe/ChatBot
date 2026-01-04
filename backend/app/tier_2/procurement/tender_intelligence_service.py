@@ -10,7 +10,7 @@ import uuid
 import json
 import logging
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Any
 from sqlalchemy.orm import Session
 
 from app.tier_1.infrastructure.config import Settings
@@ -32,12 +32,15 @@ logger = logging.getLogger(__name__)
 class TenderIntelligenceService:
     """Tender/RFP analysis service."""
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
-        self.llm_service = LLMService(db, settings)
+        self.config = config or {}
+        self.llm_service = LLMService()
         self.document_service = DocumentService(db, settings)
         logger.info("✓ TenderIntelligenceService initialized")
+        if config:
+            logger.info(f"✓ Using module config with model: {config.get(\'llm\', {}).get(\'default\', {}).get(\'model\', \'default\')}")
 
     async def analyze_tender(self, request: TenderAnalysisRequest) -> TenderAnalysisResponse:
         """Analyze tender document."""

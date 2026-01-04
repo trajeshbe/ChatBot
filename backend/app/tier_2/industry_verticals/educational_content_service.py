@@ -36,12 +36,15 @@ class EducationalContentService:
     7. AI Personalization → Generate personalized insights
     """
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
-        self.llm_service = LLMService(db, settings)
+        self.config = config or {}
+        self.llm_service = LLMService()
         self.document_service = DocumentService(db)
         logger.info("✓ EducationalContentService initialized with tier_1 services")
+        if config:
+            logger.info(f"✓ Using module config with model: {config.get(\'llm\', {}).get(\'default\', {}).get(\'model\', \'default\')}")
 
     async def recommend_content(
         self,
@@ -214,11 +217,17 @@ If no courses found, return empty array [].
 Return ONLY the JSON array, no explanation."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.1)
+            max_tokens = llm_config.get('max_tokens', 1500)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.1,
-                max_tokens=1500
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             courses = json.loads(response.strip())
@@ -319,11 +328,17 @@ If no learner data found, return empty arrays/objects.
 Return ONLY the JSON, no explanation."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.1)
+            max_tokens = llm_config.get('max_tokens', 1000)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.1,
-                max_tokens=1000
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             learner_data = json.loads(response.strip())

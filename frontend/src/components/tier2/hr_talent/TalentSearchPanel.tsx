@@ -2,6 +2,7 @@ import { useState } from 'react'
 import axios from 'axios'
 import { Search, Plus, X, Users, Star, TrendingUp, Award, Briefcase , Settings} from 'lucide-react'
 import POCConfigManager from '../../POCConfigManager'
+import FileUpload from '../../FileUpload'
 
 // Types matching backend schemas
 type ExperienceLevel = 'entry' | 'mid' | 'senior' | 'lead' | 'executive'
@@ -208,6 +209,24 @@ export default function TalentSearchPanel() {
             />
           </div>
         )}
+
+      {/* Document Upload Section */}
+      <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <h3 className="text-lg font-semibold text-slate-800 mb-2">
+          📄 Upload Resumes & Job Descriptions
+        </h3>
+        <p className="text-sm text-slate-600 mb-4">
+          Upload resumes, CVs, job descriptions, or candidate profiles for intelligent matching.
+        </p>
+        <FileUpload
+          hideProjectSelector={true}
+          compact={true}
+          metadata={{
+            company: 'hr_talent',
+            usecase: 'talent_search'
+          }}
+        />
+      </div>
 
       {/* Job Requirements Form */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6 space-y-6">

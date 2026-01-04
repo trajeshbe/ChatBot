@@ -9,10 +9,11 @@ from .multilingual_translator_schemas import *
 logger = logging.getLogger(__name__)
 
 class MultilingualTranslatorService:
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
-        self.llm_service = LLMService(db, settings)
+        self.config = config or {}
+        self.llm_service = LLMService()
 
         # Import DocumentService for extracting content from documents
         from app.tier_1.document_processing.document_service import DocumentService

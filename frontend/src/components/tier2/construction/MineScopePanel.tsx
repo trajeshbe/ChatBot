@@ -122,6 +122,8 @@ export default function MineScopePanel() {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('session_id', sessionId)
+    formData.append('company', 'construction')
+    formData.append('usecase', 'mine_scope')
 
     try {
       const response = await axios.post('http://localhost:8000/api/v1/upload', formData, {

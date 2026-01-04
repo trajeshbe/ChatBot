@@ -2,6 +2,7 @@ import { useState } from 'react'
 import axios from 'axios'
 import { Settings } from 'lucide-react'
 import POCConfigManager from './POCConfigManager'
+import FileUpload from './FileUpload'
 
 interface UserProfile {
   skills: string[]
@@ -139,6 +140,25 @@ export default function BritishCouncilRecommender() {
             />
           </div>
         )}
+
+        {/* Course Catalog Upload Section */}
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          <h2 className="text-xl font-semibold text-slate-800 mb-2">
+            📚 Upload Course Catalog
+          </h2>
+          <p className="text-sm text-slate-600 mb-4">
+            Upload course catalog files (JSON, CSV, TXT, PDF) to make them searchable for recommendations.
+            Files will be automatically chunked and embedded into the vector database.
+          </p>
+          <FileUpload
+            hideProjectSelector={true}
+            compact={true}
+            metadata={{
+              company: 'british_council',
+              usecase: 'course_recommendation'
+            }}
+          />
+        </div>
 
         {/* Input Section */}
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6">

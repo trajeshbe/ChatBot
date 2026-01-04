@@ -7,11 +7,12 @@ REST endpoints for Australian construction cost estimation.
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .estimator_au_service import EstimatorAUService
 from .estimator_au_schemas import (
     CostEstimateRequest,
@@ -32,7 +33,7 @@ router = APIRouter(
 @router.post("/estimate", response_model=CostEstimateResponse)
 async def generate_cost_estimate(
     request: CostEstimateRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -94,7 +95,12 @@ async def generate_cost_estimate(
     try:
         logger.info(f"💰 AU cost estimate request for {request.state.value}")
 
-        service = EstimatorAUService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "estimator_au")
+        logger.info(f"✓ Loaded config for estimator_au")
+
+        # Initialize service with config
+        service = EstimatorAUService(db, settings, config=module_config)
         result = await service.generate_estimate(request)
 
         logger.info(f"✓ Estimate complete: AUD ${result.total_cost_inc_gst_aud:,.2f}")
@@ -117,7 +123,7 @@ async def generate_cost_estimate(
 @router.post("/compare", response_model=EstimateComparisonResponse)
 async def compare_estimates(
     request: EstimateComparisonRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Compare multiple cost estimates.
@@ -173,7 +179,7 @@ async def compare_estimates(
 @router.post("/export")
 async def export_estimate(
     request: ExportEstimateRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Export cost estimate in various formats.

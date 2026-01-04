@@ -7,11 +7,12 @@ REST endpoints for classifying planning documents by type and purpose.
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .planning_classifier_service import PlanningClassifierService
 from .planning_classifier_schemas import (
     PlanningClassificationRequest,
@@ -35,7 +36,7 @@ router = APIRouter(
 @router.post("/classify", response_model=PlanningClassificationResponse)
 async def classify_planning_document(
     request: PlanningClassificationRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -77,7 +78,12 @@ async def classify_planning_document(
     try:
         logger.info(f"📐 Classification request for document {request.document_id}")
 
-        service = PlanningClassifierService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "planning_classifier")
+        logger.info(f"✓ Loaded config for planning_classifier")
+
+        # Initialize service with config
+        service = PlanningClassifierService(db, settings, config=module_config)
         result = await service.classify_document(request)
 
         logger.info(f"✓ Classified as {result.primary_classification.document_type.value} / {result.primary_classification.purpose.value}")
@@ -100,7 +106,7 @@ async def classify_planning_document(
 @router.post("/classify/bulk", response_model=BulkClassificationResponse)
 async def bulk_classify_planning_documents(
     request: BulkClassificationRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -136,7 +142,12 @@ async def bulk_classify_planning_documents(
     try:
         logger.info(f"📐 Bulk classification: {len(request.document_ids)} documents")
 
-        service = PlanningClassifierService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "planning_classifier")
+        logger.info(f"✓ Loaded config for planning_classifier")
+
+        # Initialize service with config
+        service = PlanningClassifierService(db, settings, config=module_config)
         result = await service.bulk_classify(request)
 
         logger.info(f"✓ Bulk classification complete: {result.successful_classifications}/{result.total_documents} successful")
@@ -153,7 +164,7 @@ async def bulk_classify_planning_documents(
 @router.post("/search", response_model=ClassificationSearchResponse)
 async def search_classifications(
     request: ClassificationSearchRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -188,7 +199,12 @@ async def search_classifications(
     try:
         logger.info(f"🔍 Searching classifications")
 
-        service = PlanningClassifierService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "planning_classifier")
+        logger.info(f"✓ Loaded config for planning_classifier")
+
+        # Initialize service with config
+        service = PlanningClassifierService(db, settings, config=module_config)
         result = await service.search_classifications(request)
 
         logger.info(f"✓ Found {result.total_count} matching classifications")
@@ -205,7 +221,7 @@ async def search_classifications(
 @router.post("/export")
 async def export_classifications(
     request: ExportClassificationRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Export classification results in various formats.
@@ -329,7 +345,7 @@ async def export_classifications(
 async def get_classification_stats(
     session_id: str = None,
     project_id: str = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Get statistics for classified planning documents.

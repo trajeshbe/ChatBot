@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
 import { GraduationCap, Upload, AlertTriangle } from 'lucide-react'
+import FileUpload from '../../FileUpload'
 
 interface EducationalContentPanelResponse {
   results: any
@@ -9,22 +10,14 @@ interface EducationalContentPanelResponse {
 }
 
 export default function EducationalContentPanel() {
-  const [file, setFile] = useState<File | null>(null)
   const [textInput, setTextInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<EducationalContentPanelResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0])
-      setError(null)
-    }
-  }
-
   const handleSubmit = async () => {
-    if (!file && !textInput.trim()) {
-      setError('Please upload a file or enter text')
+    if (!textInput.trim()) {
+      setError('Please enter a query or educational content request')
       return
     }
 
@@ -33,18 +26,10 @@ export default function EducationalContentPanel() {
     setResult(null)
 
     try {
-      const formData = new FormData()
-      if (file) {
-        formData.append('file', file)
-      }
-      if (textInput.trim()) {
-        formData.append('text', textInput)
-      }
-
       const response = await axios.post<EducationalContentPanelResponse>(
         'http://localhost:8000/api/v1/modules/educational-content/analyze',
-        formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
+        { text: textInput },
+        { headers: { 'Content-Type': 'application/json' } }
       )
       setResult(response.data)
     } catch (err: any) {
@@ -65,52 +50,37 @@ export default function EducationalContentPanel() {
         <p className="text-gray-600 mt-2">Generate educational content and learning materials</p>
       </div>
 
-      {/* Input Section */}
+      {/* File Upload Section */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4">Upload Data or Enter Text</h2>
+        <h2 className="text-xl font-semibold mb-4">📋 Upload Educational Content</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Upload course materials, textbooks, or educational documents.
+        </p>
+        <FileUpload
+          hideProjectSelector={true}
+          compact={true}
+          metadata={{
+            company: 'education',
+            usecase: 'educational_content'
+          }}
+        />
+      </div>
 
-        {/* File Upload */}
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors mb-4">
-          <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <label className="cursor-pointer">
-            <span className="text-blue-600 hover:text-blue-700 font-medium">
-              Click to upload
-            </span>
-            <span className="text-gray-600"> or drag and drop</span>
-            <input
-              type="file"
-              accept=".csv,.pdf,.txt"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-          </label>
-          <p className="text-sm text-gray-500 mt-2">PDF, CSV, or TXT files</p>
-        </div>
+      {/* Query Section */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-xl font-semibold mb-4">💬 Or Enter Query</h2>
 
-        {file && (
-          <p className="mt-3 text-sm text-gray-700 mb-4">
-            Selected: <span className="font-medium">{file.name}</span>
-          </p>
-        )}
+        <textarea
+          value={textInput}
+          onChange={(e) => setTextInput(e.target.value)}
+          placeholder="Enter your educational content query..."
+          rows={4}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 mb-4"
+        />
 
-        {/* Text Input */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Or enter text directly
-          </label>
-          <textarea
-            value={textInput}
-            onChange={(e) => setTextInput(e.target.value)}
-            placeholder="Enter your data or query here..."
-            rows={4}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        {/* Submit Button */}
         <button
           onClick={handleSubmit}
-          disabled={loading || (!file && !textInput.trim())}
+          disabled={loading || !textInput.trim()}
           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
         >
           {loading ? (

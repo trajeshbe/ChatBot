@@ -53,6 +53,8 @@ export default function RelationExtractorPanel() {
     const formData = new FormData()
     formData.append('file', uploadedFile)
     formData.append('session_id', sessionId)
+    formData.append('company', 'document_intelligence')
+    formData.append('usecase', 'relation_extraction')
 
     try {
       const response = await axios.post('http://localhost:8000/api/v1/upload', formData)

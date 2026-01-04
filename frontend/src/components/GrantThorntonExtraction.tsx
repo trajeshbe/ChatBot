@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { Upload, Loader2, CheckCircle, XCircle, FileText, DollarSign, TrendingUp, Download, Settings } from 'lucide-react'
 import axios from 'axios'
 import POCConfigManager from './POCConfigManager'
+import FileUpload from './FileUpload'
 
 interface ExtractedDatapoint {
   field_name: string
@@ -225,6 +226,26 @@ export default function GrantThorntonExtraction() {
                 />
               </div>
             )}
+
+            {/* Supporting Documents Upload */}
+            <div className="mb-6 max-w-4xl mx-auto">
+              <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
+                <h3 className="text-lg font-semibold text-slate-800 mb-2">
+                  📊 Upload Supporting Documents (Optional)
+                </h3>
+                <p className="text-sm text-slate-600 mb-4">
+                  Upload industry benchmarks, credit ratings, or reference materials for enhanced analysis.
+                </p>
+                <FileUpload
+                  hideProjectSelector={true}
+                  compact={true}
+                  metadata={{
+                    company: 'grant_thornton',
+                    usecase: 'financial_analysis'
+                  }}
+                />
+              </div>
+            </div>
           </div>
 
           {/* Company Name Input */}

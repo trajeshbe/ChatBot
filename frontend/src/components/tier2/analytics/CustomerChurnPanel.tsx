@@ -65,6 +65,8 @@ export default function CustomerChurnPanel() {
 
     const formData = new FormData()
     formData.append('file', file)
+    formData.append('company', 'analytics')
+    formData.append('usecase', 'customer_churn')
 
     try {
       const response = await axios.post<ChurnAnalysisResponse>(

@@ -7,11 +7,12 @@ REST endpoints for AI-powered talent search and matching.
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .talent_search_service import TalentSearchService
 from .talent_search_schemas import (
     TalentSearchRequest,
@@ -32,7 +33,7 @@ router = APIRouter(
 @router.post("/search", response_model=TalentSearchResponse)
 async def search_talent(
     request: TalentSearchRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -69,7 +70,12 @@ async def search_talent(
     try:
         logger.info(f"🔍 Talent search for: {request.job_requirement.job_title}")
 
-        service = TalentSearchService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "talent_search")
+        logger.info(f"✓ Loaded config for talent_search")
+
+        # Initialize service with config
+        service = TalentSearchService(db, settings, config=module_config)
         result = await service.search_talent(request)
 
         logger.info(f"✓ Found {result.total_matches_found} matches ({result.total_candidates_evaluated} evaluated)")

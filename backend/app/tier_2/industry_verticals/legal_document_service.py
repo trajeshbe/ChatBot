@@ -1,7 +1,7 @@
 """Legal Document Analyzer - Business Logic Service"""
 
 import logging
-from typing import List
+from typing import List, Any
 from sqlalchemy.orm import Session
 
 from app.tier_1.infrastructure.config import Settings
@@ -14,10 +14,11 @@ logger = logging.getLogger(__name__)
 class LegalDocumentService:
     """Service for legal document analysis"""
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
-        self.llm_service = LLMService(db, settings)
+        self.config = config or {}
+        self.llm_service = LLMService()
 
         # Import DocumentService for extracting legal documents
         from app.tier_1.document_processing.document_service import DocumentService
@@ -91,11 +92,17 @@ Return JSON array:
 Extract all important clauses. Return ONLY valid JSON array."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.1)
+            max_tokens = llm_config.get('max_tokens', 2000)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.1,
-                max_tokens=2000
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             clauses_data = json.loads(response.strip())
@@ -201,8 +208,15 @@ Type: {doc_type.value}
 
 Provide 2-3 sentences of expert legal analysis focusing on key considerations and recommended actions."""
 
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.3)
+
             response = await self.llm_service.generate_response(
-                prompt=prompt, model="gpt-4o-mini", temperature=0.3
+                prompt=prompt,
+                model=model,
+                temperature=temperature
             )
             return response.strip()
 

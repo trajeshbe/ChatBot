@@ -2,6 +2,7 @@ import { useState } from 'react'
 import axios from 'axios'
 import { Building2, TrendingUp, AlertCircle, Award, Clock, DollarSign, Star , Settings} from 'lucide-react'
 import POCConfigManager from '../../POCConfigManager'
+import FileUpload from '../../FileUpload'
 
 // Types matching backend schemas
 type VendorCategory =
@@ -218,6 +219,24 @@ export default function VendorRecommendationPanel() {
             />
           </div>
         )}
+
+      {/* Document Upload Section */}
+      <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <h3 className="text-lg font-semibold text-slate-800 mb-2">
+          🏢 Upload Vendor Data
+        </h3>
+        <p className="text-sm text-slate-600 mb-4">
+          Upload vendor profiles, capability statements, performance reports, or RFP responses for evaluation.
+        </p>
+        <FileUpload
+          hideProjectSelector={true}
+          compact={true}
+          metadata={{
+            company: 'procurement',
+            usecase: 'vendor_recommendation'
+          }}
+        />
+      </div>
 
       {/* Configuration Section */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6 space-y-6">

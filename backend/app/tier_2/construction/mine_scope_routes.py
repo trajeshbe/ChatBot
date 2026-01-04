@@ -7,11 +7,12 @@ REST endpoints for analyzing mining scope documents.
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .mine_scope_service import MineScopeService
 from .mine_scope_schemas import (
     MineScopeAnalysisRequest,
@@ -34,7 +35,7 @@ router = APIRouter(
 @router.post("/analyze", response_model=MineScopeAnalysisResponse)
 async def analyze_mining_scope(
     request: MineScopeAnalysisRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -82,7 +83,12 @@ async def analyze_mining_scope(
     try:
         logger.info(f"⛏️ Mining scope analysis request for document {request.document_id}")
 
-        service = MineScopeService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "mine_scope")
+        logger.info(f"✓ Loaded config for mine_scope")
+
+        # Initialize service with config
+        service = MineScopeService(db, settings, config=module_config)
         result = await service.analyze_scope(request)
 
         logger.info(f"✓ Analysis complete: {result.total_requirements} requirements, {result.total_risks} risks")

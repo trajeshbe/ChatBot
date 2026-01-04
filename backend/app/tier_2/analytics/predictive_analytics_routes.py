@@ -1,11 +1,12 @@
 """Predictive Analytics Engine - API Routes"""
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .predictive_analytics_service import PredictiveAnalyticsService
 from .predictive_analytics_schemas import *
 
@@ -16,12 +17,17 @@ router = APIRouter(prefix="/api/v1/modules/predictive-analytics", tags=["Predict
 @router.post("/forecast", response_model=ForecastResponse)
 async def generate_forecast(
     request: ForecastRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
     """Generate time series forecast with AI-powered analysis"""
     try:
-        service = PredictiveAnalyticsService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "predictive_analytics")
+        logger.info(f"✓ Loaded config for predictive_analytics")
+
+        # Initialize service with config
+        service = PredictiveAnalyticsService(db, settings, config=module_config)
         return await service.generate_forecast(request)
     except Exception as e:
         logger.error(f"Error in generate_forecast: {e}", exc_info=True)

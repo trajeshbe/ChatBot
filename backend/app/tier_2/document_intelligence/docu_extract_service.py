@@ -117,14 +117,19 @@ Return a valid JSON object with all 18 fields using these exact field names:
 Now analyze the document and extract the data.
 """
     
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
-        
+        self.config = config or {}
+
         # Initialize tier_1 services
-        self.llm_service = LLMService(db, settings)
+        self.llm_service = LLMService()
         self.vision_service = VisionService(db, settings)
         self.document_service = DocumentService(db, settings)
+
+        logger.info("✓ DocuExtractService initialized with tier_1 services")
+        if config:
+            logger.info(f"✓ Using module config with model: {config.get('llm', {}).get('default', {}).get('model', 'default')}")
         self.hybrid_service = HybridExtractionService(db, settings)
         self.ocr_service = OCRService(settings)
         

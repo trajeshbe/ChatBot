@@ -163,7 +163,8 @@ class DocumentService:
         team: Optional[str] = None,
         project_id: Optional[uuid.UUID] = None,
         minio_path: Optional[str] = None,
-        user_role: Optional[str] = None
+        user_role: Optional[str] = None,
+        metadata: Optional[dict] = None
     ) -> Document:
         """
         Upload file to MinIO and create database record
@@ -181,6 +182,7 @@ class DocumentService:
             team: User's team
             project_id: Project ID
             minio_path: Hierarchical MinIO path (dept/team/user/project/file)
+            metadata: Optional custom metadata (e.g., company, usecase for POCs)
         """
         if not self._initialized:
             await self.initialize()
@@ -222,7 +224,8 @@ class DocumentService:
                 department=department,
                 team=team,
                 user_role=user_role,  # Add user role
-                project_id=project_id  # Added: link to project
+                project_id=project_id,  # Added: link to project
+                meta_info=metadata if metadata else {}  # Store POC metadata (company, usecase)
             )
 
             if db:
@@ -301,7 +304,8 @@ class DocumentService:
         user_id: Optional[uuid.UUID] = None,
         department: Optional[str] = None,
         team: Optional[str] = None,
-        project_id: Optional[uuid.UUID] = None
+        project_id: Optional[uuid.UUID] = None,
+        metadata: Optional[dict] = None
     ) -> List[DocumentChunk]:
         """
         Process document and create embeddings
@@ -313,6 +317,7 @@ class DocumentService:
             department: User's department
             team: User's team
             project_id: Project ID
+            metadata: Optional custom metadata to propagate to chunks (company, usecase)
         """
         if not self._initialized:
             await self.initialize()
@@ -598,6 +603,11 @@ class DocumentService:
                     'source_url': document.source_url
                 })
 
+                # Merge custom metadata (company, usecase) with source_info
+                chunk_meta_info = chunk_data['source_info'].copy()
+                if metadata:
+                    chunk_meta_info.update(metadata)  # Add company, usecase, etc.
+
                 # Create DocumentChunk record
                 chunk_record = DocumentChunk(
                     document_id=document_id,
@@ -612,7 +622,7 @@ class DocumentService:
                     # Strategy and metadata
                     embedding_strategy=embedding_strategy,
                     embedding_metadata=chunk_data['embedding_metadata'],
-                    meta_info=chunk_data['source_info'],
+                    meta_info=chunk_meta_info,  # Include POC metadata
                     # Project/user info
                     project_id=project_id,
                     uploaded_by=user_id,

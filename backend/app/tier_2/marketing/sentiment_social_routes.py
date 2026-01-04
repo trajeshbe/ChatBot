@@ -7,11 +7,12 @@ REST endpoints for social media sentiment analysis and brand monitoring.
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .sentiment_social_service import SentimentSocialService
 from .sentiment_social_schemas import (
     SentimentSocialRequest,
@@ -32,7 +33,7 @@ router = APIRouter(
 @router.post("/analyze", response_model=SentimentSocialResponse)
 async def analyze_social_sentiment(
     request: SentimentSocialRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -107,7 +108,12 @@ async def analyze_social_sentiment(
     try:
         logger.info(f"📱 Social sentiment request for {len(request.posts)} posts")
 
-        service = SentimentSocialService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "sentiment_social")
+        logger.info(f"✓ Loaded config for sentiment_social")
+
+        # Initialize service with config
+        service = SentimentSocialService(db, settings, config=module_config)
         result = await service.analyze_social_sentiment(request)
 
         logger.info(f"✓ Analyzed {result.total_posts_analyzed} posts: {result.overall_sentiment.value}")

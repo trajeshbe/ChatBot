@@ -7,11 +7,12 @@ REST endpoints for agronomy decision support and farm management recommendations
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .agronomy_decision_service import AgronomyDecisionService
 from .agronomy_decision_schemas import (
     AgronomyDecisionRequest,
@@ -32,7 +33,7 @@ router = APIRouter(
 @router.post("/analyze", response_model=AgronomyDecisionResponse)
 async def analyze_agronomy_decisions(
     request: AgronomyDecisionRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -94,7 +95,12 @@ async def analyze_agronomy_decisions(
     try:
         logger.info(f"🌾 Agronomy decision request for {len(request.decision_types)} decision types")
 
-        service = AgronomyDecisionService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "agronomy_decision")
+        logger.info(f"✓ Loaded config for agronomy_decision")
+
+        # Initialize service with config
+        service = AgronomyDecisionService(db, settings, config=module_config)
         result = await service.make_decisions(request)
 
         logger.info(f"✓ Generated {len(result.analyses)} analyses with {result.critical_actions_count} critical actions")

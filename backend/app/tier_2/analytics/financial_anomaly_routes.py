@@ -1,11 +1,12 @@
 """Financial Anomaly Detector - API Routes"""
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .financial_anomaly_service import FinancialAnomalyService
 from .financial_anomaly_schemas import *
 
@@ -16,12 +17,17 @@ router = APIRouter(prefix="/api/v1/modules/financial-anomaly", tags=["Financial 
 @router.post("/detect", response_model=DetectAnomaliesResponse)
 async def detect_anomalies(
     request: DetectAnomaliesRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
     """Detect financial anomalies with AI-powered analysis"""
     try:
-        service = FinancialAnomalyService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "financial_anomaly")
+        logger.info(f"✓ Loaded config for financial_anomaly")
+
+        # Initialize service with config
+        service = FinancialAnomalyService(db, settings, config=module_config)
         return await service.detect_anomalies(request)
     except Exception as e:
         logger.error(f"Error in detect_anomalies: {e}", exc_info=True)

@@ -55,6 +55,8 @@ export default function FinancialAnomalyPanel() {
 
     const formData = new FormData()
     formData.append('file', file)
+    formData.append('company', 'analytics')
+    formData.append('usecase', 'financial_anomaly')
 
     try {
       const response = await axios.post<AnomalyDetectionResponse>(

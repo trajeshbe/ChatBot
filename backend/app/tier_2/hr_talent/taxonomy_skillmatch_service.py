@@ -32,11 +32,12 @@ logger = logging.getLogger(__name__)
 class TaxonomySkillmatchService:
     """Service for skill taxonomy and matching"""
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
+        self.config = config or {}
         # Tier 1 service dependencies
-        self.llm_service = LLMService(db, settings)
+        self.llm_service = LLMService()
 
         # Import DocumentService for extracting skills from documents
         from app.tier_1.document_processing.document_service import DocumentService
@@ -46,6 +47,8 @@ class TaxonomySkillmatchService:
         self.taxonomy: Dict[str, TaxonomyNode] = {}
 
         logger.info("✓ TaxonomySkillmatchService initialized with tier_1 services")
+        if config:
+            logger.info(f"✓ Using module config with model: {config.get(\'llm\', {}).get(\'default\', {}).get(\'model\', \'default\')}")
 
     async def _load_taxonomy_from_documents(self, session_id: Optional[str] = None) -> Dict[str, TaxonomyNode]:
         """Load skill taxonomy from uploaded job descriptions and competency frameworks"""
@@ -112,11 +115,17 @@ Return JSON array:
 Extract 20+ skills. Return ONLY valid JSON array."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.1)
+            max_tokens = llm_config.get('max_tokens', 1500)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.1,
-                max_tokens=1500
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             skills = json.loads(response.strip())
@@ -284,11 +293,17 @@ If no good match, return {{"mapped_skill": null}}
 Return ONLY valid JSON."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.0)
+            max_tokens = llm_config.get('max_tokens', 100)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.0,
-                max_tokens=100
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             result = json.loads(response.strip())

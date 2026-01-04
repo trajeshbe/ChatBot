@@ -49,15 +49,18 @@ class MatcherService:
     8. Confidence Scoring → Calculate overall match confidence
     """
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
+        self.config = config or {}
 
         # Tier 1 service dependencies
-        self.llm_service = LLMService(db, settings)
+        self.llm_service = LLMService()
         self.document_service = DocumentService(db, settings)
 
         logger.info("✓ MatcherService initialized with tier_1 services")
+        if config:
+            logger.info(f"✓ Using module config with model: {config.get(\'llm\', {}).get(\'default\', {}).get(\'model\', \'default\')}")
 
     async def match_po_to_invoice(
         self,
@@ -182,11 +185,17 @@ Return JSON:
 
 Return ONLY valid JSON."""
 
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.0)
+            max_tokens = llm_config.get('max_tokens', 1000)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.0,
-                max_tokens=1000
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             data = json.loads(response.strip())
@@ -269,11 +278,17 @@ Return JSON:
 
 Return ONLY valid JSON."""
 
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.0)
+            max_tokens = llm_config.get('max_tokens', 1000)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.0,
-                max_tokens=1000
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             data = json.loads(response.strip())

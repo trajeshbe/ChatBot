@@ -9,9 +9,10 @@ from .code_analysis_schemas import *
 logger = logging.getLogger(__name__)
 
 class CodeAnalysisService:
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
+        self.config = config or {}
         self.llm_service = LLMService()
 
     async def analyze_code(self, request: AnalyzeCodeRequest) -> AnalyzeCodeResponse:

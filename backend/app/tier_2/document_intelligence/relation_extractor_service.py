@@ -48,18 +48,21 @@ class RelationExtractorService:
     6. Validation → Confidence filtering
     """
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
+        self.config = config or {}
 
         # Tier 1 service dependencies
-        self.llm_service = LLMService(db, settings)
+        self.llm_service = LLMService()
         self.vision_service = VisionService(db, settings)
         self.document_service = DocumentService(db, settings)
         self.hybrid_service = HybridExtractionService(db, settings)
         self.ocr_service = OCRService(settings)
 
         logger.info("✓ RelationExtractorService initialized with tier_1 services")
+        if config:
+            logger.info(f"✓ Using module config with model: {config.get(\'llm\', {}).get(\'default\', {}).get(\'model\', \'default\')}")
 
     async def extract_relations(
         self,

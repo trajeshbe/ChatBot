@@ -7,11 +7,12 @@ REST endpoints for spending pattern analysis and cost optimization.
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .spend_smart_service import SpendSmartService
 from .spend_smart_schemas import (
     SpendAnalysisRequest,
@@ -32,7 +33,7 @@ router = APIRouter(
 @router.post("/analyze", response_model=SpendAnalysisResponse)
 async def analyze_spending(
     request: SpendAnalysisRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -60,7 +61,12 @@ async def analyze_spending(
     try:
         logger.info(f"💰 Spend analysis request for {request.time_period_months} months")
 
-        service = SpendSmartService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "spend_smart")
+        logger.info(f"✓ Loaded config for spend_smart")
+
+        # Initialize service with config
+        service = SpendSmartService(db, settings, config=module_config)
         result = await service.analyze_spending(request)
 
         logger.info(f"✓ Analysis complete: ${result.total_spend:,.2f} spend, ${result.total_potential_savings:,.2f} potential savings")

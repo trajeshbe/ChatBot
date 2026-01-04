@@ -30,17 +30,20 @@ logger = logging.getLogger(__name__)
 class TalentSearchService:
     """Service for AI-powered talent search and matching"""
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
+        self.config = config or {}
         # Tier 1 service dependencies
-        self.llm_service = LLMService(db, settings)
+        self.llm_service = LLMService()
 
         # Import DocumentService for extracting candidate profiles
         from app.tier_1.document_processing.document_service import DocumentService
         self.document_service = DocumentService(db, settings)
 
         logger.info("✓ TalentSearchService initialized with tier_1 services")
+        if config:
+            logger.info(f"✓ Using module config with model: {config.get(\'llm\', {}).get(\'default\', {}).get(\'model\', \'default\')}")
 
     async def search_talent(self, request: TalentSearchRequest) -> TalentSearchResponse:
         """
@@ -356,11 +359,17 @@ Job Description (first 1000 chars):
 Respond with ONLY a number between 0 and 100 representing the match score."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.0)
+            max_tokens = llm_config.get('max_tokens', 10)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.0,
-                max_tokens=10
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
             score = float(response.strip())
             return max(0.0, min(100.0, score))
@@ -506,11 +515,17 @@ Return JSON:
 Return ONLY valid JSON."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.0)
+            max_tokens = llm_config.get('max_tokens', 1000)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.0,
-                max_tokens=1000
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             data = json.loads(response.strip())

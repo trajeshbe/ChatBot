@@ -4,11 +4,12 @@ AI-powered maritime logistics optimization with route planning, port scheduling,
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .maritime_logistics_service import MaritimeLogisticsService
 from .maritime_logistics_schemas import (
     OptimizeRouteRequest,
@@ -29,7 +30,7 @@ router = APIRouter(prefix="/api/v1/modules/maritime-logistics", tags=["Maritime 
 @router.post("/optimize", response_model=OptimizeRouteResponse)
 async def optimize_route(
     request: OptimizeRouteRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
     """
@@ -96,7 +97,12 @@ async def optimize_route(
     ```
     """
     try:
-        service = MaritimeLogisticsService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "maritime_logistics")
+        logger.info(f"✓ Loaded config for maritime_logistics")
+
+        # Initialize service with config
+        service = MaritimeLogisticsService(db, settings, config=module_config)
         result = await service.optimize_route(request)
         return result
     except Exception as e:
@@ -107,7 +113,7 @@ async def optimize_route(
 @router.post("/search", response_model=SearchRoutesResponse)
 async def search_routes(
     request: SearchRoutesRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
     """
@@ -135,7 +141,12 @@ async def search_routes(
     ```
     """
     try:
-        service = MaritimeLogisticsService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "maritime_logistics")
+        logger.info(f"✓ Loaded config for maritime_logistics")
+
+        # Initialize service with config
+        service = MaritimeLogisticsService(db, settings, config=module_config)
         result = await service.search_routes(request)
         return result
     except Exception as e:
@@ -146,7 +157,7 @@ async def search_routes(
 @router.post("/export", response_model=ExportRoutesResponse)
 async def export_routes(
     request: ExportRoutesRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
     """
@@ -178,7 +189,12 @@ async def export_routes(
     ```
     """
     try:
-        service = MaritimeLogisticsService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "maritime_logistics")
+        logger.info(f"✓ Loaded config for maritime_logistics")
+
+        # Initialize service with config
+        service = MaritimeLogisticsService(db, settings, config=module_config)
         result = await service.export_routes(request)
         return result
     except Exception as e:
@@ -188,7 +204,7 @@ async def export_routes(
 
 @router.get("/stats", response_model=MaritimeStatsResponse)
 async def get_stats(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
     """
@@ -225,7 +241,12 @@ async def get_stats(
     ```
     """
     try:
-        service = MaritimeLogisticsService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "maritime_logistics")
+        logger.info(f"✓ Loaded config for maritime_logistics")
+
+        # Initialize service with config
+        service = MaritimeLogisticsService(db, settings, config=module_config)
         result = await service.get_stats()
         return result
     except Exception as e:
@@ -235,7 +256,7 @@ async def get_stats(
 
 @router.get("/status", response_model=StatusResponse)
 async def get_status(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
     """
@@ -268,7 +289,12 @@ async def get_status(
     ```
     """
     try:
-        service = MaritimeLogisticsService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "maritime_logistics")
+        logger.info(f"✓ Loaded config for maritime_logistics")
+
+        # Initialize service with config
+        service = MaritimeLogisticsService(db, settings, config=module_config)
         result = await service.get_status()
         return result
     except Exception as e:

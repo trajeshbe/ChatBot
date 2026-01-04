@@ -1,9 +1,10 @@
 """Multilingual Content Translator - API Routes"""
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .multilingual_translator_service import MultilingualTranslatorService
 from .multilingual_translator_schemas import *
 
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/api/v1/modules/multilingual-translator", tags=["Mult
 @router.post("/translate", response_model=TranslateResponse)
 async def translate_content(
     request: TranslateRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """Translate content into multiple target languages with quality assessment"""
@@ -26,7 +27,7 @@ async def translate_content(
 @router.post("/search", response_model=SearchTranslationsResponse)
 async def search_translations(
     request: SearchTranslationsRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """Search historical translations"""
@@ -38,7 +39,7 @@ async def search_translations(
 @router.post("/export", response_model=ExportTranslationsResponse)
 async def export_translations(
     request: ExportTranslationsRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """Export translations in specified format"""
@@ -49,7 +50,7 @@ async def export_translations(
 
 @router.get("/stats", response_model=TranslationStatsResponse)
 async def get_stats(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """Get translation statistics"""
@@ -60,7 +61,7 @@ async def get_stats(
 
 @router.get("/status", response_model=StatusResponse)
 async def get_status(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """Get service status and capabilities"""

@@ -67,6 +67,8 @@ export default function SalesPerformancePanel() {
 
     const formData = new FormData()
     formData.append('file', file)
+    formData.append('company', 'analytics')
+    formData.append('usecase', 'sales_performance')
 
     try {
       const response = await axios.post<SalesPerformanceResponse>(

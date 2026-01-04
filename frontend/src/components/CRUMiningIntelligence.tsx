@@ -2,6 +2,7 @@ import { useState } from 'react'
 import axios from 'axios'
 import { Settings } from 'lucide-react'
 import POCConfigManager from './POCConfigManager'
+import FileUpload from './FileUpload'
 
 interface Source {
   document_id: string
@@ -164,6 +165,25 @@ export default function CRUMiningIntelligence() {
             />
           </div>
         )}
+
+        {/* Mining Documents Upload Section */}
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+          <h2 className="text-xl font-semibold text-slate-800 mb-2">
+            📄 Upload Mining Documents
+          </h2>
+          <p className="text-sm text-slate-600 mb-4">
+            Upload mining reports, feasibility studies, drilling data, or technical documents.
+            Files will be automatically processed and made searchable across all pipelines.
+          </p>
+          <FileUpload
+            hideProjectSelector={true}
+            compact={true}
+            metadata={{
+              company: 'cru',
+              usecase: 'mining_intelligence'
+            }}
+          />
+        </div>
 
         {/* Pipeline badges */}
         <div className="mb-6">

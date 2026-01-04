@@ -7,11 +7,12 @@ REST endpoints for PO-to-invoice matching and reconciliation.
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any, List
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .matcher_service import MatcherService
 from .matcher_schemas import (
     POMatchRequest,
@@ -36,7 +37,7 @@ router = APIRouter(
 @router.post("/match", response_model=POMatchResponse)
 async def match_po_to_invoice(
     request: POMatchRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -105,7 +106,12 @@ async def match_po_to_invoice(
     try:
         logger.info(f"💼 PO-to-invoice match request")
 
-        service = MatcherService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "matcher")
+        logger.info(f"✓ Loaded config for matcher")
+
+        # Initialize service with config
+        service = MatcherService(db, settings, config=module_config)
         result = await service.match_po_to_invoice(request)
 
         logger.info(f"✓ Match complete: {result.match_status.value}")
@@ -128,7 +134,7 @@ async def match_po_to_invoice(
 @router.post("/match/bulk", response_model=BulkMatchResponse)
 async def bulk_match(
     request: BulkMatchRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Bulk match multiple POs to invoices.
@@ -193,7 +199,7 @@ async def bulk_match(
 @router.post("/search")
 async def search_matches(
     request: SearchMatchesRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Search for historical matches.
@@ -262,7 +268,7 @@ async def search_matches(
 @router.post("/export")
 async def export_matches(
     request: ExportMatchesRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Export matches in various formats.
@@ -339,7 +345,7 @@ async def export_matches(
 async def get_matcher_stats(
     session_id: str = None,
     project_id: str = None,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Get matcher statistics and analytics.
@@ -408,7 +414,7 @@ async def get_matcher_stats(
 @router.post("/approve", response_model=ApprovalDecisionResponse)
 async def approve_match(
     request: ApprovalDecisionRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Approve or reject a match.

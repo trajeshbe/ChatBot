@@ -7,7 +7,7 @@ import logging
 import json
 import uuid
 import statistics
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
@@ -21,10 +21,13 @@ logger = logging.getLogger(__name__)
 class PredictiveAnalyticsService:
     """Service for predictive analytics and forecasting"""
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
-        self.llm_service = LLMService(db, settings)
+        self.config = config or {}
+        self.llm_service = LLMService()
+        if config:
+            logger.info(f"✓ Using module config with model: {config.get('llm', {}).get('default', {}).get('model', 'default')}")
 
     async def generate_forecast(self, request: ForecastRequest) -> ForecastResponse:
         """Generate time series forecast with AI analysis"""
@@ -252,8 +255,13 @@ Model Accuracy: {performance.accuracy_score}%
 
 Provide 2-3 sentences of expert insights about this forecast."""
 
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.3)
+
             response = await self.llm_service.generate_response(
-                prompt=prompt, model="gpt-4o-mini", temperature=0.3
+                prompt=prompt, model=model, temperature=temperature
             )
             return response.strip()
 

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import axios from 'axios'
 import { Heart, Upload, AlertTriangle , Settings} from 'lucide-react'
 import POCConfigManager from '../../POCConfigManager'
+import FileUpload from '../../FileUpload'
 
 interface HealthcareDiagnosticsPanelResponse {
   results: any
@@ -10,23 +11,15 @@ interface HealthcareDiagnosticsPanelResponse {
 }
 
 export default function HealthcareDiagnosticsPanel() {
-  const [file, setFile] = useState<File | null>(null)
   const [showConfig, setShowConfig] = useState(false)
   const [textInput, setTextInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<HealthcareDiagnosticsPanelResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0])
-      setError(null)
-    }
-  }
-
   const handleSubmit = async () => {
-    if (!file && !textInput.trim()) {
-      setError('Please upload a file or enter text')
+    if (!textInput.trim()) {
+      setError('Please enter a query or analysis request')
       return
     }
 
@@ -35,18 +28,10 @@ export default function HealthcareDiagnosticsPanel() {
     setResult(null)
 
     try {
-      const formData = new FormData()
-      if (file) {
-        formData.append('file', file)
-      }
-      if (textInput.trim()) {
-        formData.append('text', textInput)
-      }
-
       const response = await axios.post<HealthcareDiagnosticsPanelResponse>(
         'http://localhost:8000/api/v1/modules/healthcare-diagnostics/analyze',
-        formData,
-        { headers: { 'Content-Type': 'multipart/form-data' } }
+        { text: textInput },
+        { headers: { 'Content-Type': 'application/json' } }
       )
       setResult(response.data)
     } catch (err: any) {
@@ -88,43 +73,37 @@ export default function HealthcareDiagnosticsPanel() {
           </div>
         )}
 
-      {/* Input Section */}
+      {/* Document Upload Section */}
+      <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <h3 className="text-lg font-semibold text-slate-800 mb-2">
+          🏥 Upload Medical Documents
+        </h3>
+        <p className="text-sm text-slate-600 mb-4">
+          Upload medical records, lab results, or diagnostic reports (anonymized).
+        </p>
+        <FileUpload
+          hideProjectSelector={true}
+          compact={true}
+          metadata={{
+            company: 'healthcare',
+            usecase: 'diagnostics'
+          }}
+        />
+      </div>
+
+      {/* Query Input Section */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4">Upload Data or Enter Text</h2>
-
-        {/* File Upload */}
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-red-400 transition-colors mb-4">
-          <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <label className="cursor-pointer">
-            <span className="text-red-600 hover:text-red-700 font-medium">
-              Click to upload
-            </span>
-            <span className="text-gray-600"> or drag and drop</span>
-            <input
-              type="file"
-              accept=".csv,.pdf,.txt"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-          </label>
-          <p className="text-sm text-gray-500 mt-2">PDF, CSV, or TXT files</p>
-        </div>
-
-        {file && (
-          <p className="mt-3 text-sm text-gray-700 mb-4">
-            Selected: <span className="font-medium">{file.name}</span>
-          </p>
-        )}
+        <h2 className="text-xl font-semibold mb-4">Enter Query or Analysis Request</h2>
 
         {/* Text Input */}
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Or enter text directly
+            Enter your diagnostic query or analysis request
           </label>
           <textarea
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
-            placeholder="Enter your data or query here..."
+            placeholder="e.g., Analyze uploaded medical records for diagnostic insights..."
             rows={4}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
           />

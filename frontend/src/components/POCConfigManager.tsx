@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import ModelSelector from './ModelSelector';
 
 interface POCConfigManagerProps {
   moduleName: string;
@@ -330,16 +331,6 @@ const ModelsTab: React.FC<{ config: ModuleConfig; updateConfig: (path: string, v
   updateConfig
 }) => {
   const llmConfig = config.llm || {};
-  const availableModels = [
-    'gpt-4o-mini',
-    'gpt-4',
-    'gpt-4-turbo',
-    'claude-3-5-sonnet-20241022',
-    'claude-3-opus',
-    'claude-3-sonnet',
-    'mistral-large',
-    'llama3.1'
-  ];
 
   return (
     <div className="space-y-6">
@@ -352,15 +343,13 @@ const ModelsTab: React.FC<{ config: ModuleConfig; updateConfig: (path: string, v
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Model</label>
-              <select
-                value={stageConfig.model || 'gpt-4o-mini'}
-                onChange={(e) => updateConfig(`llm.${stage}.model`, e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                {availableModels.map(model => (
-                  <option key={model} value={model}>{model}</option>
-                ))}
-              </select>
+              <ModelSelector
+                selectedModel={stageConfig.model || 'gpt-4o-mini'}
+                onModelChange={(modelId) => updateConfig(`llm.${stage}.model`, modelId)}
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                💡 Select from all available models including proprietary (OpenAI, Claude), local GPU/CPU (Ollama), and fine-tuned models
+              </p>
             </div>
 
             <div>
@@ -380,6 +369,22 @@ const ModelsTab: React.FC<{ config: ModuleConfig; updateConfig: (path: string, v
             </div>
 
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Top P (Nucleus Sampling): {stageConfig.top_p !== undefined ? stageConfig.top_p : 0.95}
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={stageConfig.top_p !== undefined ? stageConfig.top_p : 0.95}
+                onChange={(e) => updateConfig(`llm.${stage}.top_p`, parseFloat(e.target.value))}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500 mt-1">Consider tokens with top P cumulative probability</p>
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Max Tokens</label>
               <input
                 type="number"
@@ -389,6 +394,38 @@ const ModelsTab: React.FC<{ config: ModuleConfig; updateConfig: (path: string, v
                 onChange={(e) => updateConfig(`llm.${stage}.max_tokens`, parseInt(e.target.value))}
                 className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Frequency Penalty: {stageConfig.frequency_penalty !== undefined ? stageConfig.frequency_penalty : 0.0}
+              </label>
+              <input
+                type="range"
+                min="-2"
+                max="2"
+                step="0.1"
+                value={stageConfig.frequency_penalty !== undefined ? stageConfig.frequency_penalty : 0.0}
+                onChange={(e) => updateConfig(`llm.${stage}.frequency_penalty`, parseFloat(e.target.value))}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500 mt-1">Positive values reduce repetition of frequent tokens</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Presence Penalty: {stageConfig.presence_penalty !== undefined ? stageConfig.presence_penalty : 0.0}
+              </label>
+              <input
+                type="range"
+                min="-2"
+                max="2"
+                step="0.1"
+                value={stageConfig.presence_penalty !== undefined ? stageConfig.presence_penalty : 0.0}
+                onChange={(e) => updateConfig(`llm.${stage}.presence_penalty`, parseFloat(e.target.value))}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500 mt-1">Positive values encourage new topics</p>
             </div>
           </div>
         </div>

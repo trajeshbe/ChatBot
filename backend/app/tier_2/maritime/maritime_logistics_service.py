@@ -39,10 +39,11 @@ logger = logging.getLogger(__name__)
 class MaritimeLogisticsService:
     """Service for maritime logistics optimization using AI"""
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
-        self.llm_service = LLMService(db, settings)
+        self.config = config or {}
+        self.llm_service = LLMService()
 
     async def optimize_route(
         self, request: OptimizeRouteRequest
@@ -440,8 +441,15 @@ Metrics:
 
 Provide 3-4 sentences of expert insights about this route optimization, including strengths and potential concerns."""
 
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.3)
+
             response = await self.llm_service.generate_response(
-                prompt=prompt, model="gpt-4o-mini", temperature=0.3
+                prompt=prompt,
+                model=model,
+                temperature=temperature
             )
 
             return response.strip()

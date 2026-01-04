@@ -7,11 +7,12 @@ REST endpoints for skill taxonomy mapping and matching.
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .taxonomy_skillmatch_service import TaxonomySkillmatchService
 from .taxonomy_skillmatch_schemas import (
     SkillTaxonomyRequest,
@@ -34,7 +35,7 @@ router = APIRouter(
 @router.post("/taxonomy/map", response_model=SkillTaxonomyResponse)
 async def map_skills_to_taxonomy(
     request: SkillTaxonomyRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -58,7 +59,12 @@ async def map_skills_to_taxonomy(
     try:
         logger.info(f"📚 Taxonomy mapping for {len(request.skills)} skills")
 
-        service = TaxonomySkillmatchService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "taxonomy_skillmatch")
+        logger.info(f"✓ Loaded config for taxonomy_skillmatch")
+
+        # Initialize service with config
+        service = TaxonomySkillmatchService(db, settings, config=module_config)
         result = await service.map_skills_to_taxonomy(request)
 
         logger.info(f"✓ Mapped {len(result.mappings)} skills ({result.taxonomy_coverage_percent:.1f}% coverage)")
@@ -75,7 +81,7 @@ async def map_skills_to_taxonomy(
 @router.post("/skillsets/match", response_model=SkillMatchResponse)
 async def match_skillsets(
     request: SkillMatchRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -108,7 +114,12 @@ async def match_skillsets(
     try:
         logger.info(f"🔄 Skillset matching")
 
-        service = TaxonomySkillmatchService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "taxonomy_skillmatch")
+        logger.info(f"✓ Loaded config for taxonomy_skillmatch")
+
+        # Initialize service with config
+        service = TaxonomySkillmatchService(db, settings, config=module_config)
         result = await service.match_skillsets(request)
 
         logger.info(f"✓ Match complete: {result.match_result.match_percentage:.1f}% ({result.match_quality})")

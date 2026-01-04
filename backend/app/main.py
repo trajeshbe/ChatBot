@@ -351,9 +351,16 @@ async def upload_file(
     file: UploadFile = File(...),
     session_id: Optional[str] = Form(None),
     project_id: Optional[str] = Form(None),  # Link upload to project
+    company: Optional[str] = Form(None),  # POC-specific: company identifier
+    usecase: Optional[str] = Form(None),  # POC-specific: use case identifier
     db: AsyncSession = Depends(get_db)
 ):
-    """Upload a file for processing and associate with session"""
+    """Upload a file for processing and associate with session
+
+    Optional POC metadata:
+    - company: Company identifier for POC filtering (e.g., 'british_council')
+    - usecase: Use case identifier (e.g., 'course_recommendation')
+    """
     import time
     import uuid
     from app.tier_1.infrastructure.security import get_current_user_from_request
@@ -526,6 +533,15 @@ async def upload_file(
             project_uuid = None
         logger.info(f"📁 Converted to project_uuid: {project_uuid}")
 
+        # Build POC metadata (for filtering in tier2/tier3 modules)
+        poc_metadata = {}
+        if company:
+            poc_metadata['company'] = company
+            logger.info(f"🏢 POC Company: {company}")
+        if usecase:
+            poc_metadata['usecase'] = usecase
+            logger.info(f"🎯 POC Use Case: {usecase}")
+
         document = await document_service.upload_file(
             file_data=file_data,
             filename=file.filename,
@@ -537,7 +553,8 @@ async def upload_file(
             team=team_name,
             project_id=project_uuid,
             minio_path=minio_path,
-            user_role=current_user.role if current_user else None
+            user_role=current_user.role if current_user else None,
+            metadata=poc_metadata if poc_metadata else None  # Pass POC metadata
         )
 
         logger.info(f"Document created: {document.id} - {document.filename}")
@@ -551,7 +568,8 @@ async def upload_file(
                 user_id=user_id,
                 department=department_name,
                 team=team_name,
-                project_id=project_uuid
+                project_id=project_uuid,
+                metadata=poc_metadata if poc_metadata else None  # Pass POC metadata to chunks
             )
             logger.info(f"Document processed: {len(chunks)} chunks created")
 
@@ -2480,14 +2498,14 @@ except Exception as e:
 # British Council POC
 try:
     from app.tier_3 import tier3_registry
-    from app.tier_3.customer_solutions.british_council_routes import router as british_council_router
+    from app.api.routes.british_council_routes import router as british_council_router
 
     tier3_registry.register(
         module_id="british-council",
         name="British Council POC",
-        description="Educational content delivery and assessment platform",
+        description="Course recommendation platform with hybrid semantic + profile matching",
         customer="British Council",
-        tier_2_dependencies=["educational-content", "generic-rag", "multilingual-translator"]
+        tier_2_dependencies=["generic-rag"]
     )
     tier3_registry.enable("british-council")
     app.include_router(british_council_router)

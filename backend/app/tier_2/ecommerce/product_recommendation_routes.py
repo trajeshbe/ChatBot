@@ -7,11 +7,12 @@ REST endpoints for AI-powered product recommendation engine.
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .product_recommendation_service import ProductRecommendationService
 from .product_recommendation_schemas import (
     ProductRecommendationRequest,
@@ -32,7 +33,7 @@ router = APIRouter(
 @router.post("/recommend", response_model=ProductRecommendationResponse)
 async def recommend_products(
     request: ProductRecommendationRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -103,7 +104,12 @@ async def recommend_products(
     try:
         logger.info(f"🛍️ Product recommendation for {len(request.product_catalog)} products")
 
-        service = ProductRecommendationService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "product_recommendation")
+        logger.info(f"✓ Loaded config for product_recommendation")
+
+        # Initialize service with config
+        service = ProductRecommendationService(db, settings, config=module_config)
         result = await service.recommend_products(request)
 
         logger.info(f"✓ Generated {result.metrics.recommendations_generated} recommendations")

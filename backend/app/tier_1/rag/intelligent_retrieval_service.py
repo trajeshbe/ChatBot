@@ -359,7 +359,8 @@ Respond with ONLY a JSON object (no markdown, no code blocks):
             )
         )
 
-        chunks = db.execute(stmt).scalars().all()
+        result = await db.execute(stmt)
+        chunks = result.scalars().all()
         total_searched = len(chunks)
 
         if total_searched == 0:
@@ -387,7 +388,8 @@ Respond with ONLY a JSON object (no markdown, no code blocks):
                 )
             )
 
-            chunks = db.execute(stmt).scalars().all()
+            result = await db.execute(stmt)
+            chunks = result.scalars().all()
             total_searched = len(chunks)
             vector_column = "embedding"
 
@@ -523,7 +525,8 @@ Respond with ONLY a JSON object (no markdown, no code blocks):
                 )
             )
 
-            chunks = db.execute(stmt).scalars().all()
+            result = await db.execute(stmt)
+            chunks = result.scalars().all()
 
             # Calculate similarities
             results = []
@@ -576,6 +579,67 @@ Respond with ONLY a JSON object (no markdown, no code blocks):
             "strategy_results": all_results,
             "strategies_used": strategies_used
         }
+
+    async def intelligent_search(
+        self,
+        query_text: Optional[str] = None,
+        query: Optional[str] = None,
+        db: Optional[Session] = None,
+        company: Optional[str] = None,
+        usecase: Optional[str] = None,
+        top_k: int = 5,
+        session_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Backward-compatible wrapper around retrieve() method.
+
+        This method exists for compatibility with POC modules that were written
+        against an older API. New code should use retrieve() directly.
+
+        Args:
+            query_text: Query string (alternative to 'query')
+            query: Query string (alternative to 'query_text')
+            db: Database session
+            company: Company filter (applied to metadata)
+            usecase: Use case filter (applied to metadata)
+            top_k: Number of results
+            session_id: Session ID for filtering
+
+        Returns:
+            List of result dicts with 'content', 'metadata', 'similarity' fields
+        """
+        # Handle both query and query_text parameters
+        q = query_text or query
+        if not q:
+            raise ValueError("Either 'query' or 'query_text' must be provided")
+
+        if not db:
+            raise ValueError("Database session 'db' is required")
+
+        # Call the main retrieve method
+        response = await self.retrieve(
+            query=q,
+            db=db,
+            top_k=top_k * 2 if (company or usecase) else top_k,  # Get more if filtering
+            session_id=session_id
+        )
+
+        # Extract results
+        results = response.get("results", [])
+
+        # Apply company/usecase filtering if specified
+        if company or usecase:
+            filtered = []
+            for result in results:
+                metadata = result.get("metadata", {})
+                if company and metadata.get("company") != company:
+                    continue
+                if usecase and metadata.get("usecase") != usecase:
+                    continue
+                filtered.append(result)
+            results = filtered[:top_k]
+
+        return results
 
 
 # Singleton instance

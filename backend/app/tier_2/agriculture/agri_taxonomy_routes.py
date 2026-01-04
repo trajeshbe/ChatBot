@@ -7,11 +7,12 @@ REST endpoints for agricultural crop classification and taxonomy.
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .agri_taxonomy_service import AgriTaxonomyService
 from .agri_taxonomy_schemas import (
     TaxonomyClassificationRequest,
@@ -32,7 +33,7 @@ router = APIRouter(
 @router.post("/classify", response_model=TaxonomyClassificationResponse)
 async def classify_crops(
     request: TaxonomyClassificationRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -58,7 +59,12 @@ async def classify_crops(
     try:
         logger.info(f"🌾 Crop classification request for {len(request.crop_names)} crops")
 
-        service = AgriTaxonomyService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "agri_taxonomy")
+        logger.info(f"✓ Loaded config for agri_taxonomy")
+
+        # Initialize service with config
+        service = AgriTaxonomyService(db, settings, config=module_config)
         result = await service.classify_crops(request)
 
         logger.info(f"✓ Classified {len(result.classifications)} crops ({result.taxonomy_coverage_percent:.1f}% coverage)")

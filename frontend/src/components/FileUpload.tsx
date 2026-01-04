@@ -33,6 +33,7 @@ interface FileUploadProps {
   onUploadComplete?: () => void  // ✅ Callback after upload
   hideProjectSelector?: boolean  // ✅ Hide internal project selector when parent manages it
   compact?: boolean  // ✅ Compact mode for scaled contexts (smaller icons, less padding)
+  metadata?: Record<string, string>  // ✅ Custom metadata (company, usecase for POCs)
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -56,7 +57,8 @@ export default function FileUpload({
   projectId: externalProjectId,
   onUploadComplete,
   hideProjectSelector = false,
-  compact = false
+  compact = false,
+  metadata
 }: FileUploadProps) {
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [sessionId, setSessionId] = useState<string>('')
@@ -120,6 +122,13 @@ export default function FileUpload({
         if (projectIdToUse) {
           formData.append('project_id', projectIdToUse) // ✅ FIX: Use prioritized project ID!
           console.log(`📁 [FileUpload] Uploading ${file.name} to project: ${projectIdToUse}`)
+        }
+        // ✅ Append custom metadata (company, usecase for POCs)
+        if (metadata) {
+          Object.entries(metadata).forEach(([key, value]) => {
+            formData.append(key, value)
+            console.log(`🏷️ [FileUpload] Metadata: ${key}=${value}`)
+          })
         }
 
         const token = localStorage.getItem('access_token')

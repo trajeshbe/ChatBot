@@ -31,11 +31,12 @@ logger = logging.getLogger(__name__)
 class AgriTaxonomyService:
     """Service for agricultural taxonomy and crop classification"""
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
+        self.config = config or {}
         # Tier 1 service dependencies
-        self.llm_service = LLMService(db, settings)
+        self.llm_service = LLMService()
 
         # Import DocumentService for extracting crop data
         from app.tier_1.document_processing.document_service import DocumentService
@@ -45,6 +46,8 @@ class AgriTaxonomyService:
         self.taxonomy: Dict[str, Dict[str, Any]] = {}
 
         logger.info("✓ AgriTaxonomyService initialized with tier_1 services")
+        if config:
+            logger.info(f"✓ Using module config with model: {config.get(\'llm\', {}).get(\'default\', {}).get(\'model\', \'default\')}")
 
     async def _load_taxonomy_from_documents(self, session_id: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
         """Load crop taxonomy from uploaded agricultural knowledge base documents"""
@@ -104,11 +107,17 @@ Return JSON array:
 Extract 10+ crops. Return ONLY valid JSON array."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.0)
+            max_tokens = llm_config.get('max_tokens', 1500)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.0,
-                max_tokens=1500
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             crops = json.loads(response.strip())
@@ -221,11 +230,17 @@ Provide JSON response:
 Return ONLY valid JSON. If crop is unknown, return null."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.0)
+            max_tokens = llm_config.get('max_tokens', 300)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.0,
-                max_tokens=300
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             result = json.loads(response.strip())

@@ -7,11 +7,12 @@ REST endpoints for employee sentiment and engagement analysis.
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .talent_pulse_service import TalentPulseService
 from .talent_pulse_schemas import (
     TalentPulseRequest,
@@ -32,7 +33,7 @@ router = APIRouter(
 @router.post("/analyze", response_model=TalentPulseResponse)
 async def analyze_talent_pulse(
     request: TalentPulseRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -66,7 +67,12 @@ async def analyze_talent_pulse(
     try:
         logger.info(f"📊 Talent pulse analysis for {len(request.feedback_data)} feedback items")
 
-        service = TalentPulseService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "talent_pulse")
+        logger.info(f"✓ Loaded config for talent_pulse")
+
+        # Initialize service with config
+        service = TalentPulseService(db, settings, config=module_config)
         result = await service.analyze_talent_pulse(request)
 
         logger.info(f"✓ Analysis complete: {result.engagement_metrics.engagement_level} engagement")

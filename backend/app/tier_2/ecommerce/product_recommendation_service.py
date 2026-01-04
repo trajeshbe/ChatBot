@@ -34,13 +34,16 @@ logger = logging.getLogger(__name__)
 class ProductRecommendationService:
     """Service for AI-powered product recommendations"""
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
+        self.config = config or {}
         # Tier 1 service dependencies
-        self.llm_service = LLMService(db, settings)
+        self.llm_service = LLMService()
 
         logger.info("✓ ProductRecommendationService initialized with tier_1 services")
+        if config:
+            logger.info(f"✓ Using module config with model: {config.get(\'llm\', {}).get(\'default\', {}).get(\'model\', \'default\')}")
 
     async def recommend_products(self, request: ProductRecommendationRequest) -> ProductRecommendationResponse:
         """Generate personalized product recommendations"""
@@ -461,12 +464,18 @@ Provide a JSON array with personalized insights for each product, ordered by rel
 
 Return ONLY valid JSON."""
 
-                response = await self.llm_service.generate_response(
-                    prompt=prompt,
-                    model="gpt-4o-mini",
-                    temperature=0.3,
-                    max_tokens=300
-                )
+                # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.3)
+            max_tokens = llm_config.get('max_tokens', 300)
+
+            response = await self.llm_service.generate_response(
+                prompt=prompt,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
 
                 result = json.loads(response.strip())
                 insights = result.get("insights", [])
@@ -560,11 +569,17 @@ Return JSON: {{"insights": ["insight 1", "insight 2", "insight 3"]}}
 Return ONLY valid JSON."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.3)
+            max_tokens = llm_config.get('max_tokens', 150)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.3,
-                max_tokens=150
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             result = json.loads(response.strip())

@@ -108,6 +108,8 @@ export default function TenderIntelligencePanel() {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('session_id', sessionId)
+    formData.append('company', 'procurement')
+    formData.append('usecase', 'tender_analysis')
 
     try {
       const response = await axios.post('http://localhost:8000/api/v1/upload', formData, {

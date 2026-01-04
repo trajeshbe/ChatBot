@@ -50,17 +50,20 @@ class PlanningClassifierService:
     6. Validation → Confidence scoring and quality checks
     """
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
+        self.config = config or {}
 
         # Tier 1 service dependencies
-        self.llm_service = LLMService(db, settings)
+        self.llm_service = LLMService()
         self.vision_service = VisionService(db, settings)
         self.document_service = DocumentService(db, settings)
         self.ocr_service = OCRService(settings)
 
         logger.info("✓ PlanningClassifierService initialized with tier_1 services")
+        if config:
+            logger.info(f"✓ Using module config with model: {config.get(\'llm\', {}).get(\'default\', {}).get(\'model\', \'default\')}")
 
     async def classify_document(
         self,
@@ -378,11 +381,17 @@ Return JSON:
 Return ONLY the JSON, no explanation."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.0)
+            max_tokens = llm_config.get('max_tokens', 500)
+
             llm_response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.0,
-                max_tokens=500
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             classification_data = json.loads(llm_response.strip())
@@ -457,11 +466,17 @@ Return JSON:
 If information not found, use null. Return ONLY JSON."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.0)
+            max_tokens = llm_config.get('max_tokens', 500)
+
             llm_response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.0,
-                max_tokens=500
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             metadata_dict = json.loads(llm_response.strip())

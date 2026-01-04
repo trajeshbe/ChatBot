@@ -1,10 +1,11 @@
 """Real Estate Valuation AI - API Routes"""
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .real_estate_service import RealEstateService
 from .real_estate_schemas import *
 

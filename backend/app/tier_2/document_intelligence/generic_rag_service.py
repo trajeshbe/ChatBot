@@ -51,17 +51,20 @@ class GenericRAGService:
     5. Performance Tracking - Query analytics and cache metrics
     """
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
+        self.config = config or {}
 
         # Tier 1 service dependencies
-        self.rag_service = RAGService(db, settings)
-        self.llm_service = LLMService(db, settings)
+        self.rag_service = RAGService()
+        self.llm_service = LLMService()
         self.embedding_service = EmbeddingService(settings)
         self.reranker_service = CrossEncoderReranker(model_name="cross-encoder/ms-marco-MiniLM-L-6-v2")
 
         logger.info("✓ GenericRAGService initialized with tier_1 services")
+        if config:
+            logger.info(f"✓ Using module config with model: {config.get(\'llm\', {}).get(\'default\', {}).get(\'model\', \'default\')}")
 
     async def query(self, request: RAGQueryRequest) -> RAGQueryResponse:
         """

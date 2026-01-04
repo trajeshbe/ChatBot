@@ -51,16 +51,19 @@ class MineScopeService:
     7. Summary Generation → Generate executive summary
     """
 
-    def __init__(self, db: Session, settings: Settings):
+    def __init__(self, db: Session, settings: Settings, config: Optional[Dict[str, Any]] = None):
         self.db = db
         self.settings = settings
+        self.config = config or {}
 
         # Tier 1 service dependencies
-        self.llm_service = LLMService(db, settings)
+        self.llm_service = LLMService()
         self.vision_service = VisionService(db, settings)
         self.document_service = DocumentService(db, settings)
 
         logger.info("✓ MineScopeService initialized with tier_1 services")
+        if config:
+            logger.info(f"✓ Using module config with model: {config.get('llm', {}).get('default', {}).get('model', 'default')}")
 
     async def analyze_scope(
         self,
@@ -201,11 +204,17 @@ Return JSON:
 Return ONLY JSON."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.0)
+            max_tokens = llm_config.get('max_tokens', 300)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.0,
-                max_tokens=300
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             data = json.loads(response.strip())
@@ -249,11 +258,17 @@ Return JSON array:
 Return ONLY JSON array."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o')
+            temperature = llm_config.get('temperature', 0.1)
+            max_tokens = llm_config.get('max_tokens', 3000)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o",
-                temperature=0.1,
-                max_tokens=3000
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             reqs_data = json.loads(response.strip())
@@ -305,11 +320,17 @@ Return JSON with all available metrics (use null if not found):
 Return ONLY JSON."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.0)
+            max_tokens = llm_config.get('max_tokens', 800)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o-mini",
-                temperature=0.0,
-                max_tokens=800
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             metrics_data = json.loads(response.strip())
@@ -351,11 +372,17 @@ Return JSON array:
 Return ONLY JSON array."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o')
+            temperature = llm_config.get('temperature', 0.1)
+            max_tokens = llm_config.get('max_tokens', 2000)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o",
-                temperature=0.1,
-                max_tokens=2000
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             risks_data = json.loads(response.strip())
@@ -418,11 +445,17 @@ Return JSON:
 Return ONLY JSON."""
 
         try:
+            # Get LLM parameters from module config
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model = llm_config.get('model', 'gpt-4o')
+            temperature = llm_config.get('temperature', 0.3)
+            max_tokens = llm_config.get('max_tokens', 1000)
+
             response = await self.llm_service.generate_response(
                 prompt=prompt,
-                model="gpt-4o",
-                temperature=0.3,
-                max_tokens=1000
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
             data = json.loads(response.strip())

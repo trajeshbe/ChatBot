@@ -7,11 +7,12 @@ REST endpoints for entity-relationship extraction from documents.
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .relation_extractor_service import RelationExtractorService
 from .relation_extractor_schemas import (
     RelationExtractionRequest,
@@ -32,7 +33,7 @@ router = APIRouter(
 @router.post("/extract", response_model=RelationExtractionResponse)
 async def extract_relations(
     request: RelationExtractionRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -62,7 +63,12 @@ async def extract_relations(
     try:
         logger.info(f"🔗 Relation extraction request for document {request.document_id}")
 
-        service = RelationExtractorService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "relation_extractor")
+        logger.info(f"✓ Loaded config for relation_extractor")
+
+        # Initialize service with config
+        service = RelationExtractorService(db, settings, config=module_config)
         result = await service.extract_relations(request)
 
         logger.info(f"✓ Extracted {result.relations_after_filtering} relations")
@@ -85,7 +91,7 @@ async def extract_relations(
 @router.post("/search", response_model=RelationSearchResponse)
 async def search_relations(
     request: RelationSearchRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -117,7 +123,12 @@ async def search_relations(
     try:
         logger.info(f"🔍 Searching relations in extraction {request.extraction_id}")
 
-        service = RelationExtractorService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "relation_extractor")
+        logger.info(f"✓ Loaded config for relation_extractor")
+
+        # Initialize service with config
+        service = RelationExtractorService(db, settings, config=module_config)
         result = await service.search_relations(request)
 
         logger.info(f"✓ Found {result.total_count} matching relations")
@@ -134,7 +145,7 @@ async def search_relations(
 @router.post("/export")
 async def export_relations(
     request: RelationExportRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """

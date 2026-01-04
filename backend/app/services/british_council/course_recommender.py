@@ -17,11 +17,11 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import logging
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, Float
 
-from app.models.database import DocumentChunk
+from app.models.database import DocumentChunk, Document
 from app.tier_1.rag.intelligent_retrieval_service import IntelligentRetrievalService
-from app.tier_1.embeddings.reranker_service import get_reranker_service
+from app.tier_1.embeddings.reranker_service import CrossEncoderReranker
 from app.services.british_council.profile_analyzer import UserProfile
 
 logger = logging.getLogger(__name__)
@@ -90,7 +90,7 @@ class CourseRecommenderService:
         """
         self.db = db
         self.retrieval_service = IntelligentRetrievalService()
-        self.reranker = get_reranker_service()
+        self.reranker = CrossEncoderReranker(model_name="accurate")
 
         # Scoring weights
         self.semantic_weight = 0.6
@@ -214,6 +214,93 @@ class CourseRecommenderService:
         query = " ".join(parts)
         return query
 
+    async def _direct_vector_search(
+        self,
+        query: str,
+        company: str,
+        usecase: str,
+        top_k: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Direct vector similarity search bypassing IntelligentRetrievalService.
+
+        This method performs a simple, direct pgvector similarity search without
+        LLM-based query classification. It's more predictable and avoids issues
+        with LLM classification failures.
+
+        Args:
+            query: Search query
+            company: Company filter (british_council)
+            usecase: Use case filter (course_recommendation)
+            top_k: Number of results
+
+        Returns:
+            List of chunks with similarity scores
+        """
+        from app.tier_1.embeddings.embedding_service import EmbeddingService
+        from sqlalchemy import select, func, and_, or_, desc
+
+        logger.info(f"🔍 Direct vector search: query='{query[:50]}...', company={company}, usecase={usecase}, top_k={top_k}")
+
+        # Generate embedding for query
+        embedding_service = EmbeddingService()
+        query_embedding = await embedding_service.get_embedding(query)
+
+        logger.info(f"✅ Generated query embedding: {len(query_embedding)} dimensions")
+
+        # Direct vector similarity query using pgvector <=> operator
+        # Note: Document.meta_info is mapped to 'metadata' column in DB (Column('metadata', JSON))
+        # Similarity = 1 - cosine_distance (pgvector's <=> operator)
+        from sqlalchemy import literal_column, text
+
+        # Convert embedding list to pgvector format
+        embedding_str = '[' + ','.join(map(str, query_embedding)) + ']'
+
+        stmt = (
+            select(
+                DocumentChunk,
+                (1 - DocumentChunk.embedding.op('<=>', return_type=Float)(
+                    literal_column(f"'{embedding_str}'::vector")
+                )).label('similarity')
+            )
+            .join(Document, DocumentChunk.document_id == Document.id)
+            .where(
+                and_(
+                    DocumentChunk.embedding.isnot(None),
+                    # Use ->> operator for JSONB text extraction (not -> which returns JSON)
+                    text("documents.metadata->>'company' = :company").bindparams(company=company),
+                    text("documents.metadata->>'usecase' = :usecase").bindparams(usecase=usecase)
+                )
+            )
+            .order_by(desc('similarity'))
+            .limit(top_k)
+        )
+
+        result = await self.db.execute(stmt)
+        rows = result.all()
+
+        logger.info(f"📊 Direct search found {len(rows)} results")
+
+        # Convert to expected format
+        results = []
+        for chunk, similarity in rows:
+            # Extract metadata from chunk (chunks inherit metadata from documents during ingestion)
+            metadata = chunk.meta_info if chunk.meta_info else {}
+
+            results.append({
+                "content": chunk.content,
+                "metadata": metadata,
+                "score": float(similarity),
+                "similarity": float(similarity),  # Alias for compatibility
+                "chunk_id": str(chunk.id),
+                "document_id": str(chunk.document_id)
+            })
+
+            logger.debug(f"   Result: score={similarity:.3f}, content={chunk.content[:50]}...")
+
+        logger.info(f"✅ Direct vector search complete: {len(results)} results")
+        return results
+
     async def _semantic_search(
         self,
         query: str,
@@ -235,27 +322,14 @@ class CourseRecommenderService:
         Returns:
             List of search results with chunks and metadata
         """
-        # Build filter conditions
-        filters = []
-
-        # Filter by company/usecase using document metadata
-        # Note: Assumes documents have company and usecase in metadata
-        query_obj = self.db.query(DocumentChunk).join(
-            DocumentChunk.document
-        )
-
-        # For British Council courses, we'd typically filter by company and usecase
-        # But since we're using intelligent retrieval, it handles this internally
-
-        # Use intelligent retrieval service (uses pgvector)
-        results = await self.retrieval_service.intelligent_search(
-            db=self.db,
+        # Use direct vector search (bypasses IntelligentRetrievalService)
+        # This is simpler and avoids LLM classification issues
+        logger.info("🎯 Using direct vector search for British Council")
+        results = await self._direct_vector_search(
             query=query,
-            top_k=top_k,
-            session_id=session_id,
-            # Filtering will be handled by document metadata
             company=company,
-            usecase=usecase
+            usecase=usecase,
+            top_k=top_k
         )
 
         return results
@@ -280,27 +354,16 @@ class CourseRecommenderService:
         if not results:
             return []
 
-        # Extract content for reranking
-        documents = [r.get("content", "") for r in results]
-
         # Rerank with cross-encoder
-        reranked = await self.reranker.rerank(
+        # CrossEncoderReranker expects chunks (list of dicts with 'content' field)
+        reranked = self.reranker.rerank(
             query=query,
-            documents=documents,
-            top_k=top_k,
-            model="accurate"  # Use BAAI/bge-reranker-large
+            chunks=results,
+            top_k=top_k
         )
 
-        # Map reranked scores back to original results
-        reranked_results = []
-        for rerank_item in reranked:
-            idx = rerank_item.get("index", 0)
-            if idx < len(results):
-                result = results[idx].copy()
-                result["reranker_score"] = rerank_item.get("score", 0.0)
-                reranked_results.append(result)
-
-        return reranked_results
+        # CrossEncoderReranker returns chunks with 'rerank_score' field already added
+        return reranked
 
     async def _create_recommendations(
         self,
@@ -324,7 +387,7 @@ class CourseRecommenderService:
         for result in reranked_results:
             # Extract metadata
             metadata = result.get("metadata", {})
-            semantic_score = result.get("reranker_score", 0.0)
+            semantic_score = result.get("rerank_score", 0.0)  # CrossEncoderReranker uses 'rerank_score'
 
             # Calculate profile-based score
             profile_score = self._calculate_profile_score(profile, metadata)

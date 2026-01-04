@@ -53,6 +53,8 @@ export default function PredictiveAnalyticsPanel() {
     formData.append('file', file)
     formData.append('metric', metric)
     formData.append('forecast_period', forecastPeriod)
+    formData.append('company', 'analytics')
+    formData.append('usecase', 'predictive_analytics')
 
     try {
       const response = await axios.post<PredictiveAnalyticsResponse>(

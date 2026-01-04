@@ -7,11 +7,12 @@ REST endpoints for marketing campaign optimization and performance analysis.
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 
 from app.tier_1.infrastructure.database import get_db
 from app.tier_1.infrastructure.config import Settings, get_settings
+from app.services.module_config_helper import load_module_config
 from .campaign_optimizer_service import CampaignOptimizerService
 from .campaign_optimizer_schemas import (
     CampaignOptimizationRequest,
@@ -32,7 +33,7 @@ router = APIRouter(
 @router.post("/optimize", response_model=CampaignOptimizationResponse)
 async def optimize_marketing_campaigns(
     request: CampaignOptimizationRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings)
 ):
     """
@@ -94,7 +95,12 @@ async def optimize_marketing_campaigns(
     try:
         logger.info(f"📊 Campaign optimization for {len(request.campaigns)} campaigns")
 
-        service = CampaignOptimizerService(db, settings)
+        # Load module configuration
+        module_config = await load_module_config(db, "campaign_optimizer")
+        logger.info(f"✓ Loaded config for campaign_optimizer")
+
+        # Initialize service with config
+        service = CampaignOptimizerService(db, settings, config=module_config)
         result = await service.optimize_campaigns(request)
 
         logger.info(f"✓ Optimization complete: {result.expected_improvement_percent:.1f}% improvement projected")
