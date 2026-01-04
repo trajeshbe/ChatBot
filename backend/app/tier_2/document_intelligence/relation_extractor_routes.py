@@ -64,8 +64,8 @@ async def extract_relations(
         logger.info(f"🔗 Relation extraction request for document {request.document_id}")
 
         # Load module configuration
-        module_config = await load_module_config(db, "relation_extractor")
-        logger.info(f"✓ Loaded config for relation_extractor")
+        module_config = await load_module_config(db, "relation-extractor")
+        logger.info(f"✓ Loaded config for relation-extractor")
 
         # Initialize service with config
         service = RelationExtractorService(db, settings, config=module_config)
@@ -124,8 +124,8 @@ async def search_relations(
         logger.info(f"🔍 Searching relations in extraction {request.extraction_id}")
 
         # Load module configuration
-        module_config = await load_module_config(db, "relation_extractor")
-        logger.info(f"✓ Loaded config for relation_extractor")
+        module_config = await load_module_config(db, "relation-extractor")
+        logger.info(f"✓ Loaded config for relation-extractor")
 
         # Initialize service with config
         service = RelationExtractorService(db, settings, config=module_config)

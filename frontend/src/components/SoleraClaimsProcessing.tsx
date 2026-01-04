@@ -1,5 +1,6 @@
 import { Settings } from 'lucide-react'
 import POCConfigManager from './POCConfigManager'
+import ExportWizardButton from './ExportWizardButton'
 import React, { useState } from 'react';
 import axios from 'axios';
 
@@ -135,13 +136,24 @@ export default function SoleraClaimsProcessing() {
         </p>
       </div>
             </div>
-            <button
-              onClick={() => setShowConfig(!showConfig)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-            >
-              <Settings className="w-4 h-4" />
-              Configure
-            </button>
+            <div className="flex gap-2">
+              <ExportWizardButton
+                moduleCode="solera"
+                moduleName="Solera Claims Processing"
+                tier={3}
+                customerName="Solera"
+                customerEmail="export@solera.com"
+                variant="button"
+                size="md"
+              />
+              <button
+                onClick={() => setShowConfig(!showConfig)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              >
+                <Settings className="w-4 h-4" />
+                Configure
+              </button>
+            </div>
           </div>
 
           {/* Configuration Panel */}

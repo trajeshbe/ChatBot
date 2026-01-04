@@ -3,6 +3,7 @@ import { Upload, Loader2, CheckCircle, XCircle, FileText, DollarSign, TrendingUp
 import axios from 'axios'
 import POCConfigManager from './POCConfigManager'
 import FileUpload from './FileUpload'
+import ExportWizardButton from './ExportWizardButton'
 
 interface ExtractedDatapoint {
   field_name: string
@@ -208,13 +209,24 @@ export default function GrantThorntonExtraction() {
                   Upload an annual report PDF to automatically extract 50+ financial datapoints, calculate ratios, and generate Excel reports
                 </p>
               </div>
-              <button
-                onClick={() => setShowConfig(!showConfig)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-              >
-                <Settings className="w-4 h-4" />
-                Configure
-              </button>
+              <div className="flex gap-2">
+                <ExportWizardButton
+                  moduleCode="grant_thornton"
+                  moduleName="Grant Thornton Financial Analysis"
+                  tier={3}
+                  customerName="Grant Thornton"
+                  customerEmail="export@grantthornton.com"
+                  variant="button"
+                  size="md"
+                />
+                <button
+                  onClick={() => setShowConfig(!showConfig)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                >
+                  <Settings className="w-4 h-4" />
+                  Configure
+                </button>
+              </div>
             </div>
 
             {/* Configuration Panel */}

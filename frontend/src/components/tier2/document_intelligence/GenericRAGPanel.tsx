@@ -3,6 +3,7 @@ import axios from 'axios'
 import { Search, FileText, Sparkles, TrendingUp, Clock, Settings, CheckCircle } from 'lucide-react'
 import POCConfigManager from '../../POCConfigManager'
 import FileUpload from '../../FileUpload'
+import ExportWizardButton from '../../ExportWizardButton'
 
 type RetrievalStrategy = 'semantic' | 'keyword' | 'hybrid' | 'rerank'
 type ResponseStyle = 'concise' | 'detailed' | 'bullet_points' | 'technical' | 'conversational'
@@ -113,13 +114,22 @@ export default function GenericRAGPanel() {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => setShowConfig(!showConfig)}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-        >
-          <Settings className="w-4 h-4" />
-          Configure
-        </button>
+        <div className="flex gap-2">
+          <ExportWizardButton
+            moduleCode="generic-rag"
+            moduleName="Generic RAG"
+            tier={2}
+            variant="button"
+            size="md"
+          />
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Configure
+          </button>
+        </div>
       </div>
 
       {/* Configuration Panel */}

@@ -16,6 +16,7 @@
 import { useState, useRef } from 'react'
 import axios from 'axios'
 import { Upload, Loader2, FileText, AlertCircle, CheckCircle } from 'lucide-react'
+import ExportWizardButton from '../ExportWizardButton'
 
 interface ModuleInterfaceTemplateProps {
   // Module metadata
@@ -117,9 +118,18 @@ export default function ModuleInterfaceTemplate({
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">
-            {moduleIcon} {moduleName}
-          </h1>
+          <div className="flex justify-between items-start mb-2">
+            <h1 className="text-3xl font-bold text-slate-800">
+              {moduleIcon} {moduleName}
+            </h1>
+            <ExportWizardButton
+              moduleCode={moduleId}
+              moduleName={moduleName}
+              tier={2}
+              variant="button"
+              size="md"
+            />
+          </div>
           <p className="text-slate-600">{moduleDescription}</p>
           <div className="mt-2 px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium inline-block">
             Tier 2 Module • {moduleId}

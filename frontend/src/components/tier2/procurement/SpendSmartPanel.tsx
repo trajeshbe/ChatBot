@@ -112,7 +112,7 @@ export default function SpendSmartPanel() {
         {/* Submit Button */}
         <button
           onClick={handleSubmit}
-          disabled={loading || (!file && !textInput.trim())}
+          disabled={loading || !textInput.trim()}
           className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
         >
           {loading ? (

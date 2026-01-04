@@ -2695,6 +2695,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Module Configuration router: {e}")
 
+# Export Wizard API (POC Export to Production)
+try:
+    from app.api.routes import export_wizard_routes
+    app.include_router(export_wizard_routes.router)
+    logger.info("✓ Export Wizard API router registered (POC to production-ready packages)")
+except Exception as e:
+    logger.warning(f"Could not register Export Wizard router: {e}")
+
 
 # === Admin API Endpoints ===
 

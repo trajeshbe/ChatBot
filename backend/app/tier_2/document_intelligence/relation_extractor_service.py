@@ -8,10 +8,12 @@ Extracts structured relationships between entities using tier_1 services.
 
 import uuid
 import json
+import re
 import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from app.tier_1.infrastructure.config import Settings
 from app.tier_1.llm.llm_service import LLMService
@@ -55,14 +57,51 @@ class RelationExtractorService:
 
         # Tier 1 service dependencies
         self.llm_service = LLMService()
-        self.vision_service = VisionService(db, settings)
-        self.document_service = DocumentService(db, settings)
-        self.hybrid_service = HybridExtractionService(db, settings)
-        self.ocr_service = OCRService(settings)
+        self.vision_service = VisionService()  # Fixed: VisionService only takes ollama_base_url (optional)
+        self.document_service = DocumentService()  # Fixed: DocumentService takes no arguments
+        self.hybrid_service = HybridExtractionService()  # Fixed: HybridExtractionService takes no arguments
+        self.ocr_service = OCRService()  # Fixed: OCRService takes no arguments
 
         logger.info("✓ RelationExtractorService initialized with tier_1 services")
         if config:
-            logger.info(f"✓ Using module config with model: {config.get(\'llm\', {}).get(\'default\', {}).get(\'model\', \'default\')}")
+            model = config.get('llm', {}).get('default', {}).get('model', 'default')
+            logger.info(f"✓ Using module config with model: {model}")
+
+    def _extract_json_from_llm_response(self, llm_response: str) -> str:
+        """
+        Extract JSON from LLM response, handling markdown code blocks and malformed responses.
+
+        Args:
+            llm_response: Raw LLM response string
+
+        Returns:
+            Cleaned JSON string ready for parsing
+        """
+        # Remove leading/trailing whitespace
+        cleaned = llm_response.strip()
+
+        # Handle markdown code blocks
+        if cleaned.startswith("```"):
+            # Extract content between code fences
+            pattern = r'```(?:json)?\s*([\s\S]*?)\s*```'
+            match = re.search(pattern, cleaned)
+            if match:
+                cleaned = match.group(1).strip()
+            else:
+                # Fallback: just remove the backticks
+                cleaned = cleaned.strip("`").strip()
+                if cleaned.startswith("json"):
+                    cleaned = cleaned[4:].strip()
+
+        # Try to find JSON array in the response (between [ and ])
+        if not cleaned.startswith("["):
+            # Search for JSON array in the text
+            pattern = r'\[\s*{[\s\S]*}\s*\]'
+            match = re.search(pattern, cleaned)
+            if match:
+                cleaned = match.group(0)
+
+        return cleaned
 
     async def extract_relations(
         self,
@@ -166,7 +205,8 @@ class RelationExtractorService:
         try:
             # Get document from database
             from app.models.database import Document
-            doc = self.db.query(Document).filter(Document.id == document_id).first()
+            result = await self.db.execute(select(Document).filter(Document.id == document_id))
+            doc = result.scalar_one_or_none()
 
             if not doc:
                 raise ValueError(f"Document {document_id} not found")
@@ -181,8 +221,14 @@ class RelationExtractorService:
 
             # Get text content
             if mode in ["auto", "text", "hybrid"]:
-                # Use document service to get processed text
-                chunks = await self.document_service.get_document_chunks(document_id)
+                # Get document chunks from database
+                from app.models.database import DocumentChunk
+                result = await self.db.execute(
+                    select(DocumentChunk)
+                    .filter(DocumentChunk.document_id == document_id)
+                    .order_by(DocumentChunk.chunk_index)
+                )
+                chunks = result.scalars().all()
                 content["text"] = "\n\n".join([chunk.content for chunk in chunks])
 
             # Get image content for vision/hybrid modes
@@ -211,7 +257,19 @@ class RelationExtractorService:
             else "all types (person, organization, location, product, date, money, etc.)"
         )
 
-        prompt = f"""Extract all named entities from the following document.
+        # Get prompt from config or use default
+        prompt_config = self.config.get('prompts', {})
+        entity_extraction_prompt = prompt_config.get('entity_extraction', None)
+
+        if entity_extraction_prompt:
+            # Use custom prompt from UI, with template variables
+            prompt = entity_extraction_prompt.format(
+                entity_types=entity_types_str,
+                document_text=document_content.get('text', '')[:8000]
+            )
+        else:
+            # Use default prompt
+            prompt = f"""Extract all named entities from the following document.
 
 Entity types to extract: {entity_types_str}
 
@@ -233,16 +291,47 @@ Return ONLY the JSON array, no explanation.
 """
 
         try:
+            # Get LLM config from UI or use defaults
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model_id = llm_config.get('model', 'gpt-4o-mini')
+            temperature = llm_config.get('temperature', 0.0)
+            max_tokens = llm_config.get('max_tokens', 4000)
+
             # Use LLM service for entity extraction
-            llm_response = await self.llm_service.generate_response(
+            llm_result = await self.llm_service.generate(
                 prompt=prompt,
-                model="gpt-4o-mini",  # Fast and cheap for NER
-                temperature=0.0,  # Deterministic
-                max_tokens=4000
+                model_id=model_id,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
+            # Extract content from LLM response
+            llm_response = llm_result.get("content", "")
+
+            # Debug logging
+            logger.info(f"Entity Extraction - LLM Model Used: {model_id}")
+            logger.info(f"Entity Extraction - LLM Response Length: {len(llm_response)}")
+            logger.info(f"Entity Extraction - LLM Response (first 500 chars): {llm_response[:500]}")
+            logger.info(f"Entity Extraction - Full LLM Result Keys: {llm_result.keys()}")
+
+            if not llm_response:
+                logger.error(f"Empty LLM response! Full result: {llm_result}")
+                raise ValueError("LLM returned empty content")
+
+            # Extract JSON from LLM response using robust method
+            cleaned_response = self._extract_json_from_llm_response(llm_response)
+            logger.info(f"Entity Extraction - Cleaned Response (first 200 chars): {cleaned_response[:200]}")
+
+            # Save full responses for debugging (temporary)
+            try:
+                with open("/tmp/entity_llm_response.txt", "w") as f:
+                    f.write(f"RAW RESPONSE:\n{llm_response}\n\nCLEANED RESPONSE:\n{cleaned_response}")
+            except:
+                pass
+
             # Parse JSON response
-            entities_data = json.loads(llm_response.strip())
+            entities_data = json.loads(cleaned_response)
+            logger.info(f"Entity Extraction - Successfully parsed JSON with {len(entities_data)} entities")
 
             # Convert to Entity objects
             entities = []
@@ -260,6 +349,7 @@ Return ONLY the JSON array, no explanation.
                     logger.warning(f"Skipping invalid entity: {entity_dict}, error: {e}")
                     continue
 
+            logger.info(f"Entity Extraction - Created {len(entities)} Entity objects from {len(entities_data)} parsed entities")
             return entities
 
         except json.JSONDecodeError as e:
@@ -290,7 +380,20 @@ Return ONLY the JSON array, no explanation.
             for e in entities[:100]  # Limit to first 100 entities
         ])
 
-        prompt = f"""Extract structured relationships between entities from the document.
+        # Get prompt from config or use default
+        prompt_config = self.config.get('prompts', {})
+        relation_extraction_prompt = prompt_config.get('relation_extraction', None)
+
+        if relation_extraction_prompt:
+            # Use custom prompt from UI, with template variables
+            prompt = relation_extraction_prompt.format(
+                entity_list=entity_list,
+                relation_types=relation_types_str,
+                document_text=document_content.get('text', '')[:8000]
+            )
+        else:
+            # Use default prompt
+            prompt = f"""Extract structured relationships between entities from the document.
 
 Known entities:
 {entity_list}
@@ -323,16 +426,50 @@ Instructions:
 """
 
         try:
+            # Get LLM config from UI or use defaults
+            llm_config = self.config.get('llm', {}).get('default', {})
+            model_id = llm_config.get('model', 'gpt-4o')
+            temperature = llm_config.get('temperature', 0.1)
+            max_tokens = llm_config.get('max_tokens', 6000)
+
+            # Debug: Log the actual config values being used
+            logger.info(f"Relation Extraction - Config loaded: model={model_id}, temp={temperature}, max_tokens={max_tokens}")
+            logger.info(f"Relation Extraction - Full llm_config: {llm_config}")
+
             # Use LLM service for relation extraction
-            llm_response = await self.llm_service.generate_response(
+            llm_result = await self.llm_service.generate(
                 prompt=prompt,
-                model="gpt-4o",  # Use stronger model for relation extraction
-                temperature=0.1,  # Low temperature for factual extraction
-                max_tokens=6000
+                model_id=model_id,
+                temperature=temperature,
+                max_tokens=max_tokens
             )
 
+            # Extract content from LLM response
+            llm_response = llm_result.get("content", "")
+
+            # Debug logging
+            logger.info(f"Relation Extraction - LLM Model Used: {model_id}")
+            logger.info(f"Relation Extraction - LLM Response Length: {len(llm_response)}")
+            logger.info(f"Relation Extraction - LLM Response (first 500 chars): {llm_response[:500]}")
+            logger.info(f"Relation Extraction - Full LLM Result Keys: {llm_result.keys()}")
+
+            if not llm_response:
+                logger.error(f"Empty LLM response! Full result: {llm_result}")
+                raise ValueError("LLM returned empty content for relation extraction")
+
+            # Extract JSON from LLM response using robust method
+            cleaned_response = self._extract_json_from_llm_response(llm_response)
+            logger.info(f"Relation Extraction - Cleaned Response (first 200 chars): {cleaned_response[:200]}")
+
+            # Save full responses for debugging (temporary)
+            try:
+                with open("/tmp/relation_llm_response.txt", "w") as f:
+                    f.write(f"RAW RESPONSE:\n{llm_response}\n\nCLEANED RESPONSE:\n{cleaned_response}")
+            except:
+                pass
+
             # Parse JSON response
-            relations_data = json.loads(llm_response.strip())
+            relations_data = json.loads(cleaned_response)
 
             # Convert to Relation objects
             relations = []
@@ -482,9 +619,12 @@ Instructions:
             from app.models.database_enhanced import ExtractionResults
 
             # Get extraction record
-            extraction = self.db.query(ExtractionResults).filter(
-                ExtractionResults.extraction_id == uuid.UUID(request.extraction_id)
-            ).first()
+            result = await self.db.execute(
+                select(ExtractionResults).filter(
+                    ExtractionResults.extraction_id == uuid.UUID(request.extraction_id)
+                )
+            )
+            extraction = result.scalar_one_or_none()
 
             if not extraction:
                 return RelationSearchResponse(

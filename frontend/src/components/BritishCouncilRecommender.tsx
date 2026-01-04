@@ -3,6 +3,7 @@ import axios from 'axios'
 import { Settings } from 'lucide-react'
 import POCConfigManager from './POCConfigManager'
 import FileUpload from './FileUpload'
+import ExportWizardButton from './ExportWizardButton'
 
 interface UserProfile {
   skills: string[]
@@ -122,13 +123,24 @@ export default function BritishCouncilRecommender() {
               AI-powered course recommendations based on your profile and goals
             </p>
           </div>
-          <button
-            onClick={() => setShowConfig(!showConfig)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-          >
-            <Settings className="w-4 h-4" />
-            Configure
-          </button>
+          <div className="flex gap-2">
+            <ExportWizardButton
+              moduleCode="british_council"
+              moduleName="British Council Course Recommender"
+              tier={3}
+              customerName="British Council"
+              customerEmail="export@britishcouncil.org"
+              variant="button"
+              size="md"
+            />
+            <button
+              onClick={() => setShowConfig(!showConfig)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+            >
+              <Settings className="w-4 h-4" />
+              Configure
+            </button>
+          </div>
         </div>
 
         {/* Configuration Panel */}

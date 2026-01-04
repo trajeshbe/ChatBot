@@ -1133,6 +1133,13 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
           headers: {
             'Content-Type': 'multipart/form-data',
             ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          timeout: 600000, // 10 minutes timeout for large file uploads and processing
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+              console.log(`📤 File upload progress: ${percentCompleted}%`)
+            }
           }
         })
 
@@ -1398,6 +1405,14 @@ export default function ChatInterfaceEnhanced({ activeTab, ragConfig: ragConfigP
       const response = await axios.post(`${API_URL}/api/v1/query`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
+        },
+        timeout: 600000, // 10 minutes timeout for long-running queries (e.g., multi-page navigation)
+        onUploadProgress: (progressEvent) => {
+          // Track upload progress if needed
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+            console.log(`📤 Upload progress: ${percentCompleted}%`)
+          }
         }
       })
 

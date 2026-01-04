@@ -35,6 +35,17 @@ Applied fixes, bug resolutions, and troubleshooting documentation.
 ### [archive/](./archive/)
 Historical documentation, fix guides, and completed migration documents.
 
+### [implementation/](./implementation/)
+Implementation documentation for major features and system components.
+
+#### [implementation/export/](./implementation/export/)
+**NEW!** Module Export System - Complete, deployable package export:
+- Export Wizard UI for easy configuration
+- Module-specific code extraction (backend + frontend)
+- Fine-tuned model export with smart size handling
+- Multi-platform deployment (Docker, K8s, AWS, bare metal)
+- See [implementation/export/README.md](./implementation/export/README.md)
+
 ---
 
 ## 🚀 Quick Navigation
@@ -62,6 +73,11 @@ Historical documentation, fix guides, and completed migration documents.
 **Managing the system?**
 - [guides/ADMIN_GUIDE.md](./guides/ADMIN_GUIDE.md)
 
+**Exporting modules?** 🆕
+- [implementation/export/README.md](./implementation/export/README.md) - Export system overview
+- [implementation/export/USER_GUIDE.md](./implementation/export/USER_GUIDE.md) - How to export modules
+- [implementation/export/DEPLOYMENT_GUIDE.md](./implementation/export/DEPLOYMENT_GUIDE.md) - Deploy exported packages
+
 ---
 
 ## 📚 Core Documentation (in root)
@@ -73,4 +89,4 @@ Historical documentation, fix guides, and completed migration documents.
 
 ---
 
-**Last Updated**: 2025-11-29 (Added Prompt Library & Export documentation)
+**Last Updated**: 2026-01-04 (Added Module Export System documentation)

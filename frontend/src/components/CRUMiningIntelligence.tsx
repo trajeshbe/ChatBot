@@ -3,6 +3,7 @@ import axios from 'axios'
 import { Settings } from 'lucide-react'
 import POCConfigManager from './POCConfigManager'
 import FileUpload from './FileUpload'
+import ExportWizardButton from './ExportWizardButton'
 
 interface Source {
   document_id: string
@@ -147,13 +148,24 @@ export default function CRUMiningIntelligence() {
               Multi-pipeline RAG for mining document analysis
             </p>
           </div>
-          <button
-            onClick={() => setShowConfig(!showConfig)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-          >
-            <Settings className="w-4 h-4" />
-            Configure
-          </button>
+          <div className="flex gap-2">
+            <ExportWizardButton
+              moduleCode="cru"
+              moduleName="CRU Mining Intelligence"
+              tier={3}
+              customerName="CRU Group"
+              customerEmail="export@crugroup.com"
+              variant="button"
+              size="md"
+            />
+            <button
+              onClick={() => setShowConfig(!showConfig)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+            >
+              <Settings className="w-4 h-4" />
+              Configure
+            </button>
+          </div>
         </div>
 
         {/* Configuration Panel */}

@@ -3,6 +3,7 @@ import axios from 'axios'
 import { Building, Upload, AlertTriangle , Settings} from 'lucide-react'
 import POCConfigManager from '../../POCConfigManager'
 import FileUpload from '../../FileUpload'
+import ExportWizardButton from '../../ExportWizardButton'
 
 interface BuildingMetricsPanelResponse {
   results: any
@@ -54,13 +55,22 @@ export default function BuildingMetricsPanel() {
         <p className="text-gray-600 mt-2">Construction project metrics extraction and analysis</p>
       </div>
           </div>
-          <button
-            onClick={() => setShowConfig(!showConfig)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-          >
-            <Settings className="w-4 h-4" />
-            Configure
-          </button>
+          <div className="flex gap-2">
+            <ExportWizardButton
+              moduleCode="construction"
+              moduleName="Building Metrics"
+              tier={2}
+              variant="button"
+              size="md"
+            />
+            <button
+              onClick={() => setShowConfig(!showConfig)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+            >
+              <Settings className="w-4 h-4" />
+              Configure
+            </button>
+          </div>
         </div>
 
         {/* Configuration Panel */}

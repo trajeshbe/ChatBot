@@ -1,5 +1,6 @@
 import { Settings } from 'lucide-react'
 import POCConfigManager from './POCConfigManager'
+import ExportWizardButton from './ExportWizardButton'
 import { useState, useRef } from 'react'
 import { Upload, Loader2, CheckCircle, XCircle, FileArchive, Building2 } from 'lucide-react'
 import axios from 'axios'
@@ -109,13 +110,24 @@ export default function ConstructionExtraction() {
                   Upload a ZIP file containing construction documents to automatically extract building metrics
                 </p>
               </div>
-              <button
-                onClick={() => setShowConfig(!showConfig)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-              >
-                <Settings className="w-4 h-4" />
-                Configure
-              </button>
+              <div className="flex gap-2">
+                <ExportWizardButton
+                  moduleCode="construction_monitor"
+                  moduleName="Construction Monitor"
+                  tier={3}
+                  customerName="Construction Monitor"
+                  customerEmail="export@constructionmonitor.com"
+                  variant="button"
+                  size="md"
+                />
+                <button
+                  onClick={() => setShowConfig(!showConfig)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                >
+                  <Settings className="w-4 h-4" />
+                  Configure
+                </button>
+              </div>
             </div>
 
             {/* Configuration Panel */}

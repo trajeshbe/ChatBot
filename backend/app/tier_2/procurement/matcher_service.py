@@ -60,7 +60,10 @@ class MatcherService:
 
         logger.info("✓ MatcherService initialized with tier_1 services")
         if config:
-            logger.info(f"✓ Using module config with model: {config.get(\'llm\', {}).get(\'default\', {}).get(\'model\', \'default\')}")
+            llm_config = config.get('llm', {})
+            default_config = llm_config.get('default', {})
+            model_name = default_config.get('model', 'default')
+            logger.info(f"✓ Using module config with model: {model_name}")
 
     async def match_po_to_invoice(
         self,
