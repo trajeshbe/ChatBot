@@ -1,0 +1,277 @@
+./scripts/setup/initialize-fresh-install.sh
+
+============================================================
+  Enterprise RAG Chatbot - Fresh Installation
+============================================================
+
+ℹ  Installation directory: /mnt/d/EnterpriseAI/merit-aiml/ChatBot
+ℹ  Clean install: false
+ℹ  Skip build: false
+
+Step 2: Building Docker images
+ℹ  Building backend image...
+[+] Building 995.4s (15/15) FINISHED
+ => [internal] load local bake definitions                                                                                      0.0s
+ => => reading from stdin 549B                                                                                                  0.0s
+ => [internal] load build definition from Dockerfile                                                                            0.3s
+ => => transferring dockerfile: 2.07kB                                                                                          0.2s
+ => [internal] load metadata for mcr.microsoft.com/playwright/python:v1.48.0-jammy                                              0.4s
+ => [internal] load .dockerignore                                                                                               0.2s
+ => => transferring context: 2B                                                                                                 0.2s
+ => [1/8] FROM mcr.microsoft.com/playwright/python:v1.48.0-jammy@sha256:6bbd515848db4042068571135979b6ee6d330a794b28e037e3a6cc  0.1s
+ => => resolve mcr.microsoft.com/playwright/python:v1.48.0-jammy@sha256:6bbd515848db4042068571135979b6ee6d330a794b28e037e3a6cc  0.1s
+ => [internal] load build context                                                                                               6.0s
+ => => transferring context: 26.93MB                                                                                            5.9s
+ => CACHED [2/8] WORKDIR /app                                                                                                   0.0s
+ => [3/8] RUN apt-get update && apt-get install -y     libpq-dev     docker.io     tesseract-ocr     tesseract-ocr-eng     po  40.5s
+ => [4/8] RUN pip install --upgrade pip                                                                                         3.5s
+ => [5/8] COPY requirements.txt .                                                                                               0.1s
+ => [6/8] RUN pip install --no-cache-dir -r requirements.txt                                                                  521.6s
+ => [7/8] COPY . .                                                                                                              0.6s
+ => [8/8] RUN mkdir -p /tmp                                                                                                     0.4s
+ => exporting to image                                                                                                        424.6s
+ => => exporting layers                                                                                                       337.2s
+ => => exporting manifest sha256:54c8767ce0b4f8142c5ca066c19b74acb5b8d927d41579cc9205e0bef24544be                               0.1s
+ => => exporting config sha256:162603e5e0a33dd7e4f44d7a9d0e8fae1bafe2870c7e0eae60312377df6fca43                                 0.1s
+ => => exporting attestation manifest sha256:df978a8cbe454adc7abbbef3cfb7691418adfbc747e430ca4b94d98664d1f00c                   0.1s
+ => => exporting manifest list sha256:3e184ffad9b7f4e829f48eb71de3ef0fe54f620a4d7a26184e9c716e733551b1                          0.0s
+ => => naming to docker.io/library/chatbot-backend:latest                                                                       0.0s
+ => => unpacking to docker.io/library/chatbot-backend:latest                                                                   87.0s
+ => resolving provenance for metadata file                                                                                      0.0s
+[+] Building 1/1
+ ✔ chatbot-backend  Built                                                                                                       0.0s
+ℹ  Building frontend image...
+[+] Building 113.5s (15/15) FINISHED
+ => [internal] load local bake definitions                                                                                      0.0s
+ => => reading from stdin 1.02kB                                                                                                0.0s
+ => [internal] load build definition from Dockerfile                                                                            0.1s
+ => => transferring dockerfile: 1.10kB                                                                                          0.1s
+ => [internal] load metadata for docker.io/library/node:20-alpine                                                               3.6s
+ => [internal] load .dockerignore                                                                                               0.2s
+ => => transferring context: 2B                                                                                                 0.1s
+ => [base 1/1] FROM docker.io/library/node:20-alpine@sha256:658d0f63e501824d6c23e06d4bb95c71e7d704537c9d9272f488ac03a370d448    8.2s
+ => => resolve docker.io/library/node:20-alpine@sha256:658d0f63e501824d6c23e06d4bb95c71e7d704537c9d9272f488ac03a370d448         0.1s
+ => => sha256:cb3325e64457574e24f92246e3da3376946e473d636209e1390eac47b50b26a3 1.26MB / 1.26MB                                  0.9s
+ => => sha256:fd1849a5c548bc65ee47a64498951bda5d40e87d08efe9dca69b5c8cdedc7a52 443B / 443B                                      1.0s
+ => => sha256:8d06ba6946d1f299d8f962e37906c77006df33d47050430a57f7893ec35af697 42.78MB / 42.78MB                                5.7s
+ => => sha256:1074353eec0db2c1d81d5af2671e56e00cf5738486f5762609ea33d606f88612 3.86MB / 3.86MB                                  2.1s
+ => => extracting sha256:1074353eec0db2c1d81d5af2671e56e00cf5738486f5762609ea33d606f88612                                       0.3s
+ => => extracting sha256:8d06ba6946d1f299d8f962e37906c77006df33d47050430a57f7893ec35af697                                       1.5s
+ => => extracting sha256:cb3325e64457574e24f92246e3da3376946e473d636209e1390eac47b50b26a3                                       0.1s
+ => => extracting sha256:fd1849a5c548bc65ee47a64498951bda5d40e87d08efe9dca69b5c8cdedc7a52                                       0.1s
+ => [internal] load build context                                                                                               2.0s
+ => => transferring context: 2.73MB                                                                                             1.9s
+ => [deps 1/4] RUN apk add --no-cache libc6-compat                                                                              5.6s
+ => [dev 1/3] WORKDIR /app                                                                                                      5.6s
+ => [deps 2/4] WORKDIR /app                                                                                                     0.2s
+ => [deps 3/4] COPY package.json package-lock.json* ./                                                                          0.2s
+ => [deps 4/4] RUN npm ci                                                                                                      42.1s
+ => [dev 2/3] COPY --from=deps /app/node_modules ./node_modules                                                                 7.5s
+ => [dev 3/3] COPY . .                                                                                                          0.5s
+ => exporting to image                                                                                                         37.4s
+ => => exporting layers                                                                                                        25.0s
+ => => exporting manifest sha256:6c8afe834df8161f8272e71643dd43f836cf0cc69ed00c49cc9dc9caa4f21f02                               0.1s
+ => => exporting config sha256:c1b6c89082592143410fd50089419af8f871d560586b4d9df705602e5b4e0ea0                                 0.1s
+ => => exporting attestation manifest sha256:5e5edb1283c620eb380f24e2c58a8e12d70e044f61949d64d1f2f28f35e240bc                   0.1s
+ => => exporting manifest list sha256:97228f4682d6cb7c67a31767811c6ceaeecfa2b9e3471412f6c44040af73b076                          0.1s
+ => => naming to docker.io/library/chatbot-frontend:latest                                                                      0.0s
+ => => unpacking to docker.io/library/chatbot-frontend:latest                                                                  11.8s
+ => resolving provenance for metadata file                                                                                      0.0s
+[+] Building 1/1
+ ✔ chatbot-frontend  Built                                                                                                      0.0s
+✓ Docker images built
+
+Step 3: Starting infrastructure services
+ℹ  Starting PostgreSQL...
+[+] Running 3/3
+ ✔ Network chatbot_rag-network   Created                                                                                        0.1s
+ ✔ Volume chatbot_postgres_data  Created                                                                                        0.0s
+ ✔ Container rag-postgres        Started                                                                                        3.7s
+ℹ  Starting Redis...
+[+] Running 2/2
+ ✔ Volume chatbot_redis_data  Created                                                                                           0.0s
+ ✔ Container rag-redis        Started                                                                                           1.7s
+ℹ  Starting MinIO...
+[+] Running 2/2
+ ✔ Volume chatbot_minio_data  Created                                                                                           0.0s
+ ✔ Container rag-minio        Started                                                                                           1.3s
+Waiting for postgres to be ready
+✓ postgres is running
+Waiting for redis to be ready
+✓ redis is running
+Waiting for minio to be ready
+✓ minio is running
+✓ Infrastructure services started
+
+ℹ  Waiting for PostgreSQL to initialize...
+Step 4: Initializing database
+ℹ  Running database setup script...
+./scripts/setup/initialize-fresh-install.sh: line 231: /mnt/d/EnterpriseAI/merit-aiml/ChatBot/scripts/setup/setup-database-complete.sh: cannot execute: required file not found
+genai@MSSPLLAP675:/mnt/d/EnterpriseAI/merit-aiml/ChatBot$ dos2unix ./scripts/setup/initialize-fresh-install.sh
+dos2unix: converting file ./scripts/setup/initialize-fresh-install.sh to Unix format...
+genai@MSSPLLAP675:/mnt/d/EnterpriseAI/merit-aiml/ChatBot$ dos2unix ./scripts/setup/setup-database-complete.sh
+dos2unix: converting file ./scripts/setup/setup-database-complete.sh to Unix format...
+genai@MSSPLLAP675:/mnt/d/EnterpriseAI/merit-aiml/ChatBot$ ./scripts/setup/setup-database-complete.sh
+
+============================================================
+  Enterprise RAG Chatbot - Database Setup
+============================================================
+
+ℹ  Configuration:
+  Database: ragchatbot
+  Container: rag-postgres
+  Migrations: /mnt/d/EnterpriseAI/merit-aiml/ChatBot/backend/migrations
+  Project Root: /mnt/d/EnterpriseAI/merit-aiml/ChatBot
+
+WARNING: This will initialize the database with all tables and seed data.
+If the database already exists, this may conflict with existing data.
+
+Do you want to continue? (yes/no): yes
+
+Step 1: Checking prerequisites
+✓ Docker is running
+✓ PostgreSQL container is running
+✓ PostgreSQL connection successful
+Step 2: Creating database and enabling extensions
+⚠  Database 'ragchatbot' already exists
+✓ Extension: uuid-ossp
+✓ Extension: pgvector
+Step 3: Applying base schema (documents, chunks, conversations)
+✓ Applied: Base schema (000)
+Step 4: Applying enhanced tables (users, sessions, audit logs)
+✓ Applied: RBAC and Audit (001)
+Step 5: Applying core schema fixes
+✓ Applied: Embedding dimensions fix (002)
+✓ Applied: Query cache defaults (003)
+Step 6: Applying feature tables
+✓ Applied: 004_add_api_credentials
+✓ Applied: 004_add_scraping_configs
+✓ Applied: 004_add_saved_css_templates
+✓ Applied: 005_add_tool_usage_tracking
+Step 7: Setting up RBAC (Roles, Departments, Modules, Permissions)
+✓ Applied: RBAC tables (006)
+✓ Applied: RBAC seed data (007)
+Step 8: Setting up organizational hierarchy (Departments, Teams)
+✗ Failed to apply migration: Normalize departments and teams (008)
+genai@MSSPLLAP675:/mnt/d/EnterpriseAI/merit-aiml/ChatBot$ ./scripts/setup/setup-database-complete.sh
+
+============================================================
+  Enterprise RAG Chatbot - Database Setup
+============================================================
+
+ℹ  Configuration:
+  Database: ragchatbot
+  Container: rag-postgres
+  Migrations: /mnt/d/EnterpriseAI/merit-aiml/ChatBot/backend/migrations
+  Project Root: /mnt/d/EnterpriseAI/merit-aiml/ChatBot
+
+WARNING: This will initialize the database with all tables and seed data.
+If the database already exists, this may conflict with existing data.
+
+Do you want to continue? (yes/no): yes
+
+Step 1: Checking prerequisites
+✓ Docker is running
+✓ PostgreSQL container is running
+✓ PostgreSQL connection successful
+Step 2: Creating database and enabling extensions
+⚠  Database 'ragchatbot' already exists
+✓ Extension: uuid-ossp
+✓ Extension: pgvector
+Step 3: Applying base schema (documents, chunks, conversations)
+✓ Applied: Base schema (000)
+Step 4: Applying enhanced tables (users, sessions, audit logs)
+✓ Applied: RBAC and Audit (001)
+Step 5: Applying core schema fixes
+✓ Applied: Embedding dimensions fix (002)
+✓ Applied: Query cache defaults (003)
+Step 6: Applying feature tables
+✓ Applied: 004_add_api_credentials
+✓ Applied: 004_add_scraping_configs
+✗ Failed to apply migration: 004_add_saved_css_templates
+genai@MSSPLLAP675:/mnt/d/EnterpriseAI/merit-aiml/ChatBot$ docker-compose up -d
+[+] Running 111/118
+ ✔ flink-taskmanager Pulled                                                                                                   303.0s
+ ✔ envoy Pulled                                                                                                                94.1s
+ ✔ ollama Pulled                                                                                                              386.1s
+ ✔ elasticsearch Pulled                                                                                                       356.5s
+ ✔ flink-jobmanager Pulled                                                                                                    305.4s
+ ! agent-runtime Warning    pull access denied for chatbot-agent-runtime, repository does not exist o...                        3.6s
+ ✔ tensorboard Pulled                                                                                                         270.9s
+ ✔ prometheus Pulled                                                                                                          144.5s
+ ✔ promtail Pulled                                                                                                             97.5s
+ ✔ tempo Pulled                                                                                                                98.6s
+ ✔ loki Pulled                                                                                                                 80.1s
+ ✔ prefect-server Pulled                                                                                                      176.6s
+ ✔ grafana Pulled                                                                                                             180.8s
+
+
+
+
+
+
+
+
+
+
+
+
+[+] Building 10.0s (23/34)
+ => [internal] load local bake definitions                                                                                      0.0s
+ => => reading from stdin 2.00kB                                                                                                0.0s
+ => [celery-worker internal] load build definition from Dockerfile                                                              0.4s
+ => => transferring dockerfile: 2.07kB                                                                                          0.2s
+ => [agent-runtime internal] load build definition from Dockerfile.agent-runtime                                                0.4s
+ => => transferring dockerfile: 3.74kB                                                                                          0.2s
+ => [agent-runtime internal] load metadata for docker.io/library/python:3.11-slim                                               3.6s
+ => [celery-worker internal] load metadata for mcr.microsoft.com/playwright/python:v1.48.0-jammy                                0.4s
+ => [agent-runtime internal] load .dockerignore                                                                                 0.4s
+ => => transferring context: 2B                                                                                                 0.3s
+ => [celery-worker 1/8] FROM mcr.microsoft.com/playwright/python:v1.48.0-jammy@sha256:6bbd515848db4042068571135979b6ee6d330a79  0.1s
+ => => resolve mcr.microsoft.com/playwright/python:v1.48.0-jammy@sha256:6bbd515848db4042068571135979b6ee6d330a794b28e037e3a6cc  0.1s
+ => CANCELED [celery-worker internal] load build context                                                                        3.8s
+ => => transferring context: 11.82MB                                                                                            3.7s
+ => [agent-runtime internal] load build context                                                                                 0.7s
+ => => transferring context: 87.28kB                                                                                            0.5s
+ => [agent-runtime  1/18] FROM docker.io/library/python:3.11-slim@sha256:1dd3dca85e22886e44fcad1bb7ccab6691dfa83db52214cf9e206  0.8s
+ => => resolve docker.io/library/python:3.11-slim@sha256:1dd3dca85e22886e44fcad1bb7ccab6691dfa83db52214cf9e20696e095f3e36       0.1s
+ => => sha256:7cc13cb22d92060ccb92030698fd1bb23d1e7890328d424a3aa61c498ec1cb57 0B / 14.36MB                                     0.6s
+ => => sha256:654a090213c05af530d397771fd09de5fe6e66c2355cd1a752c763b27ff451cf 0B / 249B                                        0.6s
+ => => sha256:1473863bb010703cc5da49db594d480fa6a17a3a7df033dfacf0c91bf1162390 0B / 1.29MB                                      0.5s
+ => => sha256:02d7611c4eae219af91448a4720bdba036575d3bc0356cfe12774af85daa6aff 0B / 29.78MB                                     0.5s
+ => CANCELED [agent-runtime  2/18] RUN apt-get update && apt-get install -y     bash     curl     git     wget     build-essen  0.0s
+ => CACHED [agent-runtime  3/18] RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash -     && apt-get install -y nodej  0.0s
+ => CACHED [agent-runtime  4/18] RUN node --version && npm --version                                                            0.0s
+ => CACHED [agent-runtime  5/18] RUN npm install -g @anthropic-ai/claude-code ||     echo "⚠️ Claude Code CLI package not       0.0s
+ => CACHED [agent-runtime  6/18] RUN pip install --no-cache-dir openai                                                          0.0s
+ => CACHED [agent-runtime  7/18] RUN echo "=== Verifying CLI Installations ==="     && (claude --version 2>/dev/null || echo "  0.0s
+ => CACHED [agent-runtime  8/18] RUN useradd -m -u 1000 -s /bin/bash agentuser                                                  0.0s
+ => CACHED [agent-runtime  9/18] WORKDIR /workspace                                                                             0.0s
+ => CACHED [agent-runtime 10/18] RUN mkdir -p /workspace/input     /workspace/output     /workspace/artifacts     /workspace/t  0.0s
+ => CACHED [agent-runtime 11/18] COPY requirements-agent.txt /tmp/requirements-agent.txt                                        0.0s
+ => CACHED [agent-runtime 12/18] RUN pip install --no-cache-dir -r /tmp/requirements-agent.txt                                  0.0s
+ => ERROR [agent-runtime 13/18] COPY app/services/task_complexity_analyzer.py /app/services/task_complexity_analyzer.py         0.0s
+ => ERROR [agent-runtime 14/18] COPY app/services/api_usage_tracker.py /app/services/api_usage_tracker.py                       0.0s
+------
+ > [agent-runtime 13/18] COPY app/services/task_complexity_analyzer.py /app/services/task_complexity_analyzer.py:
+------
+------
+ > [agent-runtime 14/18] COPY app/services/api_usage_tracker.py /app/services/api_usage_tracker.py:
+------
+Dockerfile.agent-runtime:93
+
+--------------------
+
+  91 |     # Copy necessary service files
+
+  92 |     COPY app/services/task_complexity_analyzer.py /app/services/task_complexity_analyzer.py
+
+  93 | >>> COPY app/services/api_usage_tracker.py /app/services/api_usage_tracker.py
+
+  94 |     COPY app/services/__init__.py /app/services/__init__.py
+
+  95 |
+
+--------------------
+
+target agent-runtime: failed to solve: failed to compute cache key: failed to calculate checksum of ref s8e1kov79yh9cdtbgubnlonxj::zq6zpshqf9v1idd4b07uh7hmf: "/app/services/api_usage_tracker.py": not found
