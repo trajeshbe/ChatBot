@@ -77,6 +77,92 @@ class InfrastructureGenerator:
         """Initialize InfrastructureGenerator."""
         pass
 
+    def _generate_container_prefix(self, customer_name: str, module_name: str) -> str:
+        """
+        Generate unique container name prefix.
+
+        Pattern: {customer_name}_{module_name}_
+        Example: acme_relation-extractor_postgres
+
+        Args:
+            customer_name: Customer name (will be sanitized)
+            module_name: Module name
+
+        Returns:
+            Sanitized container prefix
+        """
+        import re
+
+        # Sanitize: lowercase, replace spaces/special chars with underscores
+        safe_customer = re.sub(r'[^a-z0-9]+', '_', customer_name.lower()).strip('_')
+        safe_module = re.sub(r'[^a-z0-9]+', '_', module_name.lower()).strip('_')
+
+        return f"{safe_customer}_{safe_module}"
+
+    def _detect_available_ports(self, base_ports: Dict[str, int], increment: int = 100) -> Dict[str, int]:
+        """
+        Detect available ports, incrementing if conflicts detected.
+
+        Note: This is a best-effort check. Actual port availability
+        depends on the deployment target system.
+
+        Args:
+            base_ports: Dictionary of {service: port}
+            increment: Port increment for conflicts (default: 100)
+
+        Returns:
+            Dictionary of {service: available_port}
+        """
+        import socket
+
+        available_ports = {}
+
+        for service, port in base_ports.items():
+            original_port = port
+            attempts = 0
+            max_attempts = 10
+
+            while attempts < max_attempts:
+                try:
+                    # Try to bind to port to check availability
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                        s.bind(('', port))
+                        # Port is available
+                        available_ports[service] = port
+                        if port != original_port:
+                            logger.info(f"   Port {original_port} in use for {service}, using {port}")
+                        break
+                except OSError:
+                    # Port in use, try next
+                    port += increment
+                    attempts += 1
+            else:
+                # Max attempts reached, use last tried port
+                logger.warning(f"   Could not find available port for {service}, using {port}")
+                available_ports[service] = port
+
+        return available_ports
+
+    def _generate_secure_secrets(self, module_name: str) -> Dict[str, str]:
+        """
+        Generate secure random secrets for various services.
+
+        Args:
+            module_name: Module name (used in secret prefixes)
+
+        Returns:
+            Dictionary of {secret_name: value}
+        """
+        import secrets
+
+        return {
+            "postgres_password": f"{module_name}_db_" + secrets.token_urlsafe(16),
+            "minio_secret_key": f"{module_name}_minio_" + secrets.token_urlsafe(16),
+            "jwt_secret": secrets.token_urlsafe(32),
+            "secret_key": secrets.token_urlsafe(32),
+        }
+
     async def generate_infrastructure(
         self,
         module_name: str,
@@ -165,7 +251,35 @@ class InfrastructureGenerator:
 
         files_generated = []
 
-        # 1. Generate docker-compose.yml
+        # Phase 3: Generate unique container names and detect ports
+        customer_name = config.get("customer_name", "customer")
+        container_prefix = self._generate_container_prefix(customer_name, module_name)
+        logger.info(f"   📦 Container prefix: {container_prefix}")
+
+        # Detect available ports
+        base_ports = {
+            "backend": 8000,
+            "frontend": 3001,
+            "postgres": 5432,
+            "redis": 6379,
+            "minio": 9000,
+            "minio_console": 9001,
+            "prometheus": 9090,
+            "grafana": 3000,
+        }
+        available_ports = self._detect_available_ports(base_ports)
+        logger.info(f"   🔌 Detected available ports")
+
+        # Generate secure secrets
+        secrets = self._generate_secure_secrets(module_name)
+        logger.info(f"   🔐 Generated secure secrets")
+
+        # Store in config for use in templates
+        config["container_prefix"] = container_prefix
+        config["ports"] = available_ports
+        config["secrets"] = secrets
+
+        # 1. Generate docker-compose.yml with unique container names
         compose_content = self._generate_docker_compose_yml(module_name, config, options)
         compose_path = docker_dir / "docker-compose.yml"
         compose_path.write_text(compose_content)
@@ -173,13 +287,21 @@ class InfrastructureGenerator:
 
         logger.info(f"   ✅ Generated: docker-compose.yml")
 
-        # 2. Generate .env.example
+        # 2. Generate .env.example (template)
         env_content = self._generate_env_file(config)
         env_path = docker_dir / ".env.example"
         env_path.write_text(env_content)
         files_generated.append(str(env_path))
 
         logger.info(f"   ✅ Generated: .env.example")
+
+        # 3. Generate pre-configured .env file (Phase 3: Automation)
+        env_preconfigured = self._generate_preconfigured_env(config, available_ports, secrets)
+        env_actual_path = docker_dir / ".env"
+        env_actual_path.write_text(env_preconfigured)
+        files_generated.append(str(env_actual_path))
+
+        logger.info(f"   ✅ Generated: .env (pre-configured, ready to use)")
 
         # 3. Generate deployment script
         deploy_script = self._generate_deploy_script(module_name, "docker-compose")
@@ -332,13 +454,16 @@ class InfrastructureGenerator:
     ) -> str:
         """Generate docker-compose.yml content."""
 
+        # Get container prefix for unique naming (Phase 3)
+        container_prefix = config.get("container_prefix", "genai")
+
         monitoring_services = ""
         if options.enable_monitoring:
-            monitoring_services = """
+            monitoring_services = f"""
   # Monitoring Stack
   prometheus:
     image: prom/prometheus:latest
-    container_name: genai-prometheus
+    container_name: {container_prefix}_prometheus
     ports:
       - "9090:9090"
     volumes:
@@ -348,22 +473,22 @@ class InfrastructureGenerator:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
     networks:
-      - genai-network
+      - {container_prefix}_network
     restart: unless-stopped
 
   grafana:
     image: grafana/grafana:latest
-    container_name: genai-grafana
+    container_name: {container_prefix}_grafana
     ports:
       - "3000:3000"
     volumes:
       - ./monitoring/grafana:/etc/grafana/provisioning
       - grafana-data:/var/lib/grafana
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${{GRAFANA_ADMIN_PASSWORD:-admin}}
       - GF_USERS_ALLOW_SIGN_UP=false
     networks:
-      - genai-network
+      - {container_prefix}_network
     restart: unless-stopped
     depends_on:
       - prometheus
@@ -373,6 +498,7 @@ class InfrastructureGenerator:
 # Module: {module_name}
 # Generated: {datetime.utcnow().isoformat()}
 # Deployment Type: Single Server (Docker Compose)
+# Container Prefix: {container_prefix}
 
 version: '3.8'
 
@@ -383,7 +509,7 @@ services:
       context: ../../backend
       dockerfile: Dockerfile
     image: {module_name}-backend:latest
-    container_name: {module_name}-backend
+    container_name: {container_prefix}_backend
     ports:
       - "${{BACKEND_PORT:-8000}}:8000"
     environment:
@@ -417,7 +543,7 @@ services:
       - ./config:/app/config
       - ./logs:/app/logs
     networks:
-      - genai-network
+      - {container_prefix}_network
     restart: unless-stopped
     depends_on:
       postgres:
@@ -441,7 +567,7 @@ services:
   # PostgreSQL with pgvector
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: genai-postgres
+    container_name: {container_prefix}_postgres
     ports:
       - "${{POSTGRES_PORT:-5432}}:5432"
     environment:
@@ -452,7 +578,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
     networks:
-      - genai-network
+      - {container_prefix}_network
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${{POSTGRES_USER:-postgres}}"]
@@ -467,13 +593,13 @@ services:
   # Redis (caching)
   redis:
     image: redis:7-alpine
-    container_name: genai-redis
+    container_name: {container_prefix}_redis
     ports:
       - "${{REDIS_PORT:-6379}}:6379"
     volumes:
       - redis-data:/data
     networks:
-      - genai-network
+      - {container_prefix}_network
     restart: unless-stopped
     command: redis-server --appendonly yes
     deploy:
@@ -484,7 +610,7 @@ services:
   # MinIO (S3-compatible object storage)
   minio:
     image: minio/minio:latest
-    container_name: genai-minio
+    container_name: {container_prefix}_minio
     ports:
       - "${{MINIO_PORT:-9000}}:9000"
       - "${{MINIO_CONSOLE_PORT:-9001}}:9001"
@@ -494,7 +620,7 @@ services:
     volumes:
       - minio-data:/data
     networks:
-      - genai-network
+      - {container_prefix}_network
     restart: unless-stopped
     command: server /data --console-address ":9001"
     healthcheck:
@@ -509,20 +635,20 @@ services:
       context: ../../frontend
       dockerfile: Dockerfile
     image: {module_name}-frontend:latest
-    container_name: {module_name}-frontend
+    container_name: {container_prefix}_frontend
     ports:
       - "${{FRONTEND_PORT:-3001}}:3001"
     environment:
       - NEXT_PUBLIC_API_URL=http://backend:8000
     networks:
-      - genai-network
+      - {container_prefix}_network
     restart: unless-stopped
     depends_on:
       - backend
 {monitoring_services}
 
 networks:
-  genai-network:
+  {container_prefix}_network:
     driver: bridge
 
 volumes:
@@ -741,6 +867,128 @@ BACKUP_RETENTION_DAYS=7
 # ============================================================================
 """
         return env_content
+
+    def _generate_preconfigured_env(
+        self,
+        config: Dict[str, Any],
+        ports: Dict[str, int],
+        secrets: Dict[str, str]
+    ) -> str:
+        """
+        Generate pre-configured .env file (Phase 3: Automation).
+
+        Unlike .env.example which has placeholders, this file is ready to use
+        with secure secrets and detected ports.
+
+        Args:
+            config: Module configuration
+            ports: Detected available ports
+            secrets: Generated secure secrets
+
+        Returns:
+            Pre-configured .env content
+        """
+        module_name = config.get("module_name", "module")
+        customer_name = config.get("customer_name", "customer")
+
+        return f"""# ============================================================================
+# {module_name.replace('_', ' ').title()} - AUTO-CONFIGURED DEPLOYMENT
+# ============================================================================
+# This file was AUTO-GENERATED with secure defaults and available ports.
+# You can use it as-is or customize as needed.
+#
+# Generated: {datetime.utcnow().isoformat()}
+# Customer: {customer_name}
+# ============================================================================
+
+# MODULE INFORMATION
+MODULE_NAME={module_name}
+MODULE_VERSION=1.0.0
+DEPLOYMENT_ENV=standalone
+
+# DATABASE CONFIGURATION
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD={secrets['postgres_password']}
+POSTGRES_DB={module_name.replace('-', '_')}_db
+DATABASE_URL=postgresql://${{POSTGRES_USER}}:${{POSTGRES_PASSWORD}}@${{POSTGRES_HOST}}:${{POSTGRES_PORT}}/${{POSTGRES_DB}}
+
+# REDIS CONFIGURATION
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_DB=0
+REDIS_URL=redis://${{REDIS_HOST}}:${{REDIS_PORT}}/${{REDIS_DB}}
+
+# OBJECT STORAGE (MinIO)
+MINIO_HOST=minio
+MINIO_PORT=9000
+MINIO_CONSOLE_PORT=9001
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD={secrets['minio_secret_key']}
+MINIO_BUCKET_DOCUMENTS=documents
+MINIO_BUCKET_UPLOADS=uploads
+MINIO_BUCKET_EXPORTS=exports
+MINIO_ENDPOINT=http://${{MINIO_HOST}}:${{MINIO_PORT}}
+
+# AI/LLM API KEYS (Inherit from host environment or add manually)
+OPENAI_API_KEY=${{OPENAI_API_KEY:-}}
+ANTHROPIC_API_KEY=${{ANTHROPIC_API_KEY:-}}
+OPENAI_MODEL=gpt-4-turbo-preview
+ANTHROPIC_MODEL=claude-3-sonnet-20240229
+DEFAULT_LLM_PROVIDER=openai
+
+# EMBEDDING MODEL
+EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+EMBEDDING_DIMENSION=384
+
+# APPLICATION SECURITY (Auto-generated secure secrets)
+JWT_SECRET={secrets['jwt_secret']}
+SECRET_KEY={secrets['secret_key']}
+SESSION_TIMEOUT_MINUTES=60
+
+# APPLICATION PORTS (Auto-detected to avoid conflicts)
+BACKEND_PORT={ports.get('backend', 8000)}
+FRONTEND_PORT={ports.get('frontend', 3001)}
+POSTGRES_PORT_EXTERNAL={ports.get('postgres', 5432)}
+REDIS_PORT_EXTERNAL={ports.get('redis', 6379)}
+MINIO_PORT={ports.get('minio', 9000)}
+MINIO_CONSOLE_PORT={ports.get('minio_console', 9001)}
+PROMETHEUS_PORT={ports.get('prometheus', 9090)}
+GRAFANA_PORT={ports.get('grafana', 3000)}
+
+# LOGGING & DEBUGGING
+LOG_LEVEL=INFO
+DEBUG=false
+SQL_ECHO=false
+
+# PERFORMANCE TUNING
+BACKEND_WORKERS=4
+DB_POOL_SIZE=20
+DB_MAX_OVERFLOW=10
+REDIS_POOL_SIZE=10
+
+# CORS (Update with your frontend URL)
+CORS_ORIGINS=http://localhost:{ports.get('frontend', 3001)},http://localhost:{ports.get('backend', 8000)}
+
+# MONITORING (Optional)
+ENABLE_MONITORING=false
+GRAFANA_ADMIN_PASSWORD=admin
+METRICS_ENABLED=true
+METRICS_PATH=/metrics
+
+# BACKUP & MAINTENANCE (Optional)
+ENABLE_AUTO_BACKUP=false
+BACKUP_SCHEDULE_CRON=0 2 * * *
+BACKUP_RETENTION_DAYS=7
+
+# ============================================================================
+# READY TO USE!
+# ============================================================================
+# This configuration is ready for deployment.
+# Only add your LLM API keys (OPENAI_API_KEY or ANTHROPIC_API_KEY)
+# ============================================================================
+"""
 
     def _generate_deploy_script(self, module_name: str, deployment_type: str) -> str:
         """Generate deployment script."""
@@ -2209,9 +2457,9 @@ FROM node:18-alpine AS deps
 
 WORKDIR /app
 
-# Install dependencies based on package-lock.json
+# Install dependencies based on package-lock.json (fallback to npm install if missing)
 COPY package.json package-lock.json* ./
-RUN npm ci --only=production
+RUN if [ -f package-lock.json ]; then npm ci --only=production; else npm install --only=production --legacy-peer-deps; fi
 
 # ============================================================================
 # Build stage
@@ -2220,9 +2468,9 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Install all dependencies (including dev)
+# Install all dependencies (including dev) - fallback to npm install if package-lock.json missing
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN if [ -f package-lock.json ]; then npm ci; else npm install --legacy-peer-deps; fi
 
 # Copy source code
 COPY . .

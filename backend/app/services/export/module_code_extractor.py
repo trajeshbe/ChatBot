@@ -283,6 +283,15 @@ class ModuleCodeExtractor:
         )
         # Note: package.json generation now includes logging
 
+        # Copy package-lock.json if it exists (for reproducible builds)
+        source_package_lock = PROJECT_ROOT / "frontend" / "package-lock.json"
+        if source_package_lock.exists():
+            dest_package_lock = frontend_dir / "package-lock.json"
+            shutil.copy2(source_package_lock, dest_package_lock)
+            logger.info(f"   ✅ Copied package-lock.json for reproducible builds")
+        else:
+            logger.warning(f"   ⚠️  package-lock.json not found - Dockerfile will use npm install fallback")
+
         # 5a. Generate frontend application structure
         logger.info(f"🎨 Generating frontend application structure...")
         self._generate_frontend_structure(
@@ -640,7 +649,7 @@ class ModuleCodeExtractor:
             "openai": "1.40.0",
             "anthropic": "0.39.0",
             "sentence-transformers": "2.3.1",
-            "torch": "2.0.0",
+            "torch": "2.2.2",
 
             # LangChain
             "langchain": "0.2.16",
@@ -650,14 +659,15 @@ class ModuleCodeExtractor:
 
             # Document processing
             "numpy": "1.26.4",
-            "opencv-python": "4.9.0",
+            "opencv-python": "4.9.0.80",
             "PyMuPDF": "1.23.26",
-            "pypdf2": "3.0.1",
+            "PyPDF2": "3.0.1",
             "python-docx": "1.1.2",
             "python-pptx": "1.0.2",
             "openpyxl": "3.1.5",
             "beautifulsoup4": "4.12.3",
             "lxml": "5.1.0",
+            "docling": "2.66.0",
 
             # Web scraping
             "playwright": "1.48.0",
@@ -811,8 +821,13 @@ class ModuleCodeExtractor:
         # Create directory structure
         pages_dir = frontend_dir / "src" / "pages"
         styles_dir = frontend_dir / "src" / "styles"
+        public_dir = frontend_dir / "public"
         pages_dir.mkdir(parents=True, exist_ok=True)
         styles_dir.mkdir(parents=True, exist_ok=True)
+        public_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create .gitkeep in public directory so it's included in the package
+        (public_dir / ".gitkeep").write_text("")
 
         # 1. _app.tsx - Application wrapper
         app_content = '''import type { AppProps } from 'next/app'
@@ -917,22 +932,22 @@ export default function Home() {{
         (pages_dir / "index.tsx").write_text(index_content)
 
         # 3. next.config.js - Next.js configuration
-        next_config = '''/** @type {{import('next').NextConfig}} */
-const nextConfig = {{
+        next_config = '''/** @type {import('next').NextConfig} */
+const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-  env: {{
+  env: {
     API_BASE_URL: process.env.API_BASE_URL || 'http://localhost:8000',
-  }},
-}}
+  },
+}
 
 module.exports = nextConfig
 '''
         (frontend_dir / "next.config.js").write_text(next_config)
 
         # 4. tsconfig.json - TypeScript configuration
-        tsconfig = '''{{
-  "compilerOptions": {{
+        tsconfig = '''{
+  "compilerOptions": {
     "target": "es5",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
@@ -947,13 +962,13 @@ module.exports = nextConfig
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
-    "paths": {{
+    "paths": {
       "@/*": ["./src/*"]
-    }}
-  }},
+    }
+  },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules"]
-}}
+}
 '''
         (frontend_dir / "tsconfig.json").write_text(tsconfig)
 
@@ -962,7 +977,7 @@ module.exports = nextConfig
 @tailwind components;
 @tailwind utilities;
 
-body {{
+body {
   margin: 0;
   padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -970,39 +985,39 @@ body {{
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}}
+}
 '''
         (styles_dir / "globals.css").write_text(globals_css)
 
         # 6. tailwind.config.js - Tailwind configuration
-        tailwind_config = '''/** @type {{import('tailwindcss').Config}} */
-module.exports = {{
+        tailwind_config = '''/** @type {import('tailwindcss').Config} */
+module.exports = {
   content: [
-    './src/pages/**/*.{{js,ts,jsx,tsx,mdx}}',
-    './src/components/**/*.{{js,ts,jsx,tsx,mdx}}',
+    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
   ],
-  theme: {{
-    extend: {{}},
-  }},
+  theme: {
+    extend: {},
+  },
   plugins: [],
-}}
+}
 '''
         (frontend_dir / "tailwind.config.js").write_text(tailwind_config)
 
         # 7. postcss.config.js - PostCSS configuration
-        postcss_config = '''module.exports = {{
-  plugins: {{
-    tailwindcss: {{}},
-    autoprefixer: {{}},
-  }},
-}}
+        postcss_config = '''module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
 '''
         (frontend_dir / "postcss.config.js").write_text(postcss_config)
 
         # 8. .eslintrc.json - ESLint configuration
-        eslint_config = '''{{
+        eslint_config = '''{
   "extends": "next/core-web-vitals"
-}}
+}
 '''
         (frontend_dir / ".eslintrc.json").write_text(eslint_config)
 
