@@ -1766,6 +1766,22 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Agent router: {e}")
 
+# System Configuration API (Phase 2 - Req #8)
+try:
+    from app.api.routes import system_config_routes
+    app.include_router(system_config_routes.router)
+    logger.info("✓ System Configuration API router registered (database-driven config)")
+except Exception as e:
+    logger.warning(f"Could not register System Config router: {e}")
+
+# Models Registry API (Phase 2 - Req #2)
+try:
+    from app.api.routes import models_routes
+    app.include_router(models_routes.router)
+    logger.info("✓ Models Registry API router registered (Ollama auto-discovery)")
+except Exception as e:
+    logger.warning(f"Could not register Models Registry router: {e}")
+
 
 # === Admin API Endpoints ===
 
