@@ -187,6 +187,59 @@ class AgentTask(Base):
     team = Column(String(100), nullable=True)
 
 
+class SystemConfig(Base):
+    """System configuration table for database-driven settings"""
+    __tablename__ = "system_config"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    config_key = Column(String(255), unique=True, nullable=False, index=True)
+    config_value = Column(Text, nullable=False)
+    config_type = Column(String(50), default='string')  # string, integer, boolean, json, url, api_key
+    category = Column(String(100), nullable=True, index=True)  # agent, embedding, ollama, prefect, rag, system
+    description = Column(Text, nullable=True)
+    is_encrypted = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True, index=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    meta_info = Column(JSON, nullable=True)
+
+
+class Model(Base):
+    """Unified registry for all LLM models (OpenAI, Claude, Ollama, fine-tuned)"""
+    __tablename__ = "models"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    model_id = Column(String(255), unique=True, nullable=False, index=True)  # e.g., 'gpt-4o', 'qwen2.5-coder:7b'
+    display_name = Column(String(255), nullable=False)  # Human-readable name
+    provider = Column(String(100), nullable=False, index=True)  # openai, anthropic, ollama, vllm, finetuned
+    model_type = Column(String(50), default='text', index=True)  # text, code, vision, multimodal
+
+    # Capabilities
+    context_length = Column(Integer, nullable=True)
+    max_tokens = Column(Integer, nullable=True)
+    supports_functions = Column(Boolean, default=False)
+    supports_vision = Column(Boolean, default=False)
+    supports_streaming = Column(Boolean, default=True)
+
+    # Cost tracking
+    cost_per_1k_input = Column(Float, nullable=True)  # Cost per 1k input tokens
+    cost_per_1k_output = Column(Float, nullable=True)  # Cost per 1k output tokens
+
+    # Status
+    is_active = Column(Boolean, default=True, index=True)
+    is_default = Column(Boolean, default=False, index=True)  # Default model for provider/type
+    source = Column(String(50), default='manual', index=True)  # manual, auto_discovered, finetuned
+    auto_discovered_at = Column(DateTime(timezone=True), nullable=True)
+    last_verified_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Metadata
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    meta_info = Column(JSON, nullable=True)
+
+
 # Import enhanced models (RBAC, audit logs, sessions)
 # These are imported here to ensure they use the same Base
 try:
@@ -197,7 +250,7 @@ try:
     )
     __all__ = [
         'Document', 'DocumentChunk', 'Conversation', 'Message',
-        'WebScrapeJob', 'QueryCache', 'AgentTask',
+        'WebScrapeJob', 'QueryCache', 'AgentTask', 'SystemConfig', 'Model',
         'User', 'APIKey', 'ChatSession', 'SessionDocument', 'ConversationMessage',
         'AuditLog', 'UsageMetrics', 'DocumentPermission', 'SessionContext',
         'UserRole', 'ActionType', 'Base'
@@ -206,5 +259,5 @@ except ImportError:
     # Enhanced models not available yet
     __all__ = [
         'Document', 'DocumentChunk', 'Conversation', 'Message',
-        'WebScrapeJob', 'QueryCache', 'AgentTask', 'Base'
+        'WebScrapeJob', 'QueryCache', 'AgentTask', 'SystemConfig', 'Model', 'Base'
     ]

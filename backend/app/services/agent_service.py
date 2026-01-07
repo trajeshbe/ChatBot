@@ -23,6 +23,7 @@ from app.schemas.agent_schemas import (
     AgentTaskList,
     TaskStatus
 )
+from app.services.system_config_service import SystemConfigService
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class AgentOrchestrationService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.config_service = SystemConfigService(db)
 
     async def _generate_task_name(self, task_description: str) -> str:
         """
@@ -79,11 +81,17 @@ Task name:"""
 
             # Try Ollama first (free, fast)
             try:
+                # Get default model from system config
+                default_model = await self.config_service.get(
+                    'agent.runtime.default_model',
+                    default='qwen2.5-coder:7b'
+                )
+
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     response = await client.post(
                         f"{settings.OLLAMA_BASE_URL}/api/generate",
                         json={
-                            "model": "qwen2.5-coder:7b",
+                            "model": default_model,
                             "prompt": prompt,
                             "stream": False,
                             "options": {
@@ -269,6 +277,20 @@ Task name:"""
 
         logger.info(f"🏢 Agent task organizational details: dept={final_department}, team={final_team}")
 
+        # Get default model and configuration from system config
+        default_model = await self.config_service.get(
+            'agent.runtime.default_model',
+            default='qwen2.5-coder:7b'
+        )
+        default_max_iterations = await self.config_service.get_int(
+            'agent.runtime.max_iterations',
+            default=20
+        )
+        default_timeout = await self.config_service.get_int(
+            'agent.runtime.timeout_seconds',
+            default=600
+        )
+
         # Create database record
         agent_task = AgentTask(
             task_id=task_id,
@@ -277,9 +299,9 @@ Task name:"""
             task_description=request.task_description,
             status=TaskStatus.PENDING,
             session_id=request.session_id,
-            model=request.model or "qwen2.5-coder:7b",
-            max_iterations=request.max_iterations or 20,
-            timeout_seconds=request.timeout_seconds or 600,
+            model=request.model or default_model,  # ✅ Dynamic from DB
+            max_iterations=request.max_iterations or default_max_iterations,  # ✅ Dynamic from DB
+            timeout_seconds=request.timeout_seconds or default_timeout,  # ✅ Dynamic from DB
             created_by=user_id,
             project_id=project_id,
             department=final_department,  # ✅ FIX: Populate department
