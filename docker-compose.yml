@@ -239,12 +239,14 @@ services:
   #     - rag-network
 
   # Prefect Server
+  # Phase 2: Updated to use schema-based database consolidation (Req #3)
   prefect-server:
     image: prefecthq/prefect:2.14-python3.11
     container_name: rag-prefect-server
     command: prefect server start --host 0.0.0.0
     environment:
-      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/prefect
+      # Use prefect schema in main ragchatbot database instead of separate DB
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/ragchatbot?options=-c%20search_path=prefect
       PREFECT_SERVER_API_HOST: 0.0.0.0
     ports:
       - "4200:4200"
