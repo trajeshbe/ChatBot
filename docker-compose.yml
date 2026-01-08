@@ -246,7 +246,8 @@ services:
     command: prefect server start --host 0.0.0.0
     environment:
       # Use prefect schema in main ragchatbot database instead of separate DB
-      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/ragchatbot?options=-c%20search_path=prefect
+      # Fixed: asyncpg requires server_settings instead of options parameter
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/ragchatbot?server_settings=search_path%3Dprefect
       PREFECT_SERVER_API_HOST: 0.0.0.0
     ports:
       - "4200:4200"

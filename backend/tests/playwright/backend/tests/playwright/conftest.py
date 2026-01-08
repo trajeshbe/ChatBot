@@ -61,23 +61,24 @@ def logged_in_admin_page(context: BrowserContext):
 
     # Check if we're already logged in (by checking URL or looking for user menu)
     if not page.is_visible('button:has-text("Logout")'):
-        # Look for login form
-        if page.is_visible('input[type="email"]') or page.is_visible('input[type="text"]'):
+        # Look for login form (check for username or email input)
+        if page.is_visible('#username') or page.is_visible('input[type="email"]'):
             # Fill login form
             try:
-                # Try email input first
-                if page.is_visible('input[type="email"]'):
+                # Fill username/email field
+                if page.is_visible('#username'):
+                    page.fill('#username', os.getenv("TEST_ADMIN_USERNAME", "admin"))
+                elif page.is_visible('input[type="email"]'):
                     page.fill('input[type="email"]', os.getenv("TEST_ADMIN_EMAIL", "admin@example.com"))
-                else:
-                    page.fill('input[type="text"]', os.getenv("TEST_ADMIN_USERNAME", "admin"))
 
-                page.fill('input[type="password"]', os.getenv("TEST_ADMIN_PASSWORD", "admin123"))
+                # Fill password field - default is "admin" not "admin123"
+                page.fill('#password', os.getenv("TEST_ADMIN_PASSWORD", "admin"))
 
                 # Click login button - don't wait for navigation as it might be SPA
                 page.click('button[type="submit"]')
 
                 # Wait for login to complete (less strict)
-                time.sleep(3)
+                time.sleep(5)  # Increased from 3 to 5 seconds
 
             except Exception as e:
                 print(f"Login attempt failed: {e}")
