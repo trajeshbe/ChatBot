@@ -1758,6 +1758,14 @@ try:
 except Exception as e:
     logger.warning(f"Could not register Export Service router: {e}")
 
+# Export Wizard API (POC-to-Production Package Export)
+try:
+    from app.api.routes import export_wizard_routes
+    app.include_router(export_wizard_routes.router)
+    logger.info("✓ Export Wizard API router registered (Full Clone with Filters)")
+except Exception as e:
+    logger.warning(f"Could not register Export Wizard router: {e}")
+
 # Agent Task Management API
 try:
     from app.api.routes import agent_routes
