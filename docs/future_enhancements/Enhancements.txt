@@ -1,0 +1,30 @@
+Can you enahance the application with the following requirements
+
+1) the embedding vectors for (pgvector) for any document is set to384 dimenstions .. can we enhance the architecture to be able to pick the embedding dimension for a project / use case based on a dropdown just like we choose models.. this might be a bit challenging as we want to leverage the core platform for all i.e ChatUI, Domain Verticals, Customer Projects etc.. so, think how we can architect on dynamic embedding with consistent retrival mechaninms.. we have a script to change the embedding dimension from backend. but is still one size fits all approach, think of a novel approach and recommend.
+
+2) Ollama when downloading a model, should auto register after download and be available in the Chat UI dropdown.. Finetuning models, do work that way.. ie after finetuning and conversion into GGUF, it gets registered into the UI Model drop down automatically after deployed.. similarly , can we have the downloaded model do so as well ??
+
+3) Looks like perfect server is creating a new postgress db and using it, leverage our core app DB for perfect server as well
+
+4) Agent runtime task looks to be hardcoded with Qwen7B coder model, it should pick from the agent task - Model selection UI dynamically
+
+5) Create a default "global" project in the DB and UI as part of installation script, so that all users are associated with this unless they create and pick new projects later
+
+6) The installation script - admin user should have pwd as admin and be defaulted to Technology Dept and Team11
+
+7) ensure all the modules are registered (example relation-extractor module)
+
+8) Agent runtime API should be picked from Database
+
+you can refer to https://github.com/trajeshbe/merit-aiml.git (kiaa-cpu) as some of fixes from 3 to 8 might be there.
+
+
+9) Create a compreshesive error free fresh installation scripts for DB with all essential seed data in it. we have been trying to get it done few times, but still installation of DB scripts for a new machine is still a challenge. you can refer to https://github.com/trajeshbe/merit-aiml.git (kiaa-cpu) for some scripts changes that was done.. by still, evaluate the installation scripts on this repo and fix it for good.
+
+10) On the export wizard for POC ( i.e POC to Production setup ) download package. Can we revist the strategy. i.e if a particular POC is chosen, say Relation Extractor for export, then we export ALL the base code, seed data, installation scripts (e.g db & docker compose),  configuration of the entire app . The ONLY things that would be omited from the export is - OMIT All Domain verticals expect for the chosen POC, OMIT - All Customer Solutions expect if a spefic customer solution is exported. All, modules/user permissions matrix / roles will just have admin user mapped to the ONLY POC/Domain Vericals/Customer solutions the export was carried on . The idea is simple, we are kind of cloning the entire app with only one of Domain verical OR Customer Solution which was chosen for export..  Think about it and give me what ur recomendation.. what say?? Adopt the "Full Clone with Filters" approach:
+
+  1. Export entire codebase structure
+  2. Filter out unwanted modules/verticals/solutions
+  3. Simplify by omitting rather than cherry-picking
+  4. Let Docker Compose handle isolation 
+  5. Ensre the data security and privacy i.e admin user with seed data all seed data will only be available in the app. No customer, no vertical, no export of any users or projects. only global project with seed data.

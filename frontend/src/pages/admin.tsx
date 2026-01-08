@@ -13,6 +13,7 @@ import PermissionMatrix from '../components/admin/PermissionMatrix'
 import UserRoleAssignment from '../components/admin/UserRoleAssignment'
 import FineTuningManager from '../components/finetuning/FineTuningManager'
 import FineTuningGovernanceUI from '../components/finetuning/FineTuningGovernanceUI'
+import ExportWizardButton from '../components/ExportWizardButton'
 
 interface User {
   id: string
@@ -505,12 +506,15 @@ export default function AdminPage() {
                   Manage users, monitor activity, and track usage
                 </p>
               </div>
-              <a
-                href="/"
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Back to Chat
-              </a>
+              <div className="flex items-center gap-3">
+                <ExportWizardButton />
+                <a
+                  href="/"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Back to Chat
+                </a>
+              </div>
             </div>
           </div>
         </header>

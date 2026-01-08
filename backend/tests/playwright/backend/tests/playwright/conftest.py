@@ -70,15 +70,15 @@ def logged_in_admin_page(context: BrowserContext):
                     page.fill('input[type="email"]', os.getenv("TEST_ADMIN_EMAIL", "admin@example.com"))
                 else:
                     page.fill('input[type="text"]', os.getenv("TEST_ADMIN_USERNAME", "admin"))
-                
+
                 page.fill('input[type="password"]', os.getenv("TEST_ADMIN_PASSWORD", "admin123"))
 
                 # Click login button - don't wait for navigation as it might be SPA
                 page.click('button[type="submit"]')
-                
+
                 # Wait for login to complete (less strict)
                 time.sleep(3)
-                
+
             except Exception as e:
                 print(f"Login attempt failed: {e}")
                 # Continue anyway - tests will fail if login was actually required
